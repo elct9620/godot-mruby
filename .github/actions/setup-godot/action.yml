@@ -25,7 +25,8 @@ runs:
           macOS-*)       suffix=macos.universal;   binary="Godot.app/Contents/MacOS/Godot" ;;
           *) echo "::error::No Godot build for $RUNNER_OS $RUNNER_ARCH"; exit 1 ;;
         esac
-        # Forward slashes keep the path usable from bash and Ruby alike on Windows.
+        # Runner paths on Windows use backslashes, which the MSYS2 tools Ruby
+        # puts on PATH read as relative; forward slashes work for every tool.
         dir="${RUNNER_TOOL_CACHE//\\//}/godot/${VERSION}"
         {
           echo "archive=Godot_v${VERSION}-stable_${suffix}.zip"
@@ -49,12 +50,13 @@ runs:
         DIR: ${{ steps.resolve.outputs.dir }}
       run: |
         url="https://github.com/godotengine/godot-builds/releases/download/${VERSION}-stable/${ARCHIVE}"
-        curl -fsSL --retry 3 --retry-all-errors --connect-timeout 10 -o "$RUNNER_TEMP/godot.zip" "$url"
+        archive="${RUNNER_TEMP//\\//}/godot.zip"
+        curl -fsSL --retry 3 --retry-all-errors --connect-timeout 10 -o "$archive" "$url"
         mkdir -p "$DIR"
         if [ "$RUNNER_OS" = "Windows" ]; then
-          7z x -y -o"$DIR" "$RUNNER_TEMP/godot.zip" > /dev/null
+          7z x -y -o"$DIR" "$archive" > /dev/null
         else
-          unzip -q "$RUNNER_TEMP/godot.zip" -d "$DIR"
+          unzip -q "$archive" -d "$DIR"
         fi
 
     - name: Expose GODOT
