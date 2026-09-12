@@ -102,9 +102,12 @@ module Addon
     JSON.parse(run!("cargo", "metadata", "--format-version", "1", "--manifest-path", Extension::MANIFEST))
   end
 
+  # Windows' own tar reads zip archives; a 7z found on PATH may be the MSYS2
+  # build Ruby brings, which cannot open drive-letter paths.
   def extract(package, dir)
     if RbConfig::CONFIG["host_os"].match?(/mswin|mingw/)
-      run!("7z", "x", package, "-o#{dir}")
+      FileUtils.mkdir_p(dir)
+      run!(File.join(ENV.fetch("SystemRoot", "C:/Windows"), "System32", "tar.exe"), "-xf", package, "-C", dir)
     else
       run!("unzip", "-q", package, "-d", dir)
     end
