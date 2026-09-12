@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# Stop hook: before a turn ends, confirm the extension still compiles cleanly,
-# its tests pass and the GDScript side lints. Any one of them failing hands the
-# result back for correction rather than carrying a broken state into the next
-# turn. Formatting is not gated here: the edit hook applies it as files are
+# Stop hook: before a turn ends, confirm the extension still compiles cleanly
+# against the mruby archive, its tests pass and the GDScript side lints. Any one
+# of them failing hands the result back for correction rather than carrying a
+# broken state into the next turn. Formatting is not gated here: the edit hook applies it as files are
 # written, and it is settled before a commit rather than at every turn's end.
 #
 # stdin carries Claude Code's hook input JSON; decision:"block" hands the turn
@@ -34,7 +34,17 @@ record() {
 	report="${report}## ${1}"$'\n'"${2}"$'\n\n'
 }
 
-if command -v cargo >/dev/null 2>&1; then
+# The crate links the mruby archive beni builds; building it is skipped once it
+# exists, and without it cargo has nothing to link
+archive_ready=true
+if command -v bundle >/dev/null 2>&1; then
+	if ! out="$(bundle exec rake beni:build 2>&1)"; then
+		record "mruby archive (rake beni:build)" "$out"
+		archive_ready=false
+	fi
+fi
+
+if $archive_ready && command -v cargo >/dev/null 2>&1; then
 	if ! out="$(cargo clippy --manifest-path "$MANIFEST" --all-targets --quiet -- -D warnings 2>&1)"; then
 		record "Lint (cargo clippy)" "$out"
 	fi

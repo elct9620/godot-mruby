@@ -39,6 +39,16 @@ case "$file" in
 		exit 2
 	fi
 	;;
+*.rb | *.rake | Rakefile)
+	# RuboCop answers only for the files .rubocop.yml includes; whatever its
+	# autocorrection leaves behind is reported
+	command -v bundle >/dev/null 2>&1 || exit 0
+	if ! out="$(cd "$ROOT" && bundle exec rubocop -A --force-exclusion --only-recognized-file-types \
+		--format simple "$file" 2>&1)"; then
+		printf 'RuboCop still reports problems in %s:\n%s\n' "${file#"$ROOT"/}" "$out" >&2
+		exit 2
+	fi
+	;;
 esac
 
 exit 0
