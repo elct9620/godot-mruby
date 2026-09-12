@@ -49,6 +49,15 @@ case "$file" in
 		exit 2
 	fi
 	;;
+"$ROOT"/.spec/*.md)
+	# sumi fmt rewrites the whole specification, so the edited file decides
+	# whether it runs rather than what it runs on
+	command -v sumi >/dev/null 2>&1 || exit 0
+	if ! out="$(cd "$ROOT" && sumi fmt 2>&1)"; then
+		printf 'sumi fmt could not write the specification:\n%s\n' "$out" >&2
+		exit 2
+	fi
+	;;
 esac
 
 exit 0

@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 #
 # Stop hook: before a turn ends, confirm the extension still compiles cleanly
-# against the mruby archive, its tests pass and the GDScript side lints. Any one
-# of them failing hands the result back for correction rather than carrying a
-# broken state into the next turn. Formatting is not gated here: the edit hook applies it as files are
+# against the mruby archive, its tests pass, the GDScript side lints and the
+# source still agrees with its specification. Any one of them failing hands the
+# result back for correction rather than carrying a broken state into the next
+# turn. Formatting is not gated here: the edit hook applies it as files are
 # written, and it is settled before a commit rather than at every turn's end.
 #
 # stdin carries Claude Code's hook input JSON; decision:"block" hands the turn
@@ -58,6 +59,13 @@ fi
 if command -v gdlint >/dev/null 2>&1; then
 	if ! out="$(gdlint "$ROOT/godot" 2>&1)"; then
 		record "Lint (gdlint godot/)" "$out"
+	fi
+fi
+
+# A difference may be settled on either side: the code, or the specification
+if command -v sumi >/dev/null 2>&1; then
+	if ! out="$(sumi verify 2>&1)"; then
+		record "Specification (sumi verify)" "$out"
 	fi
 fi
 

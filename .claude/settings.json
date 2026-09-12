@@ -21,7 +21,7 @@
 						"type": "command",
 						"command": "\"${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/stop.sh\"",
 						"timeout": 300,
-						"statusMessage": "Clippy, tests and gdlint"
+						"statusMessage": "Clippy, tests, gdlint and sumi verify"
 					}
 				]
 			}
