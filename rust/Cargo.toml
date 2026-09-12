@@ -8,3 +8,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 godot = { version = "0.5.5", features = ["api-4-6"] }
+# Links the mruby archive the beni gem builds; the gem and the crate release
+# in lockstep, so their versions move together.
+beni = "0.14.1"

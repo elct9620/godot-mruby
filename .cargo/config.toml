@@ -1,0 +1,8 @@
+# beni-sys finds the host's mruby archive through BENI_VENDOR_DIR. Setting it
+# here lets every cargo invocation (tasks, hooks, editors) find the vendor tree
+# `rake beni:build` populates. It never overrides a variable already set, and
+# MRUBY_LIB_DIR outranks it, which is how a cross build names its own archive.
+# Kept at the repository root because cargo reads configuration from the
+# working directory, not from the manifest's.
+[env]
+BENI_VENDOR_DIR = { value = "vendor", relative = true }
