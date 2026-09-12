@@ -1,0 +1,6 @@
+# Godot
+godot/.godot/
+godot/addons/godot_mruby/bin/
+
+# Rust
+rust/target/

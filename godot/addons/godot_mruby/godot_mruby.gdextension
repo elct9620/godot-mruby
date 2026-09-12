@@ -1,0 +1,13 @@
+[configuration]
+entry_symbol = "gdext_rust_init"
+compatibility_minimum = 4.6
+reloadable = true
+
+; One binary per platform: the build that fills bin/ decides the Cargo profile
+; (debug for local development, release for distribution). macOS ships a universal dylib.
+[libraries]
+macos =          "bin/libgodot_mruby.macos.dylib"
+linux.x86_64 =   "bin/libgodot_mruby.linux.x86_64.so"
+linux.arm64 =    "bin/libgodot_mruby.linux.arm64.so"
+windows.x86_64 = "bin/godot_mruby.windows.x86_64.dll"
+windows.arm64 =  "bin/godot_mruby.windows.arm64.dll"
