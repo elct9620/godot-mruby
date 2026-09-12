@@ -14,6 +14,7 @@ godot-mruby is a Godot 4 addon that embeds mruby through a Rust GDExtension (god
 | `build_config/mruby.rb` | mruby build config (host + x86_64 cross build) |
 | `Rakefile`, `tasks/*.rake` | Task entry points |
 | `tasks/support/` | Task logic: paths, library names, cargo env, Godot checks |
+| `.spec/` | Specification verified by sumitsubo (`sumi`): glossary, contract, behavior |
 | `.claude/hooks/` | Edit-time formatting and lint; stop-time quality gate |
 | `.github/workflows/pipeline.yml` | Reusable check → build → package → integration → publish; `ci.yml` calls it |
 | `.github/actions/` | Composite setup steps (Godot, Ruby/Rust/caches) |
@@ -30,7 +31,11 @@ bundle exec rake addon:package           # zip the addon with every platform's l
 bundle exec rake addon:verify            # install the zip into a copy of godot/ and verify it loads
 bundle exec rake                         # rubocop + extension:build + godot:verify
 bundle exec rake beni:clean beni:build   # rebuild mruby after editing build_config/mruby.rb
+sumi verify                              # check the source against .spec/
+sumi fmt                                 # write .spec/ in sumi's form (--check only reports)
 ```
+
+`sumi help glossary|contract|behavior` has the form of each specification.
 
 `cargo` works directly from the repo root or `rust/`: `.cargo/config.toml` points it at `vendor/` and `rust-toolchain.toml` pins the compiler.
 
