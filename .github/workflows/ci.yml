@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Cargo profile of the shipped libraries; debug helps narrow a release-only failure.
+        type: choice
+        options: [release, debug]
+        default: release
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  pipeline:
+    uses: ./.github/workflows/pipeline.yml
+    with:
+      profile: ${{ inputs.profile || 'release' }}

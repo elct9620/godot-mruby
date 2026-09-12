@@ -1,0 +1,53 @@
+name: Set up the build
+description: Install Ruby with the bundle and the pinned Rust toolchain, and restore the mruby and cargo caches.
+
+inputs:
+  profile:
+    description: Cargo profile the job builds (release or debug); keeps their caches apart.
+    default: release
+  target-cache:
+    description: Restore rust/target. Jobs that only read crate metadata skip it.
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1.321.0
+      with:
+        ruby-version: "3.4"
+        bundler-cache: true
+
+    # Without arguments rustup installs what rust-toolchain.toml names,
+    # including the x86_64 target the universal macOS library needs.
+    - name: Install the Rust toolchain
+      shell: bash
+      run: |
+        rustup toolchain install
+        rustc -vV
+
+    # The key follows the gem set and the build config, so a changed config
+    # builds mruby again rather than reusing an archive beni would keep.
+    - name: Restore mruby
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: vendor
+        key: mruby-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Gemfile.lock', 'build_config/mruby.rb') }}
+
+    - name: Restore cargo registry
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+        key: cargo-registry-${{ runner.os }}-${{ hashFiles('rust/Cargo.lock') }}
+        restore-keys: cargo-registry-${{ runner.os }}-
+
+    - name: Restore cargo target
+      if: inputs.target-cache == 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: rust/target
+        key: cargo-target-${{ runner.os }}-${{ runner.arch }}-${{ inputs.profile }}-${{ hashFiles('rust/Cargo.lock', 'rust-toolchain.toml') }}
+        restore-keys: cargo-target-${{ runner.os }}-${{ runner.arch }}-${{ inputs.profile }}-

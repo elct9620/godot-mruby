@@ -1,0 +1,67 @@
+name: Set up Godot
+description: Download an official Godot editor build for this runner and expose its executable as GODOT.
+
+inputs:
+  version:
+    description: Godot version as tagged in godotengine/godot-builds, without "-stable" (e.g. "4.6", "4.7.2").
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve the build for this runner
+      id: resolve
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+      run: |
+        # Windows ships a console wrapper beside the editor; it is the one
+        # whose output a caller can read.
+        case "$RUNNER_OS-$RUNNER_ARCH" in
+          Linux-X64)     suffix=linux.x86_64;      binary="Godot_v${VERSION}-stable_linux.x86_64" ;;
+          Linux-ARM64)   suffix=linux.arm64;       binary="Godot_v${VERSION}-stable_linux.arm64" ;;
+          Windows-X64)   suffix=win64.exe;         binary="Godot_v${VERSION}-stable_win64_console.exe" ;;
+          Windows-ARM64) suffix=windows_arm64.exe; binary="Godot_v${VERSION}-stable_windows_arm64_console.exe" ;;
+          macOS-*)       suffix=macos.universal;   binary="Godot.app/Contents/MacOS/Godot" ;;
+          *) echo "::error::No Godot build for $RUNNER_OS $RUNNER_ARCH"; exit 1 ;;
+        esac
+        # Forward slashes keep the path usable from bash and Ruby alike on Windows.
+        dir="${RUNNER_TOOL_CACHE//\\//}/godot/${VERSION}"
+        {
+          echo "archive=Godot_v${VERSION}-stable_${suffix}.zip"
+          echo "dir=${dir}"
+          echo "binary=${dir}/${binary}"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Restore Godot from cache
+      id: cache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.resolve.outputs.dir }}
+        key: godot-${{ inputs.version }}-${{ runner.os }}-${{ runner.arch }}
+
+    - name: Download Godot
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        ARCHIVE: ${{ steps.resolve.outputs.archive }}
+        DIR: ${{ steps.resolve.outputs.dir }}
+      run: |
+        url="https://github.com/godotengine/godot-builds/releases/download/${VERSION}-stable/${ARCHIVE}"
+        curl -fsSL --retry 3 --retry-all-errors --connect-timeout 10 -o "$RUNNER_TEMP/godot.zip" "$url"
+        mkdir -p "$DIR"
+        if [ "$RUNNER_OS" = "Windows" ]; then
+          7z x -y -o"$DIR" "$RUNNER_TEMP/godot.zip" > /dev/null
+        else
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$DIR"
+        fi
+
+    - name: Expose GODOT
+      shell: bash
+      env:
+        BINARY: ${{ steps.resolve.outputs.binary }}
+      run: |
+        chmod +x "$BINARY"
+        "$BINARY" --headless --version
+        echo "GODOT=$BINARY" >> "$GITHUB_ENV"

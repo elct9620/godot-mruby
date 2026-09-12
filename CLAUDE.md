@@ -15,6 +15,8 @@ godot-mruby is a Godot 4 addon that embeds mruby through a Rust GDExtension (god
 | `Rakefile`, `tasks/*.rake` | Task entry points |
 | `tasks/support/` | Task logic: paths, library names, cargo env, Godot checks |
 | `.claude/hooks/` | Edit-time formatting and lint; stop-time quality gate |
+| `.github/workflows/pipeline.yml` | Reusable check → build → package → integration → publish; `ci.yml` calls it |
+| `.github/actions/` | Composite setup steps (Godot, Ruby/Rust/caches) |
 
 ## Commands
 
