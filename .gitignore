@@ -10,3 +10,6 @@ rust/target/
 
 # Addon packages `rake addon:package` writes
 /pkg/
+
+# Local working notes, kept out of the repository
+/tmp/
