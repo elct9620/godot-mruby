@@ -45,6 +45,29 @@ jobs:
       - run: gdformat --check godot
       - run: gdlint godot
 
+  # Needs neither Ruby nor Rust, so it stands apart from the build setup.
+  spec:
+    name: Specification
+    runs-on: ubuntu-24.04
+    env:
+      # Pinned by hand: nothing watches a release asset fetched over curl.
+      # The digest is pinned alongside the tag because an asset can be replaced.
+      SUMI_VERSION: 0.1.0-preview9
+      SUMI_SHA256: b2a8eb702c281527b87733491de71c129340c6a1dd63ea6873adf6be6467e200
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install sumi
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/sumi.tar.gz" \
+            "https://github.com/elct9620/sumitsubo/releases/download/v$SUMI_VERSION/sumi-$SUMI_VERSION-linux-x86_64.tar.gz"
+          echo "$SUMI_SHA256  $RUNNER_TEMP/sumi.tar.gz" | sha256sum -c -
+          tar xzf "$RUNNER_TEMP/sumi.tar.gz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - run: sumi verify
+      - run: sumi fmt --check
+
   build:
     name: Build (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}
@@ -138,7 +161,7 @@ jobs:
 
   publish:
     name: Publish
-    needs: [check, integration]
+    needs: [check, spec, integration]
     if: inputs.tag != ''
     runs-on: ubuntu-24.04
     steps:
