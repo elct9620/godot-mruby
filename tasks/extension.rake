@@ -9,18 +9,26 @@ namespace :extension do
     Extension.install(File.join(Extension::TARGET_DIR, "debug", source), name)
   end
 
-  if Extension.macos?
-    desc "Build the macOS universal extension (release) and install it into the addon"
-    task universal: "beni:build" do
+  desc "Build the library this platform ships (PROFILE=release|debug) and install it into the addon"
+  task dist: "beni:build" do
+    profile = Extension.profile
+    flags = Extension::PROFILES.fetch(profile)
+
+    if Extension.macos?
       Extension::ARCHES.each_key do |triple|
         sh Extension.cargo_env(triple),
-           "cargo", "build", "--release", "--target", triple, "--manifest-path", Extension::MANIFEST
+           "cargo", "build", *flags, "--target", triple, "--manifest-path", Extension::MANIFEST
       end
 
-      output = Extension.universal("release")
-      sh "lipo", "-create", "-output", output, *Extension::ARCHES.keys.map { |t| Extension.slice(t, "release") }
+      output = Extension.universal(profile)
+      sh "lipo", "-create", "-output", output, *Extension::ARCHES.keys.map { |t| Extension.slice(t, profile) }
       Extension.require_arches!(output)
       Extension.install(output, Extension::MACOS_LIBRARY)
+    else
+      sh "cargo", "build", *flags, "--manifest-path", Extension::MANIFEST
+
+      source, name = Extension.host_library
+      Extension.install(File.join(Extension::TARGET_DIR, profile, source), name)
     end
   end
 end

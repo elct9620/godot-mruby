@@ -7,3 +7,6 @@ rust/target/
 
 # The mruby source and archives `rake beni:build` downloads and builds
 /vendor/
+
+# Addon packages `rake addon:package` writes
+/pkg/

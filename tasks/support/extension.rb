@@ -23,27 +23,51 @@ module Extension
 
   MACOS_LIBRARY = "lib#{CRATE}.macos.dylib".freeze
 
+  # The cargo flags for each profile; the profile name is also the directory
+  # cargo writes it to.
+  PROFILES = { "release" => ["--release"], "debug" => [] }.freeze
+
   module_function
 
   def macos?
     RbConfig::CONFIG["host_os"].include?("darwin")
   end
 
+  # A distributed build is release unless PROFILE=debug asks for one to
+  # compare against.
+  def profile
+    ENV.fetch("PROFILE", "release").tap do |name|
+      raise "PROFILE must be one of #{PROFILES.keys.join(", ")}, got #{name}" unless PROFILES.key?(name)
+    end
+  end
+
+  # The triple cargo builds for without --target. It is read from rustc
+  # rather than Ruby, which may run emulated on a machine of another
+  # architecture.
+  def host_triple
+    @host_triple ||= begin
+      output, status = Open3.capture2("rustc", "-vV", chdir: ROOT)
+      raise "rustc could not report its host" unless status.success?
+
+      output[/^host: (\S+)/, 1]
+    end
+  end
+
   def host_arch
-    case RbConfig::CONFIG["host_cpu"]
-    when /x86_64|x64|amd64/ then "x86_64"
-    when /arm64|aarch64/ then "arm64"
-    else raise "Unsupported host CPU: #{RbConfig::CONFIG["host_cpu"]}"
+    case host_triple
+    when /\Ax86_64-/ then "x86_64"
+    when /\Aaarch64-/ then "arm64"
+    else raise "Unsupported host: #{host_triple}"
     end
   end
 
   # Cargo's output name for this host, and the name the addon expects.
   def host_library
-    case RbConfig::CONFIG["host_os"]
-    when /darwin/ then ["lib#{CRATE}.dylib", MACOS_LIBRARY]
+    case host_triple
+    when /apple-darwin/ then ["lib#{CRATE}.dylib", MACOS_LIBRARY]
     when /linux/ then ["lib#{CRATE}.so", "lib#{CRATE}.linux.#{host_arch}.so"]
-    when /mswin|mingw/ then ["#{CRATE}.dll", "#{CRATE}.windows.#{host_arch}.dll"]
-    else raise "Unsupported host OS: #{RbConfig::CONFIG["host_os"]}"
+    when /windows/ then ["#{CRATE}.dll", "#{CRATE}.windows.#{host_arch}.dll"]
+    else raise "Unsupported host: #{host_triple}"
     end
   end
 

@@ -17,8 +17,8 @@ module Godot
   # loads it; the project has no main scene for a plain run to start. Godot
   # reports a library it could not open on stdout and may still exit 0, so the
   # pass is judged by what it printed.
-  def verify_loaded!
-    output, status = Open3.capture2e(EXECUTABLE, "--headless", "--editor", "--quit", "--path", PROJECT)
+  def verify_loaded!(project = PROJECT)
+    output, status = Open3.capture2e(EXECUTABLE, "--headless", "--editor", "--quit", "--path", project)
     errors = output.lines.grep(FAILED)
     return if status.success? && errors.empty? && output.include?(LOADED)
 
