@@ -18,11 +18,17 @@ module Godot
       %w[-e SkipTest#test_a_skipped_test_does_not_fail_the_run] =>
         /^\d+ runs, \d+ assertions, 0 failures, 0 errors, 0 skips$/
     }.freeze
+    # A test directory whose tests print their names as they run, the seeds
+    # tried on it, and how a run prints its seed and each test it ran.
+    ORDER = "res://order"
+    SEEDS = %w[1 2 3 4 5].freeze
+    SEED = /^Run options: --seed (\d+)$/
+    RAN = /ran (\w+#test_\w+)/
     # Runs that have to fail, each as the runner's options and what the run
     # has to print on the way, in the order it prints it: one per way a run
     # fails, all under godot/failing/ except the directory that does not
-    # exist, the filter that names no test, and the directories that are not
-    # the project's test directories.
+    # exist, the filter that names no test, the directories that are not
+    # the project's test directories, and a seed that is not a number.
     FAILING = {
       %w[--dir res://failing/assertion] => [
         "teardown ran after a failure",
@@ -42,7 +48,8 @@ module Godot
       %w[--dir res://failing/missing] => ["The test directory res://failing/missing does not exist"],
       %w[--dir res://test --include test_nothing] => ["ERROR: Nothing ran for filter: test_nothing"],
       %w[--dir res://smoke] => ["ERROR: res://smoke is not one of the project's test directories"],
-      %w[--dir res://] => ["ERROR: res:// cannot be a test directory"]
+      %w[--dir res://] => ["ERROR: res:// cannot be a test directory"],
+      %w[--dir res://test --seed x] => ["ERROR: --seed takes a whole number, not x"]
     }.freeze
     # Where the test framework's files are compiled; a failing run reports the
     # tests' own frames and never these.
@@ -54,6 +61,8 @@ module Godot
       verify_pass!(project)
       verify_filtered!(project)
       verify_fail!(project)
+      verify_seed!(project)
+      verify_shuffled!(project)
     end
 
     # Runs the project's Ruby tests and requires a pass that ran at least one,
@@ -81,7 +90,7 @@ module Godot
 
     # Makes each run that has to fail and requires it to fail with what it has
     # to print, in order, and without the framework's own frames.
-    # @behavior RT-002 RT-003 RT-004 RT-005 RT-006 RT-007 RT-008 RT-020 RT-021 RT-022 RT-023 RT-026 RT-029 RT-030
+    # @behavior RT-002 RT-003 RT-004 RT-005 RT-006 RT-007 RT-008 RT-020 RT-021 RT-022 RT-023 RT-026 RT-029 RT-030 RT-034
     def verify_fail!(project)
       FAILING.each do |options, expected|
         output, status = run(project, *options)
@@ -91,6 +100,34 @@ module Godot
 
         raise "The Ruby tests with #{options.join(" ")} did not fail as they should #{missing}:\n#{output}"
       end
+    end
+
+    # Runs the order directory without a seed, which has to print the one it
+    # used, then again with that seed, which has to repeat the order.
+    # @behavior RT-031 RT-032
+    def verify_seed!(project)
+      output, = run(project, "--dir", ORDER)
+      seed = output[SEED, 1]
+      raise "A run of #{ORDER} did not print its seed:\n#{output}" unless seed
+
+      again, = run(project, "--dir", ORDER, "--seed", seed)
+      return if order_of(output).any? && order_of(again) == order_of(output)
+
+      raise "The seed #{seed} did not repeat the order of #{ORDER}:\n#{output}\n#{again}"
+    end
+
+    # Runs the order directory with each seed; one of them has to run its
+    # tests out of name order.
+    # @behavior RT-033
+    def verify_shuffled!(project)
+      orders = SEEDS.map { |seed| order_of(run(project, "--dir", ORDER, "--seed", seed).first) }
+      return if orders.any? { |order| order.any? && order != order.sort }
+
+      raise "No seed of #{SEEDS.join(", ")} ran #{ORDER} out of name order: #{orders}"
+    end
+
+    def order_of(output)
+      output.scan(RAN).flatten
     end
 
     # The expected lines that do not appear in the output after the one before

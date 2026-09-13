@@ -17,8 +17,10 @@ pub struct RubyTestRunner {
 impl INode for RubyTestRunner {
     fn ready(&mut self) {
         let args = user_args();
-        let passed = match test_directories(&args) {
-            Ok(directories) => run(&directories, &test_options(&args)),
+        let run_as_asked =
+            test_directories(&args).and_then(|directories| Ok((directories, test_options(&args)?)));
+        let passed = match run_as_asked {
+            Ok((directories, options)) => run(&directories, &options),
             Err(refused) => {
                 godot_error!("{refused}");
                 false
@@ -93,13 +95,21 @@ fn test_directories(args: &[String]) -> Result<Vec<String>, String> {
     }
 }
 
-fn test_options(args: &[String]) -> TestOptions {
-    TestOptions {
+fn test_options(args: &[String]) -> Result<TestOptions, String> {
+    // @option --seed
+    let seed = option(args, &["-s", "--seed"])
+        .map(|seed| {
+            seed.parse()
+                .map_err(|_| format!("--seed takes a whole number, not {seed}"))
+        })
+        .transpose()?;
+    Ok(TestOptions {
         // @option --include
         include: option(args, &["-i", "--include"]),
         // @option --exclude
         exclude: option(args, &["-e", "--exclude"]),
-    }
+        seed,
+    })
 }
 
 // The value after the first of `names` on the command line.

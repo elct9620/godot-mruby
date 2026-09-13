@@ -363,8 +363,11 @@ module Minitest
     include Assertions
     include LifecycleHooks
 
+    # The test methods in the order the run's seed shuffles them. Each class
+    # reseeds, so its order does not hang on the classes before it.
     def self.runnable_methods
-      public_instance_methods(true).map(&:to_s).select { |name| name[0, 5] == "test_" }.sort
+      srand Minitest.seed
+      public_instance_methods(true).map(&:to_s).select { |name| name[0, 5] == "test_" }.sort.shuffle
     end
 
     # Each teardown step runs whatever the steps before it raised.
@@ -446,14 +449,25 @@ module Minitest
     end
   end
 
-  # Runs every test class defined so far, in name order, and answers the
-  # problems it found, each as its message, file and line, so the test runner
-  # reports them where they happened; none means every test passed. An
-  # :include that leaves no test to run is a problem too.
+  class << self
+    # The seed the current run shuffles its tests by.
+    attr_accessor :seed
+  end
+
+  # Runs every test class defined so far, in the order the :seed option
+  # shuffles them or a random seed it prints, and answers the problems it
+  # found, each as its message, file and line, so the test runner reports
+  # them where they happened; none means every test passed. An :include that
+  # leaves no test to run is a problem too.
   def self.run(options = {})
+    srand
+    self.seed = options[:seed] || srand % 0xFFFF
+    puts "Run options: --seed #{seed}"
+    puts
+    srand seed
     reporter = Reporter.new
     reporter.start
-    Runnable.runnables.sort { |a, b| a.to_s <=> b.to_s }.each { |suite| suite.run_suite(reporter, options) }
+    Runnable.runnables.shuffle.each { |suite| suite.run_suite(reporter, options) }
     reporter.report
     return [["Nothing ran for filter: #{options[:include]}", nil, nil]] if options[:include] && reporter.count == 0
 

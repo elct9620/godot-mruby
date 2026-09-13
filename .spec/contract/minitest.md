@@ -564,7 +564,7 @@ end
 
 ## `Minitest.run`
 
-Runs every test class defined so far and answers the problems the run found, each as its message, then the file and line it happened at, or `nil` for both where neither is known; none means every test passed. The test runner calls it once the test files have run, and reports each problem through Godot's log.
+Runs every test class defined so far, in an order `options[:seed]` shuffles or a random seed it prints, keeping the tests `options[:include]` names and leaving out those `options[:exclude]` names, and answers the problems the run found, each as its message, then the file and line it happened at, or `nil` for both where neither is known; none means every test passed. The test runner calls it once the test files have run, and reports each problem through Godot's log.
 
 | Attribute | Value |
 | --- | --- |

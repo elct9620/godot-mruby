@@ -25,3 +25,7 @@ Runs only the test methods named by the value, either by name alone or as `Class
 ## `--exclude`
 
 Leaves out the test methods named by the value, either by name alone or as `Class#name`; `-e` for short.
+
+## `--seed`
+
+The seed that orders the run's tests; `-s` for short, and a random one when it is not given. The run prints the seed it used as `Run options: --seed N`, so giving it again repeats the order.

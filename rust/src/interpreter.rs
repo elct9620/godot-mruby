@@ -62,6 +62,8 @@ pub struct TestOptions {
     pub include: Option<String>,
     /// The test methods to leave out, named by name or as `Class#name`.
     pub exclude: Option<String>,
+    /// The seed that orders the tests; a random one when there is none.
+    pub seed: Option<i64>,
 }
 
 /// Runs the tests the loaded test files defined that `options` leaves, and
@@ -184,6 +186,10 @@ impl Interpreter {
                     self.mrb.str_new(value.as_bytes()).as_value(),
                 )?;
             }
+        }
+        if let Some(seed) = options.seed {
+            let key = self.mrb.intern(b"seed").as_value();
+            hash.set(&self.mrb, key, Value::from_int(&self.mrb, seed))?;
         }
         Ok(hash.as_value())
     }

@@ -5,7 +5,6 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 ### What a test does not have yet
 
 - A test reaches only what its own file and core Ruby define: files do not yet find each other by name.
-- Test classes and their tests run in name order rather than a seeded random one.
 
 ## Includes
 
@@ -253,3 +252,35 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 | Given | the project's root `res://` |
 | When | the runner scene runs headless with `--dir` naming it |
 | Then | the run fails, saying `res://` cannot be a test directory |
+
+## `RT-031` A run prints the seed it ordered its tests by
+
+| Step | Statement |
+| --- | --- |
+| Given | a test directory |
+| When | the runner scene runs headless on it without `--seed` |
+| Then | Godot's output carries `Run options: --seed` and the seed |
+
+## `RT-032` The seed a run printed repeats its order
+
+| Step | Statement |
+| --- | --- |
+| Given | the seed a run of a test directory printed |
+| When | the runner scene runs headless on that directory with `--seed` giving it |
+| Then | the tests run in the same order as in that run |
+
+## `RT-033` A seed runs the tests out of name order
+
+| Step | Statement |
+| --- | --- |
+| Given | a test directory whose test classes and methods are named in order |
+| When | the runner scene runs headless on it with each of a handful of seeds |
+| Then | at least one run runs its tests in an order other than their names' |
+
+## `RT-034` A `--seed` that is not a whole number fails the run
+
+| Step | Statement |
+| --- | --- |
+| Given | a `--seed` value that is not a whole number |
+| When | the runner scene runs headless with it |
+| Then | the run fails, saying `--seed` takes a whole number |
