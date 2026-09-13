@@ -53,35 +53,182 @@ module Minitest
     end
   end
 
-  # The assertions a test calls, with the expected value first.
+  # The assertions a test calls, with the expected value first. Each builds
+  # its failure message only once it fails, and a message given to it comes
+  # before its own.
   module Assertions
+    # What assert_operator is given when it has no second operand.
+    UNDEFINED = Object.new
+  
+    def UNDEFINED.inspect
+      "UNDEFINED"
+    end
+  
+    def mu_pp(obj)
+      obj.inspect
+    end
+  
+    def message(msg = nil, ending = ".", &default)
+      return msg if msg.is_a?(Proc)
+  
+      Proc.new do
+        custom_message = "#{msg}.\n" unless msg.nil? || msg.to_s.empty?
+        "#{custom_message}#{default.call}#{ending}"
+      end
+    end
+  
     def assert(test, msg = nil)
       self.assertions += 1
       return true if test
-
-      raise Assertion, msg || "Expected #{test.inspect} to be truthy."
+  
+      msg ||= "Expected #{mu_pp test} to be truthy."
+      msg = msg.call if msg.is_a?(Proc)
+      raise Assertion, msg
     end
-
+  
     def refute(test, msg = nil)
-      assert !test, msg || "Expected #{test.inspect} to not be truthy."
+      msg ||= message { "Expected #{mu_pp test} to not be truthy" }
+      assert !test, msg
     end
-
+  
+    def pass(_msg = nil)
+      assert true
+    end
+  
     def assert_equal(exp, act, msg = nil)
-      assert exp == act, msg || "Expected: #{exp.inspect}\n  Actual: #{act.inspect}"
+      msg = message(msg, nil) { "Expected: #{mu_pp exp}\n  Actual: #{mu_pp act}" }
+      refute_nil exp, message { "Use assert_nil if expecting nil" } if exp.nil?
+      assert exp == act, msg
     end
-
+  
     def refute_equal(exp, act, msg = nil)
-      assert exp != act, msg || "Expected #{act.inspect} to not be equal to #{exp.inspect}."
+      msg = message(msg) { "Expected #{mu_pp act} to not be equal to #{mu_pp exp}" }
+      refute exp == act, msg
     end
-
+  
     def assert_nil(obj, msg = nil)
-      assert obj.nil?, msg || "Expected #{obj.inspect} to be nil."
+      msg = message(msg) { "Expected #{mu_pp obj} to be nil" }
+      assert obj.nil?, msg
     end
-
+  
     def refute_nil(obj, msg = nil)
-      assert !obj.nil?, msg || "Expected #{obj.inspect} to not be nil."
+      msg = message(msg) { "Expected #{mu_pp obj} to not be nil" }
+      refute obj.nil?, msg
     end
-
+  
+    def assert_empty(obj, msg = nil)
+      msg = message(msg) { "Expected #{mu_pp obj} to be empty" }
+      assert_predicate obj, :empty?, msg
+    end
+  
+    def refute_empty(obj, msg = nil)
+      msg = message(msg) { "Expected #{mu_pp obj} to not be empty" }
+      refute_predicate obj, :empty?, msg
+    end
+  
+    def assert_in_delta(exp, act, delta = 0.001, msg = nil)
+      n = (exp - act).abs
+      msg = message(msg) { "Expected |#{exp} - #{act}| (#{n}) to be <= #{delta}" }
+      assert delta >= n, msg
+    end
+  
+    def refute_in_delta(exp, act, delta = 0.001, msg = nil)
+      n = (exp - act).abs
+      msg = message(msg) { "Expected |#{exp} - #{act}| (#{n}) to not be <= #{delta}" }
+      refute delta >= n, msg
+    end
+  
+    def assert_in_epsilon(exp, act, epsilon = 0.001, msg = nil)
+      assert_in_delta exp, act, [exp.abs, act.abs].min * epsilon, msg
+    end
+  
+    def refute_in_epsilon(exp, act, epsilon = 0.001, msg = nil)
+      refute_in_delta exp, act, [exp.abs, act.abs].min * epsilon, msg
+    end
+  
+    def assert_includes(collection, obj, msg = nil)
+      msg = message(msg) { "Expected #{mu_pp collection} to include #{mu_pp obj}" }
+      assert_operator collection, :include?, obj, msg
+    end
+  
+    def refute_includes(collection, obj, msg = nil)
+      msg = message(msg) { "Expected #{mu_pp collection} to not include #{mu_pp obj}" }
+      refute_operator collection, :include?, obj, msg
+    end
+  
+    def assert_instance_of(cls, obj, msg = nil)
+      msg = message(msg) { "Expected #{mu_pp obj} to be an instance of #{cls}, not #{obj.class}" }
+      assert obj.instance_of?(cls), msg
+    end
+  
+    def refute_instance_of(cls, obj, msg = nil)
+      msg = message(msg) { "Expected #{mu_pp obj} to not be an instance of #{cls}" }
+      refute obj.instance_of?(cls), msg
+    end
+  
+    def assert_kind_of(cls, obj, msg = nil)
+      msg = message(msg) { "Expected #{mu_pp obj} to be a kind of #{cls}, not #{obj.class}" }
+      assert obj.kind_of?(cls), msg
+    end
+  
+    def refute_kind_of(cls, obj, msg = nil)
+      msg = message(msg) { "Expected #{mu_pp obj} to not be a kind of #{cls}" }
+      refute obj.kind_of?(cls), msg
+    end
+  
+    def assert_operator(o1, op, o2 = UNDEFINED, msg = nil)
+      return assert_predicate o1, op, msg if UNDEFINED == o2
+  
+      assert_respond_to o1, op
+      msg = message(msg) { "Expected #{mu_pp o1} to be #{op} #{mu_pp o2}" }
+      assert o1.__send__(op, o2), msg
+    end
+  
+    def refute_operator(o1, op, o2 = UNDEFINED, msg = nil)
+      return refute_predicate o1, op, msg if UNDEFINED == o2
+  
+      assert_respond_to o1, op
+      msg = message(msg) { "Expected #{mu_pp o1} to not be #{op} #{mu_pp o2}" }
+      refute o1.__send__(op, o2), msg
+    end
+  
+    def assert_predicate(o1, op, msg = nil)
+      assert_respond_to o1, op, include_all: true
+      msg = message(msg) { "Expected #{mu_pp o1} to be #{op}" }
+      assert o1.__send__(op), msg
+    end
+  
+    def refute_predicate(o1, op, msg = nil)
+      assert_respond_to o1, op, include_all: true
+      msg = message(msg) { "Expected #{mu_pp o1} to not be #{op}" }
+      refute o1.__send__(op), msg
+    end
+  
+    def assert_respond_to(obj, meth, msg = nil, include_all: false)
+      msg = message(msg) { "Expected #{mu_pp obj} (#{obj.class}) to respond to ##{meth}" }
+      assert obj.respond_to?(meth, include_all), msg
+    end
+  
+    def refute_respond_to(obj, meth, msg = nil, include_all: false)
+      msg = message(msg) { "Expected #{mu_pp obj} to not respond to #{meth}" }
+      refute obj.respond_to?(meth, include_all), msg
+    end
+  
+    def assert_same(exp, act, msg = nil)
+      msg = message(msg) do
+        format("Expected %s (oid=%d) to be the same as %s (oid=%d)", mu_pp(act), act.object_id, mu_pp(exp), exp.object_id)
+      end
+      refute_nil exp, message { "Use assert_nil if expecting nil" } if exp.nil?
+      assert exp.equal?(act), msg
+    end
+  
+    def refute_same(exp, act, msg = nil)
+      msg = message(msg) do
+        format("Expected %s (oid=%d) to not be the same as %s (oid=%d)", mu_pp(act), act.object_id, mu_pp(exp), exp.object_id)
+      end
+      refute exp.equal?(act), msg
+    end
+  
     def assert_raises(*exp)
       msg = exp.last.is_a?(String) ? "#{exp.pop}.\n" : ""
       exp << StandardError if exp.empty?
@@ -93,21 +240,21 @@ module Minitest
           return e
         end
         raise if e.is_a?(Assertion)
-
+  
         flunk "#{msg}#{exp.inspect} exception expected, not\nClass: <#{e.class}>\nMessage: <#{e.message.inspect}>"
       end
       flunk "#{msg}#{exp.inspect} expected but nothing was raised."
     end
-
+  
     def flunk(msg = nil)
       assert false, msg || "Epic Fail!"
     end
-
+  
     def skip(msg = nil)
       raise Skip, msg || "Skipped, no message given"
     end
   end
-
+  
   # What can be run and reported: every subclass is collected as it is
   # defined, so a test file needs nothing but its class.
   class Runnable

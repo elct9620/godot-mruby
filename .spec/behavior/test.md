@@ -117,3 +117,19 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 | Given | a test class whose `before_teardown` raises and whose `teardown` and `after_teardown` record their names |
 | When | the test runs |
 | Then | both names are recorded and the test reports the exception as an error |
+
+## `RT-014` A message given to an assertion comes before the assertion's own
+
+| Step | Statement |
+| --- | --- |
+| Given | an assertion that does not hold, given a message of its own |
+| When | the assertion runs |
+| Then | it raises `Minitest::Assertion` whose message is the given one followed by what the assertion expected |
+
+## `RT-015` `assert_equal` refuses `nil` as the expected value
+
+| Step | Statement |
+| --- | --- |
+| Given | an `assert_equal` whose expected value is `nil` |
+| When | the assertion runs |
+| Then | it raises `Minitest::Assertion` pointing to `assert_nil`, even when the actual value is `nil` too |
