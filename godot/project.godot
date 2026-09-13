@@ -15,4 +15,4 @@ config/features=PackedStringArray("4.7")
 
 [mruby]
 
-test/directories=PackedStringArray("res://test", "res://order", "res://failing/assertion", "res://failing/error", "res://failing/syntax", "res://failing/missing")
+test/directories=PackedStringArray("res://test", "res://order", "res://failing/assertion", "res://failing/error", "res://failing/syntax", "res://failing/missing", "res://naming")

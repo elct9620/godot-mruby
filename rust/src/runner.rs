@@ -39,20 +39,22 @@ impl INode for RubyTestRunner {
 
 fn run(directories: &[String], options: minitest::Options) -> bool {
     let pattern = settings::test_pattern();
-    let mut paths = Vec::new();
+    let mut files = TestFiles::default();
     for directory in directories {
         if !DirAccess::dir_exists_absolute(directory) {
             error!("The test directory {directory} does not exist");
             return false;
         }
-        collect_test_files(directory, &pattern, &mut paths);
+        files.collect(directory, &pattern);
     }
-    paths.sort();
+    files.tests.sort();
     // Every test file runs, so each one's problems are in the log before any
     // test runs, where a reader of the run's output looks for them.
     let loaded = logged(realm::enter(|realm| {
         realm.install::<Minitest>()?;
-        Ok(paths
+        realm.index_files(files.support);
+        Ok(files
+            .tests
             .iter()
             .map(|path| logged(realm.run_file(path).map(|()| true)))
             .fold(true, |all, loaded| all & loaded))
@@ -130,14 +132,26 @@ fn option(args: &[String], names: &[&str]) -> Option<String> {
         .map(|pair| pair[1].clone())
 }
 
-fn collect_test_files(directory: &str, pattern: &GString, paths: &mut Vec<String>) {
-    for file in DirAccess::get_files_at(directory).as_slice() {
-        if file.match_glob(pattern) {
-            paths.push(join(directory, &file.to_string()));
+// What a run covers of its test directories: the test files it runs, and the
+// test support the class index names for them.
+#[derive(Default)]
+struct TestFiles {
+    tests: Vec<String>,
+    support: Vec<String>,
+}
+
+impl TestFiles {
+    fn collect(&mut self, directory: &str, pattern: &GString) {
+        for file in DirAccess::get_files_at(directory).as_slice() {
+            if file.match_glob(pattern) {
+                self.tests.push(join(directory, &file.to_string()));
+            } else if file.ends_with(".rb") {
+                self.support.push(join(directory, &file.to_string()));
+            }
         }
-    }
-    for child in DirAccess::get_directories_at(directory).as_slice() {
-        collect_test_files(&join(directory, &child.to_string()), pattern, paths);
+        for child in DirAccess::get_directories_at(directory).as_slice() {
+            self.collect(&join(directory, &child.to_string()), pattern);
+        }
     }
 }
 

@@ -3,18 +3,25 @@ use std::collections::HashSet;
 use std::ffi::{CStr, CString};
 use std::sync::Mutex;
 
-use beni::{Ccontext, Error, FromValue, Gem, IntoValue, Mrb};
+use beni::{Ccontext, Error, FromValue, Gem, IntoValue, Mrb, Value};
 use godot::classes::FileAccess;
 
 use crate::log::{Level, Location};
 use crate::output::Output;
+use crate::settings;
 use crate::{log, warn};
 
-/// Where the game's Ruby runs: an `mrb_state` and the paths of the files that
-/// have run in it. It opens at the first entry, one thread at a time is inside
-/// it, and it hands out Rust values rather than Ruby ones.
+mod index;
+
+use index::ClassIndex;
+
+/// Where the game's Ruby runs: an `mrb_state`, the class index of the files
+/// under `res://` and the paths of the files that have run. It opens at the
+/// first entry, one thread at a time is inside it, and it hands out Rust
+/// values rather than Ruby ones.
 pub struct Realm {
     mrb: Mrb,
+    index: RefCell<ClassIndex>,
     ran: RefCell<HashSet<String>>,
 }
 
@@ -41,10 +48,45 @@ impl Realm {
             .map_err(|error| RubyError::plain(format!("mruby did not open: {error}")))?;
         let realm = Self {
             mrb,
+            index: RefCell::new(ClassIndex::default()),
             ran: RefCell::new(HashSet::new()),
         };
         realm.install::<Output>()?;
+        realm.index_files(index::game_files(&settings::test_directories()));
         Ok(realm)
+    }
+
+    /// Adds the files at `paths` to the class index, each named from `res://`.
+    pub fn index_files(&self, paths: impl IntoIterator<Item = String>) {
+        self.index.borrow_mut().add(paths, |key| self.defines(key));
+    }
+
+    // Whether the constant `key` spells is already here, matched the way the
+    // class index matches it.
+    fn defines(&self, key: &[String]) -> bool {
+        let _scope = self.mrb.arena_scope();
+        let mut scope = self.mrb.object_class().to_value(&self.mrb);
+        for segment in key {
+            match self.constant_matching(scope, segment) {
+                Some(constant) => scope = constant,
+                None => return false,
+            }
+        }
+        true
+    }
+
+    // The constant `scope` holds whose name the class index matches to
+    // `segment`.
+    fn constant_matching(&self, scope: Value, segment: &str) -> Option<Value> {
+        let constants = scope
+            .funcall(&self.mrb, c"constants", &[])
+            .and_then(|constants| constants.ensure_array(&self.mrb))
+            .ok()?;
+        let name = (0..constants.len())
+            .map(|index| constants.entry(index as isize))
+            .find(|name| index::normalize(&name.to_string(&self.mrb)) == segment)?;
+        let name = name.to_sym(&self.mrb).ok()?.to_sym();
+        scope.const_get(&self.mrb, name).ok()
     }
 
     /// Adds what `G` defines to what Ruby sees in this realm.

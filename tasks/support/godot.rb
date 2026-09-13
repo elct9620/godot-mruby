@@ -2,6 +2,7 @@
 
 require "open3"
 
+require_relative "loading"
 require_relative "ruby_tests"
 require_relative "test_settings"
 
@@ -34,6 +35,7 @@ module Godot
     verify_scripts_run!(project)
     verify_reports!(project)
     RubyTests.verify!(project)
+    Loading.verify!(project)
     TestSettings.verify!(project)
   end
 
