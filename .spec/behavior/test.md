@@ -165,3 +165,11 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 | Given | an object whose method is stubbed with a value |
 | When | the method is called inside the block and again after it |
 | Then | it answers the value inside the block and its own result after it |
+
+## `RT-020` An exception in a test is reported with the calls that led to it
+
+| Step | Statement |
+| --- | --- |
+| Given | a test method that calls a method raising an exception other than `Minitest::Assertion` |
+| When | the runner scene runs headless on its directory |
+| Then | Godot's output lists each Ruby frame from the raise up to the test method, and no frame of the test framework |

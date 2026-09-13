@@ -2,16 +2,23 @@
 # follows minitest's design and spelling, so Ruby developers write tests the
 # way they already do, within what the extension's mruby provides.
 module Minitest
-  # A failed assertion. A test raising one fails; any other exception is an
-  # error.
   # The directory the framework's files are compiled under; a frame there is
   # the framework's own rather than the test's.
   FRAMEWORK_DIRECTORY = __FILE__[0, __FILE__.rindex("/") + 1]
 
+  # The frames of a backtrace outside the framework, or every frame when all
+  # of them are the framework's.
+  def self.filter_backtrace(backtrace)
+    filtered = backtrace.reject { |frame| frame[0, FRAMEWORK_DIRECTORY.size] == FRAMEWORK_DIRECTORY }
+    filtered.empty? ? backtrace : filtered
+  end
+
+  # A failed assertion. A test raising one fails; any other exception is an
+  # error.
   class Assertion < Exception
     # Where the test failed: the first frame outside the framework.
     def location
-      frame = (backtrace || []).find { |line| line[0, FRAMEWORK_DIRECTORY.size] != FRAMEWORK_DIRECTORY }
+      frame = Minitest.filter_backtrace(backtrace || []).first
       frame ? frame.split(":in ").first : "unknown"
     end
 
@@ -46,6 +53,12 @@ module Minitest
 
     def backtrace
       @error.backtrace
+    end
+
+    # The exception, then the calls that led to it outside the framework.
+    def message
+      frames = Minitest.filter_backtrace(backtrace || [])
+      "#{@error.class}: #{@error.message}\n    #{frames.join("\n    ")}"
     end
 
     def result_code

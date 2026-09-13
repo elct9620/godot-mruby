@@ -38,12 +38,17 @@ module Godot
       "teardown ran after a failure"
     ],
     "res://failing/error" => [
-      "ErrorTest#test_raises_an_argument_error [res://failing/error/error_test.rb:5]:",
-      "ArgumentError: not an assertion"
+      "ErrorTest#test_raises_an_argument_error [res://failing/error/error_test.rb:10]:",
+      "ArgumentError: not an assertion",
+      "    res://failing/error/error_test.rb:10:in refuse_the_item",
+      "    res://failing/error/error_test.rb:6:in test_raises_an_argument_error"
     ],
     "res://failing/syntax" => ["(res://failing/syntax/broken_test.rb:4)"],
     "res://failing/missing" => ["The test directory res://failing/missing does not exist"]
   }.freeze
+  # Where the test framework's files are compiled; a failing run reports the
+  # tests' own frames and never these.
+  FRAMEWORK_FRAME = "godot_mruby/"
 
   module_function
 
@@ -107,12 +112,13 @@ module Godot
   end
 
   # Runs each directory under godot/failing/ and requires the run to fail
-  # with what it has to print.
-  # @behavior RT-002 RT-003 RT-004 RT-005 RT-006 RT-007 RT-008
+  # with what it has to print, and without the framework's own frames.
+  # @behavior RT-002 RT-003 RT-004 RT-005 RT-006 RT-007 RT-008 RT-020
   def verify_tests_fail!(project = PROJECT)
     FAILING.each do |dir, expected|
       output, status = run_tests(project, dir)
       missing = expected.reject { |line| output.include?(line) }
+      missing << "no #{FRAMEWORK_FRAME} frame" if output.include?(FRAMEWORK_FRAME)
       next if status.exitstatus == 1 && missing.empty?
 
       raise "The Ruby tests under #{dir} did not fail as they should #{missing}:\n#{output}"
