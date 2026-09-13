@@ -1,12 +1,15 @@
-use godot::classes::{DirAccess, FileAccess, INode, Node, Os};
+use godot::classes::{DirAccess, INode, Node, Os};
 use godot::prelude::*;
 
-use crate::interpreter::{self, TestOptions};
+use crate::error;
+use crate::minitest::{self, Minitest};
+use crate::realm::{self, RubyError};
 use crate::settings;
 
-/// The node the addon's runner scene holds. Once in the tree it runs every
-/// test file of the test directories it is given in the game's interpreter,
-/// then quits with 0 when every test passed and 1 otherwise.
+/// The node the addon's runner scene holds. Once in the tree it installs the
+/// test framework into the game's realm, runs every test file of the test
+/// directories it is given there, then quits with 0 when every test passed
+/// and 1 otherwise.
 #[derive(GodotClass)]
 #[class(base = Node, init)]
 pub struct RubyTestRunner {
@@ -20,9 +23,9 @@ impl INode for RubyTestRunner {
         let run_as_asked =
             test_directories(&args).and_then(|directories| Ok((directories, test_options(&args)?)));
         let passed = match run_as_asked {
-            Ok((directories, options)) => run(&directories, &options),
+            Ok((directories, options)) => run(&directories, options),
             Err(refused) => {
-                godot_error!("{refused}");
+                error!("{refused}");
                 false
             }
         };
@@ -34,30 +37,38 @@ impl INode for RubyTestRunner {
     }
 }
 
-fn run(directories: &[String], options: &TestOptions) -> bool {
+fn run(directories: &[String], options: minitest::Options) -> bool {
     let pattern = settings::test_pattern();
     let mut paths = Vec::new();
     for directory in directories {
         if !DirAccess::dir_exists_absolute(directory) {
-            godot_error!("The test directory {directory} does not exist");
+            error!("The test directory {directory} does not exist");
             return false;
         }
         collect_test_files(directory, &pattern, &mut paths);
     }
     paths.sort();
-    // What mruby says about a test file is reported before any test runs,
-    // where a reader of the run's output looks for it.
-    let (diagnostics, loaded) = interpreter::load_tests(&paths, |path| {
-        FileAccess::get_file_as_string(path).to_string()
-    });
-    for diagnostic in diagnostics {
-        diagnostic.report();
-    }
-    let problems = interpreter::run_tests(options);
-    for problem in &problems {
-        problem.report();
-    }
-    loaded && problems.is_empty()
+    // Every test file runs, so each one's problems are in the log before any
+    // test runs, where a reader of the run's output looks for them.
+    let loaded = logged(realm::enter(|realm| {
+        realm.install::<Minitest>()?;
+        Ok(paths
+            .iter()
+            .map(|path| logged(realm.run_file(path).map(|()| true)))
+            .fold(true, |all, loaded| all & loaded))
+    }));
+    let passed = logged(realm::enter(|realm| {
+        realm.call("Minitest", c"run", options)
+    }));
+    loaded && passed
+}
+
+// An outcome Ruby could not reach counts as a failure, written to the log.
+fn logged(outcome: Result<bool, RubyError>) -> bool {
+    outcome.unwrap_or_else(|failed| {
+        failed.log();
+        false
+    })
 }
 
 // What follows `--` on Godot's command line.
@@ -95,7 +106,7 @@ fn test_directories(args: &[String]) -> Result<Vec<String>, String> {
     }
 }
 
-fn test_options(args: &[String]) -> Result<TestOptions, String> {
+fn test_options(args: &[String]) -> Result<minitest::Options, String> {
     // @option --seed
     let seed = option(args, &["-s", "--seed"])
         .map(|seed| {
@@ -103,7 +114,7 @@ fn test_options(args: &[String]) -> Result<TestOptions, String> {
                 .map_err(|_| format!("--seed takes a whole number, not {seed}"))
         })
         .transpose()?;
-    Ok(TestOptions {
+    Ok(minitest::Options {
         // @option --include
         include: option(args, &["-i", "--include"]),
         // @option --exclude

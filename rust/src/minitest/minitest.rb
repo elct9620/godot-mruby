@@ -1,6 +1,6 @@
-# The test framework the test runner prepares the game's interpreter with. It
-# follows minitest's design and spelling, so Ruby developers write tests the
-# way they already do, within what the extension's mruby provides.
+# The test framework a test runner installs into a realm. It follows
+# minitest's design and spelling, so Ruby developers write tests the way they
+# already do, within what the extension's mruby provides.
 module Minitest
   # The directory the framework's files are compiled under; a frame there is
   # the framework's own rather than the test's.
@@ -391,11 +391,31 @@ module Minitest
     end
   end
 
-  # Prints a run the way minitest does: a character per test, the details of
-  # each test that did not pass, then the counts.
-  class Reporter
-    attr_reader :count
+  # What a reporter answers, as minitest's reporters do: told when the run
+  # starts, of each test's result, and when the run ends, then asked whether
+  # the run passed.
+  class AbstractReporter
+    def start; end
 
+    def record(result); end
+
+    def report; end
+
+    def passed?
+      true
+    end
+  end
+
+  # Prints a character per test as it finishes.
+  class ProgressReporter < AbstractReporter
+    def record(result)
+      print result.result_code
+    end
+  end
+
+  # Prints the details of each test that did not pass, then the counts. The
+  # run passed when every test did or was skipped.
+  class SummaryReporter < AbstractReporter
     def initialize
       @count = 0
       @assertions = 0
@@ -411,7 +431,6 @@ module Minitest
       @count += 1
       @assertions += result.assertions
       @results << result unless result.passed?
-      print result.result_code
     end
 
     def report
@@ -427,12 +446,8 @@ module Minitest
       puts summary
     end
 
-    # Each test that did not pass, as what went wrong and the file and line
-    # it went wrong at.
-    def located_problems
-      problems.map do |result|
-        ["#{result.class}##{result.name}: #{result.failure.message}", *result.failure.file_and_line]
-      end
+    def passed?
+      problems.empty?
     end
 
     private
@@ -449,28 +464,73 @@ module Minitest
     end
   end
 
+  # The reporters of one run, told everything in the order they were added;
+  # the run passed when every one of them says so.
+  class CompositeReporter < AbstractReporter
+    attr_reader :reporters
+
+    def initialize(*reporters)
+      @reporters = reporters
+    end
+
+    def <<(reporter)
+      reporters << reporter
+    end
+
+    def start
+      reporters.each(&:start)
+    end
+
+    def record(result)
+      reporters.each { |reporter| reporter.record(result) }
+    end
+
+    def report
+      reporters.each(&:report)
+    end
+
+    def passed?
+      reporters.all?(&:passed?)
+    end
+  end
+
   class << self
     # The seed the current run shuffles its tests by.
     attr_accessor :seed
+
+    # The run's reporter while plugins start, so they can add their own.
+    attr_accessor :reporter
+
+    # The names of the plugins each run starts.
+    def extensions
+      @extensions ||= []
+    end
+  end
+
+  # Starts every plugin: `plugin_NAME_init` for each name in extensions.
+  def self.init_plugins(options)
+    extensions.each do |name|
+      msg = "plugin_#{name}_init"
+      send(msg, options) if respond_to?(msg)
+    end
   end
 
   # Runs every test class defined so far, in the order the :seed option
-  # shuffles them or a random seed it prints, and answers the problems it
-  # found, each as its message, file and line, so the test runner reports
-  # them where they happened; none means every test passed. An :include that
-  # leaves no test to run is a problem too.
+  # shuffles them or a random seed it prints, and answers whether the run
+  # passed. What the run found reaches its reporters, which plugins add to.
   def self.run(options = {})
     srand
     self.seed = options[:seed] || srand % 0xFFFF
     puts "Run options: --seed #{seed}"
     puts
     srand seed
-    reporter = Reporter.new
+    reporter = CompositeReporter.new(SummaryReporter.new, ProgressReporter.new)
+    self.reporter = reporter
+    init_plugins(options)
+    self.reporter = nil
     reporter.start
     Runnable.runnables.shuffle.each { |suite| suite.run_suite(reporter, options) }
     reporter.report
-    return [["Nothing ran for filter: #{options[:include]}", nil, nil]] if options[:include] && reporter.count == 0
-
-    reporter.located_problems
+    reporter.passed?
   end
 end

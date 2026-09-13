@@ -4,11 +4,11 @@ use godot::obj::script::{ScriptInstance, SiMut};
 use godot::prelude::*;
 use godot::register::info::{MethodInfo, PropertyInfo};
 
-use crate::{interpreter, language};
+use crate::{language, realm};
 
 /// A node's instance of a `RubyScript`. It holds no Ruby state: every entry
-/// runs the script's file in the game's interpreter if it has not run yet,
-/// and otherwise leaves the node's own members to answer.
+/// runs the script's file in the game's realm if it has not run yet, and
+/// otherwise leaves the node's own members to answer.
 pub struct RubyInstance {
     script: Gd<Script>,
     // What the node prints as while its script says nothing about it.
@@ -25,9 +25,8 @@ impl RubyInstance {
 
     fn enter(&self) {
         let path = self.script.get_path().to_string();
-        let source = || self.script.get_source_code().to_string();
-        for diagnostic in interpreter::run_once(&path, source) {
-            diagnostic.report();
+        if let Err(failed) = realm::enter(|realm| realm.run_file(&path)) {
+            failed.log();
         }
     }
 }

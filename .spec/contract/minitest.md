@@ -1,6 +1,6 @@
 # Minitest
 
-The Ruby a test is written against, spelled the way minitest spells it so a Ruby developer writes tests as they already do. It exists only in the interpreter the test runner prepares.
+The Ruby a test is written against, spelled the way minitest spells it so a Ruby developer writes tests as they already do. It exists only in a realm the test runner installs it into.
 
 ### What minitest has that this does not
 
@@ -13,6 +13,7 @@ The Ruby a test is written against, spelled the way minitest spells it so a Ruby
 - A difference between two long values is shown as the expected and actual values, not as a diff.
 - `Minitest::Mock` matches positional arguments only, delegates to nothing, cannot expect the Object methods it keeps, such as `to_s`, and has no `must_verify` expectation.
 - `Object#stub` replaces only a method the object defines, and passes no keyword arguments.
+- Plugins are not found among installed gems, and none takes options: the one plugin is the extension's own, which writes each test that did not pass to Godot's log.
 
 ## Includes
 
@@ -564,7 +565,7 @@ end
 
 ## `Minitest.run`
 
-Runs every test class defined so far, in an order `options[:seed]` shuffles or a random seed it prints, keeping the tests `options[:include]` names and leaving out those `options[:exclude]` names, and answers the problems the run found, each as its message, then the file and line it happened at, or `nil` for both where neither is known; none means every test passed. The test runner calls it once the test files have run, and reports each problem through Godot's log.
+Runs every test class defined so far, in an order `options[:seed]` shuffles or a random seed it prints, keeping the tests `options[:include]` names and leaving out those `options[:exclude]` names, and answers whether the run passed, as minitest does. What the run found reaches its reporters, which plugins add to as the run starts. The test runner calls it once the test files have run.
 
 | Attribute | Value |
 | --- | --- |
@@ -573,6 +574,21 @@ Runs every test class defined so far, in an order `options[:seed]` shuffles or a
 ```ruby
 module Minitest
   def self.run(options = {})
+  end
+end
+```
+
+## `Minitest::LogReporter`
+
+The reporter the extension's plugin adds to every run: each test that did not pass is written to Godot's log at the Ruby line it went wrong at, and a filter that leaves no test to run is written there too and fails the run. The extension implements the method that writes to the log on this class, so the class is where the Ruby and the Rust sides meet.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```ruby
+module Minitest
+  class LogReporter
   end
 end
 ```

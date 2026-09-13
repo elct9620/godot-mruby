@@ -15,17 +15,20 @@ The words this project keeps, and the ones it turns down in their place.
 - `CLAUDE.md`
 - `.spec/**/*.md`
 
-### Interpreter
+### Realm
 
-One `mrb_state` together with the bookkeeping the extension keeps beside it, such as which files have run. The game's files share one interpreter, and nothing is shared between interpreters.
+Where a file's Ruby runs: one `mrb_state` and the bookkeeping the extension keeps beside it, entered by one thread at a time. A file's path chooses its realm, so every file under `res://` shares the game's, and nothing is shared between realms. What Ruby sees in a realm beyond mruby's core is what has been installed into it.
 
 #### Rejected
 
-- `VM` - mruby's virtual machine is one part of an interpreter; the interpreter is what the extension opens, enters and closes.
+- `Interpreter` - mruby is the interpreter; a realm is one world of it that the extension opens, enters and closes.
+- `VM` - mruby's virtual machine is one part of a realm.
+- `Sandbox` - a realm keeps names apart, not permissions: Ruby reaches the host through the engine.
+- `World` - Godot's `World2D` and `World3D` are the spaces a viewport simulates and draws.
 
 ### Entry
 
-A thread running Ruby in an interpreter, from the outermost call in until that call returns. A file runs at the first entry that needs it, never when it is loaded.
+A thread going into a realm to run Ruby: it waits while another thread is inside, and goes on while it is inside already. It stays inside from its outermost entry until that entry returns, engine calls made from Ruby included. A file runs at the first entry that needs it, never when Godot loads it.
 
 ### Test directory
 
