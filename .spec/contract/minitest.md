@@ -17,27 +17,96 @@ module Minitest
 end
 ```
 
-## `Minitest::Test#setup`
+## `Minitest::Test::LifecycleHooks`
+
+The steps around each test, in the order they run: `before_setup`, `setup`, `after_setup`, the test, then `before_teardown`, `teardown`, `after_teardown`. A test class overrides `setup` and `teardown`; the `before_` and `after_` hooks are for a library, which includes a module that overrides them and calls `super`. They live in a module rather than on `Minitest::Test` so such a module included into `Minitest::Test` itself still reaches them.
+
+```ruby
+module Minitest
+  class Test
+    module LifecycleHooks
+    end
+  end
+end
+```
+
+## `Minitest::Test::LifecycleHooks#before_setup`
+
+```ruby
+module Minitest
+  class Test
+    module LifecycleHooks
+      def before_setup
+      end
+    end
+  end
+end
+```
+
+## `Minitest::Test::LifecycleHooks#setup`
 
 Runs before each test.
 
 ```ruby
 module Minitest
   class Test
-    def setup
+    module LifecycleHooks
+      def setup
+      end
     end
   end
 end
 ```
 
-## `Minitest::Test#teardown`
-
-Runs after each test, whether it passed or not.
+## `Minitest::Test::LifecycleHooks#after_setup`
 
 ```ruby
 module Minitest
   class Test
-    def teardown
+    module LifecycleHooks
+      def after_setup
+      end
+    end
+  end
+end
+```
+
+## `Minitest::Test::LifecycleHooks#before_teardown`
+
+Runs after each test, whether it passed or not, as do the two teardown steps after it.
+
+```ruby
+module Minitest
+  class Test
+    module LifecycleHooks
+      def before_teardown
+      end
+    end
+  end
+end
+```
+
+## `Minitest::Test::LifecycleHooks#teardown`
+
+```ruby
+module Minitest
+  class Test
+    module LifecycleHooks
+      def teardown
+      end
+    end
+  end
+end
+```
+
+## `Minitest::Test::LifecycleHooks#after_teardown`
+
+```ruby
+module Minitest
+  class Test
+    module LifecycleHooks
+      def after_teardown
+      end
     end
   end
 end

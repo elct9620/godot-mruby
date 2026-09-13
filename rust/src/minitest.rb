@@ -157,25 +157,43 @@ module Minitest
   end
 
   # What a test class inherits: each public method whose name starts with
-  # `test_` is a test, run on its own instance between `setup` and
-  # `teardown`.
+  # `test_` is a test, run on its own instance between its lifecycle hooks.
   class Test < Runnable
+    SETUP_METHODS = %w[before_setup setup after_setup].freeze
+    TEARDOWN_METHODS = %w[before_teardown teardown after_teardown].freeze
+
+    # The steps around each test. A test class overrides `setup` and
+    # `teardown`; a library includes a module overriding the `before_` and
+    # `after_` hooks, calling `super`. They live in a module so a module
+    # included into Minitest::Test itself still comes before them.
+    module LifecycleHooks
+      def before_setup; end
+
+      def setup; end
+
+      def after_setup; end
+
+      def before_teardown; end
+
+      def teardown; end
+
+      def after_teardown; end
+    end
+
     include Assertions
+    include LifecycleHooks
 
     def self.runnable_methods
       public_instance_methods(true).map(&:to_s).select { |name| name[0, 5] == "test_" }.sort
     end
 
-    def setup; end
-
-    def teardown; end
-
+    # Each teardown step runs whatever the steps before it raised.
     def run
       capture_exceptions do
-        setup
+        SETUP_METHODS.each { |hook| __send__(hook) }
         __send__(name)
       end
-      capture_exceptions { teardown }
+      TEARDOWN_METHODS.each { |hook| capture_exceptions { __send__(hook) } }
       self
     end
 

@@ -101,3 +101,19 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 | Given | an `assert_equal` whose expected and actual values differ |
 | When | the assertion runs |
 | Then | it raises `Minitest::Assertion` whose message shows the expected value before the actual one |
+
+## `RT-012` Lifecycle hooks run around each test in minitest's order
+
+| Step | Statement |
+| --- | --- |
+| Given | a test class whose lifecycle hooks, `setup`, test method and `teardown` each record their name |
+| When | the test runs |
+| Then | the names are recorded as `before_setup`, `setup`, `after_setup`, the test, `before_teardown`, `teardown`, `after_teardown` |
+
+## `RT-013` A teardown step that raises does not stop the ones after it
+
+| Step | Statement |
+| --- | --- |
+| Given | a test class whose `before_teardown` raises and whose `teardown` and `after_teardown` record their names |
+| When | the test runs |
+| Then | both names are recorded and the test reports the exception as an error |
