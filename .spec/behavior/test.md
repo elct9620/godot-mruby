@@ -2,10 +2,6 @@
 
 How a Ruby test suite runs headless: the runner scene the addon carries runs every test file under a directory in the game's realm and quits with whether the suite passed, so a project tests its Ruby without GDScript.
 
-### What a test does not have yet
-
-- A test reaches only what its own file and core Ruby define: files do not yet find each other by name.
-
 ## Includes
 
 - `tasks/support/ruby_tests.rb`

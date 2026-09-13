@@ -14,7 +14,7 @@ module Godot
       "WARNING: res://comparable.rb names Comparable, which the realm already has, so it never loads by name",
       "WARNING: res://naming/http_client.rb and res://naming/httpclient.rb both name Naming::HttpClient, " \
       "so neither loads by name",
-      "WARNING: res://naming/inventory.rb names Naming::Inventory, which hides Naming::Items::Inventory " \
+      "WARNING: res://naming/crate.rb names Naming::Crate, which hides Naming::Items::Crate " \
       "from Ruby inside Naming::Items once it has loaded"
     ].freeze
 

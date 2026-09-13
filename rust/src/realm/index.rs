@@ -15,12 +15,29 @@ const ROOT: &str = "res://";
 #[derive(Default)]
 pub struct ClassIndex {
     files: BTreeMap<Key, String>,
+    namespaces: BTreeMap<Key, Namespace>,
     refused: BTreeSet<Key>,
 }
 
 /// A constant path as the index matches it: one segment per namespace, each
 /// without underscores and in lower case.
-type Key = Vec<String>;
+pub type Key = Vec<String>;
+
+/// What a constant path names in the index.
+pub enum Named {
+    /// The file defining it.
+    File(String),
+    /// A directory with no file of its own name, which is an empty module.
+    Namespace(Namespace),
+}
+
+#[derive(Clone)]
+pub struct Namespace {
+    /// The directory, as `res://ui/`.
+    pub directory: String,
+    /// The module's name as Zeitwerk camelizes the directory's: `Ui`.
+    pub name: String,
+}
 
 impl ClassIndex {
     /// Takes in the files at `paths`, refusing a name two files spell and a
@@ -33,6 +50,7 @@ impl ClassIndex {
         let mut added = BTreeSet::new();
         for path in paths {
             let key = key_of(&path);
+            self.add_namespaces(&path);
             if self.refused.contains(&key) {
                 continue;
             }
@@ -50,6 +68,38 @@ impl ClassIndex {
             added.insert(key);
         }
         self.warn_of_shadows(&added);
+    }
+
+    /// What `key` names, if anything: a file is what a namespace's own file
+    /// is too, so it answers before the directory.
+    pub fn named(&self, key: &[String]) -> Option<Named> {
+        match self.files.get(key) {
+            Some(path) => Some(Named::File(path.clone())),
+            None => self.namespaces.get(key).cloned().map(Named::Namespace),
+        }
+    }
+
+    /// Whether the file at `path` is one the index names.
+    pub fn names(&self, path: &str) -> bool {
+        self.files
+            .get(&key_of(path))
+            .is_some_and(|named| named == path)
+    }
+
+    // Every directory a file sits in is a namespace, named by the first
+    // directory to spell it.
+    fn add_namespaces(&mut self, path: &str) {
+        let segments = segments(path);
+        for depth in 1..segments.len() {
+            let key = segments[..depth]
+                .iter()
+                .map(|segment| normalize(segment))
+                .collect();
+            self.namespaces.entry(key).or_insert_with(|| Namespace {
+                directory: format!("{ROOT}{}/", segments[..depth].join("/")),
+                name: camelize(segments[depth - 1]),
+            });
+        }
     }
 
     // Ruby finds an outer constant before asking for an inner one of the same
@@ -124,7 +174,8 @@ fn segments(path: &str) -> Vec<&str> {
         .collect()
 }
 
-fn key_of(path: &str) -> Key {
+/// The constant path the file at `path` spells, as the index matches it.
+pub fn key_of(path: &str) -> Key {
     segments(path)
         .iter()
         .map(|segment| normalize(segment))

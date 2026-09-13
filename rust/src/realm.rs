@@ -12,8 +12,10 @@ use crate::settings;
 use crate::{log, warn};
 
 mod index;
+mod loading;
 
 use index::ClassIndex;
+use loading::{ByName, Inside};
 
 /// Where the game's Ruby runs: an `mrb_state`, the class index of the files
 /// under `res://` and the paths of the files that have run. It opens at the
@@ -35,6 +37,7 @@ pub fn enter<T>(body: impl FnOnce(&Realm) -> Result<T, RubyError>) -> Result<T, 
         Some(realm) => realm,
         None => game.insert(Realm::open()?),
     };
+    let _inside = Inside::new(realm);
     body(realm)
 }
 
@@ -52,27 +55,29 @@ impl Realm {
             ran: RefCell::new(HashSet::new()),
         };
         realm.install::<Output>()?;
+        realm.install::<ByName>()?;
         realm.index_files(index::game_files(&settings::test_directories()));
         Ok(realm)
     }
 
     /// Adds the files at `paths` to the class index, each named from `res://`.
     pub fn index_files(&self, paths: impl IntoIterator<Item = String>) {
-        self.index.borrow_mut().add(paths, |key| self.defines(key));
+        let _scope = self.mrb.arena_scope();
+        self.index
+            .borrow_mut()
+            .add(paths, |key| self.constant_at(key).is_some());
     }
 
-    // Whether the constant `key` spells is already here, matched the way the
+    // The constant `key` spells, if it is already here, matched the way the
     // class index matches it.
-    fn defines(&self, key: &[String]) -> bool {
-        let _scope = self.mrb.arena_scope();
-        let mut scope = self.mrb.object_class().to_value(&self.mrb);
-        for segment in key {
-            match self.constant_matching(scope, segment) {
-                Some(constant) => scope = constant,
-                None => return false,
-            }
-        }
-        true
+    fn constant_at(&self, key: &[String]) -> Option<Value> {
+        key.iter().try_fold(self.object(), |scope, segment| {
+            self.constant_matching(scope, segment)
+        })
+    }
+
+    fn object(&self) -> Value {
+        self.mrb.object_class().to_value(&self.mrb)
     }
 
     // The constant `scope` holds whose name the class index matches to
@@ -99,15 +104,25 @@ impl Realm {
     /// Runs the file at `path` unless it has run in this realm already,
     /// whether it succeeded or not.
     pub fn run_file(&self, path: &str) -> Result<(), RubyError> {
+        let _scope = self.mrb.arena_scope();
+        self.run(path)
+            .map_err(|error| RubyError::read(&self.mrb, Some(path), &error))
+    }
+
+    // A file the class index names runs after the namespaces its path passes
+    // through; a test file is not one it names.
+    fn run(&self, path: &str) -> Result<(), Error> {
         if !self.ran.borrow_mut().insert(path.to_owned()) {
             return Ok(());
         }
+        if self.index.borrow().names(path) {
+            self.ensure_namespaces(path)?;
+        }
         if !FileAccess::file_exists(path) {
-            return Err(RubyError::plain(format!("{path}: the file does not exist")));
+            return Err(refused(&self.mrb, "the file does not exist"));
         }
         let source = FileAccess::get_file_as_string(path).to_string();
         load(&self.mrb, path, &source)
-            .map_err(|error| RubyError::read(&self.mrb, Some(path), &error))
     }
 
     /// Calls `method` on the constant `receiver` names with `arg`, and answers

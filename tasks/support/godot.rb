@@ -18,8 +18,9 @@ module Godot
   FAILED = /^(ERROR|SCRIPT ERROR):/
   SMOKE_SCENE = "res://smoke/hello.tscn"
   # What the smoke scene's Ruby prints. Each line must appear exactly once:
-  # the scene attaches the same file to two nodes, and a file runs once.
-  SMOKE_LINES = ["puts from mruby", "print from mruby", ":p_from_mruby"].freeze
+  # the scene attaches the same file to two nodes, and a file runs once. The
+  # last is a constant of smoke.rb, which runs before the script inside smoke/.
+  SMOKE_LINES = ["puts from mruby", "print from mruby", ":p_from_mruby", "namespace from smoke.rb"].freeze
   REPORT_SCENE = "res://report/report.tscn"
   # What mruby says about the report scene's files, each as the line Godot
   # prints it on and the Ruby location Godot puts on the line after.
@@ -54,7 +55,7 @@ module Godot
 
   # Runs the smoke scene for a few frames and counts the lines its Ruby
   # printed; --quit-after ends the run even when nothing does.
-  # @behavior RS-001 RS-002 RS-003 RS-004
+  # @behavior RS-001 RS-002 RS-003 RS-004 RL-011
   def verify_scripts_run!(project = PROJECT)
     output, status = run_scene(project, SMOKE_SCENE, "--quit-after", "3")
     lines = output.lines.map(&:chomp)

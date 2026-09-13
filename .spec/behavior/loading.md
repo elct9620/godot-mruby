@@ -5,7 +5,9 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 ## Includes
 
 - `tasks/support/loading.rb`
+- `tasks/support/godot.rb`
 - `godot/test/**/*.rb`
+- `godot/naming/**/*.rb`
 
 ## `RL-001` Two files naming one constant are warned about
 
@@ -30,3 +32,91 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 | Given | a file whose path spells a constant mruby already defines |
 | When | a realm's class index takes it in |
 | Then | Godot's log warns that it never loads by name |
+
+## `RL-004` A constant a file names loads at its first use
+
+| Step | Statement |
+| --- | --- |
+| Given | a file under `res://` defining the constant its path spells |
+| When | Ruby first uses that constant |
+| Then | it gets what the file defined |
+
+## `RL-005` A namespace's own file runs before a file inside it
+
+| Step | Statement |
+| --- | --- |
+| Given | a file defining a namespace, and a file inside its directory that reopens it to define a class |
+| When | Ruby first uses that class |
+| Then | the class reaches what the namespace's own file defined |
+
+## `RL-006` A directory with no file of its own is an empty module
+
+| Step | Statement |
+| --- | --- |
+| Given | a directory holding a file but no file of the directory's own name |
+| When | Ruby first uses the constant the directory spells |
+| Then | it gets a module holding the constants of the files inside it |
+
+## `RL-007` A directory's module answers only to the name Zeitwerk gives it
+
+| Step | Statement |
+| --- | --- |
+| Given | a directory with no file of its own name, whose name Zeitwerk camelizes one way |
+| When | Ruby uses the constant spelled another way |
+| Then | it raises `NameError` naming the spelling the directory has |
+
+## `RL-008` A name used inside a namespace finds that namespace's file first
+
+| Step | Statement |
+| --- | --- |
+| Given | a file inside a namespace's directory, and code inside that namespace using its name alone |
+| When | the code runs |
+| Then | it gets the constant of the file inside the namespace |
+
+## `RL-009` A name no file spells raises the NameError core Ruby raises
+
+| Step | Statement |
+| --- | --- |
+| Given | a constant no file under `res://` spells |
+| When | Ruby uses it |
+| Then | it raises `NameError` with core Ruby's message, naming the constant |
+
+## `RL-010` A qualified name its namespace lacks is looked for outward
+
+| Step | Statement |
+| --- | --- |
+| Given | a file at the top of `res://`, and a namespace whose directory has no file of that name |
+| When | Ruby uses the name qualified by that namespace |
+| Then | it gets the constant of the file at the top |
+
+## `RL-011` A node script's namespace file runs before it
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script inside a namespace's directory that reopens the namespace, and the namespace's own file |
+| When | the scene runs |
+| Then | the script reaches what the namespace's own file defined |
+
+## `RL-012` Test support loads by name
+
+| Step | Statement |
+| --- | --- |
+| Given | a file under a test directory that does not match the test pattern |
+| When | a test uses the constant its path spells from `res://` |
+| Then | it gets what the file defined |
+
+## `RL-013` A test class loaded by name during a run does not run
+
+| Step | Statement |
+| --- | --- |
+| Given | a file defining a test class, which a test loads by name |
+| When | the run goes on |
+| Then | the loaded class's tests do not run |
+
+## `RL-014` A constant two files spell does not load by name
+
+| Step | Statement |
+| --- | --- |
+| Given | two files whose paths spell one constant, apart from an underscore |
+| When | Ruby uses that constant |
+| Then | it raises `NameError` |
