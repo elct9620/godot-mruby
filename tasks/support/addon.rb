@@ -125,9 +125,12 @@ module Addon
     end
   end
 
+  # Of .godot, the copy keeps only what a fresh checkout has: the extension list.
   def copy_project(project)
     FileUtils.cp_r(Godot::PROJECT, project)
     FileUtils.rm_rf(File.join(project, ".godot"))
+    FileUtils.mkdir_p(File.join(project, ".godot"))
+    FileUtils.cp(File.join(Godot::PROJECT, Godot::EXTENSION_LIST), File.join(project, Godot::EXTENSION_LIST))
     FileUtils.rm_rf(File.join(project, "addons", "godot_mruby"))
     FileUtils.mkdir_p(File.join(project, "addons"))
   end

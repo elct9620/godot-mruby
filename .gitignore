@@ -1,5 +1,7 @@
-# Godot
-godot/.godot/
+# Godot; the extension list is kept so a run loads the addon without the
+# editor having to discover it first
+godot/.godot/*
+!godot/.godot/extension_list.cfg
 godot/addons/godot_mruby/bin/
 
 # Rust

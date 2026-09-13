@@ -43,6 +43,7 @@ sumi fmt                                 # write .spec/ in sumi's form (--check 
 
 - Run Godot only with `--headless`; never start anything that opens its GUI.
 - Minimum Godot is 4.6: keep gdext's `api-4-6` feature and the `.gdextension`'s `compatibility_minimum` in step.
+- `godot/.godot/extension_list.cfg` is committed so Godot loads the addon at startup; an editor that first discovers it and quits at once crashes (godotengine/godot#111048).
 - Library file names are shared by `godot_mruby.gdextension` and `tasks/support/extension.rb`; change both together.
 - Put task logic in `tasks/support/` (the only Ruby RuboCop checks) and keep `.rake` files as thin glue.
 - beni skips `beni:build` while an archive exists, so a config change needs `beni:clean` first.

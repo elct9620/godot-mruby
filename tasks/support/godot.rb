@@ -6,6 +6,8 @@ require "open3"
 # Backs tasks/godot.rake.
 module Godot
   PROJECT = File.expand_path("../../godot", __dir__)
+  # The one file of the project's .godot/ the repository keeps.
+  EXTENSION_LIST = File.join(".godot", "extension_list.cfg")
   EXECUTABLE = ENV.fetch("GODOT", "godot")
   # What gdext prints once the engine has called into the library.
   LOADED = "Initialize godot-rust"
@@ -17,15 +19,14 @@ module Godot
 
   module_function
 
-  # The editor pass comes first, since it records the extension a plain run
-  # then loads.
   def verify!(project = PROJECT)
     verify_loaded!(project)
     verify_scripts_run!(project)
   end
 
-  # An editor pass is what records the addon's .gdextension for later runs and
-  # loads it; the project has no main scene for a plain run to start. Godot
+  # The project keeps its extension list, so the editor loads the addon at
+  # startup instead of discovering it: an editor that discovers an extension
+  # with classes and quits at once crashes (godotengine/godot#111048). Godot
   # reports a library it could not open on stdout and may still exit 0, so the
   # pass is judged by what it printed.
   def verify_loaded!(project = PROJECT)
