@@ -5,9 +5,16 @@ MRuby::Lockfile.disable
 # Gems join one at a time, when the extension comes to need them; anything that
 # reaches the host (IO, sockets, directories) stays out, since Ruby reaches the
 # host through Godot's API. The compiler is here because the extension runs Ruby
-# source. Every build takes this one list, as each is a half of the same shipped
-# library.
+# source.
 GEMS = %w[mruby-compiler].freeze
+
+# What every build shares, as each goes into the same shipped library. That
+# library is a shared one, so the archive's code is compiled
+# position-independent; MSVC has no such flag, its code already is.
+def extension_build(conf)
+  GEMS.each { |name| conf.gem core: name }
+  conf.compilers.each { |cc| cc.flags << "-fPIC" } unless conf.primary_toolchain == "visualcpp"
+end
 
 MRuby::Build.new do |conf|
   # load specific toolchain settings
@@ -24,7 +31,7 @@ MRuby::Build.new do |conf|
   # conf.gem :github => 'mattn/mruby-onig-regexp'
   # conf.gem :git => 'git@github.com:mattn/mruby-onig-regexp.git', :branch => 'master', :options => '-v'
 
-  GEMS.each { |name| conf.gem core: name }
+  extension_build(conf)
 
   # C compiler settings
   # conf.cc do |cc|
@@ -99,6 +106,6 @@ if RUBY_PLATFORM.include?("darwin")
     conf.cc.flags << "-arch x86_64"
     conf.linker.flags << "-arch x86_64"
 
-    GEMS.each { |name| conf.gem core: name }
+    extension_build(conf)
   end
 end
