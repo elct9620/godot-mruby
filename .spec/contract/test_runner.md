@@ -4,7 +4,7 @@ The command line the runner scene answers, which is how CI runs a project's Ruby
 
     godot --headless --path <project> res://addons/godot_mruby/runner.tscn -- <options>
 
-It quits with 0 when every test passed, and with 1 when any failed, a test file did not load, or the test directory does not exist.
+It quits with 0 when every test passed, and with 1 when any failed, a test file did not load, or a test directory is not one it can run.
 
 ## Includes
 
@@ -16,7 +16,7 @@ It quits with 0 when every test passed, and with 1 when any failed, a test file 
 
 ## `--dir`
 
-The directory whose `*_test.rb` files run, searched recursively; `res://test` when it is not given.
+The one test directory to run, which has to be one of `mruby/test/directories`; every one of them when it is not given.
 
 ## `--include`
 

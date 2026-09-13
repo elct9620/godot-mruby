@@ -2,24 +2,28 @@ use godot::classes::{DirAccess, FileAccess, INode, Node, Os};
 use godot::prelude::*;
 
 use crate::interpreter::{self, TestOptions};
+use crate::settings;
 
 /// The node the addon's runner scene holds. Once in the tree it runs every
-/// test file under the test directory in the game's interpreter, then quits
-/// with 0 when every test passed and 1 otherwise.
+/// test file of the test directories it is given in the game's interpreter,
+/// then quits with 0 when every test passed and 1 otherwise.
 #[derive(GodotClass)]
 #[class(base = Node, init)]
 pub struct RubyTestRunner {
     base: Base<Node>,
 }
 
-const DEFAULT_DIRECTORY: &str = "res://test";
-const TEST_FILE_SUFFIX: &str = "_test.rb";
-
 #[godot_api]
 impl INode for RubyTestRunner {
     fn ready(&mut self) {
         let args = user_args();
-        let passed = run(&test_directory(&args), &test_options(&args));
+        let passed = match test_directories(&args) {
+            Ok(directories) => run(&directories, &test_options(&args)),
+            Err(refused) => {
+                godot_error!("{refused}");
+                false
+            }
+        };
         self.base()
             .get_tree()
             .quit_ex()
@@ -28,13 +32,16 @@ impl INode for RubyTestRunner {
     }
 }
 
-fn run(directory: &str, options: &TestOptions) -> bool {
-    if !DirAccess::dir_exists_absolute(directory) {
-        godot_error!("The test directory {directory} does not exist");
-        return false;
-    }
+fn run(directories: &[String], options: &TestOptions) -> bool {
+    let pattern = settings::test_pattern();
     let mut paths = Vec::new();
-    collect_test_files(directory, &mut paths);
+    for directory in directories {
+        if !DirAccess::dir_exists_absolute(directory) {
+            godot_error!("The test directory {directory} does not exist");
+            return false;
+        }
+        collect_test_files(directory, &pattern, &mut paths);
+    }
     paths.sort();
     // What mruby says about a test file is reported before any test runs,
     // where a reader of the run's output looks for it.
@@ -62,8 +69,28 @@ fn user_args() -> Vec<String> {
 }
 
 // @option --dir
-fn test_directory(args: &[String]) -> String {
-    option(args, &["--dir"]).unwrap_or_else(|| DEFAULT_DIRECTORY.to_owned())
+// The directories this run covers: the one `--dir` names, which has to be
+// one of the project's test directories, or every one of them.
+fn test_directories(args: &[String]) -> Result<Vec<String>, String> {
+    let project = settings::test_directories();
+    let named = option(args, &["--dir"]);
+    let directories = named
+        .clone()
+        .map_or_else(|| project.clone(), |dir| vec![dir]);
+    if let Some(root) = directories
+        .iter()
+        .find(|dir| dir.trim_end_matches('/') == "res:")
+    {
+        return Err(format!(
+            "{root} cannot be a test directory: it is the whole project"
+        ));
+    }
+    match named {
+        Some(dir) if !project.contains(&dir) => Err(format!(
+            "{dir} is not one of the project's test directories in mruby/test/directories"
+        )),
+        _ => Ok(directories),
+    }
 }
 
 fn test_options(args: &[String]) -> TestOptions {
@@ -82,15 +109,14 @@ fn option(args: &[String], names: &[&str]) -> Option<String> {
         .map(|pair| pair[1].clone())
 }
 
-fn collect_test_files(directory: &str, paths: &mut Vec<String>) {
+fn collect_test_files(directory: &str, pattern: &GString, paths: &mut Vec<String>) {
     for file in DirAccess::get_files_at(directory).as_slice() {
-        let file = file.to_string();
-        if file.ends_with(TEST_FILE_SUFFIX) {
-            paths.push(join(directory, &file));
+        if file.match_glob(pattern) {
+            paths.push(join(directory, &file.to_string()));
         }
     }
     for child in DirAccess::get_directories_at(directory).as_slice() {
-        collect_test_files(&join(directory, &child.to_string()), paths);
+        collect_test_files(&join(directory, &child.to_string()), pattern, paths);
     }
 }
 

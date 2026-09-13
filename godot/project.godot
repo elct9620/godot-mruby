@@ -12,3 +12,7 @@ config_version=5
 
 config/name="godot-mruby"
 config/features=PackedStringArray("4.7")
+
+[mruby]
+
+test/directories=PackedStringArray("res://test", "res://failing/assertion", "res://failing/error", "res://failing/syntax", "res://failing/missing")

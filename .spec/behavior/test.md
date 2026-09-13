@@ -16,7 +16,7 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 
 | Step | Statement |
 | --- | --- |
-| Given | a `*_test.rb` file under the test directory whose `Minitest::Test` subclass has a passing `test_` method |
+| Given | a test file whose `Minitest::Test` subclass has a passing `test_` method |
 | When | the runner scene runs headless on that directory |
 | Then | the run passes and counts the test among its runs |
 
@@ -64,7 +64,7 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 
 | Step | Statement |
 | --- | --- |
-| Given | a `*_test.rb` file under the test directory that does not parse |
+| Given | a test file that does not parse |
 | When | the runner scene runs headless on that directory |
 | Then | the run fails |
 
@@ -177,7 +177,7 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 
 | Step | Statement |
 | --- | --- |
-| Given | a `*_test.rb` file under the test directory that does not parse |
+| Given | a test file that does not parse |
 | When | the runner scene runs headless on that directory |
 | Then | Godot's output carries the file's script error before the run's summary |
 
@@ -220,3 +220,35 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 | Given | a test directory none of whose tests has the name `--include` is given |
 | When | the runner scene runs headless on it |
 | Then | the run fails, saying nothing ran for that filter |
+
+## `RT-027` A project that names no test directory runs the tests under `res://test`
+
+| Step | Statement |
+| --- | --- |
+| Given | a project that sets neither `mruby/test/directories` nor `mruby/test/pattern` |
+| When | the runner scene runs headless without `--dir` |
+| Then | the run passes and counts the tests of the `*_test.rb` files under `res://test` |
+
+## `RT-028` Only the files matching the project's test pattern run
+
+| Step | Statement |
+| --- | --- |
+| Given | a project whose `mruby/test/pattern` matches one test file under its test directory |
+| When | the runner scene runs headless on that directory |
+| Then | the run counts only that file's tests |
+
+## `RT-029` A `--dir` that is not one of the project's test directories fails the run
+
+| Step | Statement |
+| --- | --- |
+| Given | a directory the project does not list in `mruby/test/directories` |
+| When | the runner scene runs headless with `--dir` naming it |
+| Then | the run fails, saying it is not a test directory of the project |
+
+## `RT-030` `res://` itself cannot be a test directory
+
+| Step | Statement |
+| --- | --- |
+| Given | the project's root `res://` |
+| When | the runner scene runs headless with `--dir` naming it |
+| Then | the run fails, saying `res://` cannot be a test directory |

@@ -26,3 +26,11 @@ One `mrb_state` together with the bookkeeping the extension keeps beside it, suc
 ### Entry
 
 A thread running Ruby in an interpreter, from the outermost call in until that call returns. A file runs at the first entry that needs it, never when it is loaded.
+
+### Test directory
+
+A directory the test runner runs tests from: one of a project's `mruby/test/directories`, searched recursively.
+
+### Test file
+
+A file under a test directory whose name matches the project's `mruby/test/pattern`. Only the test runner runs one.
