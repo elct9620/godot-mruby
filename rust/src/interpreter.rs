@@ -56,10 +56,19 @@ pub fn load_tests(paths: &[String], source: impl Fn(&str) -> String) -> (Vec<Dia
     (diagnostics, loaded)
 }
 
-/// Runs every test the loaded test files defined, and answers what went
-/// wrong, each where it went wrong; nothing means every test passed.
-pub fn run_tests() -> Vec<Diagnostic> {
-    with_game(|game| game.run_minitest()).unwrap_or_else(|failed| vec![failed])
+/// What narrows a test run, as the runner's command line gives it.
+pub struct TestOptions {
+    /// The test methods to run alone, named by name or as `Class#name`.
+    pub include: Option<String>,
+    /// The test methods to leave out, named by name or as `Class#name`.
+    pub exclude: Option<String>,
+}
+
+/// Runs the tests the loaded test files defined that `options` leaves, and
+/// answers what went wrong, each where it went wrong; nothing means every
+/// test passed.
+pub fn run_tests(options: &TestOptions) -> Vec<Diagnostic> {
+    with_game(|game| game.run_minitest(options)).unwrap_or_else(|failed| vec![failed])
 }
 
 fn with_game<T>(enter: impl FnOnce(&mut Interpreter) -> T) -> Result<T, Diagnostic> {
@@ -144,16 +153,16 @@ impl Interpreter {
 
     // Every value mruby hands back here is read into Rust before the arena
     // scope ends.
-    fn run_minitest(&self) -> Vec<Diagnostic> {
+    fn run_minitest(&self, options: &TestOptions) -> Vec<Diagnostic> {
         let _scope = self.mrb.arena_scope();
         let context = match self.context(RUNNER_PATH) {
             Ok(context) => context,
             Err(failed) => return vec![failed],
         };
-        let options = self.mrb.hash_new().as_value();
-        let problems = context
-            .load_nstring(b"Minitest")
-            .and_then(|minitest| minitest.funcall(&self.mrb, c"run", &[options]))
+        let problems = self
+            .options_hash(options)
+            .and_then(|options| Ok((context.load_nstring(b"Minitest")?, options)))
+            .and_then(|(minitest, options)| minitest.funcall(&self.mrb, c"run", &[options]))
             .and_then(|problems| problems.ensure_array(&self.mrb));
         match problems {
             Ok(problems) => (0..problems.len())
@@ -161,6 +170,22 @@ impl Interpreter {
                 .collect(),
             Err(error) => vec![self.diagnose(RUNNER_PATH, &error)],
         }
+    }
+
+    // The options Minitest.run takes, keyed by symbols as minitest keys them.
+    fn options_hash(&self, options: &TestOptions) -> Result<Value, Error> {
+        let hash = self.mrb.hash_new();
+        for (key, value) in [("include", &options.include), ("exclude", &options.exclude)] {
+            if let Some(value) = value {
+                let key = self.mrb.intern(key.as_bytes()).as_value();
+                hash.set(
+                    &self.mrb,
+                    key,
+                    self.mrb.str_new(value.as_bytes()).as_value(),
+                )?;
+            }
+        }
+        Ok(hash.as_value())
     }
 
     // One problem Minitest.run found: its message, then the file and line it

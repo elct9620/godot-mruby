@@ -9,7 +9,7 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 
 ## Includes
 
-- `tasks/support/godot.rb`
+- `tasks/support/ruby_tests.rb`
 - `godot/test/**/*.rb`
 
 ## `RT-001` A test method of a test class runs
@@ -196,3 +196,27 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 | Given | a test method that raises an exception other than `Minitest::Assertion` |
 | When | the runner scene runs headless on its directory |
 | Then | Godot's output carries an error naming the test and the exception at the `res://` path and line that raised it |
+
+## `RT-024` `--include` runs only the test it names
+
+| Step | Statement |
+| --- | --- |
+| Given | a test directory holding several tests |
+| When | the runner scene runs headless on it with `--include` naming one test as `Class#name` |
+| Then | the run counts that one test among its runs and no other |
+
+## `RT-025` `--exclude` leaves out the test it names
+
+| Step | Statement |
+| --- | --- |
+| Given | a test directory whose one skipped test is the only one that skips |
+| When | the runner scene runs headless on it with `--exclude` naming that test |
+| Then | the run counts no skips |
+
+## `RT-026` An `--include` that names no test fails the run
+
+| Step | Statement |
+| --- | --- |
+| Given | a test directory none of whose tests has the name `--include` is given |
+| When | the runner scene runs headless on it |
+| Then | the run fails, saying nothing ran for that filter |

@@ -17,3 +17,11 @@ It quits with 0 when every test passed, and with 1 when any failed, a test file 
 ## `--dir`
 
 The directory whose `*_test.rb` files run, searched recursively; `res://test` when it is not given.
+
+## `--include`
+
+Runs only the test methods named by the value, either by name alone or as `Class#name`; `-i` for short. A run it leaves without a test fails.
+
+## `--exclude`
+
+Leaves out the test methods named by the value, either by name alone or as `Class#name`; `-e` for short.

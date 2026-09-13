@@ -1,7 +1,7 @@
 use godot::classes::{DirAccess, FileAccess, INode, Node, Os};
 use godot::prelude::*;
 
-use crate::interpreter;
+use crate::interpreter::{self, TestOptions};
 
 /// The node the addon's runner scene holds. Once in the tree it runs every
 /// test file under the test directory in the game's interpreter, then quits
@@ -18,7 +18,8 @@ const TEST_FILE_SUFFIX: &str = "_test.rb";
 #[godot_api]
 impl INode for RubyTestRunner {
     fn ready(&mut self) {
-        let passed = run(&test_directory());
+        let args = user_args();
+        let passed = run(&test_directory(&args), &test_options(&args));
         self.base()
             .get_tree()
             .quit_ex()
@@ -27,7 +28,7 @@ impl INode for RubyTestRunner {
     }
 }
 
-fn run(directory: &str) -> bool {
+fn run(directory: &str, options: &TestOptions) -> bool {
     if !DirAccess::dir_exists_absolute(directory) {
         godot_error!("The test directory {directory} does not exist");
         return false;
@@ -43,24 +44,42 @@ fn run(directory: &str) -> bool {
     for diagnostic in diagnostics {
         diagnostic.report();
     }
-    let problems = interpreter::run_tests();
+    let problems = interpreter::run_tests(options);
     for problem in &problems {
         problem.report();
     }
     loaded && problems.is_empty()
 }
 
-// @option --dir
-fn test_directory() -> String {
-    let args: Vec<String> = Os::singleton()
+// What follows `--` on Godot's command line.
+fn user_args() -> Vec<String> {
+    Os::singleton()
         .get_cmdline_user_args()
         .as_slice()
         .iter()
         .map(GString::to_string)
-        .collect();
+        .collect()
+}
+
+// @option --dir
+fn test_directory(args: &[String]) -> String {
+    option(args, &["--dir"]).unwrap_or_else(|| DEFAULT_DIRECTORY.to_owned())
+}
+
+fn test_options(args: &[String]) -> TestOptions {
+    TestOptions {
+        // @option --include
+        include: option(args, &["-i", "--include"]),
+        // @option --exclude
+        exclude: option(args, &["-e", "--exclude"]),
+    }
+}
+
+// The value after the first of `names` on the command line.
+fn option(args: &[String], names: &[&str]) -> Option<String> {
     args.windows(2)
-        .find(|pair| pair[0] == "--dir")
-        .map_or_else(|| DEFAULT_DIRECTORY.to_owned(), |pair| pair[1].clone())
+        .find(|pair| names.contains(&pair[0].as_str()))
+        .map(|pair| pair[1].clone())
 }
 
 fn collect_test_files(directory: &str, paths: &mut Vec<String>) {

@@ -5,6 +5,7 @@ The Ruby a test is written against, spelled the way minitest spells it so a Ruby
 ### What minitest has that this does not
 
 - `assert_match` and `refute_match`: the extension's mruby has no `Regexp`.
+- A filter names a test exactly; the extension's mruby has no `Regexp` for a `/pattern/`.
 - `assert_throws`: the extension's mruby has no `catch` and `throw`.
 - `assert_output`, `assert_silent` and `capture_io`: Ruby prints to Godot's output, not to an IO a test can capture.
 - `assert_path_exists` and `refute_path_exists`: Ruby reaches no file system of its own.

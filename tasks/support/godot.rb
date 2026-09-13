@@ -2,6 +2,8 @@
 
 require "open3"
 
+require_relative "ruby_tests"
+
 # Runs the integration-test project headless and reads what it reports.
 # Backs tasks/godot.rake.
 module Godot
@@ -23,36 +25,6 @@ module Godot
     "WARNING: else without rescue is useless" => "(res://report/warning.rb:6)",
     %(SCRIPT ERROR: syntax error, unexpected "'end'", expecting end of file) => "(res://report/syntax_error.rb:3)"
   }.freeze
-  RUNNER_SCENE = "res://addons/godot_mruby/runner.tscn"
-  # The runner answers within the frame it starts in; this only stops a
-  # runner that never quits from hanging the check.
-  RUNNER_FRAMES = "60"
-  TESTS = "res://test"
-  PASSED = /^(\d+) runs, \d+ assertions, 0 failures, 0 errors, \d+ skips$/
-  # Test directories whose run has to fail, each with what the run has to
-  # print on the way, in the order it prints it: one per way a run fails, all
-  # under godot/failing/ except the one that does not exist.
-  FAILING = {
-    "res://failing/assertion" => [
-      "teardown ran after a failure",
-      "FailingTest#test_one_equals_two [res://failing/assertion/failing_test.rb:9]:",
-      "ERROR: FailingTest#test_one_equals_two: Expected: 1",
-      "(res://failing/assertion/failing_test.rb:9)"
-    ],
-    "res://failing/error" => [
-      "ErrorTest#test_raises_an_argument_error [res://failing/error/error_test.rb:10]:",
-      "ArgumentError: not an assertion",
-      "    res://failing/error/error_test.rb:10:in refuse_the_item",
-      "    res://failing/error/error_test.rb:6:in test_raises_an_argument_error",
-      "ERROR: ErrorTest#test_raises_an_argument_error: ArgumentError: not an assertion",
-      "(res://failing/error/error_test.rb:10)"
-    ],
-    "res://failing/syntax" => ["(res://failing/syntax/broken_test.rb:4)", "0 runs, 0 assertions"],
-    "res://failing/missing" => ["The test directory res://failing/missing does not exist"]
-  }.freeze
-  # Where the test framework's files are compiled; a failing run reports the
-  # tests' own frames and never these.
-  FRAMEWORK_FRAME = "godot_mruby/"
 
   module_function
 
@@ -60,8 +32,7 @@ module Godot
     verify_loaded!(project)
     verify_scripts_run!(project)
     verify_reports!(project)
-    verify_tests_pass!(project)
-    verify_tests_fail!(project)
+    RubyTests.verify!(project)
   end
 
   # The project keeps its extension list, so the editor loads the addon at
@@ -102,47 +73,6 @@ module Godot
 
   def reported?(lines, report, location)
     lines.each_cons(2).any? { |line, at| line == report && at.start_with?("at:") && at.end_with?(location) }
-  end
-
-  # Runs the project's Ruby tests and requires a pass that ran at least one,
-  # since a run that finds nothing passes too; godot/test/ holds a skipped
-  # test, which must not fail it.
-  # @behavior RT-001 RT-009
-  def verify_tests_pass!(project = PROJECT)
-    output, status = run_tests(project, TESTS)
-    return if status.success? && output[PASSED, 1].to_i.positive?
-
-    raise "The Ruby tests under #{TESTS} did not pass:\n#{output}"
-  end
-
-  # Runs each directory under godot/failing/ and requires the run to fail
-  # with what it has to print, in order, and without the framework's own
-  # frames.
-  # @behavior RT-002 RT-003 RT-004 RT-005 RT-006 RT-007 RT-008 RT-020 RT-021 RT-022 RT-023
-  def verify_tests_fail!(project = PROJECT)
-    FAILING.each do |dir, expected|
-      output, status = run_tests(project, dir)
-      missing = missing_in_order(output, expected)
-      missing << "no #{FRAMEWORK_FRAME} frame" if output.include?(FRAMEWORK_FRAME)
-      next if status.exitstatus == 1 && missing.empty?
-
-      raise "The Ruby tests under #{dir} did not fail as they should #{missing}:\n#{output}"
-    end
-  end
-
-  # The expected lines that do not appear in the output after the one before
-  # them.
-  def missing_in_order(output, expected)
-    position = 0
-    expected.reject do |line|
-      found = output.index(line, position)
-      position = found + line.size if found
-      found
-    end
-  end
-
-  def run_tests(project, dir)
-    run_scene(project, RUNNER_SCENE, "--quit-after", RUNNER_FRAMES, "--", "--dir", dir)
   end
 
   def run_scene(project, scene, *)

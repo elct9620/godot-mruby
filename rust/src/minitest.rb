@@ -296,8 +296,18 @@ module Minitest
       []
     end
 
-    def self.run_suite(reporter)
-      runnable_methods.each { |name| reporter.record(new(name).run) }
+    # The runnable methods the options' :include and :exclude leave, each
+    # naming a method by name alone or as Class#name.
+    def self.filter_runnable_methods(options = {})
+      pos = options[:include]
+      neg = options[:exclude]
+      runnable_methods
+        .select { |name| !pos || pos == name || pos == "#{self}##{name}" }
+        .reject { |name| neg && (neg == name || neg == "#{self}##{name}") }
+    end
+
+    def self.run_suite(reporter, options = {})
+      filter_runnable_methods(options).each { |name| reporter.record(new(name).run) }
     end
 
     attr_accessor :assertions
@@ -381,6 +391,8 @@ module Minitest
   # Prints a run the way minitest does: a character per test, the details of
   # each test that did not pass, then the counts.
   class Reporter
+    attr_reader :count
+
     def initialize
       @count = 0
       @assertions = 0
@@ -436,12 +448,15 @@ module Minitest
 
   # Runs every test class defined so far, in name order, and answers the
   # problems it found, each as its message, file and line, so the test runner
-  # reports them where they happened; none means every test passed.
+  # reports them where they happened; none means every test passed. An
+  # :include that leaves no test to run is a problem too.
   def self.run(options = {})
     reporter = Reporter.new
     reporter.start
-    Runnable.runnables.sort { |a, b| a.to_s <=> b.to_s }.each { |suite| suite.run_suite(reporter) }
+    Runnable.runnables.sort { |a, b| a.to_s <=> b.to_s }.each { |suite| suite.run_suite(reporter, options) }
     reporter.report
+    return [["Nothing ran for filter: #{options[:include]}", nil, nil]] if options[:include] && reporter.count == 0
+
     reporter.located_problems
   end
 end
