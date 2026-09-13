@@ -2,6 +2,6 @@
 
 source "https://rubygems.org"
 
-gem "beni", "~> 0.14.1"
+gem "beni", "~> 0.15.0"
 
 gem "rubocop", "~> 1.91"
