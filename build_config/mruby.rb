@@ -2,6 +2,13 @@
 # would only repeat it.
 MRuby::Lockfile.disable
 
+# Gems join one at a time, when the extension comes to need them; anything that
+# reaches the host (IO, sockets, directories) stays out, since Ruby reaches the
+# host through Godot's API. The compiler is here because the extension runs Ruby
+# source. Every build takes this one list, as each is a half of the same shipped
+# library.
+GEMS = %w[mruby-compiler].freeze
+
 MRuby::Build.new do |conf|
   # load specific toolchain settings
   conf.toolchain
@@ -17,8 +24,7 @@ MRuby::Build.new do |conf|
   # conf.gem :github => 'mattn/mruby-onig-regexp'
   # conf.gem :git => 'git@github.com:mattn/mruby-onig-regexp.git', :branch => 'master', :options => '-v'
 
-  # include the GEM box
-  conf.gembox 'default'
+  GEMS.each { |name| conf.gem core: name }
 
   # C compiler settings
   # conf.cc do |cc|
@@ -82,8 +88,6 @@ MRuby::Build.new do |conf|
 
   # Turn on `enable_debug` for better debugging
   # conf.enable_debug
-  conf.enable_bintest
-  conf.enable_test
 end
 
 # The x86_64 half of the universal macOS library. The build machine is Apple
@@ -95,6 +99,6 @@ if RUBY_PLATFORM.include?("darwin")
     conf.cc.flags << "-arch x86_64"
     conf.linker.flags << "-arch x86_64"
 
-    conf.gembox "default"
+    GEMS.each { |name| conf.gem core: name }
   end
 end
