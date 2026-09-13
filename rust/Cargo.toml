@@ -7,7 +7,10 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
-godot = { version = "0.5.5", features = ["api-4-6"] }
+# experimental-threads: Godot calls a script language, its scripts and their
+# loader from threads other than the main one (the editor's file scan, loading
+# threads), and gdext panics on those calls without it (godot-rust/gdext#597).
+godot = { version = "0.5.5", features = ["api-4-6", "experimental-threads"] }
 # Links the mruby archive the beni gem builds; the gem and the crate release
 # in lockstep, so their versions move together.
 beni = "0.14.1"
