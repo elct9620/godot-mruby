@@ -2,15 +2,30 @@
 # minitest's design and spelling, so Ruby developers write tests the way they
 # already do, within what the extension's mruby provides.
 module Minitest
-  # The directory the framework's files are compiled under; a frame there is
-  # the framework's own rather than the test's.
+  # The directory the framework's files are compiled under, and the one every
+  # file the extension embeds is compiled under.
   FRAMEWORK_DIRECTORY = __FILE__[0, __FILE__.rindex("/") + 1]
+  EXTENSION_DIRECTORY = FRAMEWORK_DIRECTORY[0, FRAMEWORK_DIRECTORY.index("/") + 1]
 
-  # The frames of a backtrace outside the framework, or every frame when all
-  # of them are the framework's.
+  # The calls that led to a failure, as minitest filters them: the frames
+  # above the framework's first, without the extension's own; failing that,
+  # every frame that is not the extension's; failing that, every frame.
   def self.filter_backtrace(backtrace)
-    filtered = backtrace.reject { |frame| frame[0, FRAMEWORK_DIRECTORY.size] == FRAMEWORK_DIRECTORY }
-    filtered.empty? ? backtrace : filtered
+    called = []
+    backtrace.each do |frame|
+      break if in_directory?(frame, FRAMEWORK_DIRECTORY)
+
+      called << frame
+    end
+    [called, backtrace].each do |frames|
+      filtered = frames.reject { |frame| in_directory?(frame, EXTENSION_DIRECTORY) }
+      return filtered unless filtered.empty?
+    end
+    backtrace
+  end
+
+  def self.in_directory?(frame, directory)
+    frame[0, directory.size] == directory
   end
 
   # A failed assertion. A test raising one fails; any other exception is an
