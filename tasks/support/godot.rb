@@ -16,12 +16,19 @@ module Godot
   # What the smoke scene's Ruby prints. Each line must appear exactly once:
   # the scene attaches the same file to two nodes, and a file runs once.
   SMOKE_LINES = ["puts from mruby", "print from mruby", ":p_from_mruby"].freeze
+  REPORT_SCENE = "res://report/report.tscn"
+  # What mruby says about the report scene's files, each as the line Godot
+  # prints it on and the Ruby location Godot puts on the line after.
+  REPORTS = {
+    "WARNING: else without rescue is useless" => "(res://report/warning.rb:6)"
+  }.freeze
 
   module_function
 
   def verify!(project = PROJECT)
     verify_loaded!(project)
     verify_scripts_run!(project)
+    verify_reports!(project)
   end
 
   # The project keeps its extension list, so the editor loads the addon at
@@ -47,5 +54,20 @@ module Godot
     return if status.success? && output.lines.grep(FAILED).empty? && counts.values.all?(1)
 
     raise "The smoke scene's Ruby did not print each line once #{counts}:\n#{output}"
+  end
+
+  # Runs the report scene and looks for each report followed by its location.
+  # @behavior RR-001
+  def verify_reports!(project = PROJECT)
+    output, status = Open3.capture2e(EXECUTABLE, "--headless", "--path", project, REPORT_SCENE, "--quit-after", "3")
+    lines = output.lines.map(&:strip)
+    missing = REPORTS.reject { |report, location| reported?(lines, report, location) }
+    return if status.success? && missing.empty?
+
+    raise "The report scene's Ruby was not reported where it was written #{missing}:\n#{output}"
+  end
+
+  def reported?(lines, report, location)
+    lines.each_cons(2).any? { |line, at| line == report && at.start_with?("at:") && at.end_with?(location) }
   end
 end

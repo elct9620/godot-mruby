@@ -26,8 +26,8 @@ impl RubyInstance {
     fn enter(&self) {
         let path = self.script.get_path().to_string();
         let source = || self.script.get_source_code().to_string();
-        if let Err(message) = interpreter::run_once(&path, source) {
-            godot_error!("{message}");
+        for diagnostic in interpreter::run_once(&path, source) {
+            diagnostic.report();
         }
     }
 }

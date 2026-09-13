@@ -3,8 +3,8 @@ use std::ffi::CString;
 use std::sync::Mutex;
 
 use beni::format::Rest;
-use beni::{Ccontext, Error, Module, Mrb, Value, method};
-use godot::global::printraw;
+use beni::{Ccontext, Error, Module, Mrb, ParseMessage, Value, method};
+use godot::global::{PrintLevel, PrintRecord, PrintSource, print_custom, printraw};
 use godot::prelude::*;
 
 /// The interpreter every game file runs in: an `mrb_state` and the paths of
@@ -19,18 +19,67 @@ static GAME: Mutex<Option<Interpreter>> = Mutex::new(None);
 
 /// Runs the file at `path` in the game's interpreter unless it has run there
 /// already, whether it succeeded or not; `source` is only read when it runs.
-/// The error is the message to report, returned rather than printed so it is
+/// What mruby said about the run is returned rather than printed, so it is
 /// reported outside the interpreter.
-pub fn run_once(path: &str, source: impl FnOnce() -> String) -> Result<(), String> {
+pub fn run_once(path: &str, source: impl FnOnce() -> String) -> Vec<Diagnostic> {
     let mut game = GAME.lock().unwrap();
     let interpreter = match game.as_mut() {
         Some(interpreter) => interpreter,
-        None => game.insert(Interpreter::open()?),
+        None => match Interpreter::open() {
+            Ok(interpreter) => game.insert(interpreter),
+            Err(message) => return vec![Diagnostic::error(message)],
+        },
     };
     if !interpreter.ran.insert(path.to_owned()) {
-        return Ok(());
+        return Vec::new();
     }
     interpreter.run(path, &source())
+}
+
+/// One thing mruby said about a file, reported through Godot's log.
+pub struct Diagnostic {
+    level: PrintLevel,
+    message: String,
+    // The file's path and the line mruby names; a report without one is
+    // placed where it is reported from.
+    at: Option<(String, u32)>,
+}
+
+impl Diagnostic {
+    fn warning(path: &str, warning: &ParseMessage) -> Self {
+        Self {
+            level: PrintLevel::Warn,
+            message: warning.message().to_owned(),
+            at: Some((path.to_owned(), warning.line().into())),
+        }
+    }
+
+    fn error(message: String) -> Self {
+        Self {
+            level: PrintLevel::Error,
+            message,
+            at: None,
+        }
+    }
+
+    #[track_caller]
+    pub fn report(&self) {
+        let source = match &self.at {
+            Some((file, line)) => PrintSource {
+                function: "",
+                file,
+                line: *line,
+            },
+            None => PrintSource::caller(),
+        };
+        print_custom(PrintRecord {
+            level: self.level,
+            message: &self.message,
+            rationale: None,
+            source: Some(source),
+            editor_notify: false,
+        });
+    }
 }
 
 pub fn close() {
@@ -47,14 +96,26 @@ impl Interpreter {
         })
     }
 
-    fn run(&self, path: &str, source: &str) -> Result<(), String> {
-        let filename = CString::new(path).map_err(|error| format!("{path}: {error}"))?;
-        let context = Ccontext::new(&self.mrb, &filename)
-            .ok_or_else(|| format!("{path}: mruby could not make a compile context"))?;
-        context
-            .load_nstring(source.as_bytes())
-            .map(drop)
-            .map_err(|error| format!("{path}: {}", self.describe(&error)))
+    fn run(&self, path: &str, source: &str) -> Vec<Diagnostic> {
+        let filename = match CString::new(path) {
+            Ok(filename) => filename,
+            Err(error) => return vec![Diagnostic::error(format!("{path}: {error}"))],
+        };
+        let Some(context) = Ccontext::new(&self.mrb, &filename) else {
+            let message = format!("{path}: mruby could not make a compile context");
+            return vec![Diagnostic::error(message)];
+        };
+        let outcome = context.load_nstring(source.as_bytes());
+        let mut diagnostics: Vec<_> = context
+            .warnings()
+            .iter()
+            .map(|warning| Diagnostic::warning(path, warning))
+            .collect();
+        if let Err(error) = outcome {
+            let message = format!("{path}: {}", self.describe(&error));
+            diagnostics.push(Diagnostic::error(message));
+        }
+        diagnostics
     }
 
     // An exception renders only through the interpreter it was raised in; a
