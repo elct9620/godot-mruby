@@ -30,12 +30,12 @@ module Godot
   TESTS = "res://test"
   PASSED = /^(\d+) runs, \d+ assertions, 0 failures, 0 errors, \d+ skips$/
   # Test directories whose run has to fail, each with what the run has to
-  # print on the way: one per way a run fails, all under godot/failing/
-  # except the one that does not exist.
+  # print on the way, in the order it prints it: one per way a run fails, all
+  # under godot/failing/ except the one that does not exist.
   FAILING = {
     "res://failing/assertion" => [
-      "FailingTest#test_one_equals_two [res://failing/assertion/failing_test.rb:9]:",
-      "teardown ran after a failure"
+      "teardown ran after a failure",
+      "FailingTest#test_one_equals_two [res://failing/assertion/failing_test.rb:9]:"
     ],
     "res://failing/error" => [
       "ErrorTest#test_raises_an_argument_error [res://failing/error/error_test.rb:10]:",
@@ -43,7 +43,7 @@ module Godot
       "    res://failing/error/error_test.rb:10:in refuse_the_item",
       "    res://failing/error/error_test.rb:6:in test_raises_an_argument_error"
     ],
-    "res://failing/syntax" => ["(res://failing/syntax/broken_test.rb:4)"],
+    "res://failing/syntax" => ["(res://failing/syntax/broken_test.rb:4)", "0 runs, 0 assertions"],
     "res://failing/missing" => ["The test directory res://failing/missing does not exist"]
   }.freeze
   # Where the test framework's files are compiled; a failing run reports the
@@ -112,16 +112,28 @@ module Godot
   end
 
   # Runs each directory under godot/failing/ and requires the run to fail
-  # with what it has to print, and without the framework's own frames.
-  # @behavior RT-002 RT-003 RT-004 RT-005 RT-006 RT-007 RT-008 RT-020
+  # with what it has to print, in order, and without the framework's own
+  # frames.
+  # @behavior RT-002 RT-003 RT-004 RT-005 RT-006 RT-007 RT-008 RT-020 RT-021
   def verify_tests_fail!(project = PROJECT)
     FAILING.each do |dir, expected|
       output, status = run_tests(project, dir)
-      missing = expected.reject { |line| output.include?(line) }
+      missing = missing_in_order(output, expected)
       missing << "no #{FRAMEWORK_FRAME} frame" if output.include?(FRAMEWORK_FRAME)
       next if status.exitstatus == 1 && missing.empty?
 
       raise "The Ruby tests under #{dir} did not fail as they should #{missing}:\n#{output}"
+    end
+  end
+
+  # The expected lines that do not appear in the output after the one before
+  # them.
+  def missing_in_order(output, expected)
+    position = 0
+    expected.reject do |line|
+      found = output.index(line, position)
+      position = found + line.size if found
+      found
     end
   end
 

@@ -6,7 +6,6 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 
 - A test reaches only what its own file and core Ruby define: files do not yet find each other by name.
 - Test classes and their tests run in name order rather than a seeded random one.
-- What mruby says about a test file, such as a parse error, is reported after the run's summary rather than where the file runs.
 
 ## Includes
 
@@ -173,3 +172,11 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 | Given | a test method that calls a method raising an exception other than `Minitest::Assertion` |
 | When | the runner scene runs headless on its directory |
 | Then | Godot's output lists each Ruby frame from the raise up to the test method, and no frame of the test framework |
+
+## `RT-021` What mruby says about a test file comes before the tests run
+
+| Step | Statement |
+| --- | --- |
+| Given | a `*_test.rb` file under the test directory that does not parse |
+| When | the runner scene runs headless on that directory |
+| Then | Godot's output carries the file's script error before the run's summary |

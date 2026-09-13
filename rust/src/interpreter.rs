@@ -36,11 +36,11 @@ pub fn run_once(path: &str, source: impl FnOnce() -> String) -> Vec<Diagnostic> 
 }
 
 /// Runs the test framework and then each test file in the game's
-/// interpreter, and answers whether every test passed: a test file that did
-/// not load fails the run as a failed test would. `source` reads a file at
-/// its path.
-pub fn run_tests(paths: &[String], source: impl Fn(&str) -> String) -> (Vec<Diagnostic>, bool) {
-    let outcome = with_game(|game| {
+/// interpreter, and answers what mruby said about them and whether every one
+/// loaded: a test file that did not load fails the run as a failed test
+/// would. `source` reads a file at its path.
+pub fn load_tests(paths: &[String], source: impl Fn(&str) -> String) -> (Vec<Diagnostic>, bool) {
+    let diagnostics = with_game(|game| {
         let mut diagnostics = Vec::new();
         for (path, source) in FRAMEWORK {
             diagnostics.extend(game.run_once(path, || source.to_owned()));
@@ -48,16 +48,17 @@ pub fn run_tests(paths: &[String], source: impl Fn(&str) -> String) -> (Vec<Diag
         for path in paths {
             diagnostics.extend(game.run_once(path, || source(path)));
         }
-        let loaded = !diagnostics.iter().any(Diagnostic::is_error);
-        match game.run_minitest() {
-            Ok(passed) => (diagnostics, loaded && passed),
-            Err(failed) => {
-                diagnostics.push(failed);
-                (diagnostics, false)
-            }
-        }
-    });
-    outcome.unwrap_or_else(|failed| (vec![failed], false))
+        diagnostics
+    })
+    .unwrap_or_else(|failed| vec![failed]);
+    let loaded = !diagnostics.iter().any(Diagnostic::is_error);
+    (diagnostics, loaded)
+}
+
+/// Runs every test the loaded test files defined, and answers whether all of
+/// them passed.
+pub fn run_tests() -> Result<bool, Diagnostic> {
+    with_game(|game| game.run_minitest()).and_then(|ran| ran)
 }
 
 fn with_game<T>(enter: impl FnOnce(&mut Interpreter) -> T) -> Result<T, Diagnostic> {

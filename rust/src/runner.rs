@@ -35,13 +35,21 @@ fn run(directory: &str) -> bool {
     let mut paths = Vec::new();
     collect_test_files(directory, &mut paths);
     paths.sort();
-    let (diagnostics, passed) = interpreter::run_tests(&paths, |path| {
+    // What mruby says about a test file is reported before any test runs,
+    // where a reader of the run's output looks for it.
+    let (diagnostics, loaded) = interpreter::load_tests(&paths, |path| {
         FileAccess::get_file_as_string(path).to_string()
     });
     for diagnostic in diagnostics {
         diagnostic.report();
     }
-    passed
+    match interpreter::run_tests() {
+        Ok(passed) => loaded && passed,
+        Err(failed) => {
+            failed.report();
+            false
+        }
+    }
 }
 
 // @option --dir
