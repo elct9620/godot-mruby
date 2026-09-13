@@ -22,6 +22,12 @@ module Minitest
       frame ? frame.split(":in ").first : "unknown"
     end
 
+    # The file and line of #location, or nil for both when it names neither.
+    def file_and_line
+      separator = location.rindex(":")
+      separator ? [location[0, separator], location[(separator + 1)..].to_i] : [nil, nil]
+    end
+
     def result_code
       "F"
     end
@@ -406,8 +412,12 @@ module Minitest
       puts summary
     end
 
-    def passed?
-      problems.empty?
+    # Each test that did not pass, as what went wrong and the file and line
+    # it went wrong at.
+    def located_problems
+      problems.map do |result|
+        ["#{result.class}##{result.name}: #{result.failure.message}", *result.failure.file_and_line]
+      end
     end
 
     private
@@ -424,13 +434,14 @@ module Minitest
     end
   end
 
-  # Runs every test class defined so far, in name order, and answers whether
-  # all of them passed.
-  def self.run
+  # Runs every test class defined so far, in name order, and answers the
+  # problems it found, each as its message, file and line, so the test runner
+  # reports them where they happened; none means every test passed.
+  def self.run(options = {})
     reporter = Reporter.new
     reporter.start
     Runnable.runnables.sort { |a, b| a.to_s <=> b.to_s }.each { |suite| suite.run_suite(reporter) }
     reporter.report
-    reporter.passed?
+    reporter.located_problems
   end
 end

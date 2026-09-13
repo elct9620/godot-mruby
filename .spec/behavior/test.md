@@ -180,3 +180,19 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 | Given | a `*_test.rb` file under the test directory that does not parse |
 | When | the runner scene runs headless on that directory |
 | Then | Godot's output carries the file's script error before the run's summary |
+
+## `RT-022` A failure appears in Godot's log at the assertion's Ruby line
+
+| Step | Statement |
+| --- | --- |
+| Given | a test method whose assertion fails |
+| When | the runner scene runs headless on its directory |
+| Then | Godot's output carries an error naming the test and the failure at the `res://` path and line of the failing assertion |
+
+## `RT-023` An exception in a test appears in Godot's log where it was raised
+
+| Step | Statement |
+| --- | --- |
+| Given | a test method that raises an exception other than `Minitest::Assertion` |
+| When | the runner scene runs headless on its directory |
+| Then | Godot's output carries an error naming the test and the exception at the `res://` path and line that raised it |

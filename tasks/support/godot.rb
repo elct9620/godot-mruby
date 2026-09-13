@@ -35,13 +35,17 @@ module Godot
   FAILING = {
     "res://failing/assertion" => [
       "teardown ran after a failure",
-      "FailingTest#test_one_equals_two [res://failing/assertion/failing_test.rb:9]:"
+      "FailingTest#test_one_equals_two [res://failing/assertion/failing_test.rb:9]:",
+      "ERROR: FailingTest#test_one_equals_two: Expected: 1",
+      "(res://failing/assertion/failing_test.rb:9)"
     ],
     "res://failing/error" => [
       "ErrorTest#test_raises_an_argument_error [res://failing/error/error_test.rb:10]:",
       "ArgumentError: not an assertion",
       "    res://failing/error/error_test.rb:10:in refuse_the_item",
-      "    res://failing/error/error_test.rb:6:in test_raises_an_argument_error"
+      "    res://failing/error/error_test.rb:6:in test_raises_an_argument_error",
+      "ERROR: ErrorTest#test_raises_an_argument_error: ArgumentError: not an assertion",
+      "(res://failing/error/error_test.rb:10)"
     ],
     "res://failing/syntax" => ["(res://failing/syntax/broken_test.rb:4)", "0 runs, 0 assertions"],
     "res://failing/missing" => ["The test directory res://failing/missing does not exist"]
@@ -114,7 +118,7 @@ module Godot
   # Runs each directory under godot/failing/ and requires the run to fail
   # with what it has to print, in order, and without the framework's own
   # frames.
-  # @behavior RT-002 RT-003 RT-004 RT-005 RT-006 RT-007 RT-008 RT-020 RT-021
+  # @behavior RT-002 RT-003 RT-004 RT-005 RT-006 RT-007 RT-008 RT-020 RT-021 RT-022 RT-023
   def verify_tests_fail!(project = PROJECT)
     FAILING.each do |dir, expected|
       output, status = run_tests(project, dir)

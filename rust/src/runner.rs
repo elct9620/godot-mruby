@@ -43,13 +43,11 @@ fn run(directory: &str) -> bool {
     for diagnostic in diagnostics {
         diagnostic.report();
     }
-    match interpreter::run_tests() {
-        Ok(passed) => loaded && passed,
-        Err(failed) => {
-            failed.report();
-            false
-        }
+    let problems = interpreter::run_tests();
+    for problem in &problems {
+        problem.report();
     }
+    loaded && problems.is_empty()
 }
 
 // @option --dir

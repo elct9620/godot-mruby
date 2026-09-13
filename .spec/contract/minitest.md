@@ -563,7 +563,7 @@ end
 
 ## `Minitest.run`
 
-Runs every test class defined so far and answers whether all of them passed. The test runner calls it once the test files have run.
+Runs every test class defined so far and answers the problems the run found, each as its message, then the file and line it happened at, or `nil` for both where neither is known; none means every test passed. The test runner calls it once the test files have run, and reports each problem through Godot's log.
 
 | Attribute | Value |
 | --- | --- |
@@ -571,7 +571,7 @@ Runs every test class defined so far and answers whether all of them passed. The
 
 ```ruby
 module Minitest
-  def self.run
+  def self.run(options = {})
   end
 end
 ```

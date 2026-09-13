@@ -24,7 +24,8 @@ const FRAMEWORK: [(&str, &str); 2] = [
     ("godot_mruby/minitest.rb", include_str!("minitest.rb")),
     ("godot_mruby/mock.rb", include_str!("mock.rb")),
 ];
-// Where the call that runs the tests is compiled, as backtraces name it.
+// Where the runner compiles its lookup of the framework, as mruby names it
+// in anything it says about that lookup.
 const RUNNER_PATH: &str = "godot_mruby/runner";
 
 /// Runs the file at `path` in the game's interpreter unless it has run there
@@ -55,10 +56,10 @@ pub fn load_tests(paths: &[String], source: impl Fn(&str) -> String) -> (Vec<Dia
     (diagnostics, loaded)
 }
 
-/// Runs every test the loaded test files defined, and answers whether all of
-/// them passed.
-pub fn run_tests() -> Result<bool, Diagnostic> {
-    with_game(|game| game.run_minitest()).and_then(|ran| ran)
+/// Runs every test the loaded test files defined, and answers what went
+/// wrong, each where it went wrong; nothing means every test passed.
+pub fn run_tests() -> Vec<Diagnostic> {
+    with_game(|game| game.run_minitest()).unwrap_or_else(|failed| vec![failed])
 }
 
 fn with_game<T>(enter: impl FnOnce(&mut Interpreter) -> T) -> Result<T, Diagnostic> {
@@ -141,11 +142,40 @@ impl Interpreter {
         self.run(path, &source())
     }
 
-    fn run_minitest(&self) -> Result<bool, Diagnostic> {
-        self.context(RUNNER_PATH)?
-            .load_nstring(b"Minitest.run")
-            .map(Value::is_true)
-            .map_err(|error| self.diagnose(RUNNER_PATH, &error))
+    // Every value mruby hands back here is read into Rust before the arena
+    // scope ends.
+    fn run_minitest(&self) -> Vec<Diagnostic> {
+        let _scope = self.mrb.arena_scope();
+        let context = match self.context(RUNNER_PATH) {
+            Ok(context) => context,
+            Err(failed) => return vec![failed],
+        };
+        let options = self.mrb.hash_new().as_value();
+        let problems = context
+            .load_nstring(b"Minitest")
+            .and_then(|minitest| minitest.funcall(&self.mrb, c"run", &[options]))
+            .and_then(|problems| problems.ensure_array(&self.mrb));
+        match problems {
+            Ok(problems) => (0..problems.len())
+                .map(|index| self.problem(problems.entry(index as isize)))
+                .collect(),
+            Err(error) => vec![self.diagnose(RUNNER_PATH, &error)],
+        }
+    }
+
+    // One problem Minitest.run found: its message, then the file and line it
+    // happened at, or nil for both.
+    fn problem(&self, problem: Value) -> Diagnostic {
+        let Ok(fields) = problem.ensure_array(&self.mrb) else {
+            return Diagnostic::error(problem.inspect(&self.mrb));
+        };
+        let file = fields.entry(1);
+        let line = fields.entry(2).to_string(&self.mrb);
+        Diagnostic {
+            level: PrintLevel::Error,
+            message: fields.entry(0).to_string(&self.mrb),
+            at: (!file.is_nil()).then(|| (file.to_string(&self.mrb), line.parse().unwrap_or(0))),
+        }
     }
 
     fn run(&self, path: &str, source: &str) -> Vec<Diagnostic> {
