@@ -10,6 +10,8 @@ The Ruby a test is written against, spelled the way minitest spells it so a Ruby
 - `assert_path_exists` and `refute_path_exists`: Ruby reaches no file system of its own.
 - `assert_pattern` and `refute_pattern`.
 - A difference between two long values is shown as the expected and actual values, not as a diff.
+- `Minitest::Mock` matches positional arguments only, delegates to nothing, cannot expect the Object methods it keeps, such as `to_s`, and has no `must_verify` expectation.
+- `Object#stub` replaces only a method the object defines, and passes no keyword arguments.
 
 ## Includes
 
@@ -485,6 +487,76 @@ module Minitest
   module Assertions
     def pass(_msg = nil)
     end
+  end
+end
+```
+
+## `Minitest::Assertions#assert_mock`
+
+Passes when the mock received every call it expected.
+
+```ruby
+module Minitest
+  module Assertions
+    def assert_mock(mock, msg = nil)
+    end
+  end
+end
+```
+
+## `Minitest::Mock`
+
+A stand-in object that answers the calls a test expects of it and nothing else: any other call raises `NoMethodError`.
+
+```ruby
+module Minitest
+  class Mock
+  end
+end
+```
+
+## `Minitest::Mock#expect`
+
+Expects one call to `name`, answered with `retval`. Each argument is matched with `===` or `==`, so a class matches any instance of it; a block given instead of arguments is called with them and must answer truthy. Expecting the same name again expects another call, answered in order.
+
+```ruby
+module Minitest
+  class Mock
+    def expect(name, retval, args = [], &blk)
+    end
+  end
+end
+```
+
+## `Minitest::Mock#verify`
+
+Raises `MockExpectationError` for the first expected call the mock did not receive.
+
+```ruby
+module Minitest
+  class Mock
+    def verify
+    end
+  end
+end
+```
+
+## `MockExpectationError`
+
+What a mock raises for a call it did not expect with those arguments, or an expected call it never received.
+
+```ruby
+class MockExpectationError
+end
+```
+
+## `Object#stub`
+
+Replaces the receiver's method `name` for the length of the block, then restores it. A callable replacement is called with the arguments; anything else is returned, calling the caller's block with `block_args` first.
+
+```ruby
+class Object
+  def stub(name, val_or_callable, *block_args, &block)
   end
 end
 ```

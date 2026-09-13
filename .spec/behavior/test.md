@@ -133,3 +133,35 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 | Given | an `assert_equal` whose expected value is `nil` |
 | When | the assertion runs |
 | Then | it raises `Minitest::Assertion` pointing to `assert_nil`, even when the actual value is `nil` too |
+
+## `RT-016` A mock answers an expected call with its return value
+
+| Step | Statement |
+| --- | --- |
+| Given | a `Minitest::Mock` expecting a call with an argument and a return value |
+| When | the call is made with a matching argument |
+| Then | it answers the return value |
+
+## `RT-017` A mock refuses a call with arguments it did not expect
+
+| Step | Statement |
+| --- | --- |
+| Given | a `Minitest::Mock` expecting a call with an argument |
+| When | the call is made with an argument that does not match |
+| Then | it raises `MockExpectationError` |
+
+## `RT-018` `assert_mock` fails for an expected call the mock never received
+
+| Step | Statement |
+| --- | --- |
+| Given | a `Minitest::Mock` expecting a call that is never made |
+| When | `assert_mock` runs on it |
+| Then | it raises `Minitest::Assertion` located at the test's own line |
+
+## `RT-019` A stub replaces a method only within its block
+
+| Step | Statement |
+| --- | --- |
+| Given | an object whose method is stubbed with a value |
+| When | the method is called inside the block and again after it |
+| Then | it answers the value inside the block and its own result after it |

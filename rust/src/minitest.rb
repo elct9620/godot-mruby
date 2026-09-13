@@ -4,10 +4,14 @@
 module Minitest
   # A failed assertion. A test raising one fails; any other exception is an
   # error.
+  # The directory the framework's files are compiled under; a frame there is
+  # the framework's own rather than the test's.
+  FRAMEWORK_DIRECTORY = __FILE__[0, __FILE__.rindex("/") + 1]
+
   class Assertion < Exception
-    # Where the test failed: the first frame outside this file.
+    # Where the test failed: the first frame outside the framework.
     def location
-      frame = (backtrace || []).find { |line| line[0, __FILE__.size] != __FILE__ }
+      frame = (backtrace || []).find { |line| line[0, FRAMEWORK_DIRECTORY.size] != FRAMEWORK_DIRECTORY }
       frame ? frame.split(":in ").first : "unknown"
     end
 

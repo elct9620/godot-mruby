@@ -18,10 +18,12 @@ struct Interpreter {
 static GAME: Mutex<Option<Interpreter>> = Mutex::new(None);
 
 // The test framework ships inside the extension but only reaches an
-// interpreter the test runner prepares; its path names its frames in
-// backtraces.
-const MINITEST: &str = include_str!("minitest.rb");
-const MINITEST_PATH: &str = "godot_mruby/minitest.rb";
+// interpreter the test runner prepares; each file's path names its frames in
+// backtraces, and the framework tells its own frames by that directory.
+const FRAMEWORK: [(&str, &str); 2] = [
+    ("godot_mruby/minitest.rb", include_str!("minitest.rb")),
+    ("godot_mruby/mock.rb", include_str!("mock.rb")),
+];
 // Where the call that runs the tests is compiled, as backtraces name it.
 const RUNNER_PATH: &str = "godot_mruby/runner";
 
@@ -39,7 +41,10 @@ pub fn run_once(path: &str, source: impl FnOnce() -> String) -> Vec<Diagnostic> 
 /// its path.
 pub fn run_tests(paths: &[String], source: impl Fn(&str) -> String) -> (Vec<Diagnostic>, bool) {
     let outcome = with_game(|game| {
-        let mut diagnostics = game.run_once(MINITEST_PATH, || MINITEST.to_owned());
+        let mut diagnostics = Vec::new();
+        for (path, source) in FRAMEWORK {
+            diagnostics.extend(game.run_once(path, || source.to_owned()));
+        }
         for path in paths {
             diagnostics.extend(game.run_once(path, || source(path)));
         }
