@@ -30,6 +30,10 @@ class LoadingFailureTest < Minitest::Test
     assert Loading.const_defined?(:Shelf)
   end
 
+  def test_the_hook_that_tells_the_realm_of_new_constants_stays_private
+    assert_raises(NoMethodError) { Module.const_added(:Unused) }
+  end
+
   # @behavior RL-019
   def test_a_file_that_raised_runs_again_at_the_next_use_of_its_constant
     first = assert_raises(RuntimeError) { Loading::Raising }

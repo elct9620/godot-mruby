@@ -11,8 +11,10 @@ Module.prepend(Module.new do
   end
 
   # A file that raises takes away what it created, so the realm has to know.
+  # Private, as Ruby's own hook is.
   def const_added(name)
     __created__(name)
     super
   end
+  private :const_added
 end)
