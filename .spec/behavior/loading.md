@@ -120,3 +120,67 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 | Given | two files whose paths spell one constant, apart from an underscore |
 | When | Ruby uses that constant |
 | Then | it raises `NameError` |
+
+## `RL-015` A constant needed while its own file runs raises NameError naming the cycle
+
+| Step | Statement |
+| --- | --- |
+| Given | two files, each needing the other's constant before defining its own |
+| When | Ruby first uses one of the constants |
+| Then | it raises `NameError` naming the files in the order they needed each other |
+
+## `RL-016` A file that runs without defining its constant raises NameError
+
+| Step | Statement |
+| --- | --- |
+| Given | a file that runs cleanly but defines something other than the constant its path spells |
+| When | Ruby first uses that constant |
+| Then | it raises `NameError` naming the file that did not define it |
+
+## `RL-017` A file that raises takes the constants it created with it
+
+| Step | Statement |
+| --- | --- |
+| Given | a file that defines its constant and another beside it, then raises |
+| When | Ruby uses its constant and the exception is rescued |
+| Then | neither constant is defined |
+
+## `RL-018` A file loaded while a failing file ran keeps its constants
+
+| Step | Statement |
+| --- | --- |
+| Given | a file that loads another file by name, which runs cleanly, and then raises |
+| When | Ruby uses the failing file's constant and the exception is rescued |
+| Then | the constant of the file it loaded is still defined |
+
+## `RL-019` A file that raised runs again at the next use of its constant
+
+| Step | Statement |
+| --- | --- |
+| Given | a file that raised the first time its constant was used |
+| When | Ruby uses the constant again |
+| Then | the file runs again and raises what it raised before |
+
+## `RL-020` A file loaded by name that does not parse raises SyntaxError at its line
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose source does not parse |
+| When | Ruby first uses the constant its path spells |
+| Then | it raises `SyntaxError` naming the file and the line |
+
+## `RL-021` An exception in a file loaded by name is reported at that file's line
+
+| Step | Statement |
+| --- | --- |
+| Given | a test using a constant whose file raises |
+| When | the runner scene runs headless on that directory |
+| Then | Godot's log carries the test's error at the line of the file that raised |
+
+## `RL-022` A directory's module made while a failing file ran stays
+
+| Step | Statement |
+| --- | --- |
+| Given | a file that uses a class inside a directory with no file of its own name, then raises |
+| When | Ruby uses the failing file's constant and the exception is rescued |
+| Then | the directory's module is still defined |

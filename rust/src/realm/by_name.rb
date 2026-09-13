@@ -1,0 +1,18 @@
+# Loading by name, the Ruby way: a module prepended to Module asks the class
+# index before Ruby's own const_missing, and tells the realm of every constant
+# a running file creates before Ruby's own const_added. `__load_by_name__` and
+# `__created__` are the extension's.
+Module.prepend(Module.new do
+  # The first time Ruby misses a constant a file under res:// names, that file
+  # runs; every other miss is left to Ruby.
+  def const_missing(name)
+    found = __load_by_name__(name)
+    found ? found.first : super
+  end
+
+  # A file that raises takes away what it created, so the realm has to know.
+  def const_added(name)
+    __created__(name)
+    super
+  end
+end)

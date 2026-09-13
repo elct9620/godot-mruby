@@ -1,5 +1,5 @@
-use std::cell::RefCell;
-use std::collections::HashSet;
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::sync::Mutex;
 
@@ -15,16 +15,20 @@ mod index;
 mod loading;
 
 use index::ClassIndex;
-use loading::{ByName, Inside};
+use loading::{ByName, Frame, Inside, Run};
 
 /// Where the game's Ruby runs: an `mrb_state`, the class index of the files
-/// under `res://` and the paths of the files that have run. It opens at the
-/// first entry, one thread at a time is inside it, and it hands out Rust
-/// values rather than Ruby ones.
+/// under `res://`, how far each file has run, and the files running now. It
+/// opens at the first entry, one thread at a time is inside it, and it hands
+/// out Rust values rather than Ruby ones.
 pub struct Realm {
     mrb: Mrb,
     index: RefCell<ClassIndex>,
-    ran: RefCell<HashSet<String>>,
+    files: RefCell<HashMap<String, Run>>,
+    frames: RefCell<Vec<Frame>>,
+    // Set while the realm itself defines a directory's module, which is no
+    // file's to take away.
+    making_namespace: Cell<bool>,
 }
 
 static GAME: Mutex<Option<Realm>> = Mutex::new(None);
@@ -52,7 +56,9 @@ impl Realm {
         let realm = Self {
             mrb,
             index: RefCell::new(ClassIndex::default()),
-            ran: RefCell::new(HashSet::new()),
+            files: RefCell::new(HashMap::new()),
+            frames: RefCell::new(Vec::new()),
+            making_namespace: Cell::new(false),
         };
         realm.install::<Output>()?;
         realm.install::<ByName>()?;
@@ -109,12 +115,17 @@ impl Realm {
             .map_err(|error| RubyError::read(&self.mrb, Some(path), &error))
     }
 
-    // A file the class index names runs after the namespaces its path passes
-    // through; a test file is not one it names.
+    // By path a file runs once, whether it succeeded or not.
     fn run(&self, path: &str) -> Result<(), Error> {
-        if !self.ran.borrow_mut().insert(path.to_owned()) {
+        if self.files.borrow().contains_key(path) {
             return Ok(());
         }
+        self.execute(path)
+    }
+
+    // Reads and runs the file at `path`, after the namespaces its path passes
+    // through when the class index names it; a test file is not one it names.
+    fn load_file(&self, path: &str) -> Result<(), Error> {
         if self.index.borrow().names(path) {
             self.ensure_namespaces(path)?;
         }
@@ -155,11 +166,20 @@ impl Realm {
 /// Runs `source` as the file at `path`: mruby stamps the path on everything
 /// compiled from it, so warnings, errors and backtraces name it. What the
 /// compiler warns about is written to Godot's log at its line.
+///
+/// A file loaded by name runs inside a method Ruby called, and there mruby
+/// throws a raised exception to the caller's frame instead of handing it back
+/// from the load; the protected frame catches it first.
 pub fn load(mrb: &Mrb, path: &str, source: &str) -> Result<(), Error> {
     let filename = CString::new(path).map_err(|error| refused(mrb, &error.to_string()))?;
     let context = Ccontext::new(mrb, &filename)
         .ok_or_else(|| refused(mrb, "mruby could not make a compile context"))?;
-    let outcome = context.load_nstring(source.as_bytes());
+    let mut loaded = None;
+    let raised = mrb.protect(|_| {
+        loaded = Some(context.load_nstring(source.as_bytes()));
+        Value::nil()
+    });
+    let outcome = loaded.unwrap_or_else(|| raised.map(|_| Value::nil()));
     for warning in context.warnings() {
         let at = Location {
             file: path.to_owned(),
