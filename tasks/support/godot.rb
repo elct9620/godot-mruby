@@ -20,7 +20,8 @@ module Godot
   # What mruby says about the report scene's files, each as the line Godot
   # prints it on and the Ruby location Godot puts on the line after.
   REPORTS = {
-    "WARNING: else without rescue is useless" => "(res://report/warning.rb:6)"
+    "WARNING: else without rescue is useless" => "(res://report/warning.rb:6)",
+    %(SCRIPT ERROR: syntax error, unexpected "'end'", expecting end of file) => "(res://report/syntax_error.rb:3)"
   }.freeze
 
   module_function
@@ -57,7 +58,7 @@ module Godot
   end
 
   # Runs the report scene and looks for each report followed by its location.
-  # @behavior RR-001
+  # @behavior RR-001 RR-002
   def verify_reports!(project = PROJECT)
     output, status = Open3.capture2e(EXECUTABLE, "--headless", "--path", project, REPORT_SCENE, "--quit-after", "3")
     lines = output.lines.map(&:strip)

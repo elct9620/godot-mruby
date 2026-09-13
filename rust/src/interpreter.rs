@@ -46,11 +46,11 @@ pub struct Diagnostic {
 }
 
 impl Diagnostic {
-    fn warning(path: &str, warning: &ParseMessage) -> Self {
+    fn compiled(level: PrintLevel, path: &str, said: &ParseMessage) -> Self {
         Self {
-            level: PrintLevel::Warn,
-            message: warning.message().to_owned(),
-            at: Some((path.to_owned(), warning.line().into())),
+            level,
+            message: said.message().to_owned(),
+            at: Some((path.to_owned(), said.line().into())),
         }
     }
 
@@ -109,21 +109,24 @@ impl Interpreter {
         let mut diagnostics: Vec<_> = context
             .warnings()
             .iter()
-            .map(|warning| Diagnostic::warning(path, warning))
+            .map(|warning| Diagnostic::compiled(PrintLevel::Warn, path, warning))
             .collect();
         if let Err(error) = outcome {
-            let message = format!("{path}: {}", self.describe(&error));
-            diagnostics.push(Diagnostic::error(message));
+            diagnostics.push(self.diagnose(path, &error));
         }
         diagnostics
     }
 
-    // An exception renders only through the interpreter it was raised in; a
-    // syntax error carries its own line and column.
-    fn describe(&self, error: &Error) -> String {
+    // A syntax error names its own line, the way Godot reports a script that
+    // does not parse; an exception renders only through the interpreter it
+    // was raised in.
+    fn diagnose(&self, path: &str, error: &Error) -> Diagnostic {
         match error {
-            Error::Exception(_) => error.message(&self.mrb),
-            _ => error.to_string(),
+            Error::Syntax(parse) => Diagnostic::compiled(PrintLevel::ScriptError, path, parse),
+            Error::Exception(_) => {
+                Diagnostic::error(format!("{path}: {}", error.message(&self.mrb)))
+            }
+            _ => Diagnostic::error(format!("{path}: {error}")),
         }
     }
 }

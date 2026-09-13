@@ -13,3 +13,11 @@ How what mruby has to say about a Ruby file reaches Godot: through Godot's own l
 | Given | a node whose script is a `.rb` file the compiler warns about |
 | When | the scene runs |
 | Then | Godot's output carries the warning as a warning at the file's `res://` path and the line the compiler names |
+
+## `RR-002` A file that does not parse appears as a script error at its Ruby line
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose script is a `.rb` file that does not parse |
+| When | the scene runs |
+| Then | Godot's output carries the compiler's error as a script error at the file's `res://` path and the line the compiler names |
