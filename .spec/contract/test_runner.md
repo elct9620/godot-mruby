@@ -1,6 +1,6 @@
 # Test runner
 
-The command line the runner scene answers, which CI and editors drive:
+The command line the runner scene answers, which is how CI runs a project's Ruby tests:
 
     godot --headless --path <project> res://addons/godot_mruby/runner.tscn -- <options>
 
