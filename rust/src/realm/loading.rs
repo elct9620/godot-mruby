@@ -1,19 +1,17 @@
-use std::cell::Cell;
-use std::ptr;
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 
-use beni::{Error, FromValue, Gem, IntoValue, Module, Mrb, RClass, RModule, Symbol, Value, method};
+use beni::{
+    DataType, Error, FromValue, Gem, IntoValue, Module, Mrb, RClass, RModule, Symbol, Value, method,
+};
+use godot::classes::FileAccess;
 
-use super::index::{self, Key, Named, Namespace};
-use super::{Realm, load};
-
-thread_local! {
-    // The realm this thread is inside, for Ruby's calls back into it.
-    static CURRENT: Cell<*const Realm> = const { Cell::new(ptr::null()) };
-}
+use super::index::{self, ClassIndex, Key, Named, Namespace};
+use super::{load, refused};
 
 /// How far a file has run in a realm.
 #[derive(Clone, Copy)]
-pub(super) enum Run {
+enum Run {
     Running,
     Done,
     /// It raised; by name it runs again, by path it does not.
@@ -22,55 +20,63 @@ pub(super) enum Run {
 
 /// A file running now, and the constants it has created so far, each as the
 /// names of its namespace and its own.
-pub(super) struct Frame {
+struct Frame {
     path: String,
     created: Vec<(Vec<String>, String)>,
-}
-
-/// Marks this thread as inside a realm for as long as it lives.
-pub(super) struct Inside(*const Realm);
-
-impl Inside {
-    pub(super) fn new(realm: &Realm) -> Self {
-        Self(CURRENT.replace(realm))
-    }
-}
-
-impl Drop for Inside {
-    fn drop(&mut self) {
-        CURRENT.set(self.0);
-    }
-}
-
-fn current<'a>() -> Option<&'a Realm> {
-    // SAFETY: CURRENT holds a realm only while an `Inside` for it lives, which
-    // `enter` keeps for as long as it lends the realm out; Ruby calls back
-    // into the realm only within that span, on this thread.
-    unsafe { CURRENT.get().as_ref() }
 }
 
 /// Loading by name: `Module#const_missing` asks the class index first and
 /// `Module#const_added` tells the realm what a running file creates, both from
 /// a module prepended to `Module` that leaves the rest to Ruby through
 /// `super`. Every realm installs it.
-pub struct ByName;
+///
+/// It is also what it knows — the class index, how far each file has run, the
+/// files running now — carried by the `mrb_state` itself, so Ruby's calls back
+/// reach it from the state they are given, as an mruby gem keeps its data.
+#[derive(Default)]
+pub struct ByName {
+    index: RefCell<ClassIndex>,
+    files: RefCell<HashMap<String, Run>>,
+    frames: RefCell<Vec<Frame>>,
+    // Set while the realm itself defines a directory's module, which is no
+    // file's to take away.
+    making_namespace: Cell<bool>,
+}
+
+static STATE: DataType<ByName> = DataType::new(c"class index");
+
+// Where the state hangs: an instance variable of Module whose name Ruby
+// cannot spell, as mruby keeps its own `__outer__`.
+const STATE_NAME: &[u8] = b"__class_index__";
 
 impl Gem for ByName {
     fn init(mrb: &Mrb) -> Result<(), Error> {
         let module = mrb.class_get(c"Module")?;
+        let carrier = mrb.class_new(mrb.object_class())?;
+        carrier.set_instance_data_tt(mrb)?;
+        let state = carrier.data_wrap(mrb, ByName::default(), &STATE)?;
+        module
+            .to_value(mrb)
+            .iv_set(mrb, mrb.intern(STATE_NAME).to_sym(), state)?;
         module.define_private_method(mrb, c"__load_by_name__", method!(load_by_name, 1))?;
         module.define_private_method(mrb, c"__created__", method!(created, 1))?;
         load(mrb, "godot_mruby/by_name.rb", include_str!("by_name.rb"))
     }
 }
 
+/// A realm's loading by name: its `mrb_state` and the state installed there.
+pub(super) struct Loading<'a> {
+    mrb: &'a Mrb,
+    state: &'a ByName,
+}
+
 // Module#__load_by_name__(name): the constant in a one-element array, or nil
 // when the class index names no file for it.
 fn load_by_name(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
-    let (Some(realm), Some(name)) = (current(), name.name(mrb)) else {
+    let (Some(loading), Some(name)) = (Loading::of(mrb), name.name(mrb)) else {
         return Ok(Value::nil());
     };
-    Ok(match realm.resolve(receiver, &name)? {
+    Ok(match loading.resolve(receiver, &name)? {
         Some(constant) => mrb.ary_new_from_values(&[constant]).as_value(),
         None => Value::nil(),
     })
@@ -78,13 +84,77 @@ fn load_by_name(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error
 
 // Module#__created__(name): the receiver has just been given the constant.
 fn created(mrb: &Mrb, receiver: Value, name: Symbol) -> Value {
-    if let (Some(realm), Some(name)) = (current(), name.name(mrb)) {
-        realm.record(receiver, name);
+    if let (Some(loading), Some(name)) = (Loading::of(mrb), name.name(mrb)) {
+        loading.record(receiver, name);
     }
     Value::nil()
 }
 
-impl Realm {
+impl<'a> Loading<'a> {
+    /// The loading state installed in `mrb`, if `ByName` has been.
+    pub(super) fn of(mrb: &'a Mrb) -> Option<Self> {
+        let module = mrb.class_get(c"Module").ok()?.to_value(mrb);
+        let state = module
+            .iv_get(mrb, mrb.intern(STATE_NAME).to_sym())
+            .data_get(mrb, &STATE)?;
+        Some(Self { mrb, state })
+    }
+
+    /// Adds the files at `paths` to the class index, each named from `res://`.
+    pub(super) fn index_files(&self, paths: impl IntoIterator<Item = String>) {
+        self.state
+            .index
+            .borrow_mut()
+            .add(paths, |key| self.constant_at(key).is_some());
+    }
+
+    // The constant `key` spells, if it is already here, matched the way the
+    // class index matches it.
+    fn constant_at(&self, key: &[String]) -> Option<Value> {
+        key.iter().try_fold(self.object(), |scope, segment| {
+            self.constant_matching(scope, segment)
+        })
+    }
+
+    fn object(&self) -> Value {
+        self.mrb.object_class().to_value(self.mrb)
+    }
+
+    // The constant `scope` holds whose name the class index matches to
+    // `segment`.
+    fn constant_matching(&self, scope: Value, segment: &str) -> Option<Value> {
+        let constants = scope
+            .funcall(self.mrb, c"constants", &[])
+            .and_then(|constants| constants.ensure_array(self.mrb))
+            .ok()?;
+        let name = (0..constants.len())
+            .map(|index| constants.entry(index as isize))
+            .find(|name| index::normalize(&name.to_string(self.mrb)) == segment)?;
+        let name = name.to_sym(self.mrb).ok()?.to_sym();
+        scope.const_get(self.mrb, name).ok()
+    }
+
+    /// Runs the file at `path` by path: once, whether it succeeded or not.
+    pub(super) fn run(&self, path: &str) -> Result<(), Error> {
+        if self.state.files.borrow().contains_key(path) {
+            return Ok(());
+        }
+        self.execute(path)
+    }
+
+    // Reads and runs the file at `path`, after the namespaces its path passes
+    // through when the class index names it; a test file is not one it names.
+    fn load_file(&self, path: &str) -> Result<(), Error> {
+        if self.state.index.borrow().names(path) {
+            self.ensure_namespaces(path)?;
+        }
+        if !FileAccess::file_exists(path) {
+            return Err(refused(self.mrb, "the file does not exist"));
+        }
+        let source = FileAccess::get_file_as_string(path).to_string();
+        load(self.mrb, path, &source)
+    }
+
     // What `name` names from inside `receiver`, looked for from the innermost
     // namespace outward, as Rails' classic autoloader does: mruby hands
     // const_missing the innermost scope alone.
@@ -97,7 +167,7 @@ impl Realm {
                 .map(|segment| index::normalize(segment))
                 .collect();
             key.push(index::normalize(name));
-            let named = self.index.borrow().named(&key);
+            let named = self.state.index.borrow().named(&key);
             match named {
                 Some(Named::File(path)) => return self.constant_from(&path, outer, name).map(Some),
                 Some(Named::Namespace(namespace)) => {
@@ -119,8 +189,8 @@ impl Realm {
     // leads back to it.
     fn path_of(&self, receiver: Value) -> Option<Vec<String>> {
         let path = RClass::from_value(receiver)
-            .and_then(|class| class.path(&self.mrb))
-            .or_else(|| RModule::from_value(receiver).and_then(|module| module.path(&self.mrb)))?;
+            .and_then(|class| class.path(self.mrb))
+            .or_else(|| RModule::from_value(receiver).and_then(|module| module.path(self.mrb)))?;
         Some(match path.as_str() {
             "Object" => Vec::new(),
             path => path.split("::").map(str::to_owned).collect(),
@@ -132,7 +202,7 @@ impl Realm {
     // A file that raised runs again, as a failed `require` does in Ruby: it
     // took away what it created, so it starts over.
     fn constant_from(&self, path: &str, outer: &[String], name: &str) -> Result<Value, Error> {
-        let running = matches!(self.files.borrow().get(path), Some(Run::Running));
+        let running = matches!(self.state.files.borrow().get(path), Some(Run::Running));
         if running {
             return Err(self.name_error(&self.cycle(path, outer, name), name));
         }
@@ -140,8 +210,8 @@ impl Realm {
             .map_err(|error| self.placed(path, error))?;
         let scope = self.named_scope(outer)?;
         let symbol = self.mrb.intern(name.as_bytes()).to_sym();
-        if scope.const_defined_at(&self.mrb, symbol) {
-            scope.const_get(&self.mrb, symbol)
+        if scope.const_defined_at(self.mrb, symbol) {
+            scope.const_get(self.mrb, symbol)
         } else {
             let message = format!("{path} ran without defining {}", qualified(outer, name));
             Err(self.name_error(&message, name))
@@ -172,13 +242,13 @@ impl Realm {
     /// runs: the namespace's own file runs, or its directory becomes an empty
     /// module. A `module` statement never asks const_missing, so a file that
     /// opened its namespace first would make a module unrelated to it.
-    pub(super) fn ensure_namespaces(&self, path: &str) -> Result<(), Error> {
+    fn ensure_namespaces(&self, path: &str) -> Result<(), Error> {
         let key = index::key_of(path);
         for depth in 1..key.len() {
             if self.constant_at(&key[..depth]).is_some() {
                 continue;
             }
-            let named = self.index.borrow().named(&key[..depth]);
+            let named = self.state.index.borrow().named(&key[..depth]);
             match named {
                 Some(Named::File(file)) => self.run_by_name(&file)?,
                 Some(Named::Namespace(namespace)) => {
@@ -198,21 +268,21 @@ impl Realm {
     // The module the names in `outer` spell exactly, from Object.
     fn named_scope(&self, outer: &[String]) -> Result<Value, Error> {
         outer.iter().try_fold(self.object(), |scope, name| {
-            scope.const_get(&self.mrb, self.mrb.intern(name.as_bytes()).to_sym())
+            scope.const_get(self.mrb, self.mrb.intern(name.as_bytes()).to_sym())
         })
     }
 
     fn define_module(&self, scope: Value, name: &str) -> Result<Value, Error> {
-        let module = self.mrb.module_new().to_value(&self.mrb);
-        self.making_namespace.set(true);
-        let defined = scope.const_set(&self.mrb, self.mrb.intern(name.as_bytes()).to_sym(), module);
-        self.making_namespace.set(false);
+        let module = self.mrb.module_new().to_value(self.mrb);
+        self.state.making_namespace.set(true);
+        let defined = scope.const_set(self.mrb, self.mrb.intern(name.as_bytes()).to_sym(), module);
+        self.state.making_namespace.set(false);
         defined.map(|()| module)
     }
 
     // A file needed by name runs unless it has run cleanly or is running now.
     fn run_by_name(&self, path: &str) -> Result<(), Error> {
-        match self.files.borrow().get(path) {
+        match self.state.files.borrow().get(path) {
             Some(Run::Done | Run::Running) => return Ok(()),
             Some(Run::Failed) | None => {}
         }
@@ -222,16 +292,17 @@ impl Realm {
     /// Runs the file at `path` whatever it did before, keeping what it
     /// creates when it succeeds and taking all of it away when it raises.
     /// What a file it loads by name creates is that file's own.
-    pub(super) fn execute(&self, path: &str) -> Result<(), Error> {
-        self.files
+    fn execute(&self, path: &str) -> Result<(), Error> {
+        self.state
+            .files
             .borrow_mut()
             .insert(path.to_owned(), Run::Running);
-        self.frames.borrow_mut().push(Frame {
+        self.state.frames.borrow_mut().push(Frame {
             path: path.to_owned(),
             created: Vec::new(),
         });
         let outcome = self.load_file(path);
-        let frame = self.frames.borrow_mut().pop();
+        let frame = self.state.frames.borrow_mut().pop();
         let run = match (&outcome, frame) {
             (Ok(()), _) => Run::Done,
             (Err(_), frame) => {
@@ -239,18 +310,18 @@ impl Realm {
                 Run::Failed
             }
         };
-        self.files.borrow_mut().insert(path.to_owned(), run);
+        self.state.files.borrow_mut().insert(path.to_owned(), run);
         outcome
     }
 
     fn record(&self, receiver: Value, name: String) {
-        if self.making_namespace.get() {
+        if self.state.making_namespace.get() {
             return;
         }
         let Some(scope) = self.path_of(receiver) else {
             return;
         };
-        if let Some(frame) = self.frames.borrow_mut().last_mut() {
+        if let Some(frame) = self.state.frames.borrow_mut().last_mut() {
             frame.created.push((scope, name));
         }
     }
@@ -261,7 +332,7 @@ impl Realm {
         for (scope, name) in frame.created.iter().rev() {
             if let Some(scope) = self.defined_scope(scope) {
                 scope
-                    .const_remove(&self.mrb, self.mrb.intern(name.as_bytes()).to_sym())
+                    .const_remove(self.mrb, self.mrb.intern(name.as_bytes()).to_sym())
                     .ok();
             }
         }
@@ -272,8 +343,8 @@ impl Realm {
     fn defined_scope(&self, scope: &[String]) -> Option<Value> {
         scope.iter().try_fold(self.object(), |outer, name| {
             let name = self.mrb.intern(name.as_bytes()).to_sym();
-            if outer.const_defined_at(&self.mrb, name) {
-                outer.const_get(&self.mrb, name).ok()
+            if outer.const_defined_at(self.mrb, name) {
+                outer.const_get(self.mrb, name).ok()
             } else {
                 None
             }
@@ -283,7 +354,7 @@ impl Realm {
     // The files that led back to the one defining `name`, which is still
     // running.
     fn cycle(&self, path: &str, outer: &[String], name: &str) -> String {
-        let frames = self.frames.borrow();
+        let frames = self.state.frames.borrow();
         let start = frames
             .iter()
             .position(|frame| frame.path == path)
@@ -307,8 +378,8 @@ impl Realm {
                 self.mrb.intern(name.as_bytes()).as_value(),
             ];
             class
-                .into_value(&self.mrb)
-                .funcall(&self.mrb, c"new", &arguments)
+                .into_value(self.mrb)
+                .funcall(self.mrb, c"new", &arguments)
         });
         match error {
             Ok(error) => Error::Exception(error),
@@ -324,7 +395,7 @@ impl Realm {
         };
         let message = format!("{path}:{}: {}", parse.line(), parse.message());
         match self.mrb.exc_get(c"SyntaxError") {
-            Ok(class) => Error::new(&self.mrb, class, &message),
+            Ok(class) => Error::new(self.mrb, class, &message),
             Err(error) => error,
         }
     }

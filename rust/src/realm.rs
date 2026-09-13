@@ -1,10 +1,7 @@
-use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::sync::Mutex;
 
 use beni::{Ccontext, Error, FromValue, Gem, IntoValue, Mrb, Value};
-use godot::classes::FileAccess;
 
 use crate::log::{Level, Location};
 use crate::output::Output;
@@ -14,21 +11,14 @@ use crate::{log, warn};
 mod index;
 mod loading;
 
-use index::ClassIndex;
-use loading::{ByName, Frame, Inside, Run};
+use loading::{ByName, Loading};
 
-/// Where the game's Ruby runs: an `mrb_state`, the class index of the files
-/// under `res://`, how far each file has run, and the files running now. It
-/// opens at the first entry, one thread at a time is inside it, and it hands
-/// out Rust values rather than Ruby ones.
+/// Where the game's Ruby runs: an `mrb_state` and what has been installed
+/// into it, the class index of the files under `res://` among them. It opens
+/// at the first entry, one thread at a time is inside it, and it hands out
+/// Rust values rather than Ruby ones.
 pub struct Realm {
     mrb: Mrb,
-    index: RefCell<ClassIndex>,
-    files: RefCell<HashMap<String, Run>>,
-    frames: RefCell<Vec<Frame>>,
-    // Set while the realm itself defines a directory's module, which is no
-    // file's to take away.
-    making_namespace: Cell<bool>,
 }
 
 static GAME: Mutex<Option<Realm>> = Mutex::new(None);
@@ -41,7 +31,6 @@ pub fn enter<T>(body: impl FnOnce(&Realm) -> Result<T, RubyError>) -> Result<T, 
         Some(realm) => realm,
         None => game.insert(Realm::open()?),
     };
-    let _inside = Inside::new(realm);
     body(realm)
 }
 
@@ -53,13 +42,7 @@ impl Realm {
     fn open() -> Result<Self, RubyError> {
         let mrb = Mrb::open()
             .map_err(|error| RubyError::plain(format!("mruby did not open: {error}")))?;
-        let realm = Self {
-            mrb,
-            index: RefCell::new(ClassIndex::default()),
-            files: RefCell::new(HashMap::new()),
-            frames: RefCell::new(Vec::new()),
-            making_namespace: Cell::new(false),
-        };
+        let realm = Self { mrb };
         realm.install::<Output>()?;
         realm.install::<ByName>()?;
         realm.index_files(index::game_files(&settings::test_directories()));
@@ -69,35 +52,9 @@ impl Realm {
     /// Adds the files at `paths` to the class index, each named from `res://`.
     pub fn index_files(&self, paths: impl IntoIterator<Item = String>) {
         let _scope = self.mrb.arena_scope();
-        self.index
-            .borrow_mut()
-            .add(paths, |key| self.constant_at(key).is_some());
-    }
-
-    // The constant `key` spells, if it is already here, matched the way the
-    // class index matches it.
-    fn constant_at(&self, key: &[String]) -> Option<Value> {
-        key.iter().try_fold(self.object(), |scope, segment| {
-            self.constant_matching(scope, segment)
-        })
-    }
-
-    fn object(&self) -> Value {
-        self.mrb.object_class().to_value(&self.mrb)
-    }
-
-    // The constant `scope` holds whose name the class index matches to
-    // `segment`.
-    fn constant_matching(&self, scope: Value, segment: &str) -> Option<Value> {
-        let constants = scope
-            .funcall(&self.mrb, c"constants", &[])
-            .and_then(|constants| constants.ensure_array(&self.mrb))
-            .ok()?;
-        let name = (0..constants.len())
-            .map(|index| constants.entry(index as isize))
-            .find(|name| index::normalize(&name.to_string(&self.mrb)) == segment)?;
-        let name = name.to_sym(&self.mrb).ok()?.to_sym();
-        scope.const_get(&self.mrb, name).ok()
+        if let Some(loading) = Loading::of(&self.mrb) {
+            loading.index_files(paths);
+        }
     }
 
     /// Adds what `G` defines to what Ruby sees in this realm.
@@ -111,29 +68,11 @@ impl Realm {
     /// whether it succeeded or not.
     pub fn run_file(&self, path: &str) -> Result<(), RubyError> {
         let _scope = self.mrb.arena_scope();
-        self.run(path)
+        let loading = Loading::of(&self.mrb)
+            .ok_or_else(|| RubyError::plain(format!("{path}: the realm cannot load files")))?;
+        loading
+            .run(path)
             .map_err(|error| RubyError::read(&self.mrb, Some(path), &error))
-    }
-
-    // By path a file runs once, whether it succeeded or not.
-    fn run(&self, path: &str) -> Result<(), Error> {
-        if self.files.borrow().contains_key(path) {
-            return Ok(());
-        }
-        self.execute(path)
-    }
-
-    // Reads and runs the file at `path`, after the namespaces its path passes
-    // through when the class index names it; a test file is not one it names.
-    fn load_file(&self, path: &str) -> Result<(), Error> {
-        if self.index.borrow().names(path) {
-            self.ensure_namespaces(path)?;
-        }
-        if !FileAccess::file_exists(path) {
-            return Err(refused(&self.mrb, "the file does not exist"));
-        }
-        let source = FileAccess::get_file_as_string(path).to_string();
-        load(&self.mrb, path, &source)
     }
 
     /// Calls `method` on the constant `receiver` names with `arg`, and answers
