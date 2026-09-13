@@ -25,10 +25,10 @@ godot-mruby is a Godot 4 addon that embeds mruby through a Rust GDExtension (god
 bundle install
 bundle exec rake beni:build              # download mruby into vendor/ and build its archives
 bundle exec rake extension:build         # host debug build, installed into the addon's bin/
-bundle exec rake godot:verify            # headless editor pass; fails unless the extension loaded
+bundle exec rake godot:verify            # headless editor pass, then godot/smoke/: fails unless the extension loaded and its Ruby printed
 bundle exec rake extension:dist          # the library this platform ships (PROFILE=release|debug; macOS: lipo universal)
 bundle exec rake addon:package           # zip the addon with every platform's library and third-party licenses
-bundle exec rake addon:verify            # install the zip into a copy of godot/ and verify it loads
+bundle exec rake addon:verify            # install the zip into a copy of godot/ and run godot:verify's checks on it
 bundle exec rake                         # rubocop + extension:build + godot:verify
 bundle exec rake beni:clean beni:build   # rebuild mruby after editing build_config/mruby.rb
 sumi verify                              # check the source against .spec/

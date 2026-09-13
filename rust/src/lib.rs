@@ -1,6 +1,8 @@
 use godot::init::InitStage;
 use godot::prelude::*;
 
+mod instance;
+mod interpreter;
 mod language;
 mod loader;
 mod script;
@@ -21,6 +23,7 @@ unsafe impl ExtensionLibrary for GodotMruby {
         if stage == InitStage::Scene {
             loader::unregister();
             language::unregister();
+            interpreter::close();
         }
     }
 }

@@ -121,7 +121,7 @@ module Addon
       copy_project(project)
       extract(package, File.join(dir, "package"))
       FileUtils.mv(File.join(dir, "package", FOLDER, "addons", "godot_mruby"), File.join(project, "addons"))
-      Godot.verify_loaded!(project)
+      Godot.verify!(project)
     end
   end
 

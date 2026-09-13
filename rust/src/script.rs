@@ -1,10 +1,12 @@
 use std::ffi::c_void;
 
-use godot::classes::{IScriptExtension, Object, Script, ScriptExtension, ScriptLanguage};
+use godot::classes::{Engine, IScriptExtension, Object, Script, ScriptExtension, ScriptLanguage};
 use godot::global::Error;
 use godot::meta::conv::RawPtr;
+use godot::obj::script::create_script_instance;
 use godot::prelude::*;
 
+use crate::instance::RubyInstance;
 use crate::language;
 
 /// The script a `.rb` file loads as, the way a `.gd` file loads as a `GDScript`.
@@ -30,8 +32,9 @@ impl IScriptExtension for RubyScript {
         true
     }
 
+    // Scripts only run in a game; the editor gets no instance.
     fn can_instantiate(&self) -> bool {
-        false
+        !Engine::singleton().is_editor_hint()
     }
 
     fn get_base_script(&self) -> Option<Gd<Script>> {
@@ -50,9 +53,10 @@ impl IScriptExtension for RubyScript {
         StringName::from("Node")
     }
 
-    unsafe fn instance_create_rawptr(&self, _for_object: Gd<Object>) -> RawPtr<*mut c_void> {
-        // SAFETY: a null instance is what a script that cannot instantiate returns.
-        unsafe { RawPtr::new(std::ptr::null_mut()) }
+    unsafe fn instance_create_rawptr(&self, for_object: Gd<Object>) -> RawPtr<*mut c_void> {
+        let instance = RubyInstance::new(self.to_gd().upcast(), &for_object);
+        // SAFETY: Godot hands the instance to `for_object` and frees it with that object.
+        unsafe { create_script_instance(instance, for_object) }
     }
 
     unsafe fn placeholder_instance_create_rawptr(
