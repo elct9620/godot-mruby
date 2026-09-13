@@ -1,6 +1,6 @@
 # The test framework the test runner prepares the game's interpreter with. It
 # follows minitest's design and spelling, so Ruby developers write tests the
-# way they already do, within what mruby core and mruby-metaprog provide.
+# way they already do, within what the extension's mruby provides.
 module Minitest
   # A failed assertion. A test raising one fails; any other exception is an
   # error.

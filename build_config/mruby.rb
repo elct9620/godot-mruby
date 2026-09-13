@@ -2,12 +2,10 @@
 # would only repeat it.
 MRuby::Lockfile.disable
 
-# Gems join one at a time, when the extension comes to need them; anything that
-# reaches the host (IO, sockets, directories) stays out, since Ruby reaches the
-# host through Godot's API. The compiler is here because the extension runs Ruby
-# source; metaprog because the test framework finds a test class's test methods
-# by listing its public instance methods.
-GEMS = %w[mruby-compiler mruby-metaprog].freeze
+# The fewest gems the extension needs; anything that reaches the host (IO,
+# sockets, directories) stays out, since Ruby reaches the host through Godot's
+# API.
+GEMS = %w[mruby-compiler mruby-metaprog mruby-random mruby-sprintf].freeze
 
 # What every build shares, as each goes into the same shipped library. That
 # library is a shared one, so the archive's code is compiled
