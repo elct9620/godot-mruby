@@ -3,6 +3,7 @@
 require "open3"
 
 require_relative "ruby_tests"
+require_relative "test_settings"
 
 # Runs the integration-test project headless and reads what it reports.
 # Backs tasks/godot.rake.
@@ -33,6 +34,7 @@ module Godot
     verify_scripts_run!(project)
     verify_reports!(project)
     RubyTests.verify!(project)
+    TestSettings.verify!(project)
   end
 
   # The project keeps its extension list, so the editor loads the addon at

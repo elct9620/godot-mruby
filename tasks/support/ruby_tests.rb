@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-require "fileutils"
-require "tmpdir"
-
 module Godot
   # Runs the integration-test project's Ruby tests through the addon's runner
   # scene and reads what the runs report. Part of Godot.verify!.
@@ -21,9 +18,6 @@ module Godot
       %w[-e SkipTest#test_a_skipped_test_does_not_fail_the_run] =>
         /^\d+ runs, \d+ assertions, 0 failures, 0 errors, 0 skips$/
     }.freeze
-    # A pattern matching one test file, and the summary of a run under it.
-    PATTERN = "setup_*.rb"
-    PATTERN_SUMMARY = /^2 runs, \d+ assertions, 0 failures, 0 errors, 0 skips$/
     # Runs that have to fail, each as the runner's options and what the run
     # has to print on the way, in the order it prints it: one per way a run
     # fails, all under godot/failing/ except the directory that does not
@@ -60,7 +54,6 @@ module Godot
       verify_pass!(project)
       verify_filtered!(project)
       verify_fail!(project)
-      verify_settings!(project)
     end
 
     # Runs the project's Ruby tests and requires a pass that ran at least one,
@@ -98,44 +91,6 @@ module Godot
 
         raise "The Ruby tests with #{options.join(" ")} did not fail as they should #{missing}:\n#{output}"
       end
-    end
-
-    # Runs a copy of the project that sets no test setting, without --dir,
-    # before and after overriding its pattern.
-    def verify_settings!(project)
-      Dir.mktmpdir do |dir|
-        copy = File.join(dir, "project")
-        FileUtils.cp_r(project, copy)
-        unset_test_settings(copy)
-        verify_defaults!(copy)
-        verify_pattern!(copy)
-      end
-    end
-
-    # A project that sets no test setting has to run the tests under
-    # res://test.
-    # @behavior RT-027
-    def verify_defaults!(project)
-      output, status = run(project)
-      return if status.success? && output[PASSED, 1].to_i.positive?
-
-      raise "A project without test settings did not run #{TESTS}:\n#{output}"
-    end
-
-    # A pattern matching one test file has to run that file's tests alone.
-    # @behavior RT-028
-    def verify_pattern!(project)
-      File.write(File.join(project, "override.cfg"), %([mruby]\n\ntest/pattern="#{PATTERN}"\n))
-      output, status = run(project)
-      return if status.success? && output.match?(PATTERN_SUMMARY)
-
-      raise "The test pattern #{PATTERN} did not narrow the run:\n#{output}"
-    end
-
-    # Removes the [mruby] section from the project's settings.
-    def unset_test_settings(project)
-      path = File.join(project, "project.godot")
-      File.write(path, File.read(path).gsub(/^\[mruby\]\n(?:[^\[].*\n|\n)*/, ""))
     end
 
     # The expected lines that do not appear in the output after the one before
