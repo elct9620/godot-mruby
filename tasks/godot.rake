@@ -3,7 +3,7 @@
 require_relative "support/godot"
 
 namespace :godot do
-  desc "Load the addon in a headless editor, then run the smoke and report scenes and check what reached Godot"
+  desc "Load the addon headless, then check the smoke and report scenes and the Ruby tests"
   task :verify do
     Godot.verify!
   end

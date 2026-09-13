@@ -8,9 +8,10 @@ godot-mruby is a Godot 4 addon that embeds mruby through a Rust GDExtension (god
 
 | Path | Role |
 |---|---|
-| `rust/` | The extension crate (gdext, beni) |
+| `rust/` | The extension crate (gdext, beni); `src/minitest.rb` is the Ruby test framework it embeds |
 | `godot/` | Integration-test Godot project |
-| `godot/addons/godot_mruby/` | The shipped addon; `bin/` is build output |
+| `godot/test/` | Ruby tests the test runner runs; `godot/failing/` holds tests whose run must fail |
+| `godot/addons/godot_mruby/` | The shipped addon; `runner.tscn` is the test runner scene, `bin/` is build output |
 | `build_config/mruby.rb` | mruby build config (host + x86_64 cross build) |
 | `Rakefile`, `tasks/*.rake` | Task entry points |
 | `tasks/support/` | Task logic: paths, library names, cargo env, Godot checks |
@@ -25,7 +26,8 @@ godot-mruby is a Godot 4 addon that embeds mruby through a Rust GDExtension (god
 bundle install
 bundle exec rake beni:build              # download mruby into vendor/ and build its archives
 bundle exec rake extension:build         # host debug build, installed into the addon's bin/
-bundle exec rake godot:verify            # headless editor pass, then godot/smoke/ and godot/report/: fails unless the extension loaded, its Ruby printed, and mruby's reports reached Godot at their Ruby lines
+bundle exec rake godot:verify            # headless editor pass, then the smoke and report scenes and the Ruby tests
+godot --headless --path godot res://addons/godot_mruby/runner.tscn -- --dir res://test   # the Ruby tests alone
 bundle exec rake extension:dist          # the library this platform ships (PROFILE=release|debug; macOS: lipo universal)
 bundle exec rake addon:package           # zip the addon with every platform's library and third-party licenses
 bundle exec rake addon:verify            # install the zip into a copy of godot/ and run godot:verify's checks on it

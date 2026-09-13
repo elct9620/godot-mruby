@@ -17,23 +17,51 @@ struct Interpreter {
 
 static GAME: Mutex<Option<Interpreter>> = Mutex::new(None);
 
+// The test framework ships inside the extension but only reaches an
+// interpreter the test runner prepares; its path names its frames in
+// backtraces.
+const MINITEST: &str = include_str!("minitest.rb");
+const MINITEST_PATH: &str = "godot_mruby/minitest.rb";
+// Where the call that runs the tests is compiled, as backtraces name it.
+const RUNNER_PATH: &str = "godot_mruby/runner";
+
 /// Runs the file at `path` in the game's interpreter unless it has run there
 /// already, whether it succeeded or not; `source` is only read when it runs.
 /// What mruby said about the run is returned rather than printed, so it is
 /// reported outside the interpreter.
 pub fn run_once(path: &str, source: impl FnOnce() -> String) -> Vec<Diagnostic> {
+    with_game(|game| game.run_once(path, source)).unwrap_or_else(|failed| vec![failed])
+}
+
+/// Runs the test framework and then each test file in the game's
+/// interpreter, and answers whether every test passed: a test file that did
+/// not load fails the run as a failed test would. `source` reads a file at
+/// its path.
+pub fn run_tests(paths: &[String], source: impl Fn(&str) -> String) -> (Vec<Diagnostic>, bool) {
+    let outcome = with_game(|game| {
+        let mut diagnostics = game.run_once(MINITEST_PATH, || MINITEST.to_owned());
+        for path in paths {
+            diagnostics.extend(game.run_once(path, || source(path)));
+        }
+        let loaded = !diagnostics.iter().any(Diagnostic::is_error);
+        match game.run_minitest() {
+            Ok(passed) => (diagnostics, loaded && passed),
+            Err(failed) => {
+                diagnostics.push(failed);
+                (diagnostics, false)
+            }
+        }
+    });
+    outcome.unwrap_or_else(|failed| (vec![failed], false))
+}
+
+fn with_game<T>(enter: impl FnOnce(&mut Interpreter) -> T) -> Result<T, Diagnostic> {
     let mut game = GAME.lock().unwrap();
     let interpreter = match game.as_mut() {
         Some(interpreter) => interpreter,
-        None => match Interpreter::open() {
-            Ok(interpreter) => game.insert(interpreter),
-            Err(message) => return vec![Diagnostic::error(message)],
-        },
+        None => game.insert(Interpreter::open().map_err(Diagnostic::error)?),
     };
-    if !interpreter.ran.insert(path.to_owned()) {
-        return Vec::new();
-    }
-    interpreter.run(path, &source())
+    Ok(enter(interpreter))
 }
 
 /// One thing mruby said about a file, reported through Godot's log.
@@ -60,6 +88,10 @@ impl Diagnostic {
             message,
             at: None,
         }
+    }
+
+    fn is_error(&self) -> bool {
+        matches!(self.level, PrintLevel::Error | PrintLevel::ScriptError)
     }
 
     #[track_caller]
@@ -96,14 +128,24 @@ impl Interpreter {
         })
     }
 
+    fn run_once(&mut self, path: &str, source: impl FnOnce() -> String) -> Vec<Diagnostic> {
+        if !self.ran.insert(path.to_owned()) {
+            return Vec::new();
+        }
+        self.run(path, &source())
+    }
+
+    fn run_minitest(&self) -> Result<bool, Diagnostic> {
+        self.context(RUNNER_PATH)?
+            .load_nstring(b"Minitest.run")
+            .map(Value::is_true)
+            .map_err(|error| self.diagnose(RUNNER_PATH, &error))
+    }
+
     fn run(&self, path: &str, source: &str) -> Vec<Diagnostic> {
-        let filename = match CString::new(path) {
-            Ok(filename) => filename,
-            Err(error) => return vec![Diagnostic::error(format!("{path}: {error}"))],
-        };
-        let Some(context) = Ccontext::new(&self.mrb, &filename) else {
-            let message = format!("{path}: mruby could not make a compile context");
-            return vec![Diagnostic::error(message)];
+        let context = match self.context(path) {
+            Ok(context) => context,
+            Err(failed) => return vec![failed],
         };
         let outcome = context.load_nstring(source.as_bytes());
         let mut diagnostics: Vec<_> = context
@@ -115,6 +157,16 @@ impl Interpreter {
             diagnostics.push(self.diagnose(path, &error));
         }
         diagnostics
+    }
+
+    // What `path` compiles in: mruby stamps it on everything compiled there,
+    // so warnings, errors and backtraces name it.
+    fn context(&self, path: &str) -> Result<Ccontext<'_>, Diagnostic> {
+        let filename =
+            CString::new(path).map_err(|error| Diagnostic::error(format!("{path}: {error}")))?;
+        Ccontext::new(&self.mrb, &filename).ok_or_else(|| {
+            Diagnostic::error(format!("{path}: mruby could not make a compile context"))
+        })
     }
 
     // A syntax error names its own line, the way Godot reports a script that

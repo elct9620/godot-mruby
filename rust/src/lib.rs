@@ -5,6 +5,7 @@ mod instance;
 mod interpreter;
 mod language;
 mod loader;
+mod runner;
 mod script;
 
 struct GodotMruby;

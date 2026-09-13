@@ -7,6 +7,7 @@ The words this project keeps, and the ones it turns down in their place.
 ### Includes
 
 - `rust/src/**/*.rs`
+- `rust/src/**/*.rb`
 - `tasks/**/*.rb`
 - `tasks/*.rake`
 - `Rakefile`

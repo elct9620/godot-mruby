@@ -21,3 +21,11 @@ The script a `.rb` file loads as, the way a `.gd` file loads as a `GDScript`.
 ```rust
 struct RubyScript;
 ```
+
+## `RubyTestRunner`
+
+The node the addon's runner scene holds: it runs a Ruby test suite and quits with its outcome.
+
+```rust
+struct RubyTestRunner;
+```
