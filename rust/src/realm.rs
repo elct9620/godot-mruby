@@ -1,7 +1,7 @@
 use std::ffi::{CStr, CString};
 use std::sync::Mutex;
 
-use beni::{Ccontext, Error, FromValue, Gem, IntoValue, Mrb, Value};
+use beni::{Ccontext, Error, FromValue, Gem, IntoValue, Mrb};
 
 use crate::log::{Level, Location};
 use crate::output::Output;
@@ -84,12 +84,15 @@ impl Realm {
         arg: A,
     ) -> Result<R, RubyError> {
         let _scope = self.mrb.arena_scope();
-        let name = self.mrb.intern(receiver.as_bytes()).to_sym();
         let answer = self
             .mrb
-            .object_class()
-            .to_value(&self.mrb)
-            .const_get(&self.mrb, name)
+            .intern(receiver.as_bytes())
+            .and_then(|name| {
+                self.mrb
+                    .object_class()
+                    .to_value(&self.mrb)
+                    .const_get(&self.mrb, name.to_sym())
+            })
             .and_then(|receiver| receiver.funcall(&self.mrb, method, &[arg.into_value(&self.mrb)]))
             .map_err(|error| RubyError::read(&self.mrb, None, &error))?;
         R::from_value(answer).ok_or_else(|| {
@@ -105,20 +108,11 @@ impl Realm {
 /// Runs `source` as the file at `path`: mruby stamps the path on everything
 /// compiled from it, so warnings, errors and backtraces name it. What the
 /// compiler warns about is written to Godot's log at its line.
-///
-/// A file loaded by name runs inside a method Ruby called, and there mruby
-/// throws a raised exception to the caller's frame instead of handing it back
-/// from the load; the protected frame catches it first.
 pub fn load(mrb: &Mrb, path: &str, source: &str) -> Result<(), Error> {
     let filename = CString::new(path).map_err(|error| refused(mrb, &error.to_string()))?;
     let context = Ccontext::new(mrb, &filename)
         .ok_or_else(|| refused(mrb, "mruby could not make a compile context"))?;
-    let mut loaded = None;
-    let raised = mrb.protect(|_| {
-        loaded = Some(context.load_nstring(source.as_bytes()));
-        Value::nil()
-    });
-    let outcome = loaded.unwrap_or_else(|| raised.map(|_| Value::nil()));
+    let outcome = context.load_nstring(source.as_bytes());
     for warning in context.warnings() {
         let at = Location {
             file: path.to_owned(),

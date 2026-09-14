@@ -38,7 +38,7 @@ impl Gem for Minitest {
 // Minitest::LogReporter#error(message, file, line): a test that did not
 // pass, written to Godot's log at its Ruby line when it has one.
 fn log_error(mrb: &Mrb, _reporter: Value) -> Result<Value, Error> {
-    let args = mrb.get_args::<Rest>();
+    let args = mrb.get_args::<Rest>()?;
     let [message, file, line] = args else {
         return Err(Error::argnum(mrb, args.len() as i64, 3, 3));
     };
@@ -83,7 +83,8 @@ impl IntoValue for Options {
         ];
         for (key, value) in entries {
             if let Some(value) = value {
-                hash.set(mrb, mrb.intern(key.as_bytes()).as_value(), value)
+                let key = mrb.intern(key.as_bytes()).expect("a short name interns");
+                hash.set(mrb, key.as_value(), value)
                     .expect("a fresh hash takes a symbol key");
             }
         }

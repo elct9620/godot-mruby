@@ -57,7 +57,7 @@ impl Gem for ByName {
         let state = carrier.data_wrap(mrb, ByName::default(), &STATE)?;
         module
             .to_value(mrb)
-            .iv_set(mrb, mrb.intern(STATE_NAME).to_sym(), state)?;
+            .iv_set(mrb, mrb.intern(STATE_NAME)?.to_sym(), state)?;
         module.define_private_method(mrb, c"__load_by_name__", method!(load_by_name, 1))?;
         module.define_private_method(mrb, c"__created__", method!(created, 1))?;
         load(mrb, "godot_mruby/by_name.rb", include_str!("by_name.rb"))
@@ -95,7 +95,7 @@ impl<'a> Loading<'a> {
     pub(super) fn of(mrb: &'a Mrb) -> Option<Self> {
         let module = mrb.class_get(c"Module").ok()?.to_value(mrb);
         let state = module
-            .iv_get(mrb, mrb.intern(STATE_NAME).to_sym())
+            .iv_get(mrb, mrb.intern(STATE_NAME).ok()?.to_sym())
             .data_get(mrb, &STATE)?;
         Some(Self { mrb, state })
     }
@@ -209,7 +209,7 @@ impl<'a> Loading<'a> {
         self.run_by_name(path)
             .map_err(|error| self.placed(path, error))?;
         let scope = self.named_scope(outer)?;
-        let symbol = self.mrb.intern(name.as_bytes()).to_sym();
+        let symbol = self.mrb.intern(name.as_bytes())?.to_sym();
         if scope.const_defined_at(self.mrb, symbol) {
             scope.const_get(self.mrb, symbol)
         } else {
@@ -268,14 +268,15 @@ impl<'a> Loading<'a> {
     // The module the names in `outer` spell exactly, from Object.
     fn named_scope(&self, outer: &[String]) -> Result<Value, Error> {
         outer.iter().try_fold(self.object(), |scope, name| {
-            scope.const_get(self.mrb, self.mrb.intern(name.as_bytes()).to_sym())
+            scope.const_get(self.mrb, self.mrb.intern(name.as_bytes())?.to_sym())
         })
     }
 
     fn define_module(&self, scope: Value, name: &str) -> Result<Value, Error> {
+        let name = self.mrb.intern(name.as_bytes())?.to_sym();
         let module = self.mrb.module_new().to_value(self.mrb);
         self.state.making_namespace.set(true);
-        let defined = scope.const_set(self.mrb, self.mrb.intern(name.as_bytes()).to_sym(), module);
+        let defined = scope.const_set(self.mrb, name, module);
         self.state.making_namespace.set(false);
         defined.map(|()| module)
     }
@@ -330,10 +331,10 @@ impl<'a> Loading<'a> {
     // class goes before the class.
     fn take_away(&self, frame: &Frame) {
         for (scope, name) in frame.created.iter().rev() {
-            if let Some(scope) = self.defined_scope(scope) {
-                scope
-                    .const_remove(self.mrb, self.mrb.intern(name.as_bytes()).to_sym())
-                    .ok();
+            if let (Some(scope), Ok(name)) =
+                (self.defined_scope(scope), self.mrb.intern(name.as_bytes()))
+            {
+                scope.const_remove(self.mrb, name.to_sym()).ok();
             }
         }
     }
@@ -342,7 +343,7 @@ impl<'a> Loading<'a> {
     // asking for a missing one would load it by name.
     fn defined_scope(&self, scope: &[String]) -> Option<Value> {
         scope.iter().try_fold(self.object(), |outer, name| {
-            let name = self.mrb.intern(name.as_bytes()).to_sym();
+            let name = self.mrb.intern(name.as_bytes()).ok()?.to_sym();
             if outer.const_defined_at(self.mrb, name) {
                 outer.const_get(self.mrb, name).ok()
             } else {
@@ -375,7 +376,7 @@ impl<'a> Loading<'a> {
         let error = self.mrb.exc_get(c"NameError").and_then(|class| {
             let arguments = [
                 self.mrb.str_new(message.as_bytes()).as_value(),
-                self.mrb.intern(name.as_bytes()).as_value(),
+                self.mrb.intern(name.as_bytes())?.as_value(),
             ];
             class
                 .into_value(self.mrb)
