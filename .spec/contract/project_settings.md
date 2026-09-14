@@ -12,7 +12,7 @@ The settings the extension adds to a project, under `mruby/`. A project changes 
 
 ## `mruby/test/directories`
 
-The directories whose tests the test runner runs, each searched recursively; `res://test` when a project sets none. `res://` itself cannot be one: the whole game is not a test directory.
+The project's test directories, each searched recursively; `res://test` when a project sets none. The test runner runs the tests under them, and an exported game's class index leaves them out. `res://` itself cannot be one: the whole game is not a test directory.
 
 ## `mruby/test/pattern`
 
