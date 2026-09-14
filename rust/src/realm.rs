@@ -1,26 +1,44 @@
-use std::ffi::{CStr, CString};
+use std::cell::{Cell, RefCell};
+use std::ffi::CStr;
 use std::sync::Mutex;
 
-use beni::{Ccontext, Error, FromValue, Gem, IntoValue, Mrb};
+use beni::{Error, FromValue, Gem, IntoValue, Mrb};
 use godot::classes::Os;
 use godot::obj::Singleton;
 
+use crate::log;
 use crate::log::{Level, Location};
-use crate::output::Output;
 use crate::settings;
-use crate::{log, warn};
 
+mod constants;
+mod executor;
 mod index;
-mod loading;
+mod print;
 
-use loading::{ByName, Loading};
+use index::ClassIndex;
 
-/// Where the game's Ruby runs: an `mrb_state` and what has been installed
-/// into it, the class index of the files under `res://` among them. It opens
-/// at the first entry, one thread at a time is inside it, and it hands out
-/// Rust values rather than Ruby ones.
+/// Where the game's Ruby runs: an `mrb_state`, the bookkeeping kept beside
+/// it, and the extensions installed into it. It opens at the first entry, one
+/// thread at a time is inside it, and it hands out Rust values rather than
+/// Ruby ones.
 pub struct Realm {
     mrb: Mrb,
+}
+
+/// What a realm keeps beside its `mrb_state`, in the state's user data so
+/// Ruby's calls back into Rust reach it from the state they are given.
+#[derive(Default)]
+struct Bookkeeping {
+    index: RefCell<ClassIndex>,
+    runs: executor::Runs,
+    // Set while the realm defines a directory's module, which no file created.
+    defining_namespace: Cell<bool>,
+}
+
+// The bookkeeping `mrb`'s realm put there as it opened.
+fn bookkeeping(mrb: &Mrb) -> &Bookkeeping {
+    mrb.user_data()
+        .expect("a realm keeps its bookkeeping from the moment it opens")
 }
 
 static GAME: Mutex<Option<Realm>> = Mutex::new(None);
@@ -53,11 +71,17 @@ fn left_out() -> Vec<String> {
 
 impl Realm {
     fn open() -> Result<Self, RubyError> {
-        let mrb = Mrb::open()
+        let mut mrb = Mrb::open()
             .map_err(|error| RubyError::plain(format!("mruby did not open: {error}")))?;
+        if mrb.set_user_data(Bookkeeping::default()).is_err() {
+            return Err(RubyError::plain(
+                "mruby opened holding user data".to_owned(),
+            ));
+        }
+        print::define(&mrb)
+            .and_then(|()| constants::define(&mrb))
+            .map_err(|error| RubyError::read(&mrb, None, &error))?;
         let realm = Self { mrb };
-        realm.install::<Output>()?;
-        realm.install::<ByName>()?;
         realm.index_files(index::game_files(&left_out()));
         Ok(realm)
     }
@@ -65,9 +89,9 @@ impl Realm {
     // Adds the files at `paths` to the class index, each named from `res://`.
     fn index_files(&self, paths: impl IntoIterator<Item = String>) {
         let _scope = self.mrb.arena_scope();
-        if let Some(loading) = Loading::of(&self.mrb) {
-            loading.index_files(paths);
-        }
+        bookkeeping(&self.mrb).index.borrow_mut().add(paths, |key| {
+            constants::constant_at(&self.mrb, key).is_some()
+        });
     }
 
     /// Adds what `G` defines to what Ruby sees in this realm.
@@ -77,15 +101,14 @@ impl Realm {
             .map_err(|error| RubyError::read(&self.mrb, None, &error))
     }
 
-    /// Runs the file at `path` unless it has run in this realm already,
-    /// whether it succeeded or not.
-    pub fn run_file(&self, path: &str) -> Result<(), RubyError> {
+    /// Runs the file at `path` with the source Godot holds for it, unless it
+    /// has run in this realm already, whether it succeeded or not.
+    pub fn run(&self, path: &str) -> Result<(), RubyError> {
         let _scope = self.mrb.arena_scope();
-        let loading = Loading::of(&self.mrb)
-            .ok_or_else(|| RubyError::plain(format!("{path}: the realm cannot load files")))?;
-        loading
-            .run(path)
-            .map_err(|error| RubyError::read(&self.mrb, Some(path), &error))
+        executor::run(&self.mrb, path, || {
+            constants::ensure_namespaces(&self.mrb, path)
+        })
+        .map_err(|error| RubyError::read(&self.mrb, Some(path), &error))
     }
 
     /// Calls `method` on the constant `receiver` names with `arg`, and answers
@@ -115,31 +138,6 @@ impl Realm {
                 answer.inspect(&self.mrb)
             ))
         })
-    }
-}
-
-/// Runs `source` as the file at `path`: mruby stamps the path on everything
-/// compiled from it, so warnings, errors and backtraces name it. What the
-/// compiler warns about is written to Godot's log at its line.
-pub fn load(mrb: &Mrb, path: &str, source: &str) -> Result<(), Error> {
-    let filename = CString::new(path).map_err(|error| refused(mrb, &error.to_string()))?;
-    let context = Ccontext::new(mrb, &filename)
-        .ok_or_else(|| refused(mrb, "mruby could not make a compile context"))?;
-    let outcome = context.load_nstring(source.as_bytes());
-    for warning in context.warnings() {
-        let at = Location {
-            file: path.to_owned(),
-            line: warning.line().into(),
-        };
-        warn!(at: &at, "{}", warning.message());
-    }
-    outcome.map(|_| ())
-}
-
-fn refused(mrb: &Mrb, message: &str) -> Error {
-    match mrb.exc_get(c"RuntimeError") {
-        Ok(class) => Error::new(mrb, class, message),
-        Err(error) => error,
     }
 }
 

@@ -1,22 +1,23 @@
 //! The test framework: minitest's design and spelling in Ruby, installed
 //! into a realm only by the test runner, so the shipped game never has it.
 
-use beni::{Error, Gem, IntoValue, Module, Mrb, Value, method};
+use std::ffi::CStr;
 
-use crate::error;
+use beni::{Ccontext, Error, Gem, IntoValue, Module, Mrb, Value, method};
+
 use crate::log::Location;
-use crate::realm;
+use crate::{error, warn};
 
 // Each file's path names its frames in backtraces: the framework tells its
 // own frames by their directory, and the extension's by the one above it.
-const FILES: [(&str, &str); 3] = [
+const FILES: [(&CStr, &str); 3] = [
     (
-        "godot_mruby/minitest/minitest.rb",
+        c"godot_mruby/minitest/minitest.rb",
         include_str!("minitest.rb"),
     ),
-    ("godot_mruby/minitest/mock.rb", include_str!("mock.rb")),
+    (c"godot_mruby/minitest/mock.rb", include_str!("mock.rb")),
     (
-        "godot_mruby/minitest/godot_plugin.rb",
+        c"godot_mruby/minitest/godot_plugin.rb",
         include_str!("godot_plugin.rb"),
     ),
 ];
@@ -26,12 +27,34 @@ pub struct Minitest;
 impl Gem for Minitest {
     fn init(mrb: &Mrb) -> Result<(), Error> {
         for (path, source) in FILES {
-            realm::load(mrb, path, source)?;
+            load(mrb, path, source)?;
         }
         mrb.module_get(c"Minitest")?
             .class_get(mrb, c"LogReporter")?
             .define_private_method(mrb, c"error", method!(log_error, 3))
     }
+}
+
+// Runs one of the framework's files under its path, writing what the
+// compiler warns about to Godot's log at its line.
+fn load(mrb: &Mrb, path: &CStr, source: &str) -> Result<(), Error> {
+    let Some(context) = Ccontext::new(mrb, path) else {
+        let class = mrb.exc_get(c"RuntimeError")?;
+        return Err(Error::new(
+            mrb,
+            class,
+            "mruby could not make a compile context",
+        ));
+    };
+    let outcome = context.load_nstring(source.as_bytes());
+    for warning in context.warnings() {
+        let at = Location {
+            file: path.to_string_lossy().into_owned(),
+            line: warning.line().into(),
+        };
+        warn!(at: &at, "{}", warning.message());
+    }
+    outcome.map(|_| ())
 }
 
 // Minitest::LogReporter#error(message, file, line): a test that did not

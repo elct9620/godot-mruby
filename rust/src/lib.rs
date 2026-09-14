@@ -6,7 +6,6 @@ mod language;
 mod loader;
 mod log;
 mod minitest;
-mod output;
 mod realm;
 mod runner;
 mod script;

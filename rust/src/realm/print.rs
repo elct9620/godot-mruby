@@ -1,20 +1,17 @@
+//! `puts`, `print` and `p`, writing to Godot's output rather than the
+//! process's: without an IO gem mruby has no output of its own, and every
+//! realm prints.
+
 use beni::format::Rest;
-use beni::{Error, Gem, Module, Mrb, Value, method};
+use beni::{Error, Module, Mrb, Value, method};
 use godot::global::printraw;
 use godot::prelude::*;
 
-/// `puts`, `print` and `p`, writing to Godot's output rather than the
-/// process's: mruby core has no output of its own. Every realm installs it.
-pub struct Output;
-
-impl Gem for Output {
-    fn init(mrb: &Mrb) -> Result<(), Error> {
-        let kernel = mrb.module_get(c"Kernel")?;
-        kernel.define_private_method(mrb, c"puts", method!(puts, -1))?;
-        kernel.define_private_method(mrb, c"print", method!(print, -1))?;
-        kernel.define_private_method(mrb, c"p", method!(p, -1))?;
-        Ok(())
-    }
+pub(super) fn define(mrb: &Mrb) -> Result<(), Error> {
+    let kernel = mrb.module_get(c"Kernel")?;
+    kernel.define_private_method(mrb, c"puts", method!(puts, -1))?;
+    kernel.define_private_method(mrb, c"print", method!(print, -1))?;
+    kernel.define_private_method(mrb, c"p", method!(p, -1))
 }
 
 fn puts(mrb: &Mrb, _receiver: Value) -> Result<Value, Error> {

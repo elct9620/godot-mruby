@@ -25,7 +25,7 @@ impl RubyInstance {
 
     fn enter(&self) {
         let path = self.script.get_path().to_string();
-        if let Err(failed) = realm::enter(|realm| realm.run_file(&path)) {
+        if let Err(failed) = realm::enter(|realm| realm.run(&path)) {
             failed.log();
         }
     }

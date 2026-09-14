@@ -54,7 +54,7 @@ fn run(directories: &[String], options: minitest::Options) -> bool {
         realm.install::<Minitest>()?;
         Ok(tests
             .iter()
-            .map(|path| logged(realm.run_file(path).map(|()| true)))
+            .map(|path| logged(realm.run(path).map(|()| true)))
             .fold(true, |all, loaded| all & loaded))
     }));
     let passed = logged(realm::enter(|realm| {
