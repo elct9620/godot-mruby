@@ -37,3 +37,11 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a node whose script is a `.rb` file calling `p` with a symbol |
 | When | the scene runs |
 | Then | the symbol's `inspect` form appears in Godot's output |
+
+## `RS-005` A script runs the source Godot holds for it
+
+| Step | Statement |
+| --- | --- |
+| Given | a `.rb` file whose source Godot was given in place of what the file holds |
+| When | a node with that script enters the scene |
+| Then | the text the given source prints appears in Godot's output |

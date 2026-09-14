@@ -4,7 +4,8 @@ use std::collections::HashMap;
 use beni::{
     DataType, Error, FromValue, Gem, IntoValue, Module, Mrb, RClass, RModule, Symbol, Value, method,
 };
-use godot::classes::FileAccess;
+use godot::classes::{ResourceLoader, Script};
+use godot::obj::Singleton;
 
 use super::index::{self, ClassIndex, Key, Named, Namespace};
 use super::{load, refused};
@@ -142,17 +143,22 @@ impl<'a> Loading<'a> {
         self.execute(path)
     }
 
-    // Reads and runs the file at `path`, after the namespaces its path passes
-    // through when the class index names it; a test file is not one it names.
+    // Runs the source Godot holds for the file at `path`, after the namespaces
+    // its path passes through when the class index names it; a test file is
+    // not one it names.
     fn load_file(&self, path: &str) -> Result<(), Error> {
         if self.state.index.borrow().names(path) {
             self.ensure_namespaces(path)?;
         }
-        if !FileAccess::file_exists(path) {
-            return Err(refused(self.mrb, "the file does not exist"));
-        }
-        let source = FileAccess::get_file_as_string(path).to_string();
-        load(self.mrb, path, &source)
+        let Some(script) = ResourceLoader::singleton()
+            .load_ex(path)
+            .type_hint("Script")
+            .done()
+            .and_then(|resource| resource.try_cast::<Script>().ok())
+        else {
+            return Err(refused(self.mrb, "Godot did not load it as a script"));
+        };
+        load(self.mrb, path, &script.get_source_code().to_string())
     }
 
     // What `name` names from inside `receiver`, looked for from the innermost
