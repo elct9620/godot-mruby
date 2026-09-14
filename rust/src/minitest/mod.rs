@@ -1,7 +1,6 @@
 //! The test framework: minitest's design and spelling in Ruby, installed
 //! into a realm only by the test runner, so the shipped game never has it.
 
-use beni::format::Rest;
 use beni::{Error, Gem, IntoValue, Module, Mrb, Value, method};
 
 use crate::error;
@@ -31,27 +30,25 @@ impl Gem for Minitest {
         }
         mrb.module_get(c"Minitest")?
             .class_get(mrb, c"LogReporter")?
-            .define_private_method(mrb, c"error", method!(log_error, -1))
+            .define_private_method(mrb, c"error", method!(log_error, 3))
     }
 }
 
 // Minitest::LogReporter#error(message, file, line): a test that did not
 // pass, written to Godot's log at its Ruby line when it has one.
-fn log_error(mrb: &Mrb, _reporter: Value) -> Result<Value, Error> {
-    let args = mrb.get_args::<Rest>()?;
-    let [message, file, line] = args else {
-        return Err(Error::argnum(mrb, args.len() as i64, 3, 3));
-    };
-    let at = (!file.is_nil()).then(|| Location {
-        file: file.to_string(mrb),
-        line: line
-            .as_int(mrb)
-            .ok()
-            .and_then(|line| line.try_into().ok())
-            .unwrap_or(0),
+fn log_error(
+    _mrb: &Mrb,
+    _reporter: Value,
+    message: String,
+    file: Option<String>,
+    line: Option<i64>,
+) -> Value {
+    let at = file.map(|file| Location {
+        file,
+        line: line.and_then(|line| line.try_into().ok()).unwrap_or(0),
     });
-    error!(at: at.as_ref(), "{}", message.to_string(mrb));
-    Ok(Value::nil())
+    error!(at: at.as_ref(), "{message}");
+    Value::nil()
 }
 
 /// What narrows a run, as `Minitest.run` takes it.
