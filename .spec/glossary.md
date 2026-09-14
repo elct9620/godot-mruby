@@ -38,13 +38,9 @@ A directory the test runner runs tests from: one of a project's `mruby/test/dire
 
 A file under a test directory whose name matches the project's `mruby/test/pattern`. Only the test runner runs one.
 
-### Test support
-
-A `.rb` file under a test directory that does not match the test pattern. A run adds the test support of the directories it covers to the class index, named from `res://` like any other file.
-
 ### Class index
 
-A realm's map from constant paths to the files named after them, built from `res://` by Zeitwerk's rules: every directory is a namespace, and a file names the constant its path spells, matched without underscores or case. The game's index leaves the test directories out.
+A realm's map from constant paths to the files named after them, built from `res://` by Zeitwerk's rules: every directory is a namespace, and a file names the constant its path spells, matched without underscores or case. An exported game's index leaves the test directories out.
 
 #### Rejected
 

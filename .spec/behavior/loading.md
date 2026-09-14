@@ -97,11 +97,11 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 | When | the scene runs |
 | Then | the script reaches what the namespace's own file defined |
 
-## `RL-012` Test support loads by name
+## `RL-012` A file under a test directory loads by name
 
 | Step | Statement |
 | --- | --- |
-| Given | a file under a test directory that does not match the test pattern |
+| Given | a file under a test directory that is not a test file |
 | When | a test uses the constant its path spells from `res://` |
 | Then | it gets what the file defined |
 

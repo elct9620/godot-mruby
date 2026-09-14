@@ -1,4 +1,4 @@
-use godot::classes::{DirAccess, INode, Node, Os};
+use godot::classes::{DirAccess, INode, Node, Os, ResourceLoader};
 use godot::prelude::*;
 
 use crate::error;
@@ -39,22 +39,20 @@ impl INode for RubyTestRunner {
 
 fn run(directories: &[String], options: minitest::Options) -> bool {
     let pattern = settings::test_pattern();
-    let mut files = TestFiles::default();
+    let mut tests = Vec::new();
     for directory in directories {
         if !DirAccess::dir_exists_absolute(directory) {
             error!("The test directory {directory} does not exist");
             return false;
         }
-        files.collect(directory, &pattern);
+        collect_tests(directory, &pattern, &mut tests);
     }
-    files.tests.sort();
+    tests.sort();
     // Every test file runs, so each one's problems are in the log before any
     // test runs, where a reader of the run's output looks for them.
     let loaded = logged(realm::enter(|realm| {
         realm.install::<Minitest>()?;
-        realm.index_files(files.support);
-        Ok(files
-            .tests
+        Ok(tests
             .iter()
             .map(|path| logged(realm.run_file(path).map(|()| true)))
             .fold(true, |all, loaded| all & loaded))
@@ -132,25 +130,17 @@ fn option(args: &[String], names: &[&str]) -> Option<String> {
         .map(|pair| pair[1].clone())
 }
 
-// What a run covers of its test directories: the test files it runs, and the
-// test support the class index names for them.
-#[derive(Default)]
-struct TestFiles {
-    tests: Vec<String>,
-    support: Vec<String>,
-}
-
-impl TestFiles {
-    fn collect(&mut self, directory: &str, pattern: &GString) {
-        for file in DirAccess::get_files_at(directory).as_slice() {
-            if file.match_glob(pattern) {
-                self.tests.push(join(directory, &file.to_string()));
-            } else if file.ends_with(".rb") {
-                self.support.push(join(directory, &file.to_string()));
-            }
-        }
-        for child in DirAccess::get_directories_at(directory).as_slice() {
-            self.collect(&join(directory, &child.to_string()), pattern);
+// The test files under `directory`, as Godot lists its resources: each one
+// whose name matches the project's test pattern.
+fn collect_tests(directory: &str, pattern: &GString, tests: &mut Vec<String>) {
+    for entry in ResourceLoader::singleton()
+        .list_directory(directory)
+        .as_slice()
+    {
+        if let Some(child) = entry.to_string().strip_suffix('/') {
+            collect_tests(&join(directory, child), pattern, tests);
+        } else if entry.match_glob(pattern) {
+            tests.push(join(directory, &entry.to_string()));
         }
     }
 }

@@ -39,7 +39,7 @@ class LoadingTest < Minitest::Test
   end
 
   # @behavior RL-012
-  def test_test_support_loads_by_name
+  def test_a_file_under_a_test_directory_loads_by_name
     assert_equal 0, Test::Support::FakeClock.new.now
   end
 

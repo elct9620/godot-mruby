@@ -141,9 +141,9 @@ fn hides(outer: &Key, inner: &Key) -> bool {
         && inner.starts_with(&outer[..outer.len() - 1])
 }
 
-/// Every `.rb` file under `res://` outside `excluded`, the directories the
-/// game's index leaves out, as Godot lists its resources: by the names they
-/// had before an export remapped them. Sorted, since Godot promises no order
+/// Every `.rb` file under `res://` outside the `excluded` directories, as
+/// Godot lists its resources: by the names they had before an export
+/// remapped them. Sorted, since Godot promises no order
 /// and the first directory to spell a namespace names it.
 pub fn game_files(excluded: &[String]) -> Vec<String> {
     let excluded: Vec<&str> = excluded

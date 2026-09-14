@@ -7,9 +7,9 @@ module Godot
   # Godot's output: what the class index warns about, and where an error in a
   # file loaded by name is reported. Part of Godot.verify!.
   module Loading
-    # A test directory whose test support spells names the class index cannot
-    # hold, and what a run of it has to warn about: those, and a game file
-    # naming a constant mruby already has.
+    # A test directory whose files spell names the class index cannot hold,
+    # and what a run of it has to warn about: those, and a game file naming a
+    # constant mruby already has.
     NAMING = "res://naming"
     WARNINGS = [
       "WARNING: res://comparable.rb names Comparable, which the realm already has, so it never loads by name",

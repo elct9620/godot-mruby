@@ -2,6 +2,8 @@ use std::ffi::{CStr, CString};
 use std::sync::Mutex;
 
 use beni::{Ccontext, Error, FromValue, Gem, IntoValue, Mrb};
+use godot::classes::Os;
+use godot::obj::Singleton;
 
 use crate::log::{Level, Location};
 use crate::output::Output;
@@ -38,6 +40,17 @@ pub fn close() {
     GAME.lock().unwrap().take();
 }
 
+// The directories the class index leaves out: an exported game's test
+// directories. Tests run only on the editor's build, where every file is
+// indexed so a test reaches any file by name.
+fn left_out() -> Vec<String> {
+    if Os::singleton().has_feature("template") {
+        settings::test_directories()
+    } else {
+        Vec::new()
+    }
+}
+
 impl Realm {
     fn open() -> Result<Self, RubyError> {
         let mrb = Mrb::open()
@@ -45,12 +58,12 @@ impl Realm {
         let realm = Self { mrb };
         realm.install::<Output>()?;
         realm.install::<ByName>()?;
-        realm.index_files(index::game_files(&settings::test_directories()));
+        realm.index_files(index::game_files(&left_out()));
         Ok(realm)
     }
 
-    /// Adds the files at `paths` to the class index, each named from `res://`.
-    pub fn index_files(&self, paths: impl IntoIterator<Item = String>) {
+    // Adds the files at `paths` to the class index, each named from `res://`.
+    fn index_files(&self, paths: impl IntoIterator<Item = String>) {
         let _scope = self.mrb.arena_scope();
         if let Some(loading) = Loading::of(&self.mrb) {
             loading.index_files(paths);
