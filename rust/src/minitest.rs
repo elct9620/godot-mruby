@@ -3,10 +3,11 @@
 
 use std::ffi::CStr;
 
-use beni::{Ccontext, Error, Gem, IntoValue, Module, Mrb, Value, method};
+use beni::{Error, Gem, IntoValue, Module, Mrb, Value, method};
 
+use crate::compiler;
+use crate::error;
 use crate::log::Location;
-use crate::{error, warn};
 
 // Each file's path names its frames in backtraces: the framework tells its
 // own frames by their directory, and the extension's by the one above it.
@@ -30,34 +31,12 @@ pub struct Minitest;
 impl Gem for Minitest {
     fn init(mrb: &Mrb) -> Result<(), Error> {
         for (path, source) in FILES {
-            load(mrb, path, source)?;
+            compiler::run(mrb, path, source)?;
         }
         mrb.module_get(c"Minitest")?
             .class_get(mrb, c"LogReporter")?
             .define_private_method(mrb, c"error", method!(log_error, 3))
     }
-}
-
-// Runs one of the framework's files under its path, writing what the
-// compiler warns about to Godot's log at its line.
-fn load(mrb: &Mrb, path: &CStr, source: &str) -> Result<(), Error> {
-    let Some(context) = Ccontext::new(mrb, path) else {
-        let class = mrb.exc_get(c"RuntimeError")?;
-        return Err(Error::new(
-            mrb,
-            class,
-            "mruby could not make a compile context",
-        ));
-    };
-    let outcome = context.load_nstring(source.as_bytes());
-    for warning in context.warnings() {
-        let at = Location {
-            file: path.to_string_lossy().into_owned(),
-            line: warning.line().into(),
-        };
-        warn!(at: &at, "{}", warning.message());
-    }
-    outcome.map(|_| ())
 }
 
 // Minitest::LogReporter#error(message, file, line): a test that did not

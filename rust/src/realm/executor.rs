@@ -6,13 +6,12 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::CString;
 
-use beni::{Ccontext, Error, Mrb, Value};
+use beni::{Error, Mrb, Value};
 use godot::classes::{ResourceLoader, Script};
 use godot::obj::Singleton;
 
 use super::bookkeeping;
-use crate::log::Location;
-use crate::warn;
+use crate::compiler;
 
 /// How far a file has run in a realm.
 #[derive(Clone, Copy)]
@@ -94,24 +93,6 @@ pub(super) fn record(mrb: &Mrb, scope: Vec<String>, name: String) {
     }
 }
 
-/// Runs `source` as the file at `path`: mruby stamps the path on everything
-/// compiled from it, so warnings, errors and backtraces name it. What the
-/// compiler warns about is written to Godot's log at its line.
-pub(super) fn load(mrb: &Mrb, path: &str, source: &str) -> Result<(), Error> {
-    let filename = CString::new(path).map_err(|error| refused(mrb, &error.to_string()))?;
-    let context = Ccontext::new(mrb, &filename)
-        .ok_or_else(|| refused(mrb, "mruby could not make a compile context"))?;
-    let outcome = context.load_nstring(source.as_bytes());
-    for warning in context.warnings() {
-        let at = Location {
-            file: path.to_owned(),
-            line: warning.line().into(),
-        };
-        warn!(at: &at, "{}", warning.message());
-    }
-    outcome.map(|_| ())
-}
-
 fn runs(mrb: &Mrb) -> &Runs {
     &bookkeeping(mrb).runs
 }
@@ -131,7 +112,10 @@ fn execute(
     });
     let outcome = prepare()
         .and_then(|()| source_of(mrb, path))
-        .and_then(|source| load(mrb, path, &source));
+        .and_then(|source| {
+            let name = CString::new(path).map_err(|error| refused(mrb, &error.to_string()))?;
+            compiler::run(mrb, &name, &source)
+        });
     let frame = runs.frames.borrow_mut().pop();
     let run = match (&outcome, frame) {
         (Ok(()), _) => Run::Done,

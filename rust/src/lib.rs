@@ -1,6 +1,7 @@
 use godot::init::InitStage;
 use godot::prelude::*;
 
+mod compiler;
 mod instance;
 mod language;
 mod loader;
