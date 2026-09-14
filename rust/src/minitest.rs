@@ -13,12 +13,15 @@ use crate::{error, warn};
 const FILES: [(&CStr, &str); 3] = [
     (
         c"godot_mruby/minitest/minitest.rb",
-        include_str!("minitest.rb"),
+        include_str!("minitest/minitest.rb"),
     ),
-    (c"godot_mruby/minitest/mock.rb", include_str!("mock.rb")),
+    (
+        c"godot_mruby/minitest/mock.rb",
+        include_str!("minitest/mock.rb"),
+    ),
     (
         c"godot_mruby/minitest/godot_plugin.rb",
-        include_str!("godot_plugin.rb"),
+        include_str!("minitest/godot_plugin.rb"),
     ),
 ];
 
