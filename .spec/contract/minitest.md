@@ -21,7 +21,7 @@ The Ruby a test is written against, spelled the way minitest spells it so a Ruby
 
 ## `Minitest::Test`
 
-What a test class inherits: each public method whose name starts with `test_` is a test, run on its own instance.
+What a test class inherits: each public method whose name starts with `test_` is a test.
 
 ```ruby
 module Minitest
@@ -32,7 +32,7 @@ end
 
 ## `Minitest::Test::LifecycleHooks`
 
-The steps around each test, in the order they run: `before_setup`, `setup`, `after_setup`, the test, then `before_teardown`, `teardown`, `after_teardown`. A test class overrides `setup` and `teardown`; the `before_` and `after_` hooks are for a library, which includes a module that overrides them and calls `super`. They live in a module rather than on `Minitest::Test` so such a module included into `Minitest::Test` itself still reaches them.
+The steps around each test. A test class overrides `setup` and `teardown`; the `before_` and `after_` hooks are for a library, which includes a module that overrides them and calls `super`. They live in a module rather than on `Minitest::Test` so such a module included into `Minitest::Test` itself still reaches them.
 
 ```ruby
 module Minitest
@@ -86,7 +86,7 @@ end
 
 ## `Minitest::Test::LifecycleHooks#before_teardown`
 
-Runs after each test, whether it passed or not, as do the two teardown steps after it.
+Runs after each test.
 
 ```ruby
 module Minitest
@@ -127,7 +127,7 @@ end
 
 ## `Minitest::Assertion`
 
-What a failed assertion raises; a test that raises it fails, where any other exception is an error.
+What a failed assertion raises.
 
 ```ruby
 module Minitest
@@ -138,7 +138,7 @@ end
 
 ## `Minitest::Assertions`
 
-What a test asserts with. Each assertion counts toward the run's assertions and raises `Minitest::Assertion` when what it asserts does not hold, with a message saying what it expected; a message given to it comes before that one.
+What a test asserts with.
 
 ```ruby
 module Minitest
@@ -171,7 +171,7 @@ end
 
 ## `Minitest::Assertions#assert_equal`
 
-The expected value comes first, and it cannot be `nil`: that is what `assert_nil` asserts.
+The expected value comes first.
 
 ```ruby
 module Minitest
@@ -217,7 +217,7 @@ end
 
 ## `Minitest::Assertions#assert_raises`
 
-Returns the exception the block raised; the last argument may be a message instead of an exception class.
+The last argument may be a message instead of an exception class.
 
 ```ruby
 module Minitest
@@ -240,8 +240,6 @@ end
 ```
 
 ## `Minitest::Assertions#skip`
-
-Ends the test without failing it.
 
 ```ruby
 module Minitest
@@ -276,8 +274,6 @@ end
 
 ## `Minitest::Assertions#assert_in_delta`
 
-Passes when `act` is no further than `delta` from `exp`.
-
 ```ruby
 module Minitest
   module Assertions
@@ -299,8 +295,6 @@ end
 ```
 
 ## `Minitest::Assertions#assert_in_epsilon`
-
-`assert_in_delta` with a delta of `epsilon` times the smaller magnitude of the two.
 
 ```ruby
 module Minitest
@@ -390,7 +384,7 @@ end
 
 ## `Minitest::Assertions#assert_operator`
 
-Sends `op` to `o1` with `o2`; without `o2` it is `assert_predicate`.
+Without `o2` it is `assert_predicate`.
 
 ```ruby
 module Minitest
@@ -458,8 +452,6 @@ end
 
 ## `Minitest::Assertions#assert_same`
 
-Passes when both are the same object.
-
 ```ruby
 module Minitest
   module Assertions
@@ -482,8 +474,6 @@ end
 
 ## `Minitest::Assertions#pass`
 
-Counts an assertion that always passes.
-
 ```ruby
 module Minitest
   module Assertions
@@ -494,8 +484,6 @@ end
 ```
 
 ## `Minitest::Assertions#assert_mock`
-
-Passes when the mock received every call it expected.
 
 ```ruby
 module Minitest
@@ -508,7 +496,7 @@ end
 
 ## `Minitest::Mock`
 
-A stand-in object that answers the calls a test expects of it and nothing else: any other call raises `NoMethodError`.
+A stand-in object that answers the calls a test expects of it.
 
 ```ruby
 module Minitest
@@ -519,7 +507,7 @@ end
 
 ## `Minitest::Mock#expect`
 
-Expects one call to `name`, answered with `retval`. Each argument is matched with `===` or `==`, so a class matches any instance of it; a block given instead of arguments is called with them and must answer truthy. Expecting the same name again expects another call, answered in order.
+Expects one call to `name`, answered with `retval`, its arguments matched by `args` or checked by the block given instead.
 
 ```ruby
 module Minitest
@@ -545,7 +533,7 @@ end
 
 ## `MockExpectationError`
 
-What a mock raises for a call it did not expect with those arguments, or an expected call it never received.
+What a mock raises when what it expected is not what it received.
 
 ```ruby
 class MockExpectationError
@@ -554,7 +542,7 @@ end
 
 ## `Object#stub`
 
-Replaces the receiver's method `name` for the length of the block, then restores it. A callable replacement is called with the arguments; anything else is returned, calling the caller's block with `block_args` first.
+Replaces the receiver's method `name` for the length of the block; a block given to the replaced method is called with `block_args`.
 
 ```ruby
 class Object
@@ -565,7 +553,7 @@ end
 
 ## `Minitest.run`
 
-Runs every test class defined so far, in an order `options[:seed]` shuffles or a random seed it prints, keeping the tests `options[:include]` names and leaving out those `options[:exclude]` names, and answers whether the run passed, as minitest does. What the run found reaches its reporters, which plugins add to as the run starts. The test runner calls it once the test files have run.
+Runs every test class defined so far under the runner's `:seed`, `:include` and `:exclude` options, and answers whether the run passed, as minitest does. What the run found reaches its reporters, which plugins add to as the run starts. The test runner calls it once the test files have run.
 
 | Attribute | Value |
 | --- | --- |
@@ -580,7 +568,7 @@ end
 
 ## `Minitest::LogReporter`
 
-The reporter the extension's plugin adds to every run: each test that did not pass is written to Godot's log at the Ruby line it went wrong at, and a filter that leaves no test to run is written there too and fails the run. The extension implements the method that writes to the log on this class, so the class is where the Ruby and the Rust sides meet.
+The reporter the extension's plugin adds to every run, writing what it reports to Godot's log. The extension implements the method that writes to the log on this class, so the class is where the Ruby and the Rust sides meet.
 
 | Attribute | Value |
 | --- | --- |

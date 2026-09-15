@@ -5,7 +5,7 @@ class MockTest < Minitest::Test
     @inventory = Minitest::Mock.new
   end
 
-  # @behavior RT-016
+  # @behavior RM-030
   def test_a_mock_answers_an_expected_call_with_its_return_value
     @inventory.expect(:count, 3, [:potion])
 
@@ -13,12 +13,14 @@ class MockTest < Minitest::Test
     assert_mock @inventory
   end
 
+  # @behavior RM-031
   def test_a_mock_matches_an_argument_by_its_class
     @inventory.expect(:add, true, [Symbol])
 
     assert @inventory.add(:ether)
   end
 
+  # @behavior RM-032
   def test_a_mock_answers_repeated_expectations_in_order
     @inventory.expect(:take, :potion)
     @inventory.expect(:take, :ether)
@@ -26,25 +28,27 @@ class MockTest < Minitest::Test
     assert_equal %i[potion ether], [@inventory.take, @inventory.take]
   end
 
+  # @behavior RM-033
   def test_a_mock_checks_its_arguments_with_a_block
     @inventory.expect(:add, true) { |item, amount| item == :potion && amount > 0 }
 
     assert @inventory.add(:potion, 2)
   end
 
-  # @behavior RT-017
+  # @behavior RM-034
   def test_a_mock_refuses_a_call_with_arguments_it_did_not_expect
     @inventory.expect(:count, 3, [:potion])
 
     assert_raises(MockExpectationError) { @inventory.count(:ether) }
   end
 
+  # @behavior RM-035
   def test_a_mock_refuses_a_call_it_did_not_expect
     error = assert_raises(NoMethodError) { @inventory.drop(:potion) }
     assert_equal "unmocked method :drop, expected one of []", error.message
   end
 
-  # @behavior RT-018
+  # @behavior RM-036
   def test_assert_mock_fails_where_the_test_asserts_for_a_call_never_made
     @inventory.expect(:count, 3, [:potion])
 
@@ -54,7 +58,7 @@ class MockTest < Minitest::Test
     assert_equal "res://test/minitest/mock_test.rb:#{__LINE__ - 3}", error.location
   end
 
-  # @behavior RT-019
+  # @behavior RM-037
   def test_a_stub_replaces_a_method_only_within_its_block
     item = "potion"
 
@@ -64,6 +68,7 @@ class MockTest < Minitest::Test
     assert_equal "POTION", item.upcase
   end
 
+  # @behavior RM-038
   def test_a_callable_stub_is_called_with_the_arguments
     item = "potion"
 

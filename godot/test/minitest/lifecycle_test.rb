@@ -2,7 +2,7 @@
 # outside; the runner never runs it, since it did not exist when the run
 # began.
 class LifecycleTest < Minitest::Test
-  # @behavior RT-012
+  # @behavior RM-002
   def test_the_hooks_run_around_the_test_in_minitests_order
     steps = []
     recorder = Class.new(Minitest::Test) do
@@ -16,7 +16,7 @@ class LifecycleTest < Minitest::Test
     assert_equal %w[before_setup setup after_setup test_it before_teardown teardown after_teardown], steps
   end
 
-  # @behavior RT-013
+  # @behavior RM-003
   def test_a_teardown_step_that_raises_does_not_stop_the_ones_after_it
     steps = []
     recorder = Class.new(Minitest::Test) do

@@ -5,7 +5,7 @@ class SetupTest < Minitest::Test
     @steps = [:setup]
   end
 
-  # @behavior RT-010
+  # @behavior RM-001
   def test_one_starts_from_what_setup_set
     assert_equal [:setup], @steps
     assert_nil @mark
@@ -13,7 +13,7 @@ class SetupTest < Minitest::Test
     @mark = :one
   end
 
-  # @behavior RT-010
+  # @behavior RM-001
   def test_two_starts_from_what_setup_set
     assert_equal [:setup], @steps
     assert_nil @mark
