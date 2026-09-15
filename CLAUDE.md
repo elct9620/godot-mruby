@@ -9,9 +9,10 @@ godot-mruby is a Godot 4 addon that embeds mruby through a Rust GDExtension (god
 | Path | Role |
 |---|---|
 | `rust/` | The extension crate (gdext, beni); `src/realm.rs` is the one way into Ruby, its pieces under `src/realm/`, and `src/minitest.rs` is the test framework the test runner installs into it |
-| `godot/` | Integration-test Godot project; its `project.godot` lists the test directories |
-| `godot/test/` | Ruby tests the test runner runs; `godot/verify/` holds the scenes and test directories `godot:verify` runs and reads |
-| `godot/loader/` | Files tests load by name, and names the class index warns about |
+| `godot/` | Integration-test Godot project, sorted by what observes a file, then by the feature it stages; `project.godot` lists the test directories |
+| `godot/test/` | Ruby tests the test runner runs, one directory per feature |
+| `godot/loader/` | Game files the tests load by name, and names the class index warns about; only `godot/comparable.rb` sits outside it, since a name mruby already has is spelled at the top level |
+| `godot/verify/` | Scenes and test directories `godot:verify` runs and reads, one directory per feature |
 | `godot/addons/godot_mruby/` | The shipped addon; `runner.tscn` is the test runner scene, `bin/` is build output |
 | `build_config/mruby.rb` | mruby build config (host + x86_64 cross build) |
 | `Rakefile`, `tasks/*.rake` | Task entry points |
@@ -48,6 +49,7 @@ sumi fmt                                 # write .spec/ in sumi's form (--check 
 - Minimum Godot is 4.6: keep gdext's `api-4-6` feature and the `.gdextension`'s `compatibility_minimum` in step.
 - `godot/.godot/extension_list.cfg` is committed so Godot loads the addon at startup; an editor that first discovers it and quits at once crashes (godotengine/godot#111048).
 - Library file names are shared by `godot_mruby.gdextension` and `tasks/support/extension.rb`; change both together.
+- A scenario is claimed where its outcome is observed: a Ruby test under `godot/test/`, or a check in `tasks/support/` reading Godot's output; a fixture claims nothing.
 - Put task logic in `tasks/support/` (the only Ruby RuboCop checks) and keep `.rake` files as thin glue.
 - beni skips `beni:build` while an archive exists, so a config change needs `beni:clean` first.
 - Hooks format on edit and gate lint/tests at stop; formatting is settled before commit, not at stop.
