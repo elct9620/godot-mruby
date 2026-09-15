@@ -16,7 +16,7 @@ module Godot
     PASSING = {
       %w[--dir res://verify/runner/skip] =>
         /^2 runs, \d+ assertions, 0 failures, 0 errors, 1 skips$/,
-      %w[--dir res://test --include SetupTest#test_one_starts_from_what_setup_set] =>
+      %w[--dir res://verify/runner/order --include AlphaOrderTest#test_a] =>
         /^1 runs, \d+ assertions, 0 failures, 0 errors, 0 skips$/,
       %w[--dir res://verify/runner/skip --exclude SkipTest#test_skips] =>
         /^1 runs, \d+ assertions, 0 failures, 0 errors, 0 skips$/

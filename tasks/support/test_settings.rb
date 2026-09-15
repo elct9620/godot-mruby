@@ -9,9 +9,12 @@ module Godot
   # Runs a copy of the integration-test project whose test settings it
   # rewrites, and reads what the runner makes of them. Part of Godot.verify!.
   module TestSettings
-    # A pattern matching one test file, and the summary of a run under it.
-    PATTERN = "setup_*.rb"
-    PATTERN_SUMMARY = /^2 runs, \d+ assertions, 0 failures, 0 errors, 0 skips$/
+    # A test file the check writes under the copy's res://test, the pattern
+    # that matches it and no other file there, and the summary of a run of it.
+    PICKED = "test/picked_by_pattern.rb"
+    PICKED_SOURCE = "class PickedByPatternTest < Minitest::Test\n  def test_runs\n    pass\n  end\nend\n"
+    PATTERN = "picked_*.rb"
+    PATTERN_SUMMARY = /^1 runs, \d+ assertions, 0 failures, 0 errors, 0 skips$/
 
     module_function
 
@@ -40,6 +43,7 @@ module Godot
     # A pattern matching one test file has to run that file's tests alone.
     # @behavior RT-028
     def verify_pattern!(project)
+      File.write(File.join(project, PICKED), PICKED_SOURCE)
       File.write(File.join(project, "override.cfg"), %([mruby]\n\ntest/pattern="#{PATTERN}"\n))
       output, status = RubyTests.run(project)
       return if status.success? && output.match?(PATTERN_SUMMARY)
