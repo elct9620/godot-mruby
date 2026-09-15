@@ -44,7 +44,7 @@ class MockTest < Minitest::Test
     assert_equal "unmocked method :drop, expected one of []", error.message
   end
 
-  # @behavior RT-018 RT-003
+  # @behavior RT-018
   def test_assert_mock_fails_where_the_test_asserts_for_a_call_never_made
     @inventory.expect(:count, 3, [:potion])
 
