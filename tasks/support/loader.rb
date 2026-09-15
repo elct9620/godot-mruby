@@ -4,9 +4,10 @@ require_relative "ruby_tests"
 
 module Godot
   # Runs the integration-test project's checks of the loader that read
-  # Godot's output: what the class index warns about, where an error in a
-  # file loaded by name is reported, and what a node script inside a
-  # namespace reaches. Part of Godot.verify!.
+  # Godot's output or a run's outcome: what the class index warns about, where
+  # an error in a file loaded by name is reported, that a test class loaded
+  # during a run does not run, and what a node script inside a namespace
+  # reaches. Part of Godot.verify!.
   module Loader
     # What every run has to warn about, since the class index takes in every
     # game file: the files spelling names it cannot hold, and a game file
@@ -28,6 +29,10 @@ module Godot
       "RuntimeError: raising.rb fails after defining its constants",
       "(res://loader/raising.rb:12)"
     ].freeze
+    # A test directory whose test loads a test class by name during the run,
+    # and the summary that shows the loaded class's test did not run.
+    LATE = "res://verify/loader/late"
+    LATE_SUMMARY = /^1 runs, \d+ assertions, 0 failures, 0 errors, 0 skips$/
     # A scene whose node script reopens the namespace its directory spells, and
     # the line it prints from what the namespace's own file defined.
     NAMESPACED_SCENE = "res://verify/loader/namespaced/namespaced.tscn"
@@ -38,6 +43,7 @@ module Godot
     def verify!(project)
       verify_warnings!(project)
       verify_raised!(project)
+      verify_late!(project)
       verify_namespaced!(project)
     end
 
@@ -61,6 +67,16 @@ module Godot
       return if status.exitstatus == 1 && missing.empty?
 
       raise "A run of #{RAISING} did not fail as it should #{missing}:\n#{output}"
+    end
+
+    # Runs the test that loads a test class by name, which has to pass with its
+    # own test alone.
+    # @behavior RL-013
+    def verify_late!(project)
+      output, status = RubyTests.run(project, "--dir", LATE)
+      return if status.success? && output.match?(LATE_SUMMARY)
+
+      raise "A run of #{LATE} ran a test class loaded by name:\n#{output}"
     end
 
     # Runs the namespaced scene, whose script has to print what the

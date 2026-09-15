@@ -10,13 +10,16 @@ module Godot
     RUNNER_FRAMES = "60"
     TESTS = "res://test"
     PASSED = /^(\d+) runs, \d+ assertions, 0 failures, 0 errors, \d+ skips$/
-    # Runs of godot/test/ narrowed by a filter, each with the runner's options
-    # and the summary it has to end on.
-    FILTERED = {
-      %w[--include SetupTest#test_one_starts_from_what_setup_set] =>
+    # Runs that have to pass, each with the runner's options and the summary it
+    # has to end on: a directory whose one test passes and the other skips,
+    # and runs narrowed by a filter.
+    PASSING = {
+      %w[--dir res://verify/runner/skip] =>
+        /^2 runs, \d+ assertions, 0 failures, 0 errors, 1 skips$/,
+      %w[--dir res://test --include SetupTest#test_one_starts_from_what_setup_set] =>
         /^1 runs, \d+ assertions, 0 failures, 0 errors, 0 skips$/,
-      %w[-e SkipTest#test_a_skipped_test_does_not_fail_the_run] =>
-        /^\d+ runs, \d+ assertions, 0 failures, 0 errors, 0 skips$/
+      %w[--dir res://verify/runner/skip --exclude SkipTest#test_skips] =>
+        /^1 runs, \d+ assertions, 0 failures, 0 errors, 0 skips$/
     }.freeze
     # A test directory whose tests print their names as they run, the seeds
     # tried on it, and how a run prints its seed and each test it ran.
@@ -64,16 +67,15 @@ module Godot
 
     def verify!(project)
       verify_pass!(project)
-      verify_filtered!(project)
+      verify_passing!(project)
       verify_fail!(project)
       verify_seed!(project)
       verify_shuffled!(project)
     end
 
     # Runs the project's Ruby tests and requires a pass that ran at least one,
-    # since a run that finds nothing passes too; godot/test/ holds a skipped
-    # test, which must not fail it.
-    # @behavior RT-001 RT-009
+    # since a run that finds nothing passes too.
+    # @behavior RT-001
     def verify_pass!(project)
       output, status = run(project, "--dir", TESTS)
       return if status.success? && output[PASSED, 1].to_i.positive?
@@ -81,15 +83,15 @@ module Godot
       raise "The Ruby tests under #{TESTS} did not pass:\n#{output}"
     end
 
-    # Runs the project's Ruby tests with each filter and requires the summary
-    # it has to end on.
-    # @behavior RT-024 RT-025
-    def verify_filtered!(project)
-      FILTERED.each do |options, summary|
-        output, status = run(project, "--dir", TESTS, *options)
+    # Makes each run that has to pass and requires the summary it has to end
+    # on.
+    # @behavior RT-009 RT-024 RT-025
+    def verify_passing!(project)
+      PASSING.each do |options, summary|
+        output, status = run(project, *options)
         next if status.success? && output.match?(summary)
 
-        raise "The Ruby tests under #{TESTS} with #{options.join(" ")} did not end as they should:\n#{output}"
+        raise "The Ruby tests with #{options.join(" ")} did not end as they should:\n#{output}"
       end
     end
 

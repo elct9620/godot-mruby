@@ -42,9 +42,4 @@ class LoaderTest < Minitest::Test
   def test_a_file_under_a_test_directory_loads_by_name
     assert_equal 0, Test::Loader::Support::FakeClock.new.now
   end
-
-  # @behavior RL-013
-  def test_a_test_class_loaded_by_name_during_the_run_does_not_run
-    assert_includes Minitest::Runnable.runnables, Test::Loader::Support::LateTestCase
-  end
 end
