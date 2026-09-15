@@ -51,7 +51,7 @@ class MockTest < Minitest::Test
     error = assert_raises(Minitest::Assertion) { assert_mock @inventory }
 
     assert_equal "Expected count(:potion) => 3.", error.message
-    assert_equal "res://test/mock_test.rb:#{__LINE__ - 3}", error.location
+    assert_equal "res://test/minitest/mock_test.rb:#{__LINE__ - 3}", error.location
   end
 
   # @behavior RT-019

@@ -6,8 +6,7 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 
 - `tasks/support/loader.rb`
 - `tasks/support/godot.rb`
-- `godot/test/**/*.rb`
-- `godot/naming/**/*.rb`
+- `godot/test/loader/**/*.rb`
 
 ## `RL-001` Two files naming one constant are warned about
 
@@ -85,9 +84,9 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 
 | Step | Statement |
 | --- | --- |
-| Given | a file at the top of `res://`, and a namespace whose directory has no file of that name |
-| When | Ruby uses the name qualified by that namespace |
-| Then | it gets the constant of the file at the top |
+| Given | a file in a namespace's directory, and a namespace inside it whose directory has no file of that name |
+| When | Ruby uses the name qualified by the inner namespace |
+| Then | it gets the constant of the file in the outer namespace |
 
 ## `RL-011` A node script's namespace file runs before it
 

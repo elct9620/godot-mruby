@@ -11,7 +11,7 @@ godot-mruby is a Godot 4 addon that embeds mruby through a Rust GDExtension (god
 | `rust/` | The extension crate (gdext, beni); `src/realm.rs` is the one way into Ruby, its pieces under `src/realm/`, and `src/minitest.rs` is the test framework the test runner installs into it |
 | `godot/` | Integration-test Godot project; its `project.godot` lists the test directories |
 | `godot/test/` | Ruby tests the test runner runs; `godot/order/` prints the order a seed gives, `godot/failing/` holds tests whose run must fail |
-| `godot/loading/`, `godot/naming/` | Files tests load by name, and names the class index warns about |
+| `godot/loader/` | Files tests load by name, and names the class index warns about |
 | `godot/addons/godot_mruby/` | The shipped addon; `runner.tscn` is the test runner scene, `bin/` is build output |
 | `build_config/mruby.rb` | mruby build config (host + x86_64 cross build) |
 | `Rakefile`, `tasks/*.rake` | Task entry points |

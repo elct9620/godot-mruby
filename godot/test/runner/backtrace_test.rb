@@ -1,5 +1,5 @@
 class BacktraceTest < Minitest::Test
-  FILE = "res://test/backtrace_test.rb".freeze
+  FILE = "res://test/runner/backtrace_test.rb".freeze
 
   # @behavior RT-020
   def test_an_error_names_only_the_calls_in_the_test_that_led_to_it

@@ -1,3 +1,3 @@
-module Loading
+module Loader
   class Broken
 end
