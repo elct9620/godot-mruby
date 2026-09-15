@@ -8,7 +8,7 @@ How the extension turns Ruby source into what runs in an `mrb_state`, whoever ho
 
 ## `run`
 
-Compiles and runs Ruby source under a name, which mruby stamps on everything compiled from it, so warnings, errors and backtraces name it; what the compiler warns about is written to Godot's log at its line.
+Compiles and runs Ruby source under a name, which mruby stamps on everything compiled from it, so warnings, errors and backtraces name it; what the compiler warns about is written to the log at its line.
 
 | Attribute | Value |
 | --- | --- |

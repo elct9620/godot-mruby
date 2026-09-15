@@ -12,4 +12,4 @@ How a project comes to run Ruby: the addon under `addons/godot_mruby/` carries t
 | --- | --- |
 | Given | a project whose extension list names the addon |
 | When | the editor starts headless and quits |
-| Then | Godot's output shows the extension initialized, with no error |
+| Then | the log shows the extension initialized, with no error |

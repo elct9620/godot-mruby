@@ -1,6 +1,6 @@
-//! `puts`, `print` and `p`, writing to Godot's output rather than the
-//! process's: without an IO gem mruby has no output of its own, and every
-//! realm prints.
+//! `puts`, `print` and `p`, writing messages to Godot's log rather than to
+//! the process's output: without an IO gem mruby has no output of its own,
+//! and every realm prints.
 
 use beni::format::Rest;
 use beni::{Error, Module, Mrb, Value, method};

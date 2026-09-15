@@ -49,3 +49,7 @@ What stands in for `require` in a realm: the first time Ruby uses a constant the
 #### Rejected
 
 - `autoload` - Godot's autoloads are singleton nodes, and Ruby's `Module#autoload` is seen by constant lookup; the loader answers only `const_missing`, which mruby calls once lookup has failed.
+
+### Log
+
+Where a run's words go, as one stream: messages - what Ruby prints and the run's report - and errors, warnings and script errors, each placed at a Ruby file and line. The editor shows it in its Output panel; a headless run prints it.

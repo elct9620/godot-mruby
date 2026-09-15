@@ -23,13 +23,13 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 | When | the runner scene runs headless on its directory |
 | Then | the run fails |
 
-## `RT-003` A failure is reported at the assertion's Ruby line
+## `RT-003` The run's report places a failure at the assertion's Ruby line
 
 | Step | Statement |
 | --- | --- |
 | Given | a test method whose assertion fails |
 | When | the runner scene runs headless on its directory |
-| Then | Godot's output names the test with the `res://` path and line of the failing assertion |
+| Then | the log carries a message naming the test with the `res://` path and line of the failing assertion |
 
 ## `RT-004` Teardown runs after a test that failed
 
@@ -37,7 +37,7 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 | --- | --- |
 | Given | a test class whose `teardown` prints, and a test method whose assertion fails |
 | When | the runner scene runs headless on its directory |
-| Then | what `teardown` prints appears in Godot's output |
+| Then | what `teardown` prints appears in the log |
 
 ## `RT-005` An exception other than an assertion fails the run
 
@@ -47,13 +47,13 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 | When | the runner scene runs headless on its directory |
 | Then | the run fails |
 
-## `RT-006` An exception in a test is reported where it was raised
+## `RT-006` The run's report places an exception where it was raised
 
 | Step | Statement |
 | --- | --- |
 | Given | a test method that raises an exception other than `Minitest::Assertion` |
 | When | the runner scene runs headless on its directory |
-| Then | Godot's output names the test, the exception, and the `res://` path and line that raised it |
+| Then | the log carries a message naming the test, the exception, and the `res://` path and line that raised it |
 
 ## `RT-007` A test file that does not parse fails the run
 
@@ -85,7 +85,7 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 | --- | --- |
 | Given | a test method that calls a method raising an exception other than `Minitest::Assertion` |
 | When | the runner scene runs headless on its directory |
-| Then | Godot's output lists each Ruby frame from the raise up to the test method, and no frame of the test framework |
+| Then | the log lists each Ruby frame from the raise up to the test method, and no frame of the test framework |
 
 ## `RT-021` What mruby says about a test file comes before the tests run
 
@@ -93,23 +93,23 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 | --- | --- |
 | Given | a test file that does not parse |
 | When | the runner scene runs headless on that directory |
-| Then | Godot's output carries the file's script error before the run's summary |
+| Then | the log carries the file's script error before the run's summary |
 
-## `RT-022` A failure appears in Godot's log at the assertion's Ruby line
+## `RT-022` A failure is logged as an error at the assertion's Ruby line
 
 | Step | Statement |
 | --- | --- |
 | Given | a test method whose assertion fails |
 | When | the runner scene runs headless on its directory |
-| Then | Godot's output carries an error naming the test and the failure at the `res://` path and line of the failing assertion |
+| Then | the log carries an error naming the test and the failure, placed at the `res://` path and line of the failing assertion |
 
-## `RT-023` An exception in a test appears in Godot's log where it was raised
+## `RT-023` An exception in a test is logged as an error where it was raised
 
 | Step | Statement |
 | --- | --- |
 | Given | a test method that raises an exception other than `Minitest::Assertion` |
 | When | the runner scene runs headless on its directory |
-| Then | Godot's output carries an error naming the test and the exception at the `res://` path and line that raised it |
+| Then | the log carries an error naming the test and the exception, placed at the `res://` path and line that raised it |
 
 ## `RT-024` `--include` runs only the test it names
 
@@ -173,7 +173,7 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 | --- | --- |
 | Given | a test directory |
 | When | the runner scene runs headless on it without `--seed` |
-| Then | Godot's output carries `Run options: --seed` and the seed |
+| Then | the log carries `Run options: --seed` and the seed |
 
 ## `RT-032` The seed a run printed repeats its order
 

@@ -13,7 +13,7 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 | --- | --- |
 | Given | two files whose paths spell one constant, apart from an underscore |
 | When | a realm's class index takes them in |
-| Then | Godot's log warns that neither of them loads by name |
+| Then | the log carries a warning that neither of them loads by name |
 
 ## `RL-002` One name at two namespace levels is warned about
 
@@ -21,7 +21,7 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 | --- | --- |
 | Given | a file whose name another file inside a namespace below it shares |
 | When | a realm's class index takes them in |
-| Then | Godot's log warns that the outer one hides the inner one once it has loaded |
+| Then | the log carries a warning that the outer one hides the inner one once it has loaded |
 
 ## `RL-003` A file naming a constant the realm already has is warned about
 
@@ -29,7 +29,7 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 | --- | --- |
 | Given | a file whose path spells a constant mruby already defines |
 | When | a realm's class index takes it in |
-| Then | Godot's log warns that it never loads by name |
+| Then | the log carries a warning that it never loads by name |
 
 ## `RL-004` A constant a file names loads at its first use
 
@@ -173,7 +173,7 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 | --- | --- |
 | Given | a test using a constant whose file raises |
 | When | the runner scene runs headless on that directory |
-| Then | Godot's log carries the test's error at the line of the file that raised |
+| Then | the log carries the test's error at the line of the file that raised |
 
 ## `RL-022` A directory's module made while a failing file ran stays
 

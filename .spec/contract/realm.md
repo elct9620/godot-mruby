@@ -86,7 +86,7 @@ impl Realm {
 
 ## `RubyError`
 
-Why Ruby could not do what it was asked, read out of the realm as a value so a component writes it to Godot's log.
+Why Ruby could not do what it was asked, read out of the realm as a value so a component writes it to the log.
 
 | Attribute | Value |
 | --- | --- |
@@ -98,7 +98,7 @@ pub struct RubyError;
 
 ## `RubyError::log`
 
-Writes the error to Godot's log, at its Ruby line when it has one.
+Writes the error to the log, at its Ruby line when it has one.
 
 | Attribute | Value |
 | --- | --- |

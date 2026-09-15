@@ -4,7 +4,7 @@ require_relative "ruby_tests"
 
 module Godot
   # Runs the integration-test project's checks of the loader that read
-  # Godot's output or a run's outcome: what the class index warns about, where
+  # the log or a run's outcome: what the class index warns about, where
   # an error in a file loaded by name is reported, that a test class loaded
   # during a run does not run, and what a node script inside a namespace
   # reaches. Part of Godot.verify!.

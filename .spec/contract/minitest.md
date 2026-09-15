@@ -7,13 +7,13 @@ The Ruby a test is written against, spelled the way minitest spells it so a Ruby
 - `assert_match` and `refute_match`: the extension's mruby has no `Regexp`.
 - A filter names a test exactly; the extension's mruby has no `Regexp` for a `/pattern/`.
 - `assert_throws`: the extension's mruby has no `catch` and `throw`.
-- `assert_output`, `assert_silent` and `capture_io`: Ruby prints to Godot's output, not to an IO a test can capture.
+- `assert_output`, `assert_silent` and `capture_io`: Ruby prints to the log, not to an IO a test can capture.
 - `assert_path_exists` and `refute_path_exists`: Ruby reaches no file system of its own.
 - `assert_pattern` and `refute_pattern`.
 - A difference between two long values is shown as the expected and actual values, not as a diff.
 - `Minitest::Mock` matches positional arguments only, delegates to nothing, cannot expect the Object methods it keeps, such as `to_s`, and has no `must_verify` expectation.
 - `Object#stub` replaces only a method the object defines, and passes no keyword arguments.
-- Plugins are not found among installed gems, and none takes options: the one plugin is the extension's own, which writes each test that did not pass to Godot's log.
+- Plugins are not found among installed gems, and none takes options: the one plugin is the extension's own, which writes each test that did not pass to the log.
 
 ## Includes
 
@@ -568,7 +568,7 @@ end
 
 ## `Minitest::LogReporter`
 
-The reporter the extension's plugin adds to every run, writing what it reports to Godot's log. The extension implements the method that writes to the log on this class, so the class is where the Ruby and the Rust sides meet.
+The reporter the extension's plugin adds to every run, writing what it reports to the log. The extension implements the method that writes to the log on this class, so the class is where the Ruby and the Rust sides meet.
 
 | Attribute | Value |
 | --- | --- |
