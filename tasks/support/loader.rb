@@ -4,8 +4,9 @@ require_relative "ruby_tests"
 
 module Godot
   # Runs the integration-test project's checks of the loader that read
-  # Godot's output: what the class index warns about, and where an error in a
-  # file loaded by name is reported. Part of Godot.verify!.
+  # Godot's output: what the class index warns about, where an error in a
+  # file loaded by name is reported, and what a node script inside a
+  # namespace reaches. Part of Godot.verify!.
   module Loader
     # What every run has to warn about, since the class index takes in every
     # game file: the files spelling names it cannot hold, and a game file
@@ -27,12 +28,17 @@ module Godot
       "RuntimeError: raising.rb fails after defining its constants",
       "(res://loader/raising.rb:12)"
     ].freeze
+    # A scene whose node script reopens the namespace its directory spells, and
+    # the line it prints from what the namespace's own file defined.
+    NAMESPACED_SCENE = "res://verify/loader/namespaced/namespaced.tscn"
+    NAMESPACED_LINE = "namespace from namespaced.rb"
 
     module_function
 
     def verify!(project)
       verify_warnings!(project)
       verify_raised!(project)
+      verify_namespaced!(project)
     end
 
     # Runs the project's Ruby tests, which have to pass and warn about every
@@ -55,6 +61,17 @@ module Godot
       return if status.exitstatus == 1 && missing.empty?
 
       raise "A run of #{RAISING} did not fail as it should #{missing}:\n#{output}"
+    end
+
+    # Runs the namespaced scene, whose script has to print what the
+    # namespace's file defined, so that file ran first.
+    # @behavior RL-011
+    def verify_namespaced!(project)
+      output, status = Godot.run_scene(project, NAMESPACED_SCENE, "--quit-after", "3")
+      printed = output.lines.map(&:chomp)
+      return if status.success? && output.lines.grep(FAILED).empty? && printed.include?(NAMESPACED_LINE)
+
+      raise "The namespaced scene's script did not reach its namespace's file:\n#{output}"
     end
   end
 end

@@ -16,11 +16,10 @@ module Godot
   # What gdext prints once the engine has called into the library.
   LOADED = "Initialize godot-rust"
   FAILED = /^(ERROR|SCRIPT ERROR):/
-  SMOKE_SCENE = "res://smoke/hello.tscn"
-  # What the smoke scene's Ruby prints. Each line must appear exactly once:
-  # the scene attaches the same file to two nodes, and a file runs once. The
-  # last is a constant of smoke.rb, which runs before the script inside smoke/.
-  SMOKE_LINES = ["puts from mruby", "print from mruby", ":p_from_mruby", "namespace from smoke.rb"].freeze
+  PRINTS_SCENE = "res://verify/script/prints.tscn"
+  # What the prints scene's Ruby prints. Each line must appear exactly once:
+  # the scene attaches the same file to two nodes, and a file runs once.
+  PRINTED_LINES = ["puts from mruby", "print from mruby", ":p_from_mruby"].freeze
   # A scene that gives Godot another source for a Ruby file before a node runs
   # it, and the line only that source prints.
   SOURCE_SCENE = "res://verify/script/held.tscn"
@@ -59,16 +58,16 @@ module Godot
     raise "The extension did not load:\n#{errors.empty? ? output : errors.join}"
   end
 
-  # Runs the smoke scene for a few frames and counts the lines its Ruby
+  # Runs the prints scene for a few frames and counts the lines its Ruby
   # printed; --quit-after ends the run even when nothing does.
-  # @behavior RS-001 RS-002 RS-003 RS-004 RL-011
+  # @behavior RS-001 RS-002 RS-003 RS-004
   def verify_scripts_run!(project = PROJECT)
-    output, status = run_scene(project, SMOKE_SCENE, "--quit-after", "3")
+    output, status = run_scene(project, PRINTS_SCENE, "--quit-after", "3")
     lines = output.lines.map(&:chomp)
-    counts = SMOKE_LINES.to_h { |line| [line, lines.count(line)] }
+    counts = PRINTED_LINES.to_h { |line| [line, lines.count(line)] }
     return if status.success? && output.lines.grep(FAILED).empty? && counts.values.all?(1)
 
-    raise "The smoke scene's Ruby did not print each line once #{counts}:\n#{output}"
+    raise "The prints scene's Ruby did not print each line once #{counts}:\n#{output}"
   end
 
   # Runs the scene that changes a script's source in Godot, whose Ruby has to

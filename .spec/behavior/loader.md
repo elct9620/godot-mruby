@@ -5,7 +5,6 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 ## Includes
 
 - `tasks/support/loader.rb`
-- `tasks/support/godot.rb`
 - `godot/test/loader/**/*.rb`
 
 ## `RL-001` Two files naming one constant are warned about
