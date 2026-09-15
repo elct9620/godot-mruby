@@ -31,7 +31,8 @@ module Godot
     # has to print on the way, in the order it prints it: one per way a run
     # fails, all under godot/verify/runner/failing/ except the filter that
     # names no test, the directories that are not the project's test
-    # directories, and a seed that is not a number.
+    # directories, and a seed that is not a number. An error's calls end at the
+    # test method, so its frame is the last before the report's blank line.
     FAILING = {
       %w[--dir res://verify/runner/failing/assertion] => [
         "teardown ran after a failure",
@@ -43,7 +44,7 @@ module Godot
         "RaisedErrorTest#test_raises_an_argument_error [res://verify/runner/failing/error/raised_error_test.rb:10]:",
         "ArgumentError: not an assertion",
         "    res://verify/runner/failing/error/raised_error_test.rb:10:in refuse_the_item",
-        "    res://verify/runner/failing/error/raised_error_test.rb:6:in test_raises_an_argument_error",
+        "    res://verify/runner/failing/error/raised_error_test.rb:6:in test_raises_an_argument_error\n\n",
         "ERROR: RaisedErrorTest#test_raises_an_argument_error: ArgumentError: not an assertion",
         "(res://verify/runner/failing/error/raised_error_test.rb:10)"
       ],

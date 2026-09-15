@@ -7,7 +7,6 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 - `tasks/support/ruby_tests.rb`
 - `tasks/support/test_settings.rb`
 - `godot/test/minitest/**/*.rb`
-- `godot/test/runner/**/*.rb`
 
 ## `RT-001` A test method of a test class runs
 
