@@ -50,6 +50,7 @@ module Godot
   # with classes and quits at once crashes (godotengine/godot#111048). Godot
   # reports a library it could not open on stdout and may still exit 0, so the
   # pass is judged by what it printed.
+  # @behavior RA-001
   def verify_loaded!(project = PROJECT)
     output, status = Open3.capture2e(EXECUTABLE, "--headless", "--editor", "--quit", "--path", project)
     errors = output.lines.grep(FAILED)
