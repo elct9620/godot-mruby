@@ -23,14 +23,15 @@ module Godot
   SMOKE_LINES = ["puts from mruby", "print from mruby", ":p_from_mruby", "namespace from smoke.rb"].freeze
   # A scene that gives Godot another source for a Ruby file before a node runs
   # it, and the line only that source prints.
-  SOURCE_SCENE = "res://source/held.tscn"
+  SOURCE_SCENE = "res://verify/script/held.tscn"
   HELD_LINE = "held.rb as Godot holds it"
-  REPORT_SCENE = "res://report/report.tscn"
+  REPORT_SCENE = "res://verify/report/report.tscn"
   # What mruby says about the report scene's files, each as the line Godot
   # prints it on and the Ruby location Godot puts on the line after.
   REPORTS = {
-    "WARNING: else without rescue is useless" => "(res://report/warning.rb:6)",
-    %(SCRIPT ERROR: syntax error, unexpected "'end'", expecting end of file) => "(res://report/syntax_error.rb:3)"
+    "WARNING: else without rescue is useless" => "(res://verify/report/warning.rb:6)",
+    %(SCRIPT ERROR: syntax error, unexpected "'end'", expecting end of file) =>
+      "(res://verify/report/syntax_error.rb:3)"
   }.freeze
 
   module_function

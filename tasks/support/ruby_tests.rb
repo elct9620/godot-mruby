@@ -20,34 +20,39 @@ module Godot
     }.freeze
     # A test directory whose tests print their names as they run, the seeds
     # tried on it, and how a run prints its seed and each test it ran.
-    ORDER = "res://order"
+    ORDER = "res://verify/runner/order"
     SEEDS = %w[1 2 3 4 5].freeze
     SEED = /^Run options: --seed (\d+)$/
     RAN = /ran (\w+#test_\w+)/
     # Runs that have to fail, each as the runner's options and what the run
     # has to print on the way, in the order it prints it: one per way a run
-    # fails, all under godot/failing/ except the directory that does not
-    # exist, the filter that names no test, the directories that are not
-    # the project's test directories, and a seed that is not a number.
+    # fails, all under godot/verify/runner/failing/ except the filter that
+    # names no test, the directories that are not the project's test
+    # directories, and a seed that is not a number.
     FAILING = {
-      %w[--dir res://failing/assertion] => [
+      %w[--dir res://verify/runner/failing/assertion] => [
         "teardown ran after a failure",
-        "FailingTest#test_one_equals_two [res://failing/assertion/failing_test.rb:9]:",
-        "ERROR: FailingTest#test_one_equals_two: Expected: 1",
-        "(res://failing/assertion/failing_test.rb:9)"
+        "FailedAssertionTest#test_one_equals_two [res://verify/runner/failing/assertion/failed_assertion_test.rb:9]:",
+        "ERROR: FailedAssertionTest#test_one_equals_two: Expected: 1",
+        "(res://verify/runner/failing/assertion/failed_assertion_test.rb:9)"
       ],
-      %w[--dir res://failing/error] => [
-        "ErrorTest#test_raises_an_argument_error [res://failing/error/error_test.rb:10]:",
+      %w[--dir res://verify/runner/failing/error] => [
+        "RaisedErrorTest#test_raises_an_argument_error [res://verify/runner/failing/error/raised_error_test.rb:10]:",
         "ArgumentError: not an assertion",
-        "    res://failing/error/error_test.rb:10:in refuse_the_item",
-        "    res://failing/error/error_test.rb:6:in test_raises_an_argument_error",
-        "ERROR: ErrorTest#test_raises_an_argument_error: ArgumentError: not an assertion",
-        "(res://failing/error/error_test.rb:10)"
+        "    res://verify/runner/failing/error/raised_error_test.rb:10:in refuse_the_item",
+        "    res://verify/runner/failing/error/raised_error_test.rb:6:in test_raises_an_argument_error",
+        "ERROR: RaisedErrorTest#test_raises_an_argument_error: ArgumentError: not an assertion",
+        "(res://verify/runner/failing/error/raised_error_test.rb:10)"
       ],
-      %w[--dir res://failing/syntax] => ["(res://failing/syntax/broken_test.rb:4)", "0 runs, 0 assertions"],
-      %w[--dir res://failing/missing] => ["The test directory res://failing/missing does not exist"],
+      %w[--dir res://verify/runner/failing/syntax] => [
+        "(res://verify/runner/failing/syntax/broken_syntax_test.rb:4)",
+        "0 runs, 0 assertions"
+      ],
+      %w[--dir res://verify/runner/failing/missing] => [
+        "The test directory res://verify/runner/failing/missing does not exist"
+      ],
       %w[--dir res://test --include test_nothing] => ["ERROR: Nothing ran for filter: test_nothing"],
-      %w[--dir res://smoke] => ["ERROR: res://smoke is not one of the project's test directories"],
+      %w[--dir res://verify/script] => ["ERROR: res://verify/script is not one of the project's test directories"],
       %w[--dir res://] => ["ERROR: res:// cannot be a test directory"],
       %w[--dir res://test --seed x] => ["ERROR: --seed takes a whole number, not x"]
     }.freeze

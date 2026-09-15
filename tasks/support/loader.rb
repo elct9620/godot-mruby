@@ -19,11 +19,12 @@ module Godot
     ].freeze
     # A test using a constant whose file raises, and what its run has to print
     # in order: the error placed at the line of the file that raised.
-    RAISING = "res://failing/loading"
+    RAISING = "res://verify/loader/failing/raising"
     RAISED = [
-      "RaisingTest#test_uses_a_file_that_raises [res://loader/raising.rb:12]:",
+      "RaisingFileTest#test_uses_a_file_that_raises [res://loader/raising.rb:12]:",
       "RuntimeError: raising.rb fails after defining its constants",
-      "ERROR: RaisingTest#test_uses_a_file_that_raises: RuntimeError: raising.rb fails after defining its constants",
+      "ERROR: RaisingFileTest#test_uses_a_file_that_raises: " \
+      "RuntimeError: raising.rb fails after defining its constants",
       "(res://loader/raising.rb:12)"
     ].freeze
 
