@@ -182,3 +182,11 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 | Given | a file that uses a class inside a directory with no file of its own name, then raises |
 | When | Ruby uses the failing file's constant and the exception is rescued |
 | Then | the directory's module is still defined |
+
+## `RL-023` The hook that tells the loader of new constants stays private
+
+| Step | Statement |
+| --- | --- |
+| Given | a realm whose loader learns of each constant a running file creates |
+| When | Ruby calls `const_added` on a module from outside it |
+| Then | it raises `NoMethodError`, as core Ruby's private hook does |

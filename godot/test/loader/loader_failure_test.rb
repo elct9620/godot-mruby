@@ -30,7 +30,8 @@ class LoaderFailureTest < Minitest::Test
     assert Loader.const_defined?(:Shelf)
   end
 
-  def test_the_hook_that_tells_the_realm_of_new_constants_stays_private
+  # @behavior RL-023
+  def test_the_hook_that_tells_the_loader_of_new_constants_stays_private
     assert_raises(NoMethodError) { Module.const_added(:Unused) }
   end
 
