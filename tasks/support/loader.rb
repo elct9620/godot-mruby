@@ -3,10 +3,10 @@
 require_relative "ruby_tests"
 
 module Godot
-  # Runs the integration-test project's checks of loading by name that read
+  # Runs the integration-test project's checks of the loader that read
   # Godot's output: what the class index warns about, and where an error in a
   # file loaded by name is reported. Part of Godot.verify!.
-  module Loading
+  module Loader
     # A test directory whose files spell names the class index cannot hold,
     # and what a run of it has to warn about: those, and a game file naming a
     # constant mruby already has.

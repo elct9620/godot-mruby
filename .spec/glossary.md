@@ -42,6 +42,10 @@ A file under a test directory whose name matches the project's `mruby/test/patte
 
 A realm's map from constant paths to the files named after them, built from `res://` by Zeitwerk's rules: every directory is a namespace, and a file names the constant its path spells, matched without underscores or case. An exported game's index leaves the test directories out.
 
+### Loader
+
+What stands in for `require` in a realm: the first time Ruby uses a constant the class index names, the loader runs the file that names it, so the file loads by name. Godot loading a file reads its source and runs nothing.
+
 #### Rejected
 
-- `autoload` - Godot's autoloads are singleton nodes, and Ruby's `Module#autoload` is seen by constant lookup; the class index answers only `const_missing`, which mruby calls once lookup has failed.
+- `autoload` - Godot's autoloads are singleton nodes, and Ruby's `Module#autoload` is seen by constant lookup; the loader answers only `const_missing`, which mruby calls once lookup has failed.

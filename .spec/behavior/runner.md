@@ -1,4 +1,4 @@
-# Ruby tests
+# Test runner
 
 How a Ruby test suite runs headless: the runner scene the addon carries runs every test file under a directory in the game's realm and quits with whether the suite passed, so a project tests its Ruby without GDScript.
 

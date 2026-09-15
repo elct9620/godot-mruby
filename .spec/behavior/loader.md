@@ -1,10 +1,10 @@
-# Loading by name
+# Loader
 
-How a file's constants reach the Ruby that uses them without `require`: a realm's class index names every file after its path, and the first use of a constant runs the file that names it.
+How a file's constants reach the Ruby that uses them without `require`: a realm's class index names every file after its path, and the loader runs the file that names a constant at the constant's first use.
 
 ## Includes
 
-- `tasks/support/loading.rb`
+- `tasks/support/loader.rb`
 - `tasks/support/godot.rb`
 - `godot/test/**/*.rb`
 - `godot/naming/**/*.rb`
