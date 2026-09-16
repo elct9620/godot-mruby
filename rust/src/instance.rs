@@ -5,21 +5,24 @@ use godot::prelude::*;
 use godot::register::info::{MethodInfo, PropertyInfo};
 
 use crate::log::GodotLog;
-use crate::{language, realm};
+use crate::realm;
 
 /// A node's instance of a `RubyScript`. It holds no Ruby state: every entry
 /// runs the script's file in the game's realm if it has not run yet, and
 /// otherwise leaves the node's own members to answer.
 pub struct RubyInstance {
     script: Gd<Script>,
+    // The language its script reports, which Godot also asks the instance for.
+    language: Gd<ScriptLanguage>,
     // What the node prints as while its script says nothing about it.
     display: GString,
 }
 
 impl RubyInstance {
-    pub fn new(script: Gd<Script>, owner: &Gd<Object>) -> Self {
+    pub fn new(script: Gd<Script>, language: Gd<ScriptLanguage>, owner: &Gd<Object>) -> Self {
         Self {
             script,
+            language,
             display: GString::from(&owner.to_string()),
         }
     }
@@ -95,9 +98,7 @@ impl ScriptInstance for RubyInstance {
     }
 
     fn get_language(&self) -> Gd<ScriptLanguage> {
-        language::registered()
-            .expect("the Ruby language outlives every Ruby script instance")
-            .upcast()
+        self.language.clone()
     }
 
     fn on_refcount_decremented(&self) -> bool {

@@ -54,7 +54,10 @@ impl IScriptExtension for RubyScript {
     }
 
     unsafe fn instance_create_rawptr(&self, for_object: Gd<Object>) -> RawPtr<*mut c_void> {
-        let instance = RubyInstance::new(self.to_gd().upcast(), &for_object);
+        let language = self
+            .get_language()
+            .expect("the Ruby language outlives every Ruby script instance");
+        let instance = RubyInstance::new(self.to_gd().upcast(), language, &for_object);
         // SAFETY: Godot hands the instance to `for_object` and frees it with that object.
         unsafe { create_script_instance(instance, for_object) }
     }

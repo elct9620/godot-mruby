@@ -130,9 +130,9 @@ lib.rs    registers Scripting and settings, prepares the realm
   ▼
 ┌─ Scripting ───────────────────────────────┐
 │  loader ──► script ◄──► language          │
-│               │            ▲              │
-│               ▼            │              │
-│            instance ───────┘              │
+│               │                           │
+│               ▼                           │
+│            instance                       │
 └──┬────────────────────────────────────────┘
    │
    │   ┌─ Testing ────────────────────────────┐
@@ -156,7 +156,7 @@ Scripting serves `.rb` files to Godot, and Testing runs a project's Ruby tests; 
 
 The realm uses no other module but `compiler`. What it needs from Godot, `game` and `log` implement for it, so every arrow into the realm is a use of it and none leaves it for Godot.
 
-Within Scripting, `language`, `script` and `instance` refer to one another, being one script language to Godot. `minitest` uses the realm only for the `Location` it writes a failure at, and runs its own Ruby through `compiler`.
+Within Scripting, `language` and `script` refer to each other, as GDExtension script languages do through the language's singleton; `instance` is handed the language by its script and reaches down only. `minitest` uses the realm only for the `Location` it writes a failure at, and runs its own Ruby through `compiler`.
 
 ## 3. Realm
 
