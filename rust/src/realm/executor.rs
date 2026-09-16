@@ -10,8 +10,7 @@ use beni::{Error, Mrb, Value};
 use godot::classes::{ResourceLoader, Script};
 use godot::obj::Singleton;
 
-use super::bookkeeping;
-use crate::compiler;
+use super::{bookkeeping, compile};
 
 /// How far a file has run in a realm.
 #[derive(Clone, Copy)]
@@ -114,7 +113,7 @@ fn execute(
         .and_then(|()| source_of(mrb, path))
         .and_then(|source| {
             let name = CString::new(path).map_err(|error| refused(mrb, &error.to_string()))?;
-            compiler::run(mrb, &name, &source)
+            compile(mrb, &name, &source)
         });
     let frame = runs.frames.borrow_mut().pop();
     let run = match (&outcome, frame) {

@@ -5,13 +5,22 @@ use std::ffi::CStr;
 
 use beni::{Ccontext, Error, Mrb};
 
-use crate::log::Location;
-use crate::warn;
+/// What the compiler warns about in the source it ran, at the line it names.
+pub struct Warning {
+    pub line: u32,
+    pub message: String,
+}
 
 /// Compiles and runs `source` under `name`: mruby stamps the name on
 /// everything compiled from it, so warnings, errors and backtraces name it.
-/// What the compiler warns about is written to Godot's log at its line.
-pub fn run(mrb: &Mrb, name: &CStr, source: &str) -> Result<(), Error> {
+/// Each warning goes to `warned` once the source has run, and the caller
+/// decides where it is reported.
+pub fn run(
+    mrb: &Mrb,
+    name: &CStr,
+    source: &str,
+    mut warned: impl FnMut(Warning),
+) -> Result<(), Error> {
     let Some(context) = Ccontext::new(mrb, name) else {
         let class = mrb.exc_get(c"RuntimeError")?;
         return Err(Error::new(
@@ -21,13 +30,11 @@ pub fn run(mrb: &Mrb, name: &CStr, source: &str) -> Result<(), Error> {
         ));
     };
     let outcome = context.load_nstring(source.as_bytes());
-    let file = name.to_string_lossy();
     for warning in context.warnings() {
-        let at = Location {
-            file: file.clone().into_owned(),
+        warned(Warning {
             line: warning.line().into(),
-        };
-        warn!(at: &at, "{}", warning.message());
+            message: warning.message().to_owned(),
+        });
     }
     outcome.map(|_| ())
 }

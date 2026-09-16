@@ -8,12 +8,24 @@ How the extension turns Ruby source into what runs in an `mrb_state`, whoever ho
 
 ## `run`
 
-Compiles and runs Ruby source under a name, which mruby stamps on everything compiled from it, so warnings, errors and backtraces name it; what the compiler warns about is written to the log at its line.
+Compiles and runs Ruby source under a name, which mruby stamps on everything compiled from it, so warnings, errors and backtraces name it; each warning the compiler gives is handed to the caller, who decides where it is reported.
 
 | Attribute | Value |
 | --- | --- |
 | internal | yes |
 
 ```rust
-pub fn run(mrb: &Mrb, name: &CStr, source: &str) -> Result<(), Error> {}
+pub fn run(mrb: &Mrb, name: &CStr, source: &str, warned: impl FnMut(Warning)) -> Result<(), Error> {}
+```
+
+## `Warning`
+
+What the compiler warns about in the source it ran, at the line it names.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub struct Warning;
 ```

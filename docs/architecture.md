@@ -146,7 +146,8 @@ lib.rs    registers Scripting and settings, closes realm
         │            │
         ▼            ▼
 ┌───────────────────────────────────────┐
-│  compiler ──► log                     │
+│  compiler                             │
+│  log                                  │
 │  settings                             │
 └───────────────────────────────────────┘
 ```

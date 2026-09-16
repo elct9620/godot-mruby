@@ -9,6 +9,7 @@ use godot::obj::Singleton;
 use crate::log;
 use crate::log::{Level, Location};
 use crate::settings;
+use crate::{compiler, warn};
 
 mod constants;
 mod executor;
@@ -39,6 +40,19 @@ struct Bookkeeping {
 fn bookkeeping(mrb: &Mrb) -> &Bookkeeping {
     mrb.user_data()
         .expect("a realm keeps its bookkeeping from the moment it opens")
+}
+
+// Compiles and runs `source` under `name` in the realm `mrb` belongs to,
+// writing what the compiler warns about to the log at its line.
+fn compile(mrb: &Mrb, name: &CStr, source: &str) -> Result<(), Error> {
+    let file = name.to_string_lossy();
+    compiler::run(mrb, name, source, |warning| {
+        let at = Location {
+            file: file.clone().into_owned(),
+            line: warning.line,
+        };
+        warn!(at: &at, "{}", warning.message);
+    })
 }
 
 static GAME: Mutex<Option<Realm>> = Mutex::new(None);

@@ -6,14 +6,13 @@
 use beni::{Error, FromValue, IntoValue, Module, Mrb, RClass, RModule, Symbol, Value, method};
 
 use super::index::{self, Key, Named, Namespace};
-use super::{bookkeeping, executor};
-use crate::compiler;
+use super::{bookkeeping, compile, executor};
 
 pub(super) fn define(mrb: &Mrb) -> Result<(), Error> {
     let module = mrb.class_get(c"Module")?;
     module.define_private_method(mrb, c"__load_by_name__", method!(load_by_name, 1))?;
     module.define_private_method(mrb, c"__created__", method!(created, 1))?;
-    compiler::run(
+    compile(
         mrb,
         c"godot_mruby/constants.rb",
         include_str!("constants.rb"),
