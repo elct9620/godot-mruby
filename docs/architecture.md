@@ -90,21 +90,9 @@ Build output stays out of the repository: `vendor/` holds mruby's source and arc
 
 Each class Godot knows answers what Godot already asks of a script language; none opens another way for Godot to reach Ruby.
 
-`ResourceFormatLoaderRubyScript` reads a file's source and runs nothing. The script holds that source and answers Godot's questions from its header, which Prism reads from the source: the superclass that makes the file a node script, and the methods its class defines. Only a node script makes an instance, for a node of the engine class it extends. The instance holds no Ruby value, only a key the realm gives it:
+`ResourceFormatLoaderRubyScript` reads a file's source and runs nothing. The script answers Godot from its header, which Prism reads from that source, and only a node script makes an instance (2.4).
 
-```
-recorded ── the first call of a method the header has ──► built(key) ──► each such call is sent to the object
-   │                                                        │
-   │ making a node runs no Ruby                             │ the file or initialize raised: reported once
-   ▼                                                        ▼
-get and set are left to the engine                       failed: calls nothing again
-
-the node is freed, on any thread ──► realm::release(key) ──► let go at the next entry or frame
-```
-
-`bridge` carries a call's arguments into Ruby and its answer back; only nil, booleans, integers and floats cross, and anything else arrives as nil. Node script behavior is specified in `.spec/behavior/script.md`.
-
-The runner is an ordinary node the addon ships. `GameFiles`, `GodotLog` and the `Godot` gem are what the game's realm is given: the files under `res://`, Godot's log, and the engine's classes under `Godot`, specified in `.spec/behavior/engine_classes.md`. The names Godot knows are in `.spec/contract/godot.md`, and the settings in `.spec/contract/project_settings.md`.
+The runner is an ordinary node the addon ships. `GameFiles`, `GodotLog` and the `Godot` gem are what the game's realm is given: the files under `res://`, Godot's log, and the engine's classes, specified in `.spec/behavior/engine_classes.md`. The names Godot knows are in `.spec/contract/godot.md`, and the settings in `.spec/contract/project_settings.md`.
 
 ### 2.2 Lifecycle
 
@@ -174,6 +162,26 @@ Scripting serves `.rb` files to Godot, and Testing runs a project's Ruby tests; 
 The realm uses no other module but `compiler`. What it needs from Godot, `game` and `log` implement for it, so every arrow into the realm is a use of it and none leaves it for Godot.
 
 `header` names a file's class by the class index's rules, `realm::key_of` and `realm::normalize`, without entering the realm. Within Scripting, `language` and `script` refer to each other, as GDExtension script languages do through the language's singleton; `instance` is handed the language by its script and reaches down only. `minitest` and `bridge` run their own Ruby through `compiler`, whose warnings `log` writes; `minitest` uses the realm only for the `Location` it writes a failure at.
+
+### 2.4 Node scripts
+
+```
+node.set_script ──► instance: recorded        no Ruby runs
+                       │
+                       │ first call of a method the header has
+                       ▼
+                    realm.build ──► built(key) ──► calls sent to the object
+                       │
+                       │ the file or initialize raised: reported once
+                       ▼
+                    failed: calls nothing again
+
+node freed (any thread) ──► release(key) ──► let go at the next entry or frame
+```
+
+The header answers what Godot asks on any thread: the engine node class the file's class extends, and the methods it defines. A script makes an instance only for a node of that class, and leaves get and set to the engine.
+
+The instance holds no Ruby value, only a key. `bridge` carries a call's arguments into Ruby and its answer back; only nil, booleans, integers and floats cross yet. Freeing a node queues its key and never waits for the realm. The rules are in `.spec/behavior/script.md` and `.spec/behavior/held_objects.md`.
 
 ## 3. Realm
 
