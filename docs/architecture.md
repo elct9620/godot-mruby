@@ -90,7 +90,17 @@ Build output stays out of the repository: `vendor/` holds mruby's source and arc
 
 Each class Godot knows answers what Godot already asks of a script language; none opens another way for Godot to reach Ruby.
 
-`ResourceFormatLoaderRubyScript` reads a file's source and runs nothing. The script holds that source and answers Godot's questions from its header, which Prism reads from the source: the superclass that makes the file a node script, and the methods its class defines. Only a node script makes an instance, for a node of the engine class it extends. The instance holds no Ruby state: each get, set, call or notification enters the realm, which runs its file the first time.
+`ResourceFormatLoaderRubyScript` reads a file's source and runs nothing. The script holds that source and answers Godot's questions from its header, which Prism reads from the source: the superclass that makes the file a node script, and the methods its class defines. Only a node script makes an instance, for a node of the engine class it extends. The instance holds no Ruby value, only a key the realm gives it:
+
+```
+recorded ── the first call of a method the header has ──► built(key) ──► each such call is sent to the object
+   │                                                        │
+   │ making a node runs no Ruby                             │ the file or initialize raised: reported once
+   ▼                                                        ▼
+get and set are left to the engine                       failed: calls nothing again
+```
+
+`bridge` carries a call's arguments into Ruby and its answer back; only nil, booleans, integers and floats cross, and anything else arrives as nil. Node script behavior is specified in `.spec/behavior/script.md`.
 
 The runner is an ordinary node the addon ships. `GameFiles`, `GodotLog` and the `Godot` gem are what the game's realm is given: the files under `res://`, Godot's log, and the engine's classes under `Godot`, specified in `.spec/behavior/engine_classes.md`. The names Godot knows are in `.spec/contract/godot.md`, and the settings in `.spec/contract/project_settings.md`.
 
@@ -165,7 +175,7 @@ The realm uses no other module but `compiler`. What it needs from Godot, `game` 
 ### 3.1 Entry
 
 ```
-RubyInstance ─────┐   on get, set, call, notification
+RubyInstance ─────┐   on a call of a method its class defines
 RubyTestRunner ───┤   when it is ready
                   ▼
 realm::enter(body)
@@ -176,6 +186,8 @@ body(&Realm)
   │  run(path)                    a file, once
   │  install::<G: Gem>()          an extension
   │  call(receiver, method, arg)  a constant's method
+  │  build(path)                  an object of a file's class, held by key
+  │  send(key, method, args)      a held object's method
   ▼
 a Rust value, or a RubyError ──► RubyError::write
 ```
@@ -194,15 +206,17 @@ realm.rs              Realm, prepare, enter, Files, Log, RubyError
 ├─ the mrb_state
 │  └─ user data       the bookkeeping, private to realm/
 │     ├─ files, log   what the realm was given as it opened
-│     └─ index, runs  the class index and each file's run
+│     ├─ index, runs  the class index and each file's run
+│     └─ registry     the objects held for keys outside
 │
 ├─ print.rs           puts, print and p write to the log
 ├─ constants.rs, .rb  const_missing and const_added hooks
 ├─ index.rs           the class index: constant path to file
-└─ executor.rs        runs a file once, all or nothing
+├─ executor.rs        runs a file once, all or nothing
+└─ registry.rs        keys to objects, rooted for the collector
 ```
 
-A realm's bookkeeping sits in the state's user data: the files and log it was given, the class index and each file's run. Ruby's calls back into Rust reach it from the state they are given, and no gem knows the slot.
+A realm's bookkeeping sits in the state's user data: the files and log it was given, the class index, each file's run, and the objects it holds for keys. Held objects live in a hash rooted for the collector, so mruby never frees an object a node still uses. Ruby's calls back into Rust reach it from the state they are given, and no gem knows the slot.
 
 What makes this mruby environment its own is defined as the realm opens: output to its log, and the hooks through which a missing constant asks the index and a running file's constants are recorded.
 

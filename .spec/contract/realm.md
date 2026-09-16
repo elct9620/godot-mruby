@@ -6,6 +6,7 @@ The one way the extension runs Ruby. A component enters the game's realm and ask
 
 - `rust/src/realm.rs`
 - `rust/src/realm/index.rs`
+- `rust/src/realm/registry.rs`
 
 ## `prepare`
 
@@ -132,6 +133,46 @@ Calls a method on the constant a name spells, and answers what it returned as a 
 ```rust
 impl Realm {
     pub fn call<A: IntoValue, R: FromValue>(&self, receiver: &str, method: &CStr, arg: A) -> Result<R, RubyError> {}
+}
+```
+
+## `Key`
+
+A Ruby object a realm holds for something outside it, which keeps the key rather than the object.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub struct Key;
+```
+
+## `Realm::build`
+
+Runs the Ruby file at a path once, and makes an object of the class its path names, held by the realm under the key it answers.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Realm {
+    pub fn build(&self, path: &str) -> Result<Key, RubyError> {}
+}
+```
+
+## `Realm::send`
+
+Calls a method on the object a key holds, and answers what it returned as a Rust value.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Realm {
+    pub fn send<A: IntoValue, R: FromValue>(&self, key: Key, method: &str, args: impl IntoIterator<Item = A>) -> Result<R, RubyError> {}
 }
 ```
 

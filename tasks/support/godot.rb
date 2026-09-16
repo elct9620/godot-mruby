@@ -3,6 +3,7 @@
 require "open3"
 
 require_relative "loader"
+require_relative "node_scripts"
 require_relative "ruby_tests"
 require_relative "test_settings"
 
@@ -24,27 +25,13 @@ module Godot
   # it, and the line only that source prints.
   SOURCE_SCENE = "res://verify/script/held.tscn"
   HELD_LINE = "held.rb as Godot holds it"
-  # A scene whose nodes take a library file and a node script extending a
-  # class they are not, and the errors refusing each.
-  ATTACH_SCENE = "res://verify/script/attach/attach.tscn"
-  REFUSALS = [
-    "ERROR: res://verify/script/attach/library.rb defines no class extending an engine node class, " \
-    "so it cannot be a node's script",
-    "ERROR: res://verify/script/attach/planar.rb extends Node2D, so it cannot be the script of a Node"
-  ].freeze
-  # A scene asking a node script what Godot asks before its file runs, the
-  # answers it prints, and the line the file prints if it ever runs.
-  HEADER_SCENE = "res://verify/script/header/header.tscn"
-  BASE_TYPE_ANSWER = "instance base type: Node2D"
-  METHOD_ANSWER = "has _ready: true"
-  REPORTED_RAN = "reported.rb ran"
   REPORT_SCENE = "res://verify/report/report.tscn"
   # What mruby says about the report scene's files, each as the line Godot
   # prints it on and the Ruby location Godot puts on the line after.
   REPORTS = {
     "WARNING: else without rescue is useless" => "(res://verify/report/warning.rb:9)",
     %(SCRIPT ERROR: syntax error, unexpected "'end'", expecting end of file) =>
-      "(res://verify/report/syntax_error.rb:9)"
+      "(res://verify/report/syntax_error.rb:12)"
   }.freeze
 
   module_function
@@ -53,9 +40,7 @@ module Godot
     verify_loaded!(project)
     verify_scripts_run!(project)
     verify_source_held!(project)
-    verify_attach_refused!(project)
-    verify_base_type_answered!(project)
-    verify_method_answered!(project)
+    NodeScripts.verify!(project)
     verify_reports!(project)
     RubyTests.verify!(project)
     Loader.verify!(project)
@@ -96,36 +81,6 @@ module Godot
     return if status.success? && output.lines.grep(FAILED).empty? && output.lines.map(&:chomp).include?(HELD_LINE)
 
     raise "The script did not run the source Godot holds for it:\n#{output}"
-  end
-
-  # Runs the scene whose nodes take scripts they cannot, each refused in the log.
-  # @behavior RS-006 RS-007
-  def verify_attach_refused!(project = PROJECT)
-    output, status = run_scene(project, ATTACH_SCENE, "--quit-after", "3")
-    missing = REFUSALS.reject { |refusal| output.include?(refusal) }
-    return if status.success? && missing.empty?
-
-    raise "The attach scene's scripts were not refused as they should be #{missing}:\n#{output}"
-  end
-
-  # Runs the scene that asks a node script what Godot asks, whose answers have
-  # to come from its source while its file never runs.
-  # @behavior RS-008
-  def verify_base_type_answered!(project = PROJECT)
-    verify_answer!(project, BASE_TYPE_ANSWER)
-  end
-
-  # @behavior RS-009
-  def verify_method_answered!(project = PROJECT)
-    verify_answer!(project, METHOD_ANSWER)
-  end
-
-  def verify_answer!(project, answer)
-    output, status = run_scene(project, HEADER_SCENE, "--quit-after", "3")
-    lines = output.lines.map(&:chomp)
-    return if status.success? && lines.include?(answer) && !lines.include?(REPORTED_RAN)
-
-    raise "The header scene did not answer #{answer.inspect} without running its file:\n#{output}"
   end
 
   # Runs the report scene and looks for each report followed by its location.

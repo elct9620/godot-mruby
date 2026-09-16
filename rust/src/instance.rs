@@ -1,25 +1,39 @@
+use std::sync::Arc;
+
 use godot::classes::{Object, Script, ScriptLanguage};
 use godot::meta::error::CallErrorType;
 use godot::obj::script::{ScriptInstance, SiMut};
 use godot::prelude::*;
 use godot::register::info::{MethodInfo, PropertyInfo};
-use std::sync::Arc;
 
+use crate::bridge::{Answer, Argument};
 use crate::header::Header;
-
 use crate::log::GodotLog;
-use crate::realm;
+use crate::realm::{self, Key, RubyError};
 
-/// A node's instance of a `RubyScript`. It holds no Ruby state: every entry
-/// runs the script's file in the game's realm if it has not run yet, and
-/// otherwise leaves the node's own members to answer.
+/// A node's instance of a `RubyScript`. It holds no Ruby value: the node's
+/// Ruby object is built in the game's realm the first time Godot calls a
+/// method its class defines, and the instance keeps the realm's key for it.
 pub struct RubyInstance {
     script: Gd<Script>,
+    // The header its script had as the instance was made, which answers
+    // which methods the node's class defines without entering the realm.
     header: Arc<Header>,
     // The language its script reports, which Godot also asks the instance for.
     language: Gd<ScriptLanguage>,
     // What the node prints as while its script says nothing about it.
     display: GString,
+    stage: Stage,
+}
+
+/// How far a node's Ruby object has come.
+enum Stage {
+    /// Not built yet: making a node runs no Ruby.
+    Recorded,
+    Built(Key),
+    /// Its file or `initialize` raised, which was reported; the node calls
+    /// nothing from then on, as an engine-made object is never built again.
+    Failed,
 }
 
 impl RubyInstance {
@@ -34,14 +48,44 @@ impl RubyInstance {
             header,
             language,
             display: GString::from(&owner.to_string()),
+            stage: Stage::Recorded,
         }
     }
 
-    fn enter(&self) {
-        let path = self.script.get_path().to_string();
-        if let Err(failed) = realm::enter(|realm| realm.run(&path)) {
-            failed.write(&GodotLog);
+    // The node's Ruby object, built at the first call that needs it.
+    fn object(&mut self) -> Option<Key> {
+        match self.stage {
+            Stage::Built(key) => return Some(key),
+            Stage::Failed => return None,
+            Stage::Recorded => {}
         }
+        let path = self.script.get_path().to_string();
+        match realm::enter(|realm| realm.build(&path)) {
+            Ok(key) => {
+                self.stage = Stage::Built(key);
+                Some(key)
+            }
+            Err(failed) => {
+                failed.write(&GodotLog);
+                self.stage = Stage::Failed;
+                None
+            }
+        }
+    }
+
+    // Calls `method` on the node's Ruby object; an exception is reported and
+    // answers null, as a callback that returned nothing does.
+    fn send(&mut self, method: &str, args: &[&Variant]) -> Variant {
+        let Some(key) = self.object() else {
+            return Variant::nil();
+        };
+        let args = args.iter().map(|arg| Argument(arg));
+        realm::enter(|realm| realm.send::<_, Answer>(key, method, args))
+            .map(|Answer(answer)| answer)
+            .unwrap_or_else(|failed: RubyError| {
+                failed.write(&GodotLog);
+                Variant::nil()
+            })
     }
 }
 
@@ -52,13 +96,11 @@ impl ScriptInstance for RubyInstance {
         self.script.get_class()
     }
 
-    fn set_property(this: SiMut<Self>, _name: StringName, _value: &Variant) -> bool {
-        this.enter();
+    fn set_property(_this: SiMut<Self>, _name: StringName, _value: &Variant) -> bool {
         false
     }
 
     fn get_property(&self, _name: StringName) -> Option<Variant> {
-        self.enter();
         None
     }
 
@@ -71,16 +113,21 @@ impl ScriptInstance for RubyInstance {
     }
 
     fn call(
-        this: SiMut<Self>,
-        _method: StringName,
-        _args: &[&Variant],
+        mut this: SiMut<Self>,
+        method: StringName,
+        args: &[&Variant],
     ) -> Result<Variant, CallErrorType> {
-        this.enter();
-        Err(CallErrorType::InvalidMethod)
+        let method = method.to_string();
+        if !this.header.has_method(&method) {
+            return Err(CallErrorType::InvalidMethod);
+        }
+        Ok(this.send(&method, args))
     }
 
-    fn on_notification(this: SiMut<Self>, _what: i32, _reversed: bool) {
-        this.enter();
+    fn on_notification(mut this: SiMut<Self>, what: i32, _reversed: bool) {
+        if this.header.has_method("_notification") {
+            this.send("_notification", &[&what.to_variant()]);
+        }
     }
 
     fn is_placeholder(&self) -> bool {

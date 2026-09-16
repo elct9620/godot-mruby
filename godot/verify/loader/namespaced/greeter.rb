@@ -5,6 +5,9 @@ module Verify
     module Namespaced
       class Greeter < Godot::Node
         puts GREETING
+
+        def _ready
+        end
       end
     end
   end

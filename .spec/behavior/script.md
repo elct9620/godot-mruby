@@ -1,16 +1,17 @@
 # Ruby scripts
 
-How a `.rb` file attached to a node comes to run, and where what it prints goes.
+How a `.rb` file attached to a node comes to run, and where what it prints goes. A node's Ruby object is built the first time Godot calls a method its class defines, so a node is made without running Ruby.
 
 ## Includes
 
 - `tasks/support/godot.rb`
+- `tasks/support/node_scripts.rb`
 
 ## `RS-001` A script attached to a node runs
 
 | Step | Statement |
 | --- | --- |
-| Given | a node whose script is a `.rb` file calling `puts` |
+| Given | a node whose script is a node script calling `puts` and defining a callback |
 | When | the scene runs |
 | Then | the text given to `puts` appears in the log |
 
@@ -18,7 +19,7 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 
 | Step | Statement |
 | --- | --- |
-| Given | two nodes whose script is the same `.rb` file calling `puts` |
+| Given | two nodes whose script is the same node script calling `puts` and defining a callback |
 | When | the scene runs |
 | Then | the text given to `puts` appears in the log once |
 
@@ -26,7 +27,7 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 
 | Step | Statement |
 | --- | --- |
-| Given | a node whose script is a `.rb` file calling `print` |
+| Given | a node whose script is a node script calling `print` and defining a callback |
 | When | the scene runs |
 | Then | the text given to `print` appears in the log |
 
@@ -34,7 +35,7 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 
 | Step | Statement |
 | --- | --- |
-| Given | a node whose script is a `.rb` file calling `p` with a symbol |
+| Given | a node whose script is a node script calling `p` with a symbol and defining a callback |
 | When | the scene runs |
 | Then | the symbol's `inspect` form appears in the log |
 
@@ -42,7 +43,7 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 
 | Step | Statement |
 | --- | --- |
-| Given | a `.rb` file whose source Godot was given in place of what the file holds |
+| Given | a node script defining a callback, whose source Godot was given in place of what the file holds |
 | When | a node with that script enters the scene |
 | Then | the text the given source prints appears in the log |
 
@@ -78,3 +79,60 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a node script whose class defines a method |
 | When | Godot asks a node with that script whether it has that method |
 | Then | the node answers that it has |
+
+## `RS-011` `_ready` is called when a node is ready
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class defines `_ready` |
+| When | its node enters the scene |
+| Then | what `_ready` prints appears in the log |
+
+## `RS-012` `_process` is given the frame's delta as a Float
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class defines `_process` printing its argument's class |
+| When | the scene runs a frame |
+| Then | the log carries `Float` as that class |
+
+## `RS-013` A node's object is built once for its node
+
+| Step | Statement |
+| --- | --- |
+| Given | two nodes with the same node script, whose `initialize` prints and whose class defines callbacks |
+| When | the scene runs for several frames |
+| Then | what `initialize` prints appears in the log twice |
+
+## `RS-014` An object that cannot be built is reported once
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose `initialize` raises and whose class defines `_process` |
+| When | the scene runs for several frames |
+| Then | the log carries the exception once |
+
+## `RS-015` A node whose object cannot be built calls no callback
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose `initialize` raises and whose `_process` prints |
+| When | the scene runs for several frames |
+| Then | what `_process` prints never appears in the log |
+
+## `RS-016` A node script whose class defines no callback never runs its file
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose file prints and whose class defines no method |
+| Given | its node, given a property value by the scene |
+| When | the scene runs for several frames |
+| Then | what the file prints never appears in the log |
+
+## `RS-017` `_notification` is given each notification's number
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class defines `_notification`, printing when it is given `NOTIFICATION_READY`'s number |
+| When | its node enters the scene |
+| Then | what `_notification` prints appears in the log |

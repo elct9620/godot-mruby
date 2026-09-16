@@ -7,6 +7,9 @@ module Verify
       else
         :useless
       end
+
+      def _ready
+      end
     end
   end
 end

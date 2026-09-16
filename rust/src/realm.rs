@@ -2,7 +2,7 @@ use std::cell::{Cell, RefCell};
 use std::ffi::CStr;
 use std::sync::Mutex;
 
-use beni::{Error, FromValue, Gem, IntoValue, Mrb};
+use beni::{Error, FromValue, Gem, IntoValue, Mrb, Value};
 
 use crate::compiler;
 
@@ -10,9 +10,12 @@ mod constants;
 mod executor;
 mod index;
 mod print;
+mod registry;
 
 use index::ClassIndex;
 pub use index::{key_of, normalize};
+pub use registry::Key;
+use registry::Registry;
 
 /// Where the game's Ruby runs: an `mrb_state`, the bookkeeping kept beside
 /// it, and the extensions installed into it. It opens at the first entry, one
@@ -68,6 +71,7 @@ struct Bookkeeping {
     log: Box<dyn Log>,
     index: RefCell<ClassIndex>,
     runs: executor::Runs,
+    registry: Registry,
     // Set while the realm defines a directory's module, which no file created.
     defining_namespace: Cell<bool>,
 }
@@ -143,6 +147,7 @@ impl Realm {
             log: Box::new(log),
             index: RefCell::default(),
             runs: executor::Runs::default(),
+            registry: Registry::new(&mrb),
             defining_namespace: Cell::default(),
         };
         if mrb.set_user_data(bookkeeping).is_err() {
@@ -226,10 +231,61 @@ impl Realm {
             })
             .and_then(|receiver| receiver.funcall(&self.mrb, method, &[arg.into_value(&self.mrb)]))
             .map_err(|error| RubyError::read(&self.mrb, None, &error))?;
+        self.taken(answer, || {
+            format!("{receiver}.{}", method.to_string_lossy())
+        })
+    }
+
+    /// Runs the file at `path` once, and makes an object of the class its
+    /// path names, held by the realm under the key this answers.
+    pub fn build(&self, path: &str) -> Result<Key, RubyError> {
+        self.run(path)?;
+        let _scope = self.mrb.arena_scope();
+        let class = constants::constant_at(&self.mrb, &key_of(path)).ok_or_else(|| {
+            RubyError::plain(format!(
+                "{path} has not defined the class its path names, so no object of it is built"
+            ))
+        })?;
+        class
+            .funcall(&self.mrb, c"new", &[])
+            .and_then(|object| bookkeeping(&self.mrb).registry.hold(&self.mrb, object))
+            .map_err(|error| RubyError::read(&self.mrb, Some(path), &error))
+    }
+
+    /// Calls `method` with `args` on the object `key` holds, and answers what
+    /// it returned as a Rust value.
+    pub fn send<A: IntoValue, R: FromValue>(
+        &self,
+        key: Key,
+        method: &str,
+        args: impl IntoIterator<Item = A>,
+    ) -> Result<R, RubyError> {
+        let _scope = self.mrb.arena_scope();
+        let args: Vec<Value> = args
+            .into_iter()
+            .map(|arg| arg.into_value(&self.mrb))
+            .collect();
+        let answer = bookkeeping(&self.mrb)
+            .registry
+            .object(&self.mrb, key)
+            .and_then(|object| {
+                let name = self.mrb.intern(method.as_bytes())?;
+                object.funcall(&self.mrb, name, &args)
+            })
+            .map_err(|error| RubyError::read(&self.mrb, None, &error))?;
+        self.taken(answer, || format!("#{method}"))
+    }
+
+    // `answer` as the Rust value its caller takes, or why it is not one.
+    fn taken<R: FromValue>(
+        &self,
+        answer: Value,
+        called: impl FnOnce() -> String,
+    ) -> Result<R, RubyError> {
         R::from_value(answer).ok_or_else(|| {
             RubyError::plain(format!(
-                "{receiver}.{} answered {}, which is not what its caller takes",
-                method.to_string_lossy(),
+                "{} answered {}, which is not what its caller takes",
+                called(),
                 answer.inspect(&self.mrb)
             ))
         })
