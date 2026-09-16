@@ -126,8 +126,14 @@ pub fn close() {
 }
 
 impl Realm {
-    /// Opens a realm that runs `files` and whose words go to `log`.
-    pub fn open(files: impl Files + 'static, log: impl Log + 'static) -> Result<Self, RubyError> {
+    /// Opens a realm that runs `files` and whose words go to `log`, first
+    /// given by `extend` what every realm of its kind has, so the class
+    /// index sees those names as it takes the files in.
+    pub fn open(
+        files: impl Files + 'static,
+        log: impl Log + 'static,
+        extend: impl FnOnce(&Realm) -> Result<(), RubyError>,
+    ) -> Result<Self, RubyError> {
         let mut mrb = Mrb::open()
             .map_err(|error| RubyError::plain(format!("mruby did not open: {error}")))?;
         let paths = files.paths();
@@ -147,6 +153,7 @@ impl Realm {
             .and_then(|()| constants::define(&mrb))
             .map_err(|error| RubyError::read(&mrb, None, &error))?;
         let realm = Self { mrb };
+        extend(&realm)?;
         realm.index_files(paths);
         Ok(realm)
     }

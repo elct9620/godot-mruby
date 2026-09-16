@@ -190,3 +190,11 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 | Given | a realm whose loader learns of each constant a running file creates |
 | When | Ruby calls `const_added` on a module from outside it |
 | Then | it raises `NoMethodError`, as core Ruby's private hook does |
+
+## `RL-024` A file naming a constant a realm opens with is warned about
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose path spells a constant an extension defines as the realm opens |
+| When | a realm's class index takes it in |
+| Then | the log carries a warning that it never loads by name |

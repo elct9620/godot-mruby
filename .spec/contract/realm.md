@@ -56,7 +56,7 @@ pub struct Realm;
 
 ## `Realm::open`
 
-Opens a realm that runs the files it is given and whose words go to the log it is given.
+Opens a realm that runs the files it is given and whose words go to the log it is given, extended by what every realm of its kind has before its class index takes the files in.
 
 | Attribute | Value |
 | --- | --- |
@@ -64,7 +64,7 @@ Opens a realm that runs the files it is given and whose words go to the log it i
 
 ```rust
 impl Realm {
-    pub fn open(files: impl Files + 'static, log: impl Log + 'static) -> Result<Self, RubyError> {}
+    pub fn open(files: impl Files + 'static, log: impl Log + 'static, extend: impl FnOnce(&Realm) -> Result<(), RubyError>) -> Result<Self, RubyError> {}
 }
 ```
 

@@ -10,10 +10,11 @@ module Godot
   # reaches. Part of Godot.verify!.
   module Loader
     # What every run has to warn about, since the class index takes in every
-    # game file: the files spelling names it cannot hold, and a game file
-    # naming a constant mruby already has.
+    # game file: the files spelling names it cannot hold, and game files
+    # naming a constant mruby has or the realm opens with.
     WARNINGS = [
       "WARNING: res://comparable.rb names Comparable, which the realm already has, so it never loads by name",
+      "WARNING: res://godot.rb names Godot, which the realm already has, so it never loads by name",
       "WARNING: res://loader/naming/http_client.rb and res://loader/naming/httpclient.rb both name " \
       "Loader::Naming::HttpClient, so neither loads by name",
       "WARNING: res://loader/naming/crate.rb names Loader::Naming::Crate, which hides " \
@@ -49,7 +50,7 @@ module Godot
 
     # Runs the project's Ruby tests, which have to pass and warn about every
     # name the class index refused or found hidden.
-    # @behavior RL-001 RL-002 RL-003
+    # @behavior RL-001 RL-002 RL-003 RL-024
     def verify_warnings!(project)
       output, status = RubyTests.run(project, "--dir", RubyTests::TESTS)
       missing = WARNINGS.reject { |warning| output.include?(warning) }

@@ -86,12 +86,13 @@ Build output stays out of the repository: `vendor/` holds mruby's source and arc
 | `settings.rs` | `ProjectSettings` under `mruby/` |
 | `GameFiles` in `game.rs` | `ResourceLoader` under `res://` |
 | `GodotLog` in `log.rs` | Godot's log |
+| `Godot` in `bridge.rs` | `ClassDB` |
 
 Each class Godot knows answers what Godot already asks of a script language; none opens another way for Godot to reach Ruby.
 
 `ResourceFormatLoaderRubyScript` reads a file's source and runs nothing. The script holds that source and answers Godot's questions without Ruby. The instance holds no Ruby state: each get, set, call or notification enters the realm, which runs its file the first time.
 
-The runner is an ordinary node the addon ships. `GameFiles` and `GodotLog` are what the game's realm is given: the files under `res://`, and Godot's log. The names Godot knows are in `.spec/contract/godot.md`, and the settings in `.spec/contract/project_settings.md`.
+The runner is an ordinary node the addon ships. `GameFiles`, `GodotLog` and the `Godot` gem are what the game's realm is given: the files under `res://`, Godot's log, and the engine's classes under `Godot`, specified in `.spec/behavior/engine_classes.md`. The names Godot knows are in `.spec/contract/godot.md`, and the settings in `.spec/contract/project_settings.md`.
 
 ### 2.2 Lifecycle
 
@@ -103,7 +104,7 @@ Scene stage begins
   │  settings::register     mruby/test/* and their defaults
   │  language::register     RubyLanguage for .rb
   │  loader::register       .rb loads as RubyScript
-  │  realm::prepare         GameFiles and GodotLog
+  │  realm::prepare         GameFiles, GodotLog, the Godot gem
   ▼
 the first entry
   │  the game's realm opens as prepared
@@ -142,6 +143,7 @@ lib.rs    registers Scripting and settings, prepares the realm
    │      ├──────► ┌─ Given to the realm ─────┐
    ├─────────────► │  log                     │
    │      │        │  game ──► settings       │
+   │      │        │  bridge                  │
    │      │        └────────────┬─────────────┘
    │      │                     │
    ▼      ▼                     ▼
@@ -156,7 +158,7 @@ Scripting serves `.rb` files to Godot, and Testing runs a project's Ruby tests; 
 
 The realm uses no other module but `compiler`. What it needs from Godot, `game` and `log` implement for it, so every arrow into the realm is a use of it and none leaves it for Godot.
 
-Within Scripting, `language` and `script` refer to each other, as GDExtension script languages do through the language's singleton; `instance` is handed the language by its script and reaches down only. `minitest` uses the realm only for the `Location` it writes a failure at, and runs its own Ruby through `compiler`.
+Within Scripting, `language` and `script` refer to each other, as GDExtension script languages do through the language's singleton; `instance` is handed the language by its script and reaches down only. `minitest` and `bridge` run their own Ruby through `compiler`, whose warnings `log` writes; `minitest` uses the realm only for the `Location` it writes a failure at.
 
 ## 3. Realm
 
@@ -209,20 +211,18 @@ The index is built from the paths its files give, and the executor takes each fi
 ### 3.3 Extensions
 
 ```
+Realm::open(files, log, extend)
+  │  the realm's own: output, hooks
+  │  extend(&realm)            install::<Godot>()     every game realm
+  │  the class index           sees what extend defined
+  ▼
 RubyTestRunner
-  │  realm.install::<Minitest>()
+  │  realm.install::<Minitest>()                      only a test run
   ▼
-Realm::install
-  │  beni's Gem
-  ▼
-Minitest::init(&Mrb)
-  │  compiler::run      minitest.rb, mock.rb, godot_plugin.rb
-  │  LogReporter#error  defined to write a failed test to the log
-  ▼
-Ruby in the realm sees Minitest
+Ruby in the realm sees Godot, and Minitest in a test run
 ```
 
-A gem is an extension: beni's `Gem`, mruby's gem init convention, installed by whoever needs it. Only the test runner installs `Minitest`, so a shipped game never has it.
+A gem is an extension: beni's `Gem`, mruby's gem init convention. What every realm of a kind has is installed by its opener's `extend`, before the class index takes the files in, so a file naming one of its constants is warned about; what only one use needs is installed by whoever needs it. Only the test runner installs `Minitest`, so a shipped game never has it.
 
 A gem is handed the state only inside its `init`, and never touches the realm's bookkeeping.
 

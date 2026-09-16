@@ -13,7 +13,7 @@ The full source layout, and how the parts fit together, is in `docs/architecture
 | `.spec/` | Specification verified by sumitsubo (`sumi`): glossary, contract, behavior |
 | `rust/src/realm.rs` | The one way into Ruby; its pieces are under `src/realm/` |
 | `godot/project.godot` | Lists the test directories the runner and `godot:verify` use |
-| `godot/loader/` | Game files the tests load by name, and names the class index warns about; only `godot/comparable.rb` sits outside it, since a name mruby already has is spelled at the top level |
+| `godot/loader/` | Game files the tests load by name, and names the class index warns about; only `godot/comparable.rb` and `godot/godot.rb` sit outside it, since a name the realm already has is spelled at the top level |
 | `build_config/mruby.rb` | mruby build config (host + x86_64 cross build) |
 | `.github/workflows/pipeline.yml` | Reusable check → build → package → integration → publish; `ci.yml` calls it |
 

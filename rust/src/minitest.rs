@@ -5,9 +5,8 @@ use std::ffi::CStr;
 
 use beni::{Error, Gem, IntoValue, Module, Mrb, Value, method};
 
-use crate::compiler;
 use crate::realm::Location;
-use crate::{error, warn};
+use crate::{compiler, error, log};
 
 // Each file's path names its frames in backtraces: the framework tells its
 // own frames by their directory, and the extension's by the one above it.
@@ -31,14 +30,7 @@ pub struct Minitest;
 impl Gem for Minitest {
     fn init(mrb: &Mrb) -> Result<(), Error> {
         for (path, source) in FILES {
-            let file = path.to_string_lossy();
-            compiler::run(mrb, path, source, |warning| {
-                let at = Location {
-                    file: file.clone().into_owned(),
-                    line: warning.line,
-                };
-                warn!(at: &at, "{}", warning.message);
-            })?;
+            compiler::run(mrb, path, source, log::compiler_warnings(path))?;
         }
         mrb.module_get(c"Minitest")?
             .class_get(mrb, c"LogReporter")?
