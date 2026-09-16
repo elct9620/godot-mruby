@@ -12,6 +12,7 @@ The words this project keeps, and the ones it turns down in their place.
 - `tasks/*.rake`
 - `Rakefile`
 - `build_config/*.rb`
+- `docs/*.md`
 - `CLAUDE.md`
 - `.spec/**/*.md`
 
