@@ -6,21 +6,16 @@ godot-mruby is a Godot 4 addon that embeds mruby through a Rust GDExtension (god
 
 ## Index
 
+The full source layout, and how the parts fit together, is in `docs/architecture.md`.
+
 | Path | Role |
 |---|---|
-| `rust/` | The extension crate (gdext, beni); `src/realm.rs` is the one way into Ruby, its pieces under `src/realm/`, and `src/minitest.rs` is the test framework the test runner installs into it |
-| `godot/` | Integration-test Godot project, sorted by what observes a file, then by the feature it stages; `project.godot` lists the test directories |
-| `godot/test/` | Ruby tests the test runner runs, one directory per feature |
-| `godot/loader/` | Game files the tests load by name, and names the class index warns about; only `godot/comparable.rb` sits outside it, since a name mruby already has is spelled at the top level |
-| `godot/verify/` | Scenes and test directories `godot:verify` runs and reads, one directory per feature |
-| `godot/addons/godot_mruby/` | The shipped addon; `runner.tscn` is the test runner scene, `bin/` is build output |
-| `build_config/mruby.rb` | mruby build config (host + x86_64 cross build) |
-| `Rakefile`, `tasks/*.rake` | Task entry points |
-| `tasks/support/` | Task logic: paths, library names, cargo env, Godot checks |
 | `.spec/` | Specification verified by sumitsubo (`sumi`): glossary, contract, behavior |
-| `.claude/hooks/` | Edit-time formatting and lint; stop-time quality gate |
+| `rust/src/realm.rs` | The one way into Ruby; its pieces are under `src/realm/` |
+| `godot/project.godot` | Lists the test directories the runner and `godot:verify` use |
+| `godot/loader/` | Game files the tests load by name, and names the class index warns about; only `godot/comparable.rb` sits outside it, since a name mruby already has is spelled at the top level |
+| `build_config/mruby.rb` | mruby build config (host + x86_64 cross build) |
 | `.github/workflows/pipeline.yml` | Reusable check → build → package → integration → publish; `ci.yml` calls it |
-| `.github/actions/` | Composite setup steps (Godot, Ruby/Rust/caches) |
 
 ## Commands
 
