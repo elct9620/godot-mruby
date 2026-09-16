@@ -102,6 +102,8 @@ type Opener = Box<dyn Fn() -> Result<Realm, RubyError> + Send>;
 // The way the game's realm opens, given before anything enters it.
 static OPENER: Mutex<Option<Opener>> = Mutex::new(None);
 static GAME: Mutex<Option<Realm>> = Mutex::new(None);
+// Keys let go of on any thread, waiting for the game's realm to take them.
+static RELEASED: Mutex<Vec<Key>> = Mutex::new(Vec::new());
 
 /// Gives the game's realm the way it opens, which its first entry uses. A
 /// mod's realm will be given its own the same way, keyed by the mod.
@@ -123,11 +125,32 @@ pub fn enter<T>(body: impl FnOnce(&Realm) -> Result<T, RubyError>) -> Result<T, 
             game.insert(open()?)
         }
     };
+    realm.release_queued();
     body(realm)
 }
 
+/// Lets go of the object `key` holds at the realm's next entry or frame,
+/// never waiting for the realm, so whatever frees a node never waits for Ruby.
+pub fn release(key: Key) {
+    RELEASED.lock().unwrap().push(key);
+}
+
+/// Lets go of the objects released keys hold, entering the game's realm only
+/// when a key is waiting; the extension calls it every frame.
+pub fn release_queued() {
+    if RELEASED.lock().unwrap().is_empty() {
+        return;
+    }
+    if let Some(realm) = GAME.lock().unwrap().as_ref() {
+        realm.release_queued();
+    }
+}
+
+/// Closes the game's realm; a key released for it holds nothing in the next.
 pub fn close() {
-    GAME.lock().unwrap().take();
+    let mut game = GAME.lock().unwrap();
+    game.take();
+    RELEASED.lock().unwrap().clear();
 }
 
 impl Realm {
@@ -236,6 +259,14 @@ impl Realm {
         })
     }
 
+    fn release_queued(&self) {
+        let keys = std::mem::take(&mut *RELEASED.lock().unwrap());
+        let registry = &bookkeeping(&self.mrb).registry;
+        for key in keys {
+            registry.release(&self.mrb, key);
+        }
+    }
+
     /// Runs the file at `path` once, and makes an object of the class its
     /// path names, held by the realm under the key this answers.
     pub fn build(&self, path: &str) -> Result<Key, RubyError> {
@@ -335,5 +366,108 @@ impl RubyError {
     #[track_caller]
     pub fn write(&self, log: &impl Log) {
         log.record(self.level, self.at.as_ref(), &self.message);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::mpsc;
+    use std::sync::{Mutex, MutexGuard};
+    use std::thread;
+    use std::time::Duration;
+
+    use super::*;
+
+    // The game's realm is one for the whole process, so its tests take turns.
+    static TURN: Mutex<()> = Mutex::new(());
+
+    const THING: &str = "res://thing.rb";
+
+    struct Thing;
+
+    impl Files for Thing {
+        fn paths(&self) -> Vec<String> {
+            vec![THING.to_owned()]
+        }
+
+        fn source(&self, _path: &str) -> Result<String, String> {
+            Ok("class Thing\n  def answer\n    42\n  end\nend\n".to_owned())
+        }
+    }
+
+    struct Silent;
+
+    impl Log for Silent {
+        fn message(&self, _text: &str) {}
+        fn raw(&self, _text: &str) {}
+        fn record(&self, _level: Level, _at: Option<&Location>, _text: &str) {}
+    }
+
+    // A fresh game's realm holding a Thing, and the key it holds it for.
+    fn held_thing() -> (MutexGuard<'static, ()>, Key) {
+        let turn = TURN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        close();
+        prepare(|| Realm::open(Thing, Silent, |_| Ok(())));
+        let key = enter(|realm| realm.build(THING)).unwrap_or_else(|_| panic!("a Thing is built"));
+        (turn, key)
+    }
+
+    fn no_args() -> std::iter::Empty<Value> {
+        std::iter::empty()
+    }
+
+    // @behavior RO-001
+    #[test]
+    fn a_released_key_no_longer_reaches_its_object() {
+        let (_turn, key) = held_thing();
+
+        release(key);
+        let sent = enter(|realm| realm.send::<_, i64>(key, "answer", no_args()));
+
+        assert!(sent.is_err());
+    }
+
+    // @behavior RO-002
+    #[test]
+    fn releasing_a_key_never_waits_for_the_realm() {
+        let (_turn, key) = held_thing();
+        let (inside, entered) = mpsc::channel();
+        let (leave, left) = mpsc::channel::<()>();
+        let holder = thread::spawn(move || {
+            enter(|_| {
+                inside.send(()).ok();
+                left.recv().ok();
+                Ok(())
+            })
+            .ok();
+        });
+        entered.recv().unwrap();
+
+        let (released, done) = mpsc::channel();
+        thread::spawn(move || {
+            release(key);
+            released.send(()).ok();
+        });
+        let returned = done.recv_timeout(Duration::from_secs(1)).is_ok();
+
+        leave.send(()).unwrap();
+        holder.join().unwrap();
+        assert!(returned);
+    }
+
+    // @behavior RO-003
+    #[test]
+    fn a_frame_lets_go_of_released_keys_without_any_other_entry() {
+        let (_turn, key) = held_thing();
+        release(key);
+
+        release_queued();
+
+        let held = GAME
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|realm| bookkeeping(&realm.mrb).registry.len(&realm.mrb));
+        assert_eq!(held, Some(0));
     }
 }

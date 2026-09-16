@@ -98,6 +98,8 @@ recorded ── the first call of a method the header has ──► built(key) �
    │ making a node runs no Ruby                             │ the file or initialize raised: reported once
    ▼                                                        ▼
 get and set are left to the engine                       failed: calls nothing again
+
+the node is freed, on any thread ──► realm::release(key) ──► let go at the next entry or frame
 ```
 
 `bridge` carries a call's arguments into Ruby and its answer back; only nil, booleans, integers and floats cross, and anything else arrives as nil. Node script behavior is specified in `.spec/behavior/script.md`.
@@ -118,6 +120,9 @@ Scene stage begins
   ▼
 the first entry
   │  the game's realm opens as prepared
+  ▼
+every frame
+  │  realm::release_queued  objects of nodes freed since
   ▼
 Scene stage ends
   │  loader::unregister
@@ -196,7 +201,7 @@ The realm is the one way into Ruby. A component hands `realm::enter` a body, and
 
 What comes back is a Rust value, or a `RubyError` the component writes to a log. Since nothing outside holds a Ruby value, the realm's inside changes without its callers changing.
 
-There is one realm, the game's, entered by one thread at a time. Its operations are specified in `.spec/contract/realm.md`.
+There is one realm, the game's, entered by one thread at a time. Freeing a node never waits for it: the key goes into a queue that the next entry, or the next frame, empties. Its operations are specified in `.spec/contract/realm.md`.
 
 ### 3.2 Internals
 

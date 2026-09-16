@@ -68,6 +68,30 @@ A constant's name as the class index matches it against a path's segment: withou
 pub fn normalize(segment: &str) -> String {}
 ```
 
+## `release`
+
+Lets go of the object a key of the game's realm holds, at the realm's next entry or frame; it never waits for the realm, so a node is freed on any thread without waiting for Ruby.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub fn release(key: Key) {}
+```
+
+## `release_queued`
+
+Enters the game's realm, if a key is waiting to be released, and lets go of what those keys hold; the extension calls it every frame.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub fn release_queued() {}
+```
+
 ## `Realm`
 
 Where the game's Ruby runs, handed only to the body of an entry.

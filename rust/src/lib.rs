@@ -33,6 +33,12 @@ unsafe impl ExtensionLibrary for GodotMruby {
         }
     }
 
+    // Lets go of the Ruby objects of nodes freed since the last frame, even
+    // when no Ruby runs to take them.
+    fn on_main_loop_frame() {
+        realm::release_queued();
+    }
+
     fn on_stage_deinit(stage: InitStage) {
         if stage == InitStage::Scene {
             loader::unregister();

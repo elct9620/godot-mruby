@@ -34,9 +34,24 @@ impl Registry {
         Ok(key)
     }
 
-    /// The object `key` holds, or nil when it holds none.
+    /// The object `key` holds; a key released already holds none.
     pub fn object(&self, mrb: &Mrb, key: Key) -> Result<Value, Error> {
-        self.objects.get(mrb, key.to_value(mrb))
+        let held = key.to_value(mrb);
+        if !self.objects.contains_key(mrb, held)? {
+            let class = mrb.exc_get(c"RuntimeError")?;
+            return Err(Error::new(mrb, class, "the object was released"));
+        }
+        self.objects.get(mrb, held)
+    }
+
+    /// Lets go of the object `key` holds, for the collector to free.
+    pub fn release(&self, mrb: &Mrb, key: Key) {
+        self.objects.delete(mrb, key.to_value(mrb)).ok();
+    }
+
+    #[cfg(test)]
+    pub fn len(&self, mrb: &Mrb) -> usize {
+        self.objects.len(mrb)
     }
 }
 

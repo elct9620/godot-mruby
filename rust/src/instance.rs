@@ -89,6 +89,15 @@ impl RubyInstance {
     }
 }
 
+// Godot frees an instance with its node, on whatever thread frees the node.
+impl Drop for RubyInstance {
+    fn drop(&mut self) {
+        if let Stage::Built(key) = self.stage {
+            realm::release(key);
+        }
+    }
+}
+
 impl ScriptInstance for RubyInstance {
     type Base = Object;
 
