@@ -222,7 +222,7 @@ RubyTestRunner
 Ruby in the realm sees Godot, and Minitest in a test run
 ```
 
-A gem is an extension: beni's `Gem`, mruby's gem init convention. What every realm of a kind has is installed by its opener's `extend`, before the class index takes the files in, so a file naming one of its constants is warned about; what only one use needs is installed by whoever needs it. Only the test runner installs `Minitest`, so a shipped game never has it.
+A gem is an extension: beni's `Gem`, mruby's gem init convention. What every realm of a kind has is installed by its opener's `extend`, before the class index takes the files in, so a file naming one of its constants is warned about; what only one use needs is installed by whoever needs it, and the install warns of an indexed file naming what it added. Only the test runner installs `Minitest`, so a shipped game never has it.
 
 A gem is handed the state only inside its `init`, and never touches the realm's bookkeeping.
 

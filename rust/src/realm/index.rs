@@ -65,14 +65,7 @@ impl ClassIndex {
                 continue;
             }
             if defined(&key) {
-                log.record(
-                    Level::Warn,
-                    Some(&at(&path)),
-                    &format!(
-                        "{path} names {}, which the realm already has, so it never loads by name",
-                        name_of(&path)
-                    ),
-                );
+                warn_of_defined(&path, log);
                 self.refused.insert(key);
                 continue;
             }
@@ -80,6 +73,22 @@ impl ClassIndex {
             added.insert(key);
         }
         self.warn_of_shadows(&added, log);
+    }
+
+    /// The constant paths the index names a file for.
+    pub fn file_keys(&self) -> Vec<Key> {
+        self.files.keys().cloned().collect()
+    }
+
+    /// Refuses the files naming `keys`, constants the realm has come to have
+    /// since it took the files in.
+    pub fn refuse_defined(&mut self, keys: impl IntoIterator<Item = Key>, log: &dyn Log) {
+        for key in keys {
+            if let Some(path) = self.files.remove(&key) {
+                warn_of_defined(&path, log);
+                self.refused.insert(key);
+            }
+        }
     }
 
     /// What `key` names, if anything: a file is what a namespace's own file
@@ -145,6 +154,17 @@ impl ClassIndex {
             }
         }
     }
+}
+
+fn warn_of_defined(path: &str, log: &dyn Log) {
+    log.record(
+        Level::Warn,
+        Some(&at(path)),
+        &format!(
+            "{path} names {}, which the realm already has, so it never loads by name",
+            name_of(path)
+        ),
+    );
 }
 
 // Whether `outer` shares `inner`'s last segment from a namespace `inner`'s

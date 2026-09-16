@@ -169,11 +169,30 @@ impl Realm {
         );
     }
 
-    /// Adds what `G` defines to what Ruby sees in this realm.
+    /// Adds what `G` defines to what Ruby sees in this realm, refusing the
+    /// indexed files that name what it added, as the index refuses a file
+    /// naming a constant the realm already has.
     pub fn install<G: Gem>(&self) -> Result<(), RubyError> {
+        let _scope = self.mrb.arena_scope();
+        let bookkeeping = bookkeeping(&self.mrb);
+        let missing: Vec<_> = bookkeeping
+            .index
+            .borrow()
+            .file_keys()
+            .into_iter()
+            .filter(|key| constants::constant_at(&self.mrb, key).is_none())
+            .collect();
         self.mrb
             .init_gem::<G>()
-            .map_err(|error| RubyError::read(&self.mrb, None, &error))
+            .map_err(|error| RubyError::read(&self.mrb, None, &error))?;
+        let added = missing
+            .into_iter()
+            .filter(|key| constants::constant_at(&self.mrb, key).is_some());
+        bookkeeping
+            .index
+            .borrow_mut()
+            .refuse_defined(added, bookkeeping.log.as_ref());
+        Ok(())
     }
 
     /// Runs the file at `path` with the source the realm's files give, unless it

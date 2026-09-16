@@ -198,3 +198,11 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 | Given | a file whose path spells a constant an extension defines as the realm opens |
 | When | a realm's class index takes it in |
 | Then | the log carries a warning that it never loads by name |
+
+## `RL-025` A file naming a constant an extension installed later defines is warned about
+
+| Step | Statement |
+| --- | --- |
+| Given | a realm whose class index took in a file whose path spells a constant an extension defines |
+| When | the extension is installed into the realm |
+| Then | the log carries a warning that the file never loads by name |
