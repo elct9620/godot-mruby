@@ -28,7 +28,7 @@ Godot never sees Ruby. It talks to the extension through the contracts it gives 
 
 The extension keeps no Ruby state of its own: it turns what Godot asks into entries into the realm.
 
-The realm is one `mrb_state`, reached only through `realm::enter`, and it reaches mruby only through beni. Calls flow downward; the realm turns back to Godot only for what Godot holds, a file's source, the listing of `res://` and the project's settings, and to write the log.
+The realm is one `mrb_state`, reached only through `realm::enter`, and it reaches mruby only through beni. Calls flow downward, and the realm never turns back to Godot: the files it runs and the log it writes to are given to it as it opens.
 
 ### 1.2 What ships
 
@@ -76,7 +76,7 @@ Build output stays out of the repository: `vendor/` holds mruby's source and arc
 
 ### 2.1 Components
 
-| Component | Godot contract |
+| Component | Godot counterpart |
 | --- | --- |
 | `RubyLanguage` in `language.rs` | `ScriptLanguageExtension` |
 | `ResourceFormatLoaderRubyScript` in `loader.rs` | `ResourceFormatLoader` |
@@ -84,12 +84,14 @@ Build output stays out of the repository: `vendor/` holds mruby's source and arc
 | `RubyInstance` in `instance.rs` | A script instance |
 | `RubyTestRunner` in `runner.rs` | A `Node` in `runner.tscn` |
 | `settings.rs` | `ProjectSettings` under `mruby/` |
+| `GameFiles` in `game.rs` | `ResourceLoader` under `res://` |
+| `GodotLog` in `log.rs` | Godot's log |
 
-Each component answers what Godot already asks of a script language; none opens another way for Godot to reach Ruby.
+Each class Godot knows answers what Godot already asks of a script language; none opens another way for Godot to reach Ruby.
 
 The loader reads a file's source and runs nothing. The script holds that source and answers Godot's questions without Ruby. The instance holds no Ruby state: each get, set, call or notification enters the realm, which runs its file the first time.
 
-The runner is an ordinary node the addon ships. The first four components make up Scripting, and the runner makes up Testing (see 2.3). The names Godot knows are in `.spec/contract/godot.md`, and the settings in `.spec/contract/project_settings.md`.
+The runner is an ordinary node the addon ships. `GameFiles` and `GodotLog` are what the game's realm is given: the files under `res://`, and Godot's log. The names Godot knows are in `.spec/contract/godot.md`, and the settings in `.spec/contract/project_settings.md`.
 
 ### 2.2 Lifecycle
 
@@ -101,9 +103,10 @@ Scene stage begins
   │  settings::register     mruby/test/* and their defaults
   │  language::register     RubyLanguage for .rb
   │  loader::register       .rb loads as RubyScript
+  │  realm::prepare         GameFiles and GodotLog
   ▼
 the first entry
-  │  the game's realm opens
+  │  the game's realm opens as prepared
   ▼
 Scene stage ends
   │  loader::unregister
@@ -115,48 +118,45 @@ the library unloads
 
 Everything registers at the Scene stage, the stage a script language has to be registered by; gdext registers the classes themselves.
 
-Nothing opens the realm at startup. It opens at the first entry that needs Ruby, so a process that never runs a Ruby file never opens one.
+Nothing opens the realm at startup: `lib.rs` only prepares how it opens. It opens at the first entry that needs Ruby, so a process that never runs a Ruby file never opens one.
 
 Teardown runs in reverse: Godot stops loading `.rb` files and forgets the language before the realm closes.
 
 ### 2.3 Dependencies
 
 ```
-lib.rs    registers Scripting and settings, closes realm
+lib.rs    registers Scripting and settings, prepares the realm
   │
   ▼
-┌─ Scripting ───────────────────────────┐
-│  loader ──► script ◄──► language      │
-│               │            ▲          │
-│               ▼            │          │
-│            instance ───────┘          │
-└───────────────┬───────────────────────┘
-                │ instance
-                ▼
-┌─ Realm ───────────────────────────────┐
-│  realm                                │◄─────┐
-└───────┬───────────────────────────────┘      │
-        │                                      │ runner
-        │       ┌─ Testing ─────────────────┐  │
-        │       │  runner ──────────────────┼──┘
-        │       │    │                      │
-        │       │    ▼                      │
-        │       │  minitest                 │
-        │       └────┬──────────────────────┘
-        │            │
-        ▼            ▼
-┌───────────────────────────────────────┐
-│  compiler                             │
-│  log                                  │
-│  settings                             │
-└───────────────────────────────────────┘
+┌─ Scripting ───────────────────────────────┐
+│  loader ──► script ◄──► language          │
+│               │            ▲              │
+│               ▼            │              │
+│            instance ───────┘              │
+└──┬────────────────────────────────────────┘
+   │
+   │   ┌─ Testing ────────────────────────────┐
+   │   │  runner ──► minitest                 │
+   │   └──┬───────────────────────────────────┘
+   │      │
+   │      ├──────► ┌─ Given to the realm ─────┐
+   ├─────────────► │  log                     │
+   │      │        │  game ──► settings       │
+   │      │        └────────────┬─────────────┘
+   │      │                     │
+   ▼      ▼                     ▼
+┌─ Realm ───────────────────────────────────┐
+│  realm                                    │
+└─────────────────────┬─────────────────────┘
+                      ▼
+                   compiler
 ```
 
-The top-level modules fall into three contexts, much as `.spec/behavior/` is split: Scripting serves `.rb` files to Godot, Realm runs Ruby, and Testing runs a project's Ruby tests. The modules beneath belong to none: how any Ruby compiles, how any word reaches the log, and the project's settings.
+Scripting serves `.rb` files to Godot, and Testing runs a project's Ruby tests; both reach Ruby only through the realm, by `instance` and `runner`.
 
-`instance` and `runner` are the only ways into the realm, and the realm uses neither Scripting nor Testing.
+The realm uses no other module but `compiler`. What it needs from Godot, `game` and `log` implement for it, so every arrow into the realm is a use of it and none leaves it for Godot.
 
-Within Scripting, `language`, `script` and `instance` refer to one another, being one script language to Godot. `minitest` does not use the realm: a gem is handed an `mrb_state` only while it installs.
+Within Scripting, `language`, `script` and `instance` refer to one another, being one script language to Godot. `minitest` uses the realm only for the `Location` it writes a failure at, and runs its own Ruby through `compiler`.
 
 ## 3. Realm
 
@@ -168,29 +168,31 @@ RubyTestRunner ───┤   when it is ready
                   ▼
 realm::enter(body)
   │  waits while another thread is inside
-  │  opens the realm at the first entry
+  │  opens the realm at the first entry, as prepared
   ▼
 body(&Realm)
   │  run(path)                    a file, once
   │  install::<G: Gem>()          an extension
   │  call(receiver, method, arg)  a constant's method
   ▼
-a Rust value, or a RubyError ──► RubyError::log
+a Rust value, or a RubyError ──► RubyError::write
 ```
 
 The realm is the one way into Ruby. A component hands `realm::enter` a body, and the body is given the realm, never its `mrb_state`.
 
-What comes back is a Rust value, or a `RubyError` the component writes to the log. Since nothing outside holds a Ruby value, the realm's inside changes without its callers changing.
+What comes back is a Rust value, or a `RubyError` the component writes to a log. Since nothing outside holds a Ruby value, the realm's inside changes without its callers changing.
 
 There is one realm, the game's, entered by one thread at a time. Its operations are specified in `.spec/contract/realm.md`.
 
 ### 3.2 Internals
 
 ```
-realm.rs              Realm, enter, close, RubyError
+realm.rs              Realm, prepare, enter, Files, Log, RubyError
 │
 ├─ the mrb_state
 │  └─ user data       the bookkeeping, private to realm/
+│     ├─ files, log   what the realm was given as it opened
+│     └─ index, runs  the class index and each file's run
 │
 ├─ print.rs           puts, print and p write to the log
 ├─ constants.rs, .rb  const_missing and const_added hooks
@@ -198,11 +200,11 @@ realm.rs              Realm, enter, close, RubyError
 └─ executor.rs        runs a file once, all or nothing
 ```
 
-A realm's bookkeeping, the class index and each file's run, sits in the state's user data. Ruby's calls back into Rust reach it from the state they are given, and no gem knows the slot.
+A realm's bookkeeping sits in the state's user data: the files and log it was given, the class index and each file's run. Ruby's calls back into Rust reach it from the state they are given, and no gem knows the slot.
 
-What makes this mruby environment its own is defined as the realm opens: output to Godot's log, and the hooks through which a missing constant asks the index and a running file's constants are recorded.
+What makes this mruby environment its own is defined as the realm opens: output to its log, and the hooks through which a missing constant asks the index and a running file's constants are recorded.
 
-The executor takes a file's source from Godot's `ResourceLoader` and never reads a file itself. The loader's rules are in `.spec/behavior/loader.md`.
+The index is built from the paths its files give, and the executor takes each file's source from them, so the realm never reads a file itself. The loader's rules are in `.spec/behavior/loader.md`.
 
 ### 3.3 Extensions
 
