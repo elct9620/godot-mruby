@@ -6,11 +6,8 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::CString;
 
-use beni::{Error, Mrb, Value};
-use godot::classes::{ResourceLoader, Script};
-use godot::obj::Singleton;
-
 use super::{bookkeeping, compile};
+use beni::{Error, Mrb, Value};
 
 /// How far a file has run in a realm.
 #[derive(Clone, Copy)]
@@ -127,15 +124,12 @@ fn execute(
     outcome
 }
 
-// The source Godot holds for the file at `path`.
+// The source the realm's files give for the file at `path`.
 fn source_of(mrb: &Mrb, path: &str) -> Result<String, Error> {
-    ResourceLoader::singleton()
-        .load_ex(path)
-        .type_hint("Script")
-        .done()
-        .and_then(|resource| resource.try_cast::<Script>().ok())
-        .map(|script| script.get_source_code().to_string())
-        .ok_or_else(|| refused(mrb, "Godot did not load it as a script"))
+    bookkeeping(mrb)
+        .files
+        .source(path)
+        .map_err(|why| refused(mrb, &why))
 }
 
 // Removes what `frame` created, the last first, so a constant inside a class

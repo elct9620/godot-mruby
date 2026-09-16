@@ -41,7 +41,7 @@ A file under a test directory whose name matches the project's `mruby/test/patte
 
 ### Class index
 
-A realm's map from constant paths to the files named after them, built from `res://` by Zeitwerk's rules: every directory is a namespace, and a file names the constant its path spells, matched without underscores or case. An exported game's index leaves the test directories out.
+A realm's map from constant paths to the files named after them, built from the files the realm is given by Zeitwerk's rules: every directory is a namespace, and a file names the constant its path spells, matched without underscores or case. The game's realm is given every file under `res://`, and an exported game leaves the test directories out.
 
 ### Loader
 

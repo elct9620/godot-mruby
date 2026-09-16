@@ -1,8 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use godot::classes::ResourceLoader;
-use godot::obj::Singleton;
-
 use super::{Level, Location, Log};
 
 const ROOT: &str = "res://";
@@ -156,38 +153,6 @@ fn hides(outer: &Key, inner: &Key) -> bool {
     outer.len() < inner.len()
         && outer.last() == inner.last()
         && inner.starts_with(&outer[..outer.len() - 1])
-}
-
-/// Every `.rb` file under `res://` outside the `excluded` directories, as
-/// Godot lists its resources: by the names they had before an export
-/// remapped them. Sorted, since Godot promises no order
-/// and the first directory to spell a namespace names it.
-pub fn game_files(excluded: &[String]) -> Vec<String> {
-    let excluded: Vec<&str> = excluded
-        .iter()
-        .map(|dir| dir.trim_end_matches('/'))
-        .collect();
-    let mut paths = Vec::new();
-    collect(ROOT, &excluded, &mut paths);
-    paths.sort();
-    paths
-}
-
-fn collect(directory: &str, excluded: &[&str], paths: &mut Vec<String>) {
-    for entry in ResourceLoader::singleton()
-        .list_directory(directory)
-        .as_slice()
-    {
-        let entry = entry.to_string();
-        if let Some(child) = entry.strip_suffix('/') {
-            let child = format!("{directory}{child}");
-            if !excluded.contains(&child.as_str()) {
-                collect(&format!("{child}/"), excluded, paths);
-            }
-        } else if entry.ends_with(".rb") {
-            paths.push(format!("{directory}{entry}"));
-        }
-    }
 }
 
 fn segments(path: &str) -> Vec<&str> {

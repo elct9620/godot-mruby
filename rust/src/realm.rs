@@ -3,10 +3,8 @@ use std::ffi::CStr;
 use std::sync::Mutex;
 
 use beni::{Error, FromValue, Gem, IntoValue, Mrb};
-use godot::classes::Os;
-use godot::obj::Singleton;
 
-use crate::{compiler, settings};
+use crate::compiler;
 
 mod constants;
 mod executor;
@@ -38,6 +36,16 @@ pub struct Location {
     pub line: u32,
 }
 
+/// The Ruby files a realm runs: which there are, for its class index, and
+/// what each one's source is. A realm is given them as it opens, so it never
+/// knows where they are kept.
+pub trait Files: Send {
+    /// Every file the class index takes in, by path.
+    fn paths(&self) -> Vec<String>;
+    /// The source of the file at `path`, or why there is none.
+    fn source(&self, path: &str) -> Result<String, String>;
+}
+
 /// Where a realm's words go: what Ruby prints, and the records placed at a
 /// Ruby file and line. A realm is given one as it opens, so it never knows
 /// whose log it writes to.
@@ -55,6 +63,7 @@ pub trait Log: Send {
 /// What a realm keeps beside its `mrb_state`, in the state's user data so
 /// Ruby's calls back into Rust reach it from the state they are given.
 struct Bookkeeping {
+    files: Box<dyn Files>,
     log: Box<dyn Log>,
     index: RefCell<ClassIndex>,
     runs: executor::Runs,
@@ -116,23 +125,14 @@ pub fn close() {
     GAME.lock().unwrap().take();
 }
 
-// The directories the class index leaves out: an exported game's test
-// directories. Tests run only on the editor's build, where every file is
-// indexed so a test reaches any file by name.
-fn left_out() -> Vec<String> {
-    if Os::singleton().has_feature("template") {
-        settings::test_directories()
-    } else {
-        Vec::new()
-    }
-}
-
 impl Realm {
-    /// Opens a realm whose words go to `log`.
-    pub fn open(log: impl Log + 'static) -> Result<Self, RubyError> {
+    /// Opens a realm that runs `files` and whose words go to `log`.
+    pub fn open(files: impl Files + 'static, log: impl Log + 'static) -> Result<Self, RubyError> {
         let mut mrb = Mrb::open()
             .map_err(|error| RubyError::plain(format!("mruby did not open: {error}")))?;
+        let paths = files.paths();
         let bookkeeping = Bookkeeping {
+            files: Box::new(files),
             log: Box::new(log),
             index: RefCell::default(),
             runs: executor::Runs::default(),
@@ -147,7 +147,7 @@ impl Realm {
             .and_then(|()| constants::define(&mrb))
             .map_err(|error| RubyError::read(&mrb, None, &error))?;
         let realm = Self { mrb };
-        realm.index_files(index::game_files(&left_out()));
+        realm.index_files(paths);
         Ok(realm)
     }
 
@@ -169,7 +169,7 @@ impl Realm {
             .map_err(|error| RubyError::read(&self.mrb, None, &error))
     }
 
-    /// Runs the file at `path` with the source Godot holds for it, unless it
+    /// Runs the file at `path` with the source the realm's files give, unless it
     /// has run in this realm already, whether it succeeded or not.
     pub fn run(&self, path: &str) -> Result<(), RubyError> {
         let _scope = self.mrb.arena_scope();
@@ -210,7 +210,7 @@ impl Realm {
 }
 
 /// Why Ruby could not do what it was asked, read out of the realm so it can
-/// be written to Godot's log from anywhere.
+/// be written to a log from anywhere.
 pub struct RubyError {
     level: Level,
     message: String,

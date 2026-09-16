@@ -56,7 +56,7 @@ pub struct Realm;
 
 ## `Realm::open`
 
-Opens a realm whose words go to the log it is given.
+Opens a realm that runs the files it is given and whose words go to the log it is given.
 
 | Attribute | Value |
 | --- | --- |
@@ -64,13 +64,13 @@ Opens a realm whose words go to the log it is given.
 
 ```rust
 impl Realm {
-    pub fn open(log: impl Log + 'static) -> Result<Self, RubyError> {}
+    pub fn open(files: impl Files + 'static, log: impl Log + 'static) -> Result<Self, RubyError> {}
 }
 ```
 
 ## `Realm::run`
 
-Runs the Ruby file at a path once, with the source Godot holds for it.
+Runs the Ruby file at a path once, with the source the realm's files give for it.
 
 | Attribute | Value |
 | --- | --- |
@@ -133,6 +133,46 @@ Writes the error to a log, at its Ruby line when it has one.
 ```rust
 impl RubyError {
     pub fn write(&self, log: &impl Log) {}
+}
+```
+
+## `Files`
+
+The Ruby files a realm runs: which there are, for its class index, and what each one's source is. A realm is given them as it opens, so it never knows where they are kept.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub trait Files {}
+```
+
+## `Files::paths`
+
+Every file the class index takes in, by path.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub trait Files {
+    fn paths(&self) -> Vec<String>;
+}
+```
+
+## `Files::source`
+
+The source of the file at a path, or why there is none.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub trait Files {
+    fn source(&self, path: &str) -> Result<String, String>;
 }
 ```
 
