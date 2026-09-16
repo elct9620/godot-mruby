@@ -5,6 +5,7 @@ The one way the extension runs Ruby. A component enters the game's realm and ask
 ## Includes
 
 - `rust/src/realm.rs`
+- `rust/src/realm/index.rs`
 
 ## `prepare`
 
@@ -40,6 +41,30 @@ Closes the game's realm; the next entry opens a new one.
 
 ```rust
 pub fn close() {}
+```
+
+## `key_of`
+
+The constant path a file's path names, one segment per namespace as the class index matches it, so what reads a file outside the realm names it as the realm does.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub fn key_of(path: &str) -> Vec<String> {}
+```
+
+## `normalize`
+
+A constant's name as the class index matches it against a path's segment: without underscores and in lower case.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub fn normalize(segment: &str) -> String {}
 ```
 
 ## `Realm`

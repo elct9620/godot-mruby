@@ -5,7 +5,8 @@ extends Node
 # scene prints tells which source the extension ran.
 func _ready() -> void:
 	var script: Script = load("res://verify/script/held.rb")
-	script.source_code = 'puts "held.rb as Godot holds it"'
+	var class_statement := "class Verify::Script::Held < Godot::Node"
+	script.source_code = '%s; puts "held.rb as Godot holds it"; end' % class_statement
 	var node := Node.new()
 	node.set_script(script)
 	add_child(node)

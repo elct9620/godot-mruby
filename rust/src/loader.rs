@@ -53,7 +53,7 @@ impl IResourceFormatLoader for ResourceFormatLoaderRubyScript {
     fn load(
         &self,
         path: GString,
-        _original_path: GString,
+        original_path: GString,
         _use_sub_threads: bool,
         _cache_mode: i32,
     ) -> Variant {
@@ -63,6 +63,13 @@ impl IResourceFormatLoader for ResourceFormatLoaderRubyScript {
             return error.to_variant();
         }
 
-        RubyScript::from_source(source).to_variant()
+        // An exported game loads a remapped file under the name it was asked
+        // for, and the path Godot gives the script is that name.
+        let name = if original_path.is_empty() {
+            &path
+        } else {
+            &original_path
+        };
+        RubyScript::from_source(&name.to_string(), source).to_variant()
     }
 }

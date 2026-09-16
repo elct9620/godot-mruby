@@ -1,28 +1,54 @@
 use std::ffi::c_void;
+use std::sync::Arc;
 
-use godot::classes::{Engine, IScriptExtension, Object, Script, ScriptExtension, ScriptLanguage};
+use godot::classes::{
+    ClassDb, Engine, IScriptExtension, Object, Script, ScriptExtension, ScriptLanguage,
+};
 use godot::global::Error;
 use godot::meta::conv::RawPtr;
 use godot::obj::script::create_script_instance;
 use godot::prelude::*;
 
+use crate::error;
+use crate::header::Header;
 use crate::instance::RubyInstance;
 use crate::language;
 
 /// The script a `.rb` file loads as, the way a `.gd` file loads as a `GDScript`.
 ///
-/// It holds the file's source and answers Godot's questions without running
-/// any Ruby: a loaded script only becomes code when something enters it.
+/// It holds the file's source and answers Godot's questions from its header
+/// without running any Ruby: a loaded script only becomes code when something
+/// enters it.
 #[derive(GodotClass)]
 #[class(base = ScriptExtension, init, tool)]
 pub struct RubyScript {
     base: Base<ScriptExtension>,
     source: GString,
+    // Both read again whenever the source changes, so Godot's questions are
+    // answered from what the script holds; an instance keeps the header its
+    // script had as the instance was made.
+    header: Arc<Header>,
+    // The engine node class the file's class extends, when it is a node script.
+    node_class: Option<StringName>,
 }
 
 impl RubyScript {
-    pub fn from_source(source: GString) -> Gd<Self> {
-        Gd::from_init_fn(|base| Self { base, source })
+    /// The script of the file at `path`, holding `source`.
+    pub fn from_source(path: &str, source: GString) -> Gd<Self> {
+        let header = Header::read(path, &source.to_string());
+        Gd::from_init_fn(|base| Self {
+            base,
+            node_class: Self::node_class(&header),
+            header: Arc::new(header),
+            source,
+        })
+    }
+
+    // The engine node class the file's class extends, when it is a node script.
+    fn node_class(header: &Header) -> Option<StringName> {
+        let engine_class = header.superclass()?.strip_prefix("Godot::")?;
+        (!engine_class.contains("::") && ClassDb::singleton().is_parent_class(engine_class, "Node"))
+            .then(|| StringName::from(engine_class))
     }
 }
 
@@ -32,7 +58,9 @@ impl IScriptExtension for RubyScript {
         true
     }
 
-    // Scripts only run in a game; the editor gets no instance.
+    // Scripts only run in a game; the editor gets no instance. Godot asks
+    // this before making an instance, so a file that is no node script is
+    // refused as the instance is made, where the refusal is reported.
     fn can_instantiate(&self) -> bool {
         !Engine::singleton().is_editor_hint()
     }
@@ -50,14 +78,34 @@ impl IScriptExtension for RubyScript {
     }
 
     fn get_instance_base_type(&self) -> StringName {
-        StringName::from("Node")
+        self.node_class.clone().unwrap_or_default()
     }
 
+    // Only a node script makes an instance, and only for a node of the engine
+    // class it extends, as a GDScript refuses an object its native type does
+    // not fit.
     unsafe fn instance_create_rawptr(&self, for_object: Gd<Object>) -> RawPtr<*mut c_void> {
+        let path = self.base().get_path();
+        let Some(engine_class) = &self.node_class else {
+            error!(
+                "{path} defines no class extending an engine node class, so it cannot be a node's script"
+            );
+            return refused();
+        };
+        let object_class = StringName::from(&for_object.get_class());
+        if !ClassDb::singleton().is_parent_class(&object_class, engine_class) {
+            error!("{path} extends {engine_class}, so it cannot be the script of a {object_class}");
+            return refused();
+        }
         let language = self
             .get_language()
             .expect("the Ruby language outlives every Ruby script instance");
-        let instance = RubyInstance::new(self.to_gd().upcast(), language, &for_object);
+        let instance = RubyInstance::new(
+            self.to_gd().upcast(),
+            Arc::clone(&self.header),
+            language,
+            &for_object,
+        );
         // SAFETY: Godot hands the instance to `for_object` and frees it with that object.
         unsafe { create_script_instance(instance, for_object) }
     }
@@ -66,8 +114,7 @@ impl IScriptExtension for RubyScript {
         &self,
         _for_object: Gd<Object>,
     ) -> RawPtr<*mut c_void> {
-        // SAFETY: a null placeholder leaves the object without a script instance.
-        unsafe { RawPtr::new(std::ptr::null_mut()) }
+        refused()
     }
 
     fn instance_has(&self, _object: Gd<Object>) -> bool {
@@ -83,6 +130,10 @@ impl IScriptExtension for RubyScript {
     }
 
     fn set_source_code(&mut self, code: GString) {
+        let path = self.base().get_path().to_string();
+        let header = Header::read(&path, &code.to_string());
+        self.node_class = Self::node_class(&header);
+        self.header = Arc::new(header);
         self.source = code;
     }
 
@@ -98,8 +149,8 @@ impl IScriptExtension for RubyScript {
         Array::new()
     }
 
-    fn has_method(&self, _method: StringName) -> bool {
-        false
+    fn has_method(&self, method: StringName) -> bool {
+        self.header.has_method(&method.to_string())
     }
 
     fn has_static_method(&self, _method: StringName) -> bool {
@@ -167,4 +218,10 @@ impl IScriptExtension for RubyScript {
     fn get_rpc_config(&self) -> Variant {
         Variant::nil()
     }
+}
+
+// No instance: the object is left without a script instance.
+fn refused() -> RawPtr<*mut c_void> {
+    // SAFETY: a null pointer is how a script tells Godot it made no instance.
+    unsafe { RawPtr::new(std::ptr::null_mut()) }
 }

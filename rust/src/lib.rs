@@ -4,6 +4,7 @@ use godot::prelude::*;
 mod bridge;
 mod compiler;
 mod game;
+mod header;
 mod instance;
 mod language;
 mod loader;

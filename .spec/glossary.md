@@ -54,3 +54,15 @@ What stands in for `require` in a realm: the first time Ruby uses a constant the
 ### Log
 
 Where a run's words go, as one stream: messages - what Ruby prints and the run's report - and errors, warnings and script errors, each placed at a Ruby file and line. The editor shows it in its Output panel; a headless run prints it.
+
+### Header
+
+What a Ruby file says about the class its path names, read from its source without running it: the superclass written on the class statement, and the names of the methods the class defines. Godot asks a script these on any thread, before its file has run.
+
+### Node script
+
+A file whose class, the one its path names, extends an engine node class. It is the only kind of file a node takes as its script.
+
+### Library file
+
+A file that is not a node script: it loads by name and is never a node's script.

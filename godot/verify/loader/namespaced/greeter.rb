@@ -3,7 +3,9 @@
 module Verify
   module Loader
     module Namespaced
-      puts GREETING
+      class Greeter < Godot::Node
+        puts GREETING
+      end
     end
   end
 end

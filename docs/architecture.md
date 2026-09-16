@@ -43,7 +43,7 @@ res://addons/godot_mruby/
 
 What ships is the addon folder, placed where Godot expects a non-project asset: `addons/<name>/`, so its files clash with neither the project nor other assets.
 
-The editor loads the library the `.gdextension` names for the platform, from Godot 4.6 on. Each library is a single binary: the crate links the mruby archive beni builds, so nothing else is needed at run time, and macOS ships one universal library.
+The editor loads the library the `.gdextension` names for the platform, from Godot 4.6 on. Each library is a single binary: the crate links the mruby archive beni builds and the Prism parser `ruby-prism` builds, so nothing else is needed at run time, and macOS ships one universal library. Building needs libclang, which Prism's bindings are generated with.
 
 mruby carries only the gems `build_config/mruby.rb` lists, and none that reaches the host: Ruby reaches files, sockets and processes through Godot.
 
@@ -80,7 +80,7 @@ Build output stays out of the repository: `vendor/` holds mruby's source and arc
 | --- | --- |
 | `RubyLanguage` in `language.rs` | `ScriptLanguageExtension` |
 | `ResourceFormatLoaderRubyScript` in `loader.rs` | `ResourceFormatLoader` |
-| `RubyScript` in `script.rs` | `ScriptExtension` |
+| `RubyScript` in `script.rs`, its `Header` in `header.rs` | `ScriptExtension` |
 | `RubyInstance` in `instance.rs` | A script instance |
 | `RubyTestRunner` in `runner.rs` | A `Node` in `runner.tscn` |
 | `settings.rs` | `ProjectSettings` under `mruby/` |
@@ -90,7 +90,7 @@ Build output stays out of the repository: `vendor/` holds mruby's source and arc
 
 Each class Godot knows answers what Godot already asks of a script language; none opens another way for Godot to reach Ruby.
 
-`ResourceFormatLoaderRubyScript` reads a file's source and runs nothing. The script holds that source and answers Godot's questions without Ruby. The instance holds no Ruby state: each get, set, call or notification enters the realm, which runs its file the first time.
+`ResourceFormatLoaderRubyScript` reads a file's source and runs nothing. The script holds that source and answers Godot's questions from its header, which Prism reads from the source: the superclass that makes the file a node script, and the methods its class defines. Only a node script makes an instance, for a node of the engine class it extends. The instance holds no Ruby state: each get, set, call or notification enters the realm, which runs its file the first time.
 
 The runner is an ordinary node the addon ships. `GameFiles`, `GodotLog` and the `Godot` gem are what the game's realm is given: the files under `res://`, Godot's log, and the engine's classes under `Godot`, specified in `.spec/behavior/engine_classes.md`. The names Godot knows are in `.spec/contract/godot.md`, and the settings in `.spec/contract/project_settings.md`.
 
@@ -131,7 +131,7 @@ lib.rs    registers Scripting and settings, prepares the realm
   ▼
 ┌─ Scripting ───────────────────────────────┐
 │  loader ──► script ◄──► language          │
-│               │                           │
+│               │    └───► header           │
 │               ▼                           │
 │            instance                       │
 └──┬────────────────────────────────────────┘
@@ -158,7 +158,7 @@ Scripting serves `.rb` files to Godot, and Testing runs a project's Ruby tests; 
 
 The realm uses no other module but `compiler`. What it needs from Godot, `game` and `log` implement for it, so every arrow into the realm is a use of it and none leaves it for Godot.
 
-Within Scripting, `language` and `script` refer to each other, as GDExtension script languages do through the language's singleton; `instance` is handed the language by its script and reaches down only. `minitest` and `bridge` run their own Ruby through `compiler`, whose warnings `log` writes; `minitest` uses the realm only for the `Location` it writes a failure at.
+`header` names a file's class by the class index's rules, `realm::key_of` and `realm::normalize`, without entering the realm. Within Scripting, `language` and `script` refer to each other, as GDExtension script languages do through the language's singleton; `instance` is handed the language by its script and reaches down only. `minitest` and `bridge` run their own Ruby through `compiler`, whose warnings `log` writes; `minitest` uses the realm only for the `Location` it writes a failure at.
 
 ## 3. Realm
 

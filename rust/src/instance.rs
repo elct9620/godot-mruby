@@ -3,6 +3,9 @@ use godot::meta::error::CallErrorType;
 use godot::obj::script::{ScriptInstance, SiMut};
 use godot::prelude::*;
 use godot::register::info::{MethodInfo, PropertyInfo};
+use std::sync::Arc;
+
+use crate::header::Header;
 
 use crate::log::GodotLog;
 use crate::realm;
@@ -12,6 +15,7 @@ use crate::realm;
 /// otherwise leaves the node's own members to answer.
 pub struct RubyInstance {
     script: Gd<Script>,
+    header: Arc<Header>,
     // The language its script reports, which Godot also asks the instance for.
     language: Gd<ScriptLanguage>,
     // What the node prints as while its script says nothing about it.
@@ -19,9 +23,15 @@ pub struct RubyInstance {
 }
 
 impl RubyInstance {
-    pub fn new(script: Gd<Script>, language: Gd<ScriptLanguage>, owner: &Gd<Object>) -> Self {
+    pub fn new(
+        script: Gd<Script>,
+        header: Arc<Header>,
+        language: Gd<ScriptLanguage>,
+        owner: &Gd<Object>,
+    ) -> Self {
         Self {
             script,
+            header,
             language,
             display: GString::from(&owner.to_string()),
         }
@@ -77,8 +87,8 @@ impl ScriptInstance for RubyInstance {
         false
     }
 
-    fn has_method(&self, _method: StringName) -> bool {
-        false
+    fn has_method(&self, method: StringName) -> bool {
+        self.header.has_method(&method.to_string())
     }
 
     fn get_script(&self) -> &Gd<Script> {

@@ -12,6 +12,7 @@ mod index;
 mod print;
 
 use index::ClassIndex;
+pub use index::{key_of, normalize};
 
 /// Where the game's Ruby runs: an `mrb_state`, the bookkeeping kept beside
 /// it, and the extensions installed into it. It opens at the first entry, one
