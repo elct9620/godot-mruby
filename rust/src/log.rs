@@ -1,24 +1,31 @@
 //! Godot's log, written the way the `log` crate is: `log!` at any level,
 //! `error!` and `warn!` for the common ones. `at:` places a record at a Ruby
 //! file and line; without it, a record is placed where it was written.
+//! `GodotLog` is the same log as a realm writes to it.
 
 use std::fmt;
 
-use godot::global::{PrintLevel, PrintRecord, PrintSource, print_custom};
+use godot::global::{PrintLevel, PrintRecord, PrintSource, godot_print, print_custom, printraw};
+use godot::prelude::ToGodot;
 
-/// How serious a record is, as Godot's log tells them apart.
-#[derive(Clone, Copy)]
-pub enum Level {
-    Error,
-    Warn,
-    /// A Ruby file that does not parse, the way Godot reports a GDScript one.
-    ScriptError,
-}
+use crate::realm::{self, Level, Location};
 
-/// A line of a Ruby file.
-pub struct Location {
-    pub file: String,
-    pub line: u32,
+/// Godot's log as a realm writes to it.
+pub struct GodotLog;
+
+impl realm::Log for GodotLog {
+    fn message(&self, text: &str) {
+        godot_print!("{text}");
+    }
+
+    fn raw(&self, text: &str) {
+        printraw(&[text.to_variant()]);
+    }
+
+    #[track_caller]
+    fn record(&self, level: Level, at: Option<&Location>, text: &str) {
+        write(level, at, format_args!("{text}"));
+    }
 }
 
 #[track_caller]
@@ -51,16 +58,16 @@ macro_rules! log {
         $crate::log::write($level, $at, format_args!($($arg)+))
     };
     ($level:expr, $($arg:tt)+) => {
-        $crate::log::write($level, None::<&$crate::log::Location>, format_args!($($arg)+))
+        $crate::log::write($level, None::<&$crate::realm::Location>, format_args!($($arg)+))
     };
 }
 
 #[macro_export]
 macro_rules! error {
-    ($($arg:tt)+) => { $crate::log!($crate::log::Level::Error, $($arg)+) };
+    ($($arg:tt)+) => { $crate::log!($crate::realm::Level::Error, $($arg)+) };
 }
 
 #[macro_export]
 macro_rules! warn {
-    ($($arg:tt)+) => { $crate::log!($crate::log::Level::Warn, $($arg)+) };
+    ($($arg:tt)+) => { $crate::log!($crate::realm::Level::Warn, $($arg)+) };
 }

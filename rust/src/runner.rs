@@ -2,6 +2,7 @@ use godot::classes::{DirAccess, INode, Node, Os, ResourceLoader};
 use godot::prelude::*;
 
 use crate::error;
+use crate::log::GodotLog;
 use crate::minitest::{self, Minitest};
 use crate::realm::{self, RubyError};
 use crate::settings;
@@ -66,7 +67,7 @@ fn run(directories: &[String], options: minitest::Options) -> bool {
 // An outcome Ruby could not reach counts as a failure, written to the log.
 fn logged(outcome: Result<bool, RubyError>) -> bool {
     outcome.unwrap_or_else(|failed| {
-        failed.log();
+        failed.write(&GodotLog);
         false
     })
 }

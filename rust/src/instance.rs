@@ -4,6 +4,7 @@ use godot::obj::script::{ScriptInstance, SiMut};
 use godot::prelude::*;
 use godot::register::info::{MethodInfo, PropertyInfo};
 
+use crate::log::GodotLog;
 use crate::{language, realm};
 
 /// A node's instance of a `RubyScript`. It holds no Ruby state: every entry
@@ -26,7 +27,7 @@ impl RubyInstance {
     fn enter(&self) {
         let path = self.script.get_path().to_string();
         if let Err(failed) = realm::enter(|realm| realm.run(&path)) {
-            failed.log();
+            failed.write(&GodotLog);
         }
     }
 }

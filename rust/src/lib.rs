@@ -22,6 +22,7 @@ unsafe impl ExtensionLibrary for GodotMruby {
             settings::register();
             language::register();
             loader::register();
+            realm::prepare(|| realm::Realm::open(log::GodotLog));
         }
     }
 

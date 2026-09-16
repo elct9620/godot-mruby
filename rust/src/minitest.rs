@@ -6,7 +6,7 @@ use std::ffi::CStr;
 use beni::{Error, Gem, IntoValue, Module, Mrb, Value, method};
 
 use crate::compiler;
-use crate::log::Location;
+use crate::realm::Location;
 use crate::{error, warn};
 
 // Each file's path names its frames in backtraces: the framework tells its

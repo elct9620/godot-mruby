@@ -6,10 +6,7 @@ use beni::{Error, FromValue, Gem, IntoValue, Mrb};
 use godot::classes::Os;
 use godot::obj::Singleton;
 
-use crate::log;
-use crate::log::{Level, Location};
-use crate::settings;
-use crate::{compiler, warn};
+use crate::{compiler, settings};
 
 mod constants;
 mod executor;
@@ -26,10 +23,39 @@ pub struct Realm {
     mrb: Mrb,
 }
 
+/// How serious a record is.
+#[derive(Clone, Copy)]
+pub enum Level {
+    Error,
+    Warn,
+    /// A Ruby file that does not parse, the way Godot reports a GDScript one.
+    ScriptError,
+}
+
+/// A line of a Ruby file.
+pub struct Location {
+    pub file: String,
+    pub line: u32,
+}
+
+/// Where a realm's words go: what Ruby prints, and the records placed at a
+/// Ruby file and line. A realm is given one as it opens, so it never knows
+/// whose log it writes to.
+pub trait Log: Send {
+    /// A line Ruby prints, as `puts` and `p` write one.
+    fn message(&self, text: &str);
+    /// Text Ruby prints as it is, as `print` writes it.
+    fn raw(&self, text: &str);
+    /// An error, a warning or a script error, at a Ruby file and line when
+    /// it has one.
+    #[track_caller]
+    fn record(&self, level: Level, at: Option<&Location>, text: &str);
+}
+
 /// What a realm keeps beside its `mrb_state`, in the state's user data so
 /// Ruby's calls back into Rust reach it from the state they are given.
-#[derive(Default)]
 struct Bookkeeping {
+    log: Box<dyn Log>,
     index: RefCell<ClassIndex>,
     runs: executor::Runs,
     // Set while the realm defines a directory's module, which no file created.
@@ -51,19 +77,37 @@ fn compile(mrb: &Mrb, name: &CStr, source: &str) -> Result<(), Error> {
             file: file.clone().into_owned(),
             line: warning.line,
         };
-        warn!(at: &at, "{}", warning.message);
+        bookkeeping(mrb)
+            .log
+            .record(Level::Warn, Some(&at), &warning.message);
     })
 }
 
+type Opener = Box<dyn Fn() -> Result<Realm, RubyError> + Send>;
+
+// The way the game's realm opens, given before anything enters it.
+static OPENER: Mutex<Option<Opener>> = Mutex::new(None);
 static GAME: Mutex<Option<Realm>> = Mutex::new(None);
 
-/// Runs `body` inside the game's realm, opening the realm first if this is
-/// its first entry.
+/// Gives the game's realm the way it opens, which its first entry uses. A
+/// mod's realm will be given its own the same way, keyed by the mod.
+pub fn prepare(open: impl Fn() -> Result<Realm, RubyError> + Send + 'static) {
+    *OPENER.lock().unwrap() = Some(Box::new(open));
+}
+
+/// Runs `body` inside the game's realm, opening the realm first, the way it
+/// was prepared, if this is its first entry.
 pub fn enter<T>(body: impl FnOnce(&Realm) -> Result<T, RubyError>) -> Result<T, RubyError> {
     let mut game = GAME.lock().unwrap();
     let realm = match game.as_mut() {
         Some(realm) => realm,
-        None => game.insert(Realm::open()?),
+        None => {
+            let opener = OPENER.lock().unwrap();
+            let open = opener.as_ref().ok_or_else(|| {
+                RubyError::plain("the game's realm was entered before it was prepared".to_owned())
+            })?;
+            game.insert(open()?)
+        }
     };
     body(realm)
 }
@@ -84,10 +128,17 @@ fn left_out() -> Vec<String> {
 }
 
 impl Realm {
-    fn open() -> Result<Self, RubyError> {
+    /// Opens a realm whose words go to `log`.
+    pub fn open(log: impl Log + 'static) -> Result<Self, RubyError> {
         let mut mrb = Mrb::open()
             .map_err(|error| RubyError::plain(format!("mruby did not open: {error}")))?;
-        if mrb.set_user_data(Bookkeeping::default()).is_err() {
+        let bookkeeping = Bookkeeping {
+            log: Box::new(log),
+            index: RefCell::default(),
+            runs: executor::Runs::default(),
+            defining_namespace: Cell::default(),
+        };
+        if mrb.set_user_data(bookkeeping).is_err() {
             return Err(RubyError::plain(
                 "mruby opened holding user data".to_owned(),
             ));
@@ -103,9 +154,12 @@ impl Realm {
     // Adds the files at `paths` to the class index, each named from `res://`.
     fn index_files(&self, paths: impl IntoIterator<Item = String>) {
         let _scope = self.mrb.arena_scope();
-        bookkeeping(&self.mrb).index.borrow_mut().add(paths, |key| {
-            constants::constant_at(&self.mrb, key).is_some()
-        });
+        let bookkeeping = bookkeeping(&self.mrb);
+        bookkeeping.index.borrow_mut().add(
+            paths,
+            |key| constants::constant_at(&self.mrb, key).is_some(),
+            bookkeeping.log.as_ref(),
+        );
     }
 
     /// Adds what `G` defines to what Ruby sees in this realm.
@@ -194,8 +248,9 @@ impl RubyError {
         }
     }
 
+    /// Writes the error to `log`, at its Ruby line when it has one.
     #[track_caller]
-    pub fn log(&self) {
-        log!(self.level, at: self.at.as_ref(), "{}", self.message);
+    pub fn write(&self, log: &impl Log) {
+        log.record(self.level, self.at.as_ref(), &self.message);
     }
 }

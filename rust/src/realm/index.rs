@@ -3,8 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use godot::classes::ResourceLoader;
 use godot::obj::Singleton;
 
-use crate::log::Location;
-use crate::warn;
+use super::{Level, Location, Log};
 
 const ROOT: &str = "res://";
 
@@ -47,6 +46,7 @@ impl ClassIndex {
         &mut self,
         paths: impl IntoIterator<Item = String>,
         defined: impl Fn(&[String]) -> bool,
+        log: &dyn Log,
     ) {
         let mut added = BTreeSet::new();
         for path in paths {
@@ -56,19 +56,33 @@ impl ClassIndex {
                 continue;
             }
             if let Some(other) = self.files.remove(&key) {
-                warn!(at: &at(&path), "{other} and {path} both name {}, so neither loads by name", name_of(&other));
+                log.record(
+                    Level::Warn,
+                    Some(&at(&path)),
+                    &format!(
+                        "{other} and {path} both name {}, so neither loads by name",
+                        name_of(&other)
+                    ),
+                );
                 self.refused.insert(key);
                 continue;
             }
             if defined(&key) {
-                warn!(at: &at(&path), "{path} names {}, which the realm already has, so it never loads by name", name_of(&path));
+                log.record(
+                    Level::Warn,
+                    Some(&at(&path)),
+                    &format!(
+                        "{path} names {}, which the realm already has, so it never loads by name",
+                        name_of(&path)
+                    ),
+                );
                 self.refused.insert(key);
                 continue;
             }
             self.files.insert(key.clone(), path);
             added.insert(key);
         }
-        self.warn_of_shadows(&added);
+        self.warn_of_shadows(&added, log);
     }
 
     /// What `key` names, if anything: a file is what a namespace's own file
@@ -107,7 +121,7 @@ impl ClassIndex {
     // name, so once the outer file has loaded the inner one never does. Only
     // files sharing a last segment can hide one another, and a pair already
     // warned about has no file among `added`.
-    fn warn_of_shadows(&self, added: &BTreeSet<Key>) {
+    fn warn_of_shadows(&self, added: &BTreeSet<Key>, log: &dyn Log) {
         let mut by_name: BTreeMap<&str, Vec<(&Key, &String)>> = BTreeMap::new();
         for (key, path) in &self.files {
             if let Some(name) = key.last() {
@@ -119,12 +133,15 @@ impl ClassIndex {
                 for &(outer, outer_path) in files {
                     let new = added.contains(inner) || added.contains(outer);
                     if new && hides(outer, inner) {
-                        warn!(
-                            at: &at(inner_path),
-                            "{outer_path} names {}, which hides {} from Ruby inside {} once it has loaded",
+                        log.record(
+                            Level::Warn,
+                            Some(&at(inner_path)),
+                            &format!(
+                                "{outer_path} names {}, which hides {} from Ruby inside {} once it has loaded",
                             name_of(outer_path),
                             name_of(inner_path),
                             namespace_of(inner_path)
+                            ),
                         );
                     }
                 }
