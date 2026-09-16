@@ -89,7 +89,7 @@ Build output stays out of the repository: `vendor/` holds mruby's source and arc
 
 Each class Godot knows answers what Godot already asks of a script language; none opens another way for Godot to reach Ruby.
 
-The loader reads a file's source and runs nothing. The script holds that source and answers Godot's questions without Ruby. The instance holds no Ruby state: each get, set, call or notification enters the realm, which runs its file the first time.
+`ResourceFormatLoaderRubyScript` reads a file's source and runs nothing. The script holds that source and answers Godot's questions without Ruby. The instance holds no Ruby state: each get, set, call or notification enters the realm, which runs its file the first time.
 
 The runner is an ordinary node the addon ships. `GameFiles` and `GodotLog` are what the game's realm is given: the files under `res://`, and Godot's log. The names Godot knows are in `.spec/contract/godot.md`, and the settings in `.spec/contract/project_settings.md`.
 
