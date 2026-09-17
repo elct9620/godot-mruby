@@ -10,10 +10,12 @@ mod constants;
 mod executor;
 mod index;
 mod print;
+mod reentrant;
 mod registry;
 
 use index::ClassIndex;
 pub use index::{file_named, key_of, normalize};
+use reentrant::ReentrantLock;
 pub use registry::Key;
 use registry::Registry;
 
@@ -123,7 +125,9 @@ type Opener = Box<dyn Fn() -> Result<Realm, RubyError> + Send>;
 
 // The way the game's realm opens, given before anything enters it.
 static OPENER: Mutex<Option<Opener>> = Mutex::new(None);
-static GAME: Mutex<Option<Realm>> = Mutex::new(None);
+// A thread inside the game's realm enters it again, since Godot calls back
+// into scripts while the Ruby it started still runs.
+static GAME: ReentrantLock<RefCell<Game>> = ReentrantLock::new(RefCell::new(Game::Closed));
 // Keys let go of on any thread, waiting for the game's realm to take them.
 static RELEASED: Mutex<Vec<Key>> = Mutex::new(Vec::new());
 
@@ -133,22 +137,46 @@ pub fn prepare(open: impl Fn() -> Result<Realm, RubyError> + Send + 'static) {
     *OPENER.lock().unwrap() = Some(Box::new(open));
 }
 
+/// The game's realm, as far as it has come.
+enum Game {
+    Closed,
+    Opening,
+    Open(Realm),
+}
+
 /// Runs `body` inside the game's realm, opening the realm first, the way it
-/// was prepared, if this is its first entry.
+/// was prepared, if this is its first entry. A thread already inside enters
+/// again.
 pub fn enter<T>(body: impl FnOnce(&Realm) -> Result<T, RubyError>) -> Result<T, RubyError> {
-    let mut game = GAME.lock().unwrap();
-    let realm = match game.as_mut() {
-        Some(realm) => realm,
-        None => {
-            let opener = OPENER.lock().unwrap();
-            let open = opener.as_ref().ok_or_else(|| {
-                RubyError::plain("the game's realm was entered before it was prepared".to_owned())
-            })?;
-            game.insert(open()?)
+    let game = GAME.lock();
+    if matches!(*game.borrow(), Game::Closed) {
+        *game.borrow_mut() = Game::Opening;
+        match open_game() {
+            Ok(realm) => *game.borrow_mut() = Game::Open(realm),
+            Err(error) => {
+                *game.borrow_mut() = Game::Closed;
+                return Err(error);
+            }
         }
+    }
+    let game = game.borrow();
+    let Game::Open(realm) = &*game else {
+        return Err(RubyError::plain(
+            "the game's realm was entered while it opens".to_owned(),
+        ));
     };
     realm.release_queued();
     body(realm)
+}
+
+// Opens the game's realm the way it was prepared, holding no borrow of it, so
+// what it opens with may enter and be refused.
+fn open_game() -> Result<Realm, RubyError> {
+    let opener = OPENER.lock().unwrap();
+    let open = opener.as_ref().ok_or_else(|| {
+        RubyError::plain("the game's realm was entered before it was prepared".to_owned())
+    })?;
+    open()
 }
 
 /// Lets go of the object `key` holds at the realm's next entry or frame,
@@ -163,15 +191,20 @@ pub fn release_queued() {
     if RELEASED.lock().unwrap().is_empty() {
         return;
     }
-    if let Some(realm) = GAME.lock().unwrap().as_ref() {
+    let game = GAME.lock();
+    if let Game::Open(realm) = &*game.borrow() {
         realm.release_queued();
     }
 }
 
-/// Closes the game's realm; a key released for it holds nothing in the next.
+/// Closes the game's realm, unless this thread is inside it; a key released
+/// for it holds nothing in the next.
 pub fn close() {
-    let mut game = GAME.lock().unwrap();
-    game.take();
+    let game = GAME.lock();
+    if game.is_nested() {
+        return;
+    }
+    *game.borrow_mut() = Game::Closed;
     RELEASED.lock().unwrap().clear();
 }
 
@@ -492,11 +525,88 @@ mod tests {
 
         release_queued();
 
-        let held = GAME
-            .lock()
-            .unwrap()
-            .as_ref()
-            .map(|realm| bookkeeping(&realm.mrb).registry.len(&realm.mrb));
+        let game = GAME.lock();
+        let held = match &*game.borrow() {
+            Game::Open(realm) => Some(bookkeeping(&realm.mrb).registry.len(&realm.mrb)),
+            _ => None,
+        };
         assert_eq!(held, Some(0));
+    }
+
+    // @behavior RE-001
+    #[test]
+    fn a_thread_inside_the_realm_enters_it_again() {
+        let (_turn, key) = held_thing();
+
+        let answer = enter(|_| enter(|realm| realm.send::<_, i64>(key, "answer", no_args())));
+
+        assert_eq!(answer.ok(), Some(42));
+    }
+
+    // @behavior RE-002
+    #[test]
+    fn another_thread_waits_until_the_outermost_entry_returns() {
+        let (_turn, _key) = held_thing();
+        let (inner_returned, returned) = mpsc::channel();
+        let (leave, left) = mpsc::channel::<()>();
+        let holder = thread::spawn(move || {
+            enter(|_| {
+                enter(|_| Ok(())).ok();
+                inner_returned.send(()).ok();
+                left.recv().ok();
+                Ok(())
+            })
+            .ok();
+        });
+        returned.recv().unwrap();
+
+        let (entered, inside) = mpsc::channel();
+        let waiter = thread::spawn(move || {
+            enter(|_| {
+                entered.send(()).ok();
+                Ok(())
+            })
+            .ok();
+        });
+        let entered_early = inside.recv_timeout(Duration::from_millis(200)).is_ok();
+        leave.send(()).unwrap();
+        let entered_after = inside.recv_timeout(Duration::from_secs(1)).is_ok();
+
+        holder.join().unwrap();
+        waiter.join().unwrap();
+        assert!(!entered_early);
+        assert!(entered_after);
+    }
+
+    // @behavior RE-003
+    #[test]
+    fn an_entry_made_while_the_realm_opens_fails() {
+        let _turn = TURN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        close();
+        let (nested, outcome) = mpsc::channel();
+        prepare(move || {
+            let nested = nested.clone();
+            Realm::open(Thing, Silent, move |_| {
+                nested.send(enter(|_| Ok(())).is_err()).ok();
+                Ok(())
+            })
+        });
+
+        enter(|_| Ok(())).ok();
+
+        assert_eq!(outcome.try_recv().ok(), Some(true));
+    }
+
+    // @behavior RE-004
+    #[test]
+    fn closing_the_realm_from_inside_it_leaves_it_open() {
+        let (_turn, key) = held_thing();
+
+        let answer = enter(|_| {
+            close();
+            enter(|realm| realm.send::<_, i64>(key, "answer", no_args()))
+        });
+
+        assert_eq!(answer.ok(), Some(42));
     }
 }

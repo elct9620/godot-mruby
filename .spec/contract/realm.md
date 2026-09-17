@@ -22,7 +22,7 @@ pub fn prepare(open: impl Fn() -> Result<Realm, RubyError> + Send + 'static) {}
 
 ## `enter`
 
-Runs the body inside the game's realm, one thread at a time, opening the realm at its first entry the way it was prepared.
+Runs the body inside the game's realm, one thread at a time and again on a thread already inside, opening the realm at its first entry the way it was prepared.
 
 | Attribute | Value |
 | --- | --- |
@@ -34,7 +34,7 @@ pub fn enter<T>(body: impl FnOnce(&Realm) -> Result<T, RubyError>) -> Result<T, 
 
 ## `close`
 
-Closes the game's realm; the next entry opens a new one.
+Closes the game's realm unless the calling thread is inside it; the next entry opens a new one.
 
 | Attribute | Value |
 | --- | --- |
