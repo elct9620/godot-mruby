@@ -6,20 +6,23 @@ module Godot
   # file runs, and which callbacks a node's Ruby object is given. Part of
   # Godot.verify!.
   module NodeScripts
-    # A scene whose nodes take a library file and a node script extending a
-    # class they are not, and the errors refusing each.
+    # A scene whose nodes take a library file, a node script extending a class
+    # they are not and an abstract node script, and the errors refusing each.
     ATTACH_SCENE = "res://verify/script/attach/attach.tscn"
     REFUSALS = [
       "ERROR: res://verify/script/attach/library.rb defines no class extending an engine node class, " \
       "so it cannot be a node's script",
-      "ERROR: res://verify/script/attach/planar.rb extends Node2D, so it cannot be the script of a Node"
+      "ERROR: res://verify/script/attach/planar.rb extends Node2D, so it cannot be the script of a Node",
+      'ERROR: Node "Abstract" previously had a script, but that script is now abstract.'
     ].freeze
     # A scene asking a node script what Godot asks before its file runs, the
     # answers it prints, and the line the file prints if it ever runs.
     HEADER_SCENE = "res://verify/script/header/header.tscn"
     BASE_TYPE_ANSWER = "instance base type: Node2D"
     METHOD_ANSWER = "has _ready: true"
-    REPORTED_RAN = "reported.rb ran"
+    TOOL_ANSWER = "is tool: true"
+    ABSTRACT_ANSWER = "is abstract: true"
+    RAN_LINES = ["reported.rb ran", "marked.rb ran"].freeze
     # A scene of nodes whose scripts define callbacks, what they print, and
     # what they must never print.
     CALLBACKS_SCENE = "res://verify/script/callbacks/callbacks.tscn"
@@ -37,11 +40,13 @@ module Godot
       verify_attach_refused!(project)
       verify_base_type_answered!(project)
       verify_method_answered!(project)
+      verify_tool_answered!(project)
+      verify_abstract_answered!(project)
       verify_callbacks!(project)
     end
 
     # Runs the scene whose nodes take scripts they cannot, each refused in the log.
-    # @behavior RS-006 RS-007
+    # @behavior RS-006 RS-007 RS-020
     def verify_attach_refused!(project)
       output, status = Godot.run_scene(project, ATTACH_SCENE, "--quit-after", "3")
       missing = REFUSALS.reject { |refusal| output.include?(refusal) }
@@ -62,10 +67,20 @@ module Godot
       verify_answer!(project, METHOD_ANSWER)
     end
 
+    # @behavior RS-018
+    def verify_tool_answered!(project)
+      verify_answer!(project, TOOL_ANSWER)
+    end
+
+    # @behavior RS-019
+    def verify_abstract_answered!(project)
+      verify_answer!(project, ABSTRACT_ANSWER)
+    end
+
     def verify_answer!(project, answer)
       output, status = Godot.run_scene(project, HEADER_SCENE, "--quit-after", "3")
       lines = output.lines.map(&:chomp)
-      return if status.success? && lines.include?(answer) && !lines.include?(REPORTED_RAN)
+      return if status.success? && lines.include?(answer) && !lines.intersect?(RAN_LINES)
 
       raise "The header scene did not answer #{answer.inspect} without running its file:\n#{output}"
     end

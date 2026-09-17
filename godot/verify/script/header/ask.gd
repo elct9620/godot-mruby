@@ -1,7 +1,7 @@
 extends Node
 
 
-# Asks a node script what Godot asks before its file runs, and prints the
+# Asks node scripts what Godot asks before their files run, and prints the
 # answers. The node never enters the tree and loses its script before it is
 # freed, so nothing else asks the script anything.
 func _ready() -> void:
@@ -12,3 +12,6 @@ func _ready() -> void:
 	print("has _ready: ", node.has_method("_ready"))
 	node.set_script(null)
 	node.free()
+	var marked: Script = load("res://verify/script/header/marked.rb")
+	print("is tool: ", marked.is_tool())
+	print("is abstract: ", marked.is_abstract())

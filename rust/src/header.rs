@@ -4,16 +4,32 @@
 
 use std::collections::BTreeSet;
 
-use ruby_prism::{Node, NodeList};
+use ruby_prism::{CallNode, Node, NodeList};
 
 use crate::realm;
 
-/// A file's header: the superclass written on the class its path names, and
-/// the names of the methods that class defines.
+/// A file's header: the superclass written on the class its path names, the
+/// names of the methods that class defines, and the `tool` and `abstract` its
+/// body calls.
 #[derive(Debug, Default)]
 pub struct Header {
-    superclass: Option<String>,
+    superclass: Option<Superclass>,
     methods: BTreeSet<String>,
+    tool: bool,
+    is_abstract: bool,
+}
+
+/// A superclass as its class statement writes it: a constant path.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Superclass {
+    names: Vec<String>,
+}
+
+impl Superclass {
+    /// The constant path as written, as `["Godot", "Node"]`.
+    pub fn names(&self) -> &[String] {
+        &self.names
+    }
 }
 
 impl Header {
@@ -22,7 +38,6 @@ impl Header {
     pub fn read(path: &str, source: &str) -> Self {
         let result = ruby_prism::parse(source.as_bytes());
         let mut reader = Reader {
-            source: source.as_bytes(),
             key: realm::key_of(path),
             header: None,
         };
@@ -32,23 +47,55 @@ impl Header {
         reader.header.unwrap_or_default()
     }
 
-    /// The superclass as written on the class statement, as `Godot::Node`.
-    pub fn superclass(&self) -> Option<&str> {
-        self.superclass.as_deref()
+    pub fn superclass(&self) -> Option<&Superclass> {
+        self.superclass.as_ref()
     }
 
     pub fn has_method(&self, name: &str) -> bool {
         self.methods.contains(name)
     }
+
+    pub fn is_tool(&self) -> bool {
+        self.tool
+    }
+
+    pub fn is_abstract(&self) -> bool {
+        self.is_abstract
+    }
+
+    // What the class body's own statements say: the methods it defines on its
+    // instances and the calls it makes itself; a class inside it or a method's
+    // body says nothing of this class.
+    fn read_class_body(&mut self, statements: &NodeList) {
+        for node in statements.iter() {
+            if let Some(def) = node.as_def_node() {
+                if def.receiver().is_none() {
+                    self.methods.insert(text(def.name().as_slice()));
+                }
+            } else if let Some(call) = node.as_call_node() {
+                self.read_call(&call);
+            }
+        }
+    }
+
+    fn read_call(&mut self, call: &CallNode) {
+        if call.receiver().is_some() || call.arguments().is_some() || call.block().is_some() {
+            return;
+        }
+        match call.name().as_slice() {
+            b"tool" => self.tool = true,
+            b"abstract" => self.is_abstract = true,
+            _ => {}
+        }
+    }
 }
 
-struct Reader<'a> {
-    source: &'a [u8],
+struct Reader {
     key: Vec<String>,
     header: Option<Header>,
 }
 
-impl Reader<'_> {
+impl Reader {
     // The `module` and `class` statements of a body inside the namespaces
     // `scope` names, looking for the one the file's path names.
     fn read_body(&mut self, body: &NodeList, scope: &[String]) {
@@ -68,16 +115,23 @@ impl Reader<'_> {
         let Some(names) = constant_names(&path, scope) else {
             return;
         };
+        let statements = body
+            .and_then(|body| body.as_statements_node())
+            .map(|statements| statements.body());
         if self.header.is_none() && self.names_file(&names) {
-            self.header = Some(Header {
+            let mut header = Header {
                 superclass: class
                     .and_then(|class| class.superclass())
-                    .map(|superclass| self.text(&superclass).trim_start_matches("::").to_owned()),
-                methods: body.as_ref().map(methods).unwrap_or_default(),
-            });
+                    .and_then(|superclass| written(&superclass)),
+                ..Header::default()
+            };
+            if let Some(statements) = &statements {
+                header.read_class_body(statements);
+            }
+            self.header = Some(header);
         }
-        if let Some(statements) = body.and_then(|body| body.as_statements_node()) {
-            self.read_body(&statements.body(), &names);
+        if let Some(statements) = &statements {
+            self.read_body(statements, &names);
         }
     }
 
@@ -88,51 +142,55 @@ impl Reader<'_> {
                 .zip(&self.key)
                 .all(|(name, segment)| realm::normalize(name) == *segment)
     }
-
-    fn text(&self, node: &Node) -> String {
-        let location = node.location();
-        String::from_utf8_lossy(&self.source[location.start_offset()..location.end_offset()])
-            .into_owned()
-    }
 }
 
-// The methods a class body defines on its instances; what a class inside it
-// defines is that class's own.
-fn methods(body: &Node) -> BTreeSet<String> {
-    let Some(statements) = body.as_statements_node() else {
-        return BTreeSet::new();
-    };
-    statements
-        .body()
-        .iter()
-        .filter_map(|node| node.as_def_node())
-        .filter(|def| def.receiver().is_none())
-        .map(|def| String::from_utf8_lossy(def.name().as_slice()).into_owned())
-        .collect()
+fn text(bytes: &[u8]) -> String {
+    String::from_utf8_lossy(bytes).into_owned()
+}
+
+// A superclass the class statement writes, when it is a constant path.
+fn written(superclass: &Node) -> Option<Superclass> {
+    let (names, _) = constant_path(superclass)?;
+    Some(Superclass { names })
 }
 
 // The whole constant path a `module` or `class` statement inside `scope`
 // defines: `class A::B` in `module Outer` is `Outer::A::B`, `class ::A` is `A`.
 // None for a path whose parent is not a constant.
 fn constant_names(path: &Node, scope: &[String]) -> Option<Vec<String>> {
-    let name = |id: &[u8]| String::from_utf8_lossy(id).into_owned();
-    if let Some(read) = path.as_constant_read_node() {
-        let mut names = scope.to_vec();
-        names.push(name(read.name().as_slice()));
-        return Some(names);
+    let (names, from_top) = constant_path(path)?;
+    Some(if from_top {
+        names
+    } else {
+        [scope, &names].concat()
+    })
+}
+
+// A constant path as written, and whether it starts from the top level as
+// `::A` does. None for a path whose parent is not a constant.
+fn constant_path(node: &Node) -> Option<(Vec<String>, bool)> {
+    if let Some(read) = node.as_constant_read_node() {
+        return Some((vec![text(read.name().as_slice())], false));
     }
-    let constant_path = path.as_constant_path_node()?;
-    let mut names = match constant_path.parent() {
-        Some(parent) => constant_names(&parent, scope)?,
-        None => Vec::new(),
+    let path = node.as_constant_path_node()?;
+    let (mut names, from_top) = match path.parent() {
+        Some(parent) => constant_path(&parent)?,
+        None => (Vec::new(), true),
     };
-    names.push(name(constant_path.name()?.as_slice()));
-    Some(names)
+    names.push(text(path.name()?.as_slice()));
+    Some((names, from_top))
 }
 
 #[cfg(test)]
 mod tests {
     use super::Header;
+
+    // The superclass's constant path, joined as it is written.
+    fn superclass(header: &Header) -> Option<String> {
+        header
+            .superclass()
+            .map(|superclass| superclass.names().join("::"))
+    }
 
     // @behavior RH-001
     #[test]
@@ -141,7 +199,7 @@ mod tests {
 
         let header = Header::read("res://enemies/boss.rb", source);
 
-        assert_eq!(header.superclass(), Some("Godot::Node2D"));
+        assert_eq!(superclass(&header).as_deref(), Some("Godot::Node2D"));
     }
 
     // @behavior RH-002
@@ -151,7 +209,7 @@ mod tests {
 
         let header = Header::read("res://enemies/boss.rb", source);
 
-        assert_eq!(header.superclass(), Some("Godot::Node2D"));
+        assert_eq!(superclass(&header).as_deref(), Some("Godot::Node2D"));
     }
 
     // @behavior RH-003
@@ -161,7 +219,7 @@ mod tests {
 
         let header = Header::read("res://http_client.rb", source);
 
-        assert_eq!(header.superclass(), Some("Godot::Node"));
+        assert_eq!(superclass(&header).as_deref(), Some("Godot::Node"));
     }
 
     // @behavior RH-004
@@ -182,7 +240,7 @@ mod tests {
 
         let header = Header::read("res://player.rb", source);
 
-        assert_eq!(header.superclass(), Some("Godot::Node"));
+        assert_eq!(superclass(&header).as_deref(), Some("Godot::Node"));
         assert!(header.has_method("_ready"));
     }
 
@@ -193,6 +251,46 @@ mod tests {
 
         let header = Header::read("res://items.rb", source);
 
-        assert_eq!(header.superclass(), None);
+        assert_eq!(superclass(&header), None);
+    }
+
+    // @behavior RH-007
+    #[test]
+    fn a_superclass_that_is_not_a_constant_is_not_carried() {
+        let source = "class Point < Struct.new(:x, :y)\nend\n";
+
+        let header = Header::read("res://point.rb", source);
+
+        assert_eq!(superclass(&header), None);
+    }
+
+    // @behavior RH-008
+    #[test]
+    fn tool_called_in_the_class_body_makes_the_header_a_tools() {
+        let source = "class Player < Godot::Node\n  tool\nend\n";
+
+        let header = Header::read("res://player.rb", source);
+
+        assert!(header.is_tool());
+    }
+
+    // @behavior RH-009
+    #[test]
+    fn abstract_called_in_the_class_body_makes_the_header_an_abstract_classs() {
+        let source = "class Enemy < Godot::Node2D\n  abstract\nend\n";
+
+        let header = Header::read("res://enemy.rb", source);
+
+        assert!(header.is_abstract());
+    }
+
+    // @behavior RH-010
+    #[test]
+    fn a_call_inside_a_method_of_the_class_is_not_the_class_bodys() {
+        let source = "class Player < Godot::Node\n  def setup\n    tool\n  end\nend\n";
+
+        let header = Header::read("res://player.rb", source);
+
+        assert!(!header.is_tool());
     }
 }

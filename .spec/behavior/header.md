@@ -1,6 +1,6 @@
 # Header
 
-How a file's header is read from its source without running it: the class the file's path names, the superclass written on it, and the names of the methods it defines.
+How a file's header is read from its source without running it: the class the file's path names, the superclass written on it, the names of the methods it defines, and the `tool` and `abstract` its body calls.
 
 ## Includes
 
@@ -53,3 +53,35 @@ How a file's header is read from its source without running it: the class the fi
 | Given | a file whose path names a module |
 | When | its header is read |
 | Then | the header carries no superclass |
+
+## `RH-007` A superclass that is not a constant is not carried
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose class extends what a method call returns |
+| When | its header is read |
+| Then | the header carries no superclass |
+
+## `RH-008` `tool` called in the class body makes the header a tool's
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose class body calls `tool` |
+| When | its header is read |
+| Then | the header says the class is a tool |
+
+## `RH-009` `abstract` called in the class body makes the header an abstract class's
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose class body calls `abstract` |
+| When | its header is read |
+| Then | the header says the class is abstract |
+
+## `RH-010` A call inside a method of the class is not the class body's
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose class defines a method calling `tool` |
+| When | its header is read |
+| Then | the header does not say the class is a tool |

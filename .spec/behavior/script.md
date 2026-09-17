@@ -136,3 +136,28 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a node script whose class defines `_notification`, printing when it is given `NOTIFICATION_READY`'s number |
 | When | its node enters the scene |
 | Then | what `_notification` prints appears in the log |
+
+## `RS-018` A node script reports that its class is a tool before its file runs
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class body calls `tool` |
+| When | Godot asks the script whether it is a tool |
+| Then | the script answers that it is |
+
+## `RS-019` A node script reports that its class is abstract before its file runs
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class body calls `abstract` |
+| When | Godot asks the script whether it is abstract |
+| Then | the script answers that it is |
+
+## `RS-020` An abstract node script cannot be a node's script
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class body calls `abstract` |
+| Given | a node of the engine class it extends, with that script |
+| When | the scene runs |
+| Then | the log carries an error that the script is abstract |

@@ -57,7 +57,7 @@ Where a run's words go, as one stream: messages - what Ruby prints and the run's
 
 ### Header
 
-What a Ruby file says about the class its path names, read from its source without running it: the superclass written on the class statement, and the names of the methods the class defines. Godot asks a script these on any thread, before its file has run.
+What a Ruby file says about the class its path names, read from its source without running it: the superclass written on the class statement, the names of the methods the class defines, and the `tool` and `abstract` its body calls. Godot asks a script these on any thread, before its file has run.
 
 ### Node script
 

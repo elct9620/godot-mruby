@@ -46,9 +46,11 @@ impl RubyScript {
 
     // The engine node class the file's class extends, when it is a node script.
     fn node_class(header: &Header) -> Option<StringName> {
-        let engine_class = header.superclass()?.strip_prefix("Godot::")?;
-        (!engine_class.contains("::") && ClassDb::singleton().is_parent_class(engine_class, "Node"))
-            .then(|| StringName::from(engine_class))
+        let [godot, engine_class] = header.superclass()?.names() else {
+            return None;
+        };
+        (godot == "Godot" && ClassDb::singleton().is_parent_class(engine_class.as_str(), "Node"))
+            .then(|| StringName::from(engine_class.as_str()))
     }
 }
 
@@ -162,7 +164,13 @@ impl IScriptExtension for RubyScript {
     }
 
     fn is_tool(&self) -> bool {
-        false
+        self.header.is_tool()
+    }
+
+    // Godot refuses an abstract script as an object's script before it asks
+    // for an instance.
+    fn is_abstract(&self) -> bool {
+        self.header.is_abstract()
     }
 
     fn is_valid(&self) -> bool {
