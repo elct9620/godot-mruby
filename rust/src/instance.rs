@@ -8,8 +8,8 @@ use godot::register::info::{MethodInfo, PropertyInfo};
 
 use crate::ancestry::Ancestry;
 use crate::bridge::{Answer, Argument};
-use crate::header::Header;
 use crate::log::GodotLog;
+use crate::parser::Header;
 use crate::realm::{self, Key, RubyError};
 
 /// A node's instance of a `RubyScript`. It holds no Ruby value: the node's

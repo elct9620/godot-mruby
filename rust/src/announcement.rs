@@ -3,7 +3,7 @@
 //! the editor scans a project without running any of it.
 
 use crate::ancestry::{self, Ancestry};
-use crate::header::Header;
+use crate::parser::Header;
 use crate::realm::{self, Files};
 
 /// What the editor lists a node script by.

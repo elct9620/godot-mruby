@@ -13,9 +13,9 @@ use godot::prelude::*;
 use crate::ancestry::{self, Ancestry, Broken};
 use crate::error;
 use crate::game::GameFiles;
-use crate::header::Header;
 use crate::instance::RubyInstance;
 use crate::language;
+use crate::parser::Header;
 
 /// The script a `.rb` file loads as, the way a `.gd` file loads as a `GDScript`.
 ///

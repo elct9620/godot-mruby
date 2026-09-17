@@ -1,6 +1,5 @@
-//! What a Ruby file says about the class its path names, read from its source
-//! by Prism without running it, so a script answers Godot on any thread before
-//! its file has run.
+//! Reads a Ruby file's source with Prism and never runs it, so what the file
+//! says is known on any thread before its file has run.
 
 use std::collections::BTreeSet;
 

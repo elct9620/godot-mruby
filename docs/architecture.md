@@ -80,7 +80,7 @@ Build output stays out of the repository: `vendor/` holds mruby's source and arc
 | --- | --- |
 | `RubyLanguage` in `language.rs`, its `Project` in `announcement.rs` | `ScriptLanguageExtension` |
 | `ResourceFormatLoaderRubyScript` in `loader.rs` | `ResourceFormatLoader` |
-| `RubyScript` in `script.rs`, its `Header` and `Ancestry` in `header.rs` and `ancestry.rs` | `ScriptExtension` |
+| `RubyScript` in `script.rs`, its `Header` and `Ancestry` in `parser.rs` and `ancestry.rs` | `ScriptExtension` |
 | `RubyInstance` in `instance.rs` | A script instance |
 | `RubyTestRunner` in `runner.rs` | A `Node` in `runner.tscn` |
 | `settings.rs` | `ProjectSettings` under `mruby/` |
@@ -139,7 +139,7 @@ lib.rs    registers Scripting and settings, prepares the realm
 │               │  ancestry ◄─ announcement │
 │               ▼    │                      │
 │          instance  ▼                      │
-│                  header                   │
+│                  parser                   │
 └──┬────────────────────────────────────────┘
    │
    │   ┌─ Testing ────────────────────────────┐
@@ -164,7 +164,7 @@ Scripting serves `.rb` files to Godot, and Testing runs a project's Ruby tests; 
 
 The realm uses no other module but `compiler`. What it needs from Godot, `game` and `log` implement for it, so every arrow into the realm is a use of it and none leaves it for Godot.
 
-`header` and `ancestry` name files by the class index's rules, `realm::key_of`, `realm::normalize` and `realm::file_named`, without entering the realm. Within Scripting, `language` and `script` refer to each other, as GDExtension script languages do through the language's singleton; `instance` is handed the language by its script and reaches down only. `minitest` and `bridge` run their own Ruby through `compiler`, whose warnings `log` writes; `minitest` uses the realm only for the `Location` it writes a failure at.
+`parser` and `ancestry` name files by the class index's rules, `realm::key_of`, `realm::normalize` and `realm::file_named`, without entering the realm. Within Scripting, `language` and `script` refer to each other, as GDExtension script languages do through the language's singleton; `instance` is handed the language by its script and reaches down only. `minitest` and `bridge` run their own Ruby through `compiler`, whose warnings `log` writes; `minitest` uses the realm only for the `Location` it writes a failure at.
 
 ### 2.4 Node scripts
 
