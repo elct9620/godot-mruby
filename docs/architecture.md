@@ -80,7 +80,7 @@ Build output stays out of the repository: `vendor/` holds mruby's source and arc
 | --- | --- |
 | `RubyLanguage` in `language.rs`, its `Project` in `announcement.rs` | `ScriptLanguageExtension` |
 | `ResourceFormatLoaderRubyScript` in `loader.rs` | `ResourceFormatLoader` |
-| `RubyScript` in `script.rs`, its `Header` and `Ancestry` in `parser.rs` and `ancestry.rs` | `ScriptExtension` |
+| `RubyScript` in `script.rs`, answered from `parser.rs` and `ancestry.rs` | `ScriptExtension` |
 | `RubyInstance` in `instance.rs` | A script instance |
 | `RubyTestRunner` in `runner.rs` | A `Node` in `runner.tscn` |
 | `settings.rs` | `ProjectSettings` under `mruby/` |
@@ -132,27 +132,23 @@ Teardown runs in reverse: Godot stops loading `.rb` files and forgets the langua
 lib.rs    registers Scripting and settings, prepares the realm
   │
   ▼
-┌─ Scripting ───────────────────────────────┐
-│  loader ──► script ◄──► language          │
-│               │    │        │             │
-│               │    ▼        ▼             │
-│               │  ancestry ◄─ announcement │
-│               ▼    │                      │
-│          instance  ▼                      │
-│                  parser                   │
-└──┬────────────────────────────────────────┘
+┌─ Scripting ───────────────────────────────┐   ┌─ Testing ────────────┐
+│  loader ──► script ◄──► language          │   │  runner ──► minitest │
+│               │            │              │   └──┬───────────────────┘
+│               ▼            ▼              │      │
+│            instance    announcement       │      │
+└──┬────────────────────────────────────────┘      │
+   │                                               │
+   ▼                                               ▼
+┌─ Given to the realm ──────────────────────────────────────┐
+│  game ──► settings        log        bridge               │
+└──┬────────────────────────────────────────────────────────┘
    │
-   │   ┌─ Testing ────────────────────────────┐
-   │   │  runner ──► minitest                 │
-   │   └──┬───────────────────────────────────┘
-   │      │
-   │      ├──────► ┌─ Given to the realm ─────┐
-   ├─────────────► │  log                     │
-   │      │        │  game ──► settings       │
-   │      │        │  bridge                  │
-   │      │        └────────────┬─────────────┘
-   │      │                     │
-   ▼      ▼                     ▼
+   ▼
+┌─ Declarations ────────────────────────────┐
+│  ancestry ──► parser                      │   Prism
+└──┬────────────────────────────────────────┘
+   ▼
 ┌─ Realm ───────────────────────────────────┐
 │  realm                                    │
 └─────────────────────┬─────────────────────┘
@@ -160,11 +156,9 @@ lib.rs    registers Scripting and settings, prepares the realm
                    compiler
 ```
 
-Scripting serves `.rb` files to Godot, and Testing runs a project's Ruby tests; both reach Ruby only through the realm, by `instance` and `runner`.
+Each layer uses only the layers below it. The realm uses no other module but `compiler`: what it needs from Godot, `game` and `log` implement, and it neither parses a file nor knows the engine.
 
-The realm uses no other module but `compiler`. What it needs from Godot, `game` and `log` implement for it, so every arrow into the realm is a use of it and none leaves it for Godot.
-
-`parser` and `ancestry` name files by the class index's rules, `realm::key_of`, `realm::normalize` and `realm::file_named`, without entering the realm. Within Scripting, `language` and `script` refer to each other, as GDExtension script languages do through the language's singleton; `instance` is handed the language by its script and reaches down only. `minitest` and `bridge` run their own Ruby through `compiler`, whose warnings `log` writes; `minitest` uses the realm only for the `Location` it writes a failure at.
+`parser` and `ancestry` read what a file declares without running it, naming files by `realm::key_of`, `realm::normalize` and `realm::file_named`. Scripting answers Godot from them; `game` hands the realm, through `Files::declared`, what each file opens and the superclass a node script's class is held to, asking `bridge` which engine classes are nodes. `language` and `script` refer to each other, as GDExtension script languages do; `minitest` uses the realm only for a failure's `Location`.
 
 ### 2.4 Node scripts
 
@@ -255,11 +249,11 @@ realm.rs              Realm, prepare, enter, Files, Log, RubyError
 └─ registry.rs        keys to objects, rooted for the collector
 ```
 
-A realm's bookkeeping sits in the state's user data: the files and log it was given, the class index, each file's run, and the objects it holds for keys. Held objects live in a hash rooted for the collector, so mruby never frees an object a node still uses. Ruby's calls back into Rust reach it from the state they are given, and no gem knows the slot.
+A realm's bookkeeping sits in the state's user data. Held objects live in a hash rooted for the collector, so mruby never frees an object a node still uses. Ruby's calls back into Rust reach it from the state they are given, and no gem knows the slot.
 
 What makes this mruby environment its own is defined as the realm opens: output to its log, and the hooks through which a missing constant asks the index and a running file's constants are recorded.
 
-The index is built from the paths its files give, and the executor takes each file's source from them, so the realm never reads a file itself. The loader's rules are in `.spec/behavior/loader.md`.
+The index is built from the paths its files give, and the executor takes each file's source and declaration from them, so the realm never reads a file itself: what a file opens loads before it runs, and a node script's class is held to its declared superclass after. The loader's rules are in `.spec/behavior/loader.md`.
 
 ### 3.3 Extensions
 
