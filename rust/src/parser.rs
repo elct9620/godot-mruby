@@ -7,11 +7,13 @@ use ruby_prism::{CallNode, Node, NodeList};
 
 use crate::realm;
 
-/// A file's header: the name the class its path names is written with, the
-/// superclass written on it, the names of the methods it defines, and the
-/// `tool`, `abstract` and `icon` its body calls.
+/// A file's header: the constants its `module` and `class` statements write,
+/// the name the class its path names is written with, the superclass written
+/// on it, the names of the methods it defines, and the `tool`, `abstract` and
+/// `icon` its body calls.
 #[derive(Debug, Default)]
 pub struct Header {
+    writes: Vec<Vec<String>>,
     name: String,
     superclass: Option<Superclass>,
     methods: BTreeSet<String>,
@@ -49,11 +51,22 @@ impl Header {
         let mut reader = Reader {
             key: realm::key_of(path),
             header: None,
+            writes: Vec::new(),
         };
         if let Some(program) = result.node().as_program_node() {
             reader.read_body(&program.statements().body(), &[]);
         }
-        reader.header.unwrap_or_default()
+        Header {
+            writes: reader.writes,
+            ..reader.header.unwrap_or_default()
+        }
+    }
+
+    /// Each constant a `module` or `class` statement writes, in the order
+    /// they are written, as its names from the top level: `module Items` then
+    /// `class Potion` inside it write `["Items"]` and `["Items", "Potion"]`.
+    pub fn writes(&self) -> &[Vec<String>] {
+        &self.writes
     }
 
     /// The class's own name as its class statement writes it, without the
@@ -122,6 +135,7 @@ impl Header {
 struct Reader {
     key: Vec<String>,
     header: Option<Header>,
+    writes: Vec<Vec<String>>,
 }
 
 impl Reader {
@@ -144,6 +158,7 @@ impl Reader {
         let Some(names) = constant_names(&path, scope) else {
             return;
         };
+        self.writes.push(names.clone());
         let statements = body
             .and_then(|body| body.as_statements_node())
             .map(|statements| statements.body());
@@ -372,5 +387,34 @@ mod tests {
         let header = Header::read("res://net/http_client.rb", source);
 
         assert_eq!(header.name(), "HTTPClient");
+    }
+
+    // @behavior RH-015
+    #[test]
+    fn every_constant_a_module_or_class_statement_writes_is_carried() {
+        let source = "module Enemies\n  class Boss < Enemy\n    class Loot\n    end\n  end\n\n  class ::Lamp\n  end\nend\n";
+
+        let header = Header::read("res://enemies/boss.rb", source);
+
+        assert_eq!(
+            header.writes(),
+            [
+                vec!["Enemies"],
+                vec!["Enemies", "Boss"],
+                vec!["Enemies", "Boss", "Loot"],
+                vec!["Lamp"],
+            ]
+        );
+    }
+
+    // @behavior RH-016
+    #[test]
+    fn a_class_statement_inside_a_method_writes_nothing_the_header_carries() {
+        let source =
+            "class Boss < Godot::Node\n  def spawn\n    class Minion\n    end\n  end\nend\n";
+
+        let header = Header::read("res://boss.rb", source);
+
+        assert_eq!(header.writes(), [vec!["Boss"]]);
     }
 }

@@ -4,7 +4,8 @@
 use godot::classes::{Os, ResourceLoader, Script};
 use godot::obj::Singleton;
 
-use crate::realm::Files;
+use crate::parser::Header;
+use crate::realm::{Declared, Files};
 use crate::settings;
 
 const ROOT: &str = "res://";
@@ -38,6 +39,17 @@ impl Files for GameFiles {
             .and_then(|resource| resource.try_cast::<Script>().ok())
             .map(|script| script.get_source_code().to_string())
             .ok_or_else(|| "Godot did not load it as a script".to_owned())
+    }
+
+    // Read from the source, so a file that cannot be read declares nothing and
+    // fails where the realm reads its source to run it.
+    fn declared(&self, path: &str) -> Declared {
+        let Ok(source) = self.source(path) else {
+            return Declared::default();
+        };
+        Declared {
+            writes: Header::read(path, &source).writes().to_vec(),
+        }
     }
 }
 

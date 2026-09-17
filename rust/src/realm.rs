@@ -48,6 +48,16 @@ pub trait Files: Send {
     fn paths(&self) -> Vec<String>;
     /// The source of the file at `path`, or why there is none.
     fn source(&self, path: &str) -> Result<String, String>;
+    /// What the file at `path` declares before it runs.
+    fn declared(&self, path: &str) -> Declared;
+}
+
+/// What a file declares before it runs.
+#[derive(Debug, Default)]
+pub struct Declared {
+    /// The constants its statements write, each as its names from the top
+    /// level; the realm loads them before the statements open them.
+    pub writes: Vec<Vec<String>>,
 }
 
 /// Where a realm's words go: what Ruby prints, and the records placed at a
@@ -229,7 +239,7 @@ impl Realm {
     pub fn run(&self, path: &str) -> Result<(), RubyError> {
         let _scope = self.mrb.arena_scope();
         executor::run(&self.mrb, path, || {
-            constants::ensure_namespaces(&self.mrb, path)
+            constants::ensure_opened(&self.mrb, path)
         })
         .map_err(|error| RubyError::read(&self.mrb, Some(path), &error))
     }
@@ -392,6 +402,10 @@ mod tests {
 
         fn source(&self, _path: &str) -> Result<String, String> {
             Ok("class Thing\n  def answer\n    42\n  end\nend\n".to_owned())
+        }
+
+        fn declared(&self, _path: &str) -> Declared {
+            Declared::default()
         }
     }
 

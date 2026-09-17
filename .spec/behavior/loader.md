@@ -206,3 +206,27 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 | Given | a realm whose class index took in a file whose path spells a constant an extension defines |
 | When | the extension is installed into the realm |
 | Then | the log carries a warning that the file never loads by name |
+
+## `RL-026` A file that opens another file's class runs after that file
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose `class` statement opens a class another file's path names, which has not loaded |
+| When | Ruby first uses the constant of the opening file |
+| Then | the class has what both files define |
+
+## `RL-027` Opening another file's class with another superclass raises TypeError
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose `class` statement opens a class another file's path names, writing a superclass that file does not |
+| When | Ruby first uses the constant of the opening file |
+| Then | it raises `TypeError` for the superclass mismatch |
+
+## `RL-028` A directory's module a file opens is made before the file runs
+
+| Step | Statement |
+| --- | --- |
+| Given | a file outside a directory with no file of its own name, whose `module` statement opens the directory's module, then raises |
+| When | Ruby uses the failing file's constant and the exception is rescued |
+| Then | the directory's module is still defined |

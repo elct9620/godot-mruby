@@ -1,6 +1,6 @@
 # Header
 
-How a file's header is read from its source without running it: the class the file's path names and the name it is written with, the superclass written on it and the namespaces it is looked up from, the names of the methods it defines, and the `tool`, `abstract` and `icon` its body calls.
+How a file's header is read from its source without running it: the constants its `module` and `class` statements write, the class the file's path names and the name it is written with, the superclass written on it and the namespaces it is looked up from, the names of the methods it defines, and the `tool`, `abstract` and `icon` its body calls.
 
 ## Includes
 
@@ -38,7 +38,7 @@ How a file's header is read from its source without running it: the class the fi
 | When | its header is read |
 | Then | the header does not carry that method |
 
-## `RH-005` A file that does not parse still has a header
+## `RH-005` A file with a syntax error still has a header
 
 | Step | Statement |
 | --- | --- |
@@ -117,3 +117,19 @@ How a file's header is read from its source without running it: the class the fi
 | Given | a file whose class statement spells its constant path in full |
 | When | its header is read |
 | Then | the header carries the last name of that path as the class's name |
+
+## `RH-015` Every constant a `module` or `class` statement writes is carried
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose statements open its path's namespaces, its own class, a class inside that class, and another constant |
+| When | its header is read |
+| Then | the header carries each of those constants, spelled as written from the top level |
+
+## `RH-016` A `class` statement inside a method writes nothing the header carries
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose method body holds a `class` statement |
+| When | its header is read |
+| Then | the header does not carry that constant |

@@ -278,6 +278,32 @@ pub trait Files {
 }
 ```
 
+## `Files::declared`
+
+What the file at a path declares before it runs, which the realm keeps as it runs the file.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub trait Files {
+    fn declared(&self, path: &str) -> Declared;
+}
+```
+
+## `Declared`
+
+What a file declares before it runs: the constants its statements write, each as the names written from the top level, which the realm loads before the statements open them.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub struct Declared;
+```
+
 ## `Log`
 
 Where a realm's words go: what Ruby prints, and the records placed at a Ruby file and line.

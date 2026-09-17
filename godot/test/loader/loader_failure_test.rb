@@ -47,4 +47,16 @@ class LoaderFailureTest < Minitest::Test
     error = assert_raises(SyntaxError) { Loader::Broken }
     assert_includes error.message, "res://loader/broken.rb:4: syntax error"
   end
+
+  # @behavior RL-027
+  def test_opening_another_files_class_with_another_superclass_raises_type_error
+    error = assert_raises(TypeError) { Loader::Mismatching }
+    assert_includes error.message, "superclass mismatch"
+  end
+
+  # @behavior RL-028
+  def test_a_directory_module_a_file_opens_is_made_before_the_file_runs
+    assert_raises(RuntimeError) { Loader::Shading }
+    assert Loader.const_defined?(:Shades)
+  end
 end

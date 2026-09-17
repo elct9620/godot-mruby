@@ -42,4 +42,12 @@ class LoaderTest < Minitest::Test
   def test_a_file_under_a_test_directory_loads_by_name
     assert_equal 0, Test::Loader::Support::FakeClock.new.now
   end
+
+  # @behavior RL-026
+  def test_a_file_that_opens_another_files_class_runs_after_that_file
+    Loader::Opener
+    lamp = Loader::Lamp.new
+    assert lamp.bright?
+    assert lamp.lit?
+  end
 end

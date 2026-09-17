@@ -42,12 +42,42 @@ fn created(mrb: &Mrb, receiver: Value, name: Symbol) -> Value {
     Value::nil()
 }
 
-/// Makes sure each namespace the file at `path` sits in exists before it
-/// runs, when the class index names the file: the namespace's own file runs,
-/// or its directory becomes an empty module. A `module` statement never asks
-/// const_missing, so a file that opened its namespace first would make a
-/// module unrelated to it.
-pub(super) fn ensure_namespaces(mrb: &Mrb, path: &str) -> Result<(), Error> {
+/// Makes sure what the file at `path` opens exists before it runs, as CRuby
+/// loads a constant still to be loaded at the statement opening it: the
+/// namespaces its path sits in, then each other constant its statements write
+/// that the class index names. mruby's statements never ask const_missing, so
+/// a file opening one first would make a module or class unrelated to it.
+pub(super) fn ensure_opened(mrb: &Mrb, path: &str) -> Result<(), Error> {
+    ensure_namespaces(mrb, path)?;
+    let own = index::key_of(path);
+    for names in bookkeeping(mrb).files.declared(path).writes {
+        let key: Vec<String> = names.iter().map(|name| index::normalize(name)).collect();
+        // Its own class and the namespaces around it are the file's to define,
+        // and nothing inside its class exists before the class does.
+        if own.starts_with(&key) || key.starts_with(&own) || constant_at(mrb, &key).is_some() {
+            continue;
+        }
+        let Some((name, outer)) = names.split_last() else {
+            continue;
+        };
+        let named = bookkeeping(mrb).index.borrow().named(&key);
+        match named {
+            Some(Named::File(file)) => {
+                constant_from(mrb, &file, outer, name)?;
+            }
+            Some(Named::Namespace(namespace)) => {
+                namespace_module(mrb, outer, name, &namespace)?;
+            }
+            None => {}
+        }
+    }
+    Ok(())
+}
+
+// Makes sure each namespace the file at `path` sits in exists, when the class
+// index names the file: the namespace's own file runs, or its directory
+// becomes an empty module.
+fn ensure_namespaces(mrb: &Mrb, path: &str) -> Result<(), Error> {
     if !bookkeeping(mrb).index.borrow().names(path) {
         return Ok(());
     }
@@ -151,7 +181,7 @@ fn constant_from(mrb: &Mrb, path: &str, outer: &[String], name: &str) -> Result<
 }
 
 fn run_by_name(mrb: &Mrb, path: &str) -> Result<(), Error> {
-    executor::run_by_name(mrb, path, || ensure_namespaces(mrb, path))
+    executor::run_by_name(mrb, path, || ensure_opened(mrb, path))
 }
 
 // A directory's module, which answers only to the name Zeitwerk gives it.
