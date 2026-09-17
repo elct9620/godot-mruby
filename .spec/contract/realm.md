@@ -294,7 +294,7 @@ pub trait Files {
 
 ## `Declared`
 
-What a file declares before it runs: the constants its statements write, each as the names written from the top level, which the realm loads before the statements open them.
+What a file declares before it runs: the constants its statements write, each as the names written from the top level, which the realm loads before the statements open them, and the superclass its class extends when something relies on it, which the realm holds the class to once the file has run.
 
 | Attribute | Value |
 | --- | --- |
@@ -302,6 +302,18 @@ What a file declares before it runs: the constants its statements write, each as
 
 ```rust
 pub struct Declared;
+```
+
+## `Extends`
+
+The superclass a file's class is held to: the class another file's path names, or a constant no file names, spelled from the top level.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub enum Extends {}
 ```
 
 ## `Log`

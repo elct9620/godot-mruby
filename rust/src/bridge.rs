@@ -29,6 +29,12 @@ impl Gem for Godot {
     }
 }
 
+/// Whether the engine class named `class` is a node class, the only kind a
+/// node script extends.
+pub fn is_node_class(class: &str) -> bool {
+    ClassDb::singleton().is_parent_class(class, "Node")
+}
+
 // Godot.__engine_superclass__(name): the name of the engine class `name`
 // inherits from, empty for the root, or nil when the engine has no such class.
 fn engine_superclass(mrb: &Mrb, _godot: Value, name: Symbol) -> Value {

@@ -6,7 +6,7 @@
 use beni::{Error, FromValue, IntoValue, Module, Mrb, RClass, RModule, Symbol, Value, method};
 
 use super::index::{self, Named, Namespace};
-use super::{bookkeeping, compile, executor};
+use super::{Extends, bookkeeping, compile, executor};
 
 pub(super) fn define(mrb: &Mrb) -> Result<(), Error> {
     let module = mrb.class_get(c"Module")?;
@@ -47,10 +47,12 @@ fn created(mrb: &Mrb, receiver: Value, name: Symbol) -> Value {
 /// namespaces its path sits in, then each other constant its statements write
 /// that the class index names. mruby's statements never ask const_missing, so
 /// a file opening one first would make a module or class unrelated to it.
-pub(super) fn ensure_opened(mrb: &Mrb, path: &str) -> Result<(), Error> {
+/// Answers the superclass the file's class is held to once it has run.
+pub(super) fn ensure_opened(mrb: &Mrb, path: &str) -> Result<Option<Extends>, Error> {
     ensure_namespaces(mrb, path)?;
     let own = index::key_of(path);
-    for names in bookkeeping(mrb).files.declared(path).writes {
+    let declared = bookkeeping(mrb).files.declared(path);
+    for names in declared.writes {
         let key: Vec<String> = names.iter().map(|name| index::normalize(name)).collect();
         // Its own class and the namespaces around it are the file's to define,
         // and nothing inside its class exists before the class does.
@@ -71,7 +73,48 @@ pub(super) fn ensure_opened(mrb: &Mrb, path: &str) -> Result<(), Error> {
             None => {}
         }
     }
-    Ok(())
+    Ok(declared.extends)
+}
+
+/// Holds the class the file at `path` defined to the superclass it declared,
+/// compared by name so the comparison loads nothing. A file that defined no
+/// class of its path's name is left to whoever asked for the class.
+pub(super) fn keep_extends(mrb: &Mrb, path: &str, extends: Option<Extends>) -> Result<(), Error> {
+    let Some(extends) = extends else {
+        return Ok(());
+    };
+    let Some(class) = constant_at(mrb, &index::key_of(path)) else {
+        return Ok(());
+    };
+    let (expected, promised) = match &extends {
+        Extends::File(file) => (index::key_of(file), format!("the class {file} names")),
+        Extends::Constant(names) => (
+            names.iter().map(|name| index::normalize(name)).collect(),
+            names.join("::"),
+        ),
+    };
+    let superclass = RClass::from_value(class)
+        .is_some()
+        .then(|| class.funcall(mrb, c"superclass", &[]).ok())
+        .flatten()
+        .and_then(|superclass| path_of(mrb, superclass));
+    let extended: Option<Vec<String>> = superclass
+        .as_ref()
+        .map(|names| names.iter().map(|name| index::normalize(name)).collect());
+    if extended.as_ref() == Some(&expected) {
+        return Ok(());
+    }
+    let own = path_of(mrb, class).unwrap_or_default().join("::");
+    let found = match superclass {
+        None => "no class".to_owned(),
+        Some(names) if names.is_empty() => "Object".to_owned(),
+        Some(names) => names.join("::"),
+    };
+    let message = format!("{own} in {path} extends {found}, not {promised}");
+    match mrb.exc_get(c"TypeError") {
+        Ok(type_error) => Err(Error::new(mrb, type_error, &message)),
+        Err(error) => Err(error),
+    }
 }
 
 // Makes sure each namespace the file at `path` sits in exists, when the class
@@ -181,7 +224,12 @@ fn constant_from(mrb: &Mrb, path: &str, outer: &[String], name: &str) -> Result<
 }
 
 fn run_by_name(mrb: &Mrb, path: &str) -> Result<(), Error> {
-    executor::run_by_name(mrb, path, || ensure_opened(mrb, path))
+    executor::run_by_name(
+        mrb,
+        path,
+        || ensure_opened(mrb, path),
+        |extends| keep_extends(mrb, path, extends),
+    )
 }
 
 // A directory's module, which answers only to the name Zeitwerk gives it.

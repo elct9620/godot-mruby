@@ -50,4 +50,10 @@ class LoaderTest < Minitest::Test
     assert lamp.bright?
     assert lamp.lit?
   end
+
+  # @behavior RL-030
+  def test_a_library_files_superclass_is_rubys_to_look_up
+    superclass = Loader::Posts::Plain.superclass
+    assert_same Loader::Posts::Marker, superclass
+  end
 end

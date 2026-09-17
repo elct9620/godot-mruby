@@ -2,9 +2,7 @@ use std::ffi::c_void;
 use std::sync::Mutex;
 
 use godot::classes::native::ScriptLanguageExtensionProfilingInfo;
-use godot::classes::{
-    ClassDb, Engine, IScriptLanguageExtension, Object, Script, ScriptLanguageExtension,
-};
+use godot::classes::{Engine, IScriptLanguageExtension, Object, Script, ScriptLanguageExtension};
 use godot::global::Error;
 use godot::meta::conv::RawPtr;
 use godot::prelude::*;
@@ -13,7 +11,7 @@ use crate::announcement::{Project, Unannounced};
 use crate::game::GameFiles;
 use crate::realm::Location;
 use crate::script::RubyScript;
-use crate::{settings, warn};
+use crate::{bridge, settings, warn};
 
 /// The Ruby script language, registered with the engine for `.rb` files.
 ///
@@ -316,8 +314,7 @@ impl IScriptLanguageExtension for RubyLanguage {
     // lists the file as a class by the name answered.
     fn get_global_class_name(&self, path: GString) -> AnyDictionary {
         let test_directories = settings::test_directories();
-        let is_node = |class: &str| ClassDb::singleton().is_parent_class(class, "Node");
-        let project = Project::new(&GameFiles, &test_directories, &is_node);
+        let project = Project::new(&GameFiles, &test_directories, &bridge::is_node_class);
         match project.announce(&path.to_string()) {
             Ok(announcement) => vdict! {
                 "name" => announcement.name,

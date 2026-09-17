@@ -11,11 +11,11 @@ use godot::obj::script::create_script_instance;
 use godot::prelude::*;
 
 use crate::ancestry::{self, Ancestry, Broken};
-use crate::error;
 use crate::game::GameFiles;
 use crate::instance::RubyInstance;
 use crate::language;
 use crate::parser::Header;
+use crate::{bridge, error};
 
 /// The script a `.rb` file loads as, the way a `.gd` file loads as a `GDScript`.
 ///
@@ -60,8 +60,7 @@ impl RubyScript {
     fn node_class(&self) -> Result<StringName, Broken> {
         let ancestry = self.ancestry().as_ref().map_err(Clone::clone)?;
         let engine_class = ancestry.engine_class();
-        ClassDb::singleton()
-            .is_parent_class(engine_class, "Node")
+        bridge::is_node_class(engine_class)
             .then(|| StringName::from(engine_class))
             .ok_or(Broken::NoEngineClass)
     }

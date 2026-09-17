@@ -230,3 +230,19 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 | Given | a file outside a directory with no file of its own name, whose `module` statement opens the directory's module, then raises |
 | When | Ruby uses the failing file's constant and the exception is rescued |
 | Then | the directory's module is still defined |
+
+## `RL-029` A node script whose class extends another class than its ancestry says raises TypeError
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose superclass, as Ruby looks it up, is not the class its ancestry found by the loader's rule |
+| When | Ruby first uses the node script's constant |
+| Then | it raises `TypeError` naming the file its ancestry found |
+
+## `RL-030` A library file's superclass is Ruby's to look up
+
+| Step | Statement |
+| --- | --- |
+| Given | a library file whose superclass, as Ruby looks it up, is not the class the loader's rule would find |
+| When | Ruby first uses the library file's constant |
+| Then | its class extends the class Ruby found |

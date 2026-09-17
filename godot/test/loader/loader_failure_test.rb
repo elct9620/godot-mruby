@@ -59,4 +59,11 @@ class LoaderFailureTest < Minitest::Test
     assert_raises(RuntimeError) { Loader::Shading }
     assert Loader.const_defined?(:Shades)
   end
+
+  # @behavior RL-029
+  def test_a_node_script_extending_another_class_than_its_ancestry_says_raises_type_error
+    error = assert_raises(TypeError) { Loader::Posts::Shadowed }
+    assert_equal "Loader::Posts::Shadowed in res://loader/posts/shadowed.rb extends Loader::Posts::Sentry, " \
+                 "not the class res://loader/sentry.rb names", error.message
+  end
 end

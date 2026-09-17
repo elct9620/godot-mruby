@@ -5,8 +5,9 @@ use godot::classes::{Os, ResourceLoader, Script};
 use godot::obj::Singleton;
 
 use crate::parser::Header;
-use crate::realm::{Declared, Files};
+use crate::realm::{Declared, Extends, Files};
 use crate::settings;
+use crate::{ancestry, bridge};
 
 const ROOT: &str = "res://";
 
@@ -42,13 +43,26 @@ impl Files for GameFiles {
     }
 
     // Read from the source, so a file that cannot be read declares nothing and
-    // fails where the realm reads its source to run it.
+    // fails where the realm reads its source to run it. Only a node script's
+    // class is held to its superclass: Godot is told its ancestry before it
+    // runs, and a library file's is Ruby's to look up.
     fn declared(&self, path: &str) -> Declared {
         let Ok(source) = self.source(path) else {
             return Declared::default();
         };
+        let header = Header::read(path, &source);
+        let extends = ancestry::read(path, &header, self)
+            .ok()
+            .filter(|ancestry| bridge::is_node_class(ancestry.engine_class()))
+            .map(|ancestry| match ancestry.files().first() {
+                Some((file, _)) => Extends::File(file.clone()),
+                None => {
+                    Extends::Constant(vec!["Godot".to_owned(), ancestry.engine_class().to_owned()])
+                }
+            });
         Declared {
-            writes: Header::read(path, &source).writes().to_vec(),
+            writes: header.writes().to_vec(),
+            extends,
         }
     }
 }

@@ -58,6 +58,18 @@ pub struct Declared {
     /// The constants its statements write, each as its names from the top
     /// level; the realm loads them before the statements open them.
     pub writes: Vec<Vec<String>>,
+    /// The superclass its class extends when something relies on it; once the
+    /// file has run, a class extending another raises `TypeError`.
+    pub extends: Option<Extends>,
+}
+
+/// The superclass a file's class is held to.
+#[derive(Debug)]
+pub enum Extends {
+    /// The class the file at this path names.
+    File(String),
+    /// A constant no file names, as its names from the top level.
+    Constant(Vec<String>),
 }
 
 /// Where a realm's words go: what Ruby prints, and the records placed at a
@@ -238,9 +250,12 @@ impl Realm {
     /// has run in this realm already, whether it succeeded or not.
     pub fn run(&self, path: &str) -> Result<(), RubyError> {
         let _scope = self.mrb.arena_scope();
-        executor::run(&self.mrb, path, || {
-            constants::ensure_opened(&self.mrb, path)
-        })
+        executor::run(
+            &self.mrb,
+            path,
+            || constants::ensure_opened(&self.mrb, path),
+            |extends| constants::keep_extends(&self.mrb, path, extends),
+        )
         .map_err(|error| RubyError::read(&self.mrb, Some(path), &error))
     }
 

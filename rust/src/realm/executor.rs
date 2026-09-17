@@ -33,31 +33,34 @@ pub(super) struct Runs {
 }
 
 /// Runs the file at `path` by path: once, whether it succeeded or not.
-/// `prepare` is the run's first step.
-pub(super) fn run(
+/// `prepare` is the run's first step, and what it answers `settle` is given
+/// as the last, once the file has run.
+pub(super) fn run<T>(
     mrb: &Mrb,
     path: &str,
-    prepare: impl FnOnce() -> Result<(), Error>,
+    prepare: impl FnOnce() -> Result<T, Error>,
+    settle: impl FnOnce(T) -> Result<(), Error>,
 ) -> Result<(), Error> {
     if runs(mrb).files.borrow().contains_key(path) {
         return Ok(());
     }
-    execute(mrb, path, prepare)
+    execute(mrb, path, prepare, settle)
 }
 
 /// Runs the file at `path` for a name it defines, unless it has run cleanly
 /// or is running now. A file that raised runs again, as a failed `require`
 /// does in Ruby: it took away what it created, so it starts over.
-pub(super) fn run_by_name(
+pub(super) fn run_by_name<T>(
     mrb: &Mrb,
     path: &str,
-    prepare: impl FnOnce() -> Result<(), Error>,
+    prepare: impl FnOnce() -> Result<T, Error>,
+    settle: impl FnOnce(T) -> Result<(), Error>,
 ) -> Result<(), Error> {
     match runs(mrb).files.borrow().get(path) {
         Some(Run::Done | Run::Running) => return Ok(()),
         Some(Run::Failed) | None => {}
     }
-    execute(mrb, path, prepare)
+    execute(mrb, path, prepare, settle)
 }
 
 /// The files that led back to the one at `path` while it is still running,
@@ -93,10 +96,11 @@ fn runs(mrb: &Mrb) -> &Runs {
     &bookkeeping(mrb).runs
 }
 
-fn execute(
+fn execute<T>(
     mrb: &Mrb,
     path: &str,
-    prepare: impl FnOnce() -> Result<(), Error>,
+    prepare: impl FnOnce() -> Result<T, Error>,
+    settle: impl FnOnce(T) -> Result<(), Error>,
 ) -> Result<(), Error> {
     let runs = runs(mrb);
     runs.files
@@ -106,12 +110,12 @@ fn execute(
         path: path.to_owned(),
         created: Vec::new(),
     });
-    let outcome = prepare()
-        .and_then(|()| source_of(mrb, path))
-        .and_then(|source| {
-            let name = CString::new(path).map_err(|error| refused(mrb, &error.to_string()))?;
-            compile(mrb, &name, &source)
-        });
+    let outcome = prepare().and_then(|prepared| {
+        let source = source_of(mrb, path)?;
+        let name = CString::new(path).map_err(|error| refused(mrb, &error.to_string()))?;
+        compile(mrb, &name, &source)?;
+        settle(prepared)
+    });
     let frame = runs.frames.borrow_mut().pop();
     let run = match (&outcome, frame) {
         (Ok(()), _) => Run::Done,
