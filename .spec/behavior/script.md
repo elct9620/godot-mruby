@@ -4,6 +4,7 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 
 ## Includes
 
+- `tasks/support/announcement.rb`
 - `tasks/support/godot.rb`
 - `tasks/support/node_scripts.rb`
 
@@ -194,3 +195,19 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a node with that script |
 | When | the scene runs |
 | Then | the log carries an error naming the superclass no file names |
+
+## `RS-025` The editor lists a node script by its announcement
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class extends another node script's class and names an icon relative to its file |
+| When | the editor scans the project |
+| Then | the project's class list carries the class with the other class as base and the icon's path from the project root |
+
+## `RS-026` The editor warns of node scripts sharing a name
+
+| Step | Statement |
+| --- | --- |
+| Given | two node scripts in different directories whose classes share a name |
+| When | the editor scans the project |
+| Then | the log carries a warning naming both files |

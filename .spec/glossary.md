@@ -57,7 +57,7 @@ Where a run's words go, as one stream: messages - what Ruby prints and the run's
 
 ### Header
 
-What a Ruby file says about the class its path names, read from its source without running it: the superclass written on the class statement and the namespaces it is looked up from, the names of the methods the class defines, and the `tool` and `abstract` its body calls. Godot asks a script these on any thread, before its file has run.
+What a Ruby file says about the class its path names, read from its source without running it: the name the class is written with, the superclass written on the class statement and the namespaces it is looked up from, the names of the methods the class defines, and the `tool`, `abstract` and `icon` its body calls. Godot asks a script these on any thread, before its file has run.
 
 ### Ancestry
 
@@ -66,6 +66,10 @@ The files a class inherits from through the superclasses their headers write, ne
 ### Node script
 
 A file whose class, the one its path names, extends an engine node class, itself or through its ancestry. It is the only kind of file a node takes as its script.
+
+### Announcement
+
+What a node script tells the editor to list it by, as `class_name` does for a GDScript: the name its class is written with, without its namespaces, the nearest announced class it inherits from or else its engine class, and its icon, `tool` and `abstract`. A file under a test directory is never announced, and neither is any of the node scripts sharing a name.
 
 ### Library file
 

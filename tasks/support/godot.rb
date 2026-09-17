@@ -2,6 +2,7 @@
 
 require "open3"
 
+require_relative "announcement"
 require_relative "loader"
 require_relative "node_scripts"
 require_relative "ruby_tests"
@@ -41,6 +42,7 @@ module Godot
     verify_scripts_run!(project)
     verify_source_held!(project)
     NodeScripts.verify!(project)
+    Announcement.verify!(project)
     verify_reports!(project)
     RubyTests.verify!(project)
     Loader.verify!(project)
@@ -54,7 +56,7 @@ module Godot
   # pass is judged by what it printed.
   # @behavior RA-001
   def verify_loaded!(project = PROJECT)
-    output, status = Open3.capture2e(EXECUTABLE, "--headless", "--editor", "--quit", "--path", project)
+    output, status = run_editor(project)
     errors = output.lines.grep(FAILED)
     return if status.success? && errors.empty? && output.include?(LOADED)
 
@@ -96,6 +98,11 @@ module Godot
 
   def reported?(lines, report, location)
     lines.each_cons(2).any? { |line, at| line == report && at.start_with?("at:") && at.end_with?(location) }
+  end
+
+  # Opens the project in the editor, which scans it, and quits.
+  def run_editor(project)
+    Open3.capture2e(EXECUTABLE, "--headless", "--editor", "--quit", "--path", project)
   end
 
   def run_scene(project, scene, *)

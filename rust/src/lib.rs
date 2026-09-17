@@ -2,6 +2,7 @@ use godot::init::InitStage;
 use godot::prelude::*;
 
 mod ancestry;
+mod announcement;
 mod bridge;
 mod compiler;
 mod game;

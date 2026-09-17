@@ -2,12 +2,18 @@ use std::ffi::c_void;
 use std::sync::Mutex;
 
 use godot::classes::native::ScriptLanguageExtensionProfilingInfo;
-use godot::classes::{Engine, IScriptLanguageExtension, Object, Script, ScriptLanguageExtension};
+use godot::classes::{
+    ClassDb, Engine, IScriptLanguageExtension, Object, Script, ScriptLanguageExtension,
+};
 use godot::global::Error;
 use godot::meta::conv::RawPtr;
 use godot::prelude::*;
 
+use crate::announcement::{Project, Unannounced};
+use crate::game::GameFiles;
+use crate::realm::Location;
 use crate::script::RubyScript;
+use crate::{settings, warn};
 
 /// The Ruby script language, registered with the engine for `.rb` files.
 ///
@@ -302,11 +308,62 @@ impl IScriptLanguageExtension for RubyLanguage {
 
     fn frame(&mut self) {}
 
-    fn handles_global_class_type(&self, _type: GString) -> bool {
-        false
+    fn handles_global_class_type(&self, type_: GString) -> bool {
+        type_ == RubyScript::class_id().to_gstring()
     }
 
-    fn get_global_class_name(&self, _path: GString) -> AnyDictionary {
-        empty_dictionary()
+    // The editor asks this of every script file as it scans the project, and
+    // lists the file as a class by the name answered.
+    fn get_global_class_name(&self, path: GString) -> AnyDictionary {
+        let test_directories = settings::test_directories();
+        let is_node = |class: &str| ClassDb::singleton().is_parent_class(class, "Node");
+        let project = Project::new(&GameFiles, &test_directories, &is_node);
+        match project.announce(&path.to_string()) {
+            Ok(announcement) => vdict! {
+                "name" => announcement.name,
+                "base_type" => announcement.base,
+                "icon_path" => announcement
+                    .icon
+                    .map(|icon| icon_path(&path, &icon))
+                    .unwrap_or_default()
+                    .to_string(),
+                "is_abstract" => announcement.is_abstract,
+                "is_tool" => announcement.is_tool,
+            }
+            .upcast_any_dictionary(),
+            Err(Unannounced::SharedName { name, others }) => {
+                warn_of_shared_name(path.to_string(), name, others);
+                empty_dictionary()
+            }
+            Err(_) => empty_dictionary(),
+        }
     }
+}
+
+// An icon's path from the project's root: one written relative to the file's
+// directory is taken from there, as GDScript's `@icon` is.
+fn icon_path(script: &GString, icon: &str) -> GString {
+    let icon = GString::from(icon);
+    if icon.is_relative_path() {
+        script.get_base_dir().path_join(&icon).simplify_path()
+    } else {
+        icon.simplify_path()
+    }
+}
+
+// Written once the language is no longer in a call: Godot asks the language
+// for its stack as it prints a warning, which cannot happen while it answers.
+fn warn_of_shared_name(path: String, name: String, others: Vec<String>) {
+    Callable::from_sync_fn("warn_of_shared_name", move |_| {
+        let at = Location {
+            file: path.clone(),
+            line: 1,
+        };
+        warn!(
+            at: &at,
+            "{path} and {} define node scripts named {name}, so none is listed by that name",
+            others.join(" and ")
+        );
+    })
+    .call_deferred(&[]);
 }

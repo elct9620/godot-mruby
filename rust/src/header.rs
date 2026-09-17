@@ -8,15 +8,17 @@ use ruby_prism::{CallNode, Node, NodeList};
 
 use crate::realm;
 
-/// A file's header: the superclass written on the class its path names, the
-/// names of the methods that class defines, and the `tool` and `abstract` its
-/// body calls.
+/// A file's header: the name the class its path names is written with, the
+/// superclass written on it, the names of the methods it defines, and the
+/// `tool`, `abstract` and `icon` its body calls.
 #[derive(Debug, Default)]
 pub struct Header {
+    name: String,
     superclass: Option<Superclass>,
     methods: BTreeSet<String>,
     tool: bool,
     is_abstract: bool,
+    icon: Option<String>,
 }
 
 /// A superclass as its class statement writes it: a constant path, and the
@@ -55,6 +57,12 @@ impl Header {
         reader.header.unwrap_or_default()
     }
 
+    /// The class's own name as its class statement writes it, without the
+    /// namespaces around it: `HTTPClient` for `class Net::HTTPClient`.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     pub fn superclass(&self) -> Option<&Superclass> {
         self.superclass.as_ref()
     }
@@ -69,6 +77,11 @@ impl Header {
 
     pub fn is_abstract(&self) -> bool {
         self.is_abstract
+    }
+
+    /// The icon's path, as the string `icon` is called with.
+    pub fn icon(&self) -> Option<&str> {
+        self.icon.as_deref()
     }
 
     // What the class body's own statements say: the methods it defines on its
@@ -87,12 +100,21 @@ impl Header {
     }
 
     fn read_call(&mut self, call: &CallNode) {
-        if call.receiver().is_some() || call.arguments().is_some() || call.block().is_some() {
+        if call.receiver().is_some() || call.block().is_some() {
             return;
         }
-        match call.name().as_slice() {
-            b"tool" => self.tool = true,
-            b"abstract" => self.is_abstract = true,
+        let arguments: Vec<Node> = call
+            .arguments()
+            .map(|arguments| arguments.arguments().iter().collect())
+            .unwrap_or_default();
+        match (call.name().as_slice(), arguments.as_slice()) {
+            (b"tool", []) => self.tool = true,
+            (b"abstract", []) => self.is_abstract = true,
+            (b"icon", [path]) => {
+                if let Some(path) = path.as_string_node() {
+                    self.icon = Some(text(path.unescaped()));
+                }
+            }
             _ => {}
         }
     }
@@ -128,6 +150,7 @@ impl Reader {
             .map(|statements| statements.body());
         if self.header.is_none() && self.names_file(&names) {
             let mut header = Header {
+                name: names.last().cloned().unwrap_or_default(),
                 superclass: class
                     .and_then(|class| class.superclass())
                     .and_then(|superclass| written(&superclass, scope)),
@@ -330,5 +353,25 @@ mod tests {
         let header = Header::read("res://enemies/boss.rb", source);
 
         assert_eq!(scope(&header), Some(Vec::new()));
+    }
+
+    // @behavior RH-013
+    #[test]
+    fn icon_called_in_the_class_body_with_a_string_carries_that_path() {
+        let source = "class Enemy < Godot::Node2D\n  icon \"icons/enemy.svg\"\nend\n";
+
+        let header = Header::read("res://enemy.rb", source);
+
+        assert_eq!(header.icon(), Some("icons/enemy.svg"));
+    }
+
+    // @behavior RH-014
+    #[test]
+    fn the_classs_name_is_the_last_name_its_class_statement_writes() {
+        let source = "class Net::HTTPClient < Godot::Node\nend\n";
+
+        let header = Header::read("res://net/http_client.rb", source);
+
+        assert_eq!(header.name(), "HTTPClient");
     }
 }

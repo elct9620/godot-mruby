@@ -97,14 +97,15 @@ pub fn read(path: &str, header: &Header, files: &impl Files) -> Result<Ancestry,
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use std::collections::BTreeMap;
 
     use super::{Ancestry, Broken, read};
     use crate::header::Header;
     use crate::realm::Files;
 
-    struct Sources(BTreeMap<&'static str, &'static str>);
+    /// Files kept in memory, by path.
+    pub struct Sources(pub BTreeMap<&'static str, &'static str>);
 
     impl Files for Sources {
         fn paths(&self) -> Vec<String> {

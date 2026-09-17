@@ -1,6 +1,6 @@
 # Header
 
-How a file's header is read from its source without running it: the class the file's path names, the superclass written on it and the namespaces it is looked up from, the names of the methods it defines, and the `tool` and `abstract` its body calls.
+How a file's header is read from its source without running it: the class the file's path names and the name it is written with, the superclass written on it and the namespaces it is looked up from, the names of the methods it defines, and the `tool`, `abstract` and `icon` its body calls.
 
 ## Includes
 
@@ -101,3 +101,19 @@ How a file's header is read from its source without running it: the class the fi
 | Given | a file whose top-level class statement spells its constant path in full, extending a constant |
 | When | its header is read |
 | Then | the header carries no namespace the superclass is looked up from |
+
+## `RH-013` `icon` called in the class body with a string carries that path
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose class body calls `icon` with a string literal |
+| When | its header is read |
+| Then | the header carries that string as the class's icon |
+
+## `RH-014` The class's name is the last name its class statement writes
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose class statement spells its constant path in full |
+| When | its header is read |
+| Then | the header carries the last name of that path as the class's name |
