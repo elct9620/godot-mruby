@@ -11,5 +11,5 @@ end
 
 desc "Open the editor on godot/ with a fresh host build"
 task editor: "extension:build" do
-  sh Godot::EXECUTABLE, "--editor", "--path", Godot::PROJECT
+  Godot.open_editor!
 end

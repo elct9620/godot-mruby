@@ -37,6 +37,21 @@ module Godot
 
   module_function
 
+  # Opens the project in the editor's GUI, for a person to look at what no
+  # headless run shows.
+  def open_editor!(project = PROJECT)
+    system(EXECUTABLE, "--editor", *editor_workarounds, "--path", project, exception: true)
+  end
+
+  # nixpkgs' macOS build aborts compiling Metal shaders for the Forward+
+  # renderer (NixOS/nixpkgs#485083); the Compatibility renderer opens.
+  def editor_workarounds
+    version, = Open3.capture2e(EXECUTABLE, "--version")
+    return [] unless RUBY_PLATFORM.include?("darwin") && version.include?(".nixpkgs.")
+
+    %w[--rendering-method gl_compatibility]
+  end
+
   def verify!(project = PROJECT)
     verify_loaded!(project)
     verify_scripts_run!(project)
