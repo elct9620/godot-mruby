@@ -19,13 +19,21 @@ pub struct Header {
     is_abstract: bool,
 }
 
-/// A superclass as its class statement writes it: a constant path.
-#[derive(Debug, PartialEq, Eq)]
+/// A superclass as its class statement writes it: a constant path, and the
+/// namespaces Ruby looks it up from, innermost last.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Superclass {
+    scope: Vec<String>,
     names: Vec<String>,
 }
 
 impl Superclass {
+    /// The namespaces the class statement is written in, which Ruby looks the
+    /// superclass up from; none for one written from the top level, as `::A`.
+    pub fn scope(&self) -> &[String] {
+        &self.scope
+    }
+
     /// The constant path as written, as `["Godot", "Node"]`.
     pub fn names(&self) -> &[String] {
         &self.names
@@ -122,7 +130,7 @@ impl Reader {
             let mut header = Header {
                 superclass: class
                     .and_then(|class| class.superclass())
-                    .and_then(|superclass| written(&superclass)),
+                    .and_then(|superclass| written(&superclass, scope)),
                 ..Header::default()
             };
             if let Some(statements) = &statements {
@@ -148,10 +156,14 @@ fn text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
-// A superclass the class statement writes, when it is a constant path.
-fn written(superclass: &Node) -> Option<Superclass> {
-    let (names, _) = constant_path(superclass)?;
-    Some(Superclass { names })
+// A superclass the class statement inside `scope` writes, when it is a
+// constant path.
+fn written(superclass: &Node, scope: &[String]) -> Option<Superclass> {
+    let (names, from_top) = constant_path(superclass)?;
+    Some(Superclass {
+        scope: if from_top { Vec::new() } else { scope.to_vec() },
+        names,
+    })
 }
 
 // The whole constant path a `module` or `class` statement inside `scope`
@@ -190,6 +202,12 @@ mod tests {
         header
             .superclass()
             .map(|superclass| superclass.names().join("::"))
+    }
+
+    fn scope(header: &Header) -> Option<Vec<String>> {
+        header
+            .superclass()
+            .map(|superclass| superclass.scope().to_vec())
     }
 
     // @behavior RH-001
@@ -292,5 +310,25 @@ mod tests {
         let header = Header::read("res://player.rb", source);
 
         assert!(!header.is_tool());
+    }
+
+    // @behavior RH-011
+    #[test]
+    fn a_superclass_is_looked_up_from_the_namespaces_its_class_is_written_in() {
+        let source = "module Enemies\n  class Boss < Enemy\n  end\nend\n";
+
+        let header = Header::read("res://enemies/boss.rb", source);
+
+        assert_eq!(scope(&header), Some(vec!["Enemies".to_owned()]));
+    }
+
+    // @behavior RH-012
+    #[test]
+    fn a_superclass_on_a_class_written_with_its_whole_path_is_looked_up_from_the_top_level() {
+        let source = "class Enemies::Boss < Enemy\nend\n";
+
+        let header = Header::read("res://enemies/boss.rb", source);
+
+        assert_eq!(scope(&header), Some(Vec::new()));
     }
 }

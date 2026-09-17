@@ -13,7 +13,7 @@ mod print;
 mod registry;
 
 use index::ClassIndex;
-pub use index::{key_of, normalize};
+pub use index::{file_named, key_of, normalize};
 pub use registry::Key;
 use registry::Registry;
 

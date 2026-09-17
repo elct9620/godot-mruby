@@ -1,6 +1,6 @@
 # Header
 
-How a file's header is read from its source without running it: the class the file's path names, the superclass written on it, the names of the methods it defines, and the `tool` and `abstract` its body calls.
+How a file's header is read from its source without running it: the class the file's path names, the superclass written on it and the namespaces it is looked up from, the names of the methods it defines, and the `tool` and `abstract` its body calls.
 
 ## Includes
 
@@ -85,3 +85,19 @@ How a file's header is read from its source without running it: the class the fi
 | Given | a file whose class defines a method calling `tool` |
 | When | its header is read |
 | Then | the header does not say the class is a tool |
+
+## `RH-011` A superclass is looked up from the namespaces its class statement is written in
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose class is written inside `module` statements, extending a constant |
+| When | its header is read |
+| Then | the header carries those modules as the namespaces the superclass is looked up from |
+
+## `RH-012` A superclass on a class written with its whole constant path is looked up from the top level
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose top-level class statement spells its constant path in full, extending a constant |
+| When | its header is read |
+| Then | the header carries no namespace the superclass is looked up from |

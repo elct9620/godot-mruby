@@ -5,7 +5,7 @@
 
 use beni::{Error, FromValue, IntoValue, Module, Mrb, RClass, RModule, Symbol, Value, method};
 
-use super::index::{self, Key, Named, Namespace};
+use super::index::{self, Named, Namespace};
 use super::{bookkeeping, compile, executor};
 
 pub(super) fn define(mrb: &Mrb) -> Result<(), Error> {
@@ -99,28 +99,20 @@ fn constant_matching(mrb: &Mrb, scope: Value, segment: &str) -> Option<Value> {
     scope.const_get(mrb, name).ok()
 }
 
-// What `name` names from inside `receiver`, looked for from the innermost
-// namespace outward, as Rails' classic autoloader does: mruby hands
-// const_missing the innermost scope alone.
+// What `name` names from inside `receiver`: mruby hands const_missing the
+// innermost scope alone, so the index looks outward from it.
 fn resolve(mrb: &Mrb, receiver: Value, name: &str) -> Result<Option<Value>, Error> {
     let scope = path_of(mrb, receiver).unwrap_or_default();
-    for depth in (0..=scope.len()).rev() {
-        let outer = &scope[..depth];
-        let mut key: Key = outer
-            .iter()
-            .map(|segment| index::normalize(segment))
-            .collect();
-        key.push(index::normalize(name));
-        let named = bookkeeping(mrb).index.borrow().named(&key);
-        match named {
-            Some(Named::File(path)) => return constant_from(mrb, &path, outer, name).map(Some),
-            Some(Named::Namespace(namespace)) => {
-                return namespace_module(mrb, outer, name, &namespace).map(Some);
-            }
-            None => {}
+    let named = bookkeeping(mrb).index.borrow().lookup(&scope, name);
+    match named {
+        Some((depth, Named::File(path))) => {
+            constant_from(mrb, &path, &scope[..depth], name).map(Some)
         }
+        Some((depth, Named::Namespace(namespace))) => {
+            namespace_module(mrb, &scope[..depth], name, &namespace).map(Some)
+        }
+        None => Ok(None),
     }
-    Ok(None)
 }
 
 // The names of the namespaces `receiver` sits in, outermost first, then its

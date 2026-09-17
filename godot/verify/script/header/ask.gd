@@ -15,3 +15,6 @@ func _ready() -> void:
 	var marked: Script = load("res://verify/script/header/marked.rb")
 	print("is tool: ", marked.is_tool())
 	print("is abstract: ", marked.is_abstract())
+	var boss: Script = load("res://verify/script/inherit/boss.rb")
+	print("inherited base type: ", boss.get_instance_base_type())
+	print("base script: ", boss.get_base_script().resource_path)

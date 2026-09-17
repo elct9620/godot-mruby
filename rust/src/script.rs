@@ -1,15 +1,18 @@
 use std::ffi::c_void;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use godot::classes::{
-    ClassDb, Engine, IScriptExtension, Object, Script, ScriptExtension, ScriptLanguage,
+    ClassDb, Engine, IScriptExtension, Object, ResourceLoader, Script, ScriptExtension,
+    ScriptLanguage,
 };
 use godot::global::Error;
 use godot::meta::conv::RawPtr;
 use godot::obj::script::create_script_instance;
 use godot::prelude::*;
 
+use crate::ancestry::{self, Ancestry, Broken};
 use crate::error;
+use crate::game::GameFiles;
 use crate::header::Header;
 use crate::instance::RubyInstance;
 use crate::language;
@@ -25,11 +28,12 @@ pub struct RubyScript {
     base: Base<ScriptExtension>,
     source: GString,
     // Both read again whenever the source changes, so Godot's questions are
-    // answered from what the script holds; an instance keeps the header its
-    // script had as the instance was made.
+    // answered from what the script holds; an instance keeps what its script
+    // had as the instance was made.
     header: Arc<Header>,
-    // The engine node class the file's class extends, when it is a node script.
-    node_class: Option<StringName>,
+    // Read from other files' sources at the first question that needs it,
+    // since loading a script must not load the scripts it inherits from.
+    ancestry: OnceLock<Result<Arc<Ancestry>, Broken>>,
 }
 
 impl RubyScript {
@@ -38,19 +42,28 @@ impl RubyScript {
         let header = Header::read(path, &source.to_string());
         Gd::from_init_fn(|base| Self {
             base,
-            node_class: Self::node_class(&header),
             header: Arc::new(header),
+            ancestry: OnceLock::new(),
             source,
         })
     }
 
-    // The engine node class the file's class extends, when it is a node script.
-    fn node_class(header: &Header) -> Option<StringName> {
-        let [godot, engine_class] = header.superclass()?.names() else {
-            return None;
-        };
-        (godot == "Godot" && ClassDb::singleton().is_parent_class(engine_class.as_str(), "Node"))
-            .then(|| StringName::from(engine_class.as_str()))
+    fn ancestry(&self) -> &Result<Arc<Ancestry>, Broken> {
+        self.ancestry.get_or_init(|| {
+            let path = self.base().get_path().to_string();
+            ancestry::read(&path, &self.header, &GameFiles).map(Arc::new)
+        })
+    }
+
+    // The engine node class the file's class extends when it is a node
+    // script, or why it is none.
+    fn node_class(&self) -> Result<StringName, Broken> {
+        let ancestry = self.ancestry().as_ref().map_err(Clone::clone)?;
+        let engine_class = ancestry.engine_class();
+        ClassDb::singleton()
+            .is_parent_class(engine_class, "Node")
+            .then(|| StringName::from(engine_class))
+            .ok_or(Broken::NoEngineClass)
     }
 }
 
@@ -68,7 +81,13 @@ impl IScriptExtension for RubyScript {
     }
 
     fn get_base_script(&self) -> Option<Gd<Script>> {
-        None
+        let (path, _) = self.ancestry().as_ref().ok()?.files().first()?;
+        ResourceLoader::singleton()
+            .load_ex(path)
+            .type_hint("Script")
+            .done()?
+            .try_cast::<Script>()
+            .ok()
     }
 
     fn get_global_name(&self) -> StringName {
@@ -80,7 +99,7 @@ impl IScriptExtension for RubyScript {
     }
 
     fn get_instance_base_type(&self) -> StringName {
-        self.node_class.clone().unwrap_or_default()
+        self.node_class().unwrap_or_default()
     }
 
     // Only a node script makes an instance, and only for a node of the engine
@@ -88,14 +107,15 @@ impl IScriptExtension for RubyScript {
     // not fit.
     unsafe fn instance_create_rawptr(&self, for_object: Gd<Object>) -> RawPtr<*mut c_void> {
         let path = self.base().get_path();
-        let Some(engine_class) = &self.node_class else {
-            error!(
-                "{path} defines no class extending an engine node class, so it cannot be a node's script"
-            );
-            return refused();
+        let engine_class = match self.node_class() {
+            Ok(engine_class) => engine_class,
+            Err(broken) => {
+                error!("{path} {broken}, so it cannot be a node's script");
+                return refused();
+            }
         };
         let object_class = StringName::from(&for_object.get_class());
-        if !ClassDb::singleton().is_parent_class(&object_class, engine_class) {
+        if !ClassDb::singleton().is_parent_class(&object_class, &engine_class) {
             error!("{path} extends {engine_class}, so it cannot be the script of a {object_class}");
             return refused();
         }
@@ -105,6 +125,10 @@ impl IScriptExtension for RubyScript {
         let instance = RubyInstance::new(
             self.to_gd().upcast(),
             Arc::clone(&self.header),
+            self.ancestry()
+                .as_ref()
+                .map(Arc::clone)
+                .expect("a node script has an ancestry"),
             language,
             &for_object,
         );
@@ -134,8 +158,8 @@ impl IScriptExtension for RubyScript {
     fn set_source_code(&mut self, code: GString) {
         let path = self.base().get_path().to_string();
         let header = Header::read(&path, &code.to_string());
-        self.node_class = Self::node_class(&header);
         self.header = Arc::new(header);
+        self.ancestry = OnceLock::new();
         self.source = code;
     }
 
@@ -152,7 +176,12 @@ impl IScriptExtension for RubyScript {
     }
 
     fn has_method(&self, method: StringName) -> bool {
-        self.header.has_method(&method.to_string())
+        let method = method.to_string();
+        self.header.has_method(&method)
+            || self
+                .ancestry()
+                .as_ref()
+                .is_ok_and(|ancestry| ancestry.has_method(&method))
     }
 
     fn has_static_method(&self, _method: StringName) -> bool {

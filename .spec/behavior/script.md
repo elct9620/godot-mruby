@@ -161,3 +161,36 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a node of the engine class it extends, with that script |
 | When | the scene runs |
 | Then | the log carries an error that the script is abstract |
+
+## `RS-021` A node script reports the engine class it extends through other files before its file runs
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class extends another file's class, which extends an engine node class |
+| When | Godot asks the script for its instance base type |
+| Then | the script answers that engine class |
+
+## `RS-022` A node script reports the script of the class it extends
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class extends another file's class |
+| When | Godot asks the script for its base script |
+| Then | the script answers the script of that other file |
+
+## `RS-023` A node's object is given a callback its class inherits from another file
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class defines no method and extends another file's class defining `_ready` |
+| When | its node enters the scene |
+| Then | what the inherited `_ready` prints appears in the log |
+
+## `RS-024` A file whose superclass no file names cannot be a node's script
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose class extends a name no file spells |
+| Given | a node with that script |
+| When | the scene runs |
+| Then | the log carries an error naming the superclass no file names |

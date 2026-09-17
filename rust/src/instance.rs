@@ -6,6 +6,7 @@ use godot::obj::script::{ScriptInstance, SiMut};
 use godot::prelude::*;
 use godot::register::info::{MethodInfo, PropertyInfo};
 
+use crate::ancestry::Ancestry;
 use crate::bridge::{Answer, Argument};
 use crate::header::Header;
 use crate::log::GodotLog;
@@ -16,9 +17,10 @@ use crate::realm::{self, Key, RubyError};
 /// method its class defines, and the instance keeps the realm's key for it.
 pub struct RubyInstance {
     script: Gd<Script>,
-    // The header its script had as the instance was made, which answers
-    // which methods the node's class defines without entering the realm.
+    // The header and ancestry its script had as the instance was made, which
+    // answer which methods the node's class has without entering the realm.
     header: Arc<Header>,
+    ancestry: Arc<Ancestry>,
     // The language its script reports, which Godot also asks the instance for.
     language: Gd<ScriptLanguage>,
     // What the node prints as while its script says nothing about it.
@@ -40,12 +42,14 @@ impl RubyInstance {
     pub fn new(
         script: Gd<Script>,
         header: Arc<Header>,
+        ancestry: Arc<Ancestry>,
         language: Gd<ScriptLanguage>,
         owner: &Gd<Object>,
     ) -> Self {
         Self {
             script,
             header,
+            ancestry,
             language,
             display: GString::from(&owner.to_string()),
             stage: Stage::Recorded,
@@ -71,6 +75,11 @@ impl RubyInstance {
                 None
             }
         }
+    }
+
+    // Whether the node's class defines `method` or inherits it from a file.
+    fn has(&self, method: &str) -> bool {
+        self.header.has_method(method) || self.ancestry.has_method(method)
     }
 
     // Calls `method` on the node's Ruby object; an exception is reported and
@@ -127,14 +136,14 @@ impl ScriptInstance for RubyInstance {
         args: &[&Variant],
     ) -> Result<Variant, CallErrorType> {
         let method = method.to_string();
-        if !this.header.has_method(&method) {
+        if !this.has(&method) {
             return Err(CallErrorType::InvalidMethod);
         }
         Ok(this.send(&method, args))
     }
 
     fn on_notification(mut this: SiMut<Self>, what: i32, _reversed: bool) {
-        if this.header.has_method("_notification") {
+        if this.has("_notification") {
             this.send("_notification", &[&what.to_variant()]);
         }
     }
@@ -144,7 +153,7 @@ impl ScriptInstance for RubyInstance {
     }
 
     fn has_method(&self, method: StringName) -> bool {
-        self.header.has_method(&method.to_string())
+        self.has(&method.to_string())
     }
 
     fn get_script(&self) -> &Gd<Script> {

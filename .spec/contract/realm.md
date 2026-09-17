@@ -68,6 +68,18 @@ A constant's name as the class index matches it against a path's segment: withou
 pub fn normalize(segment: &str) -> String {}
 ```
 
+## `file_named`
+
+The file a constant path written inside namespaces names, looked up among paths as the realm's loader looks it up: from the innermost namespace outward, with a name two files spell naming none. What reads files outside the realm finds the file the realm would run.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub fn file_named(paths: Vec<String>, scope: &[String], names: &[String]) -> Option<String> {}
+```
+
 ## `release`
 
 Lets go of the object a key of the game's realm holds, at the realm's next entry or frame; it never waits for the realm, so a node is freed on any thread without waiting for Ruby.

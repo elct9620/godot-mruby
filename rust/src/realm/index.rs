@@ -100,6 +100,20 @@ impl ClassIndex {
         }
     }
 
+    /// What `name` names from inside the namespaces `scope` spells, looked for
+    /// from the innermost namespace outward, as Rails' classic autoloader does,
+    /// and how many of those namespaces it was found inside.
+    pub fn lookup(&self, scope: &[String], name: &str) -> Option<(usize, Named)> {
+        (0..=scope.len()).rev().find_map(|depth| {
+            let mut key: Key = scope[..depth]
+                .iter()
+                .map(|segment| normalize(segment))
+                .collect();
+            key.push(normalize(name));
+            self.named(&key).map(|named| (depth, named))
+        })
+    }
+
     /// Whether the file at `path` is one the index names.
     pub fn names(&self, path: &str) -> bool {
         self.files
@@ -180,6 +194,37 @@ fn segments(path: &str) -> Vec<&str> {
         .trim_end_matches(".rb")
         .split('/')
         .collect()
+}
+
+/// The file a constant path written inside the namespaces `scope` spells
+/// names among `paths`, found as a realm's loader finds it: each name from
+/// the innermost namespace outward, and a name two files spell naming none.
+pub fn file_named(paths: Vec<String>, scope: &[String], names: &[String]) -> Option<String> {
+    let mut index = ClassIndex::default();
+    index.add(paths, |_| false, &Unheard);
+    let mut scope = scope.to_vec();
+    let mut named = None;
+    for name in names {
+        let (depth, found) = index.lookup(&scope, name)?;
+        scope.truncate(depth);
+        scope.push(name.clone());
+        named = Some(found);
+    }
+    match named? {
+        Named::File(path) => Some(path),
+        Named::Namespace(_) => None,
+    }
+}
+
+// A log for an index read outside a realm, whose warnings the realm gives.
+struct Unheard;
+
+impl Log for Unheard {
+    fn message(&self, _text: &str) {}
+
+    fn raw(&self, _text: &str) {}
+
+    fn record(&self, _level: Level, _at: Option<&Location>, _text: &str) {}
 }
 
 /// The constant path the file at `path` spells, as the index matches it.
