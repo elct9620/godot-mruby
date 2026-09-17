@@ -38,3 +38,11 @@ How a thread goes into the game's realm: one thread at a time is inside, and a t
 | Given | a thread inside the game's realm |
 | When | the thread closes the realm |
 | Then | the entry it is inside still reaches the realm |
+
+## `RE-005` An entry after the realm panicked while opening opens it again
+
+| Step | Statement |
+| --- | --- |
+| Given | the game's realm, which panicked while opening at an entry |
+| When | the realm is entered again |
+| Then | the realm opens |

@@ -1,6 +1,6 @@
 use std::cell::{Cell, RefCell};
 use std::ffi::CStr;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use beni::{Error, FromValue, Gem, IntoValue, Mrb, Value};
 
@@ -131,10 +131,16 @@ static GAME: ReentrantLock<RefCell<Game>> = ReentrantLock::new(RefCell::new(Game
 // Keys let go of on any thread, waiting for the game's realm to take them.
 static RELEASED: Mutex<Vec<Key>> = Mutex::new(Vec::new());
 
+// The way the game's realm opens, which an opener that panicked leaves as it
+// was, so the lock is taken whether or not that poisoned it.
+fn opener() -> MutexGuard<'static, Option<Opener>> {
+    OPENER.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
 /// Gives the game's realm the way it opens, which its first entry uses. A
 /// mod's realm will be given its own the same way, keyed by the mod.
 pub fn prepare(open: impl Fn() -> Result<Realm, RubyError> + Send + 'static) {
-    *OPENER.lock().unwrap() = Some(Box::new(open));
+    *opener() = Some(Box::new(open));
 }
 
 /// The game's realm, as far as it has come.
@@ -150,14 +156,8 @@ enum Game {
 pub fn enter<T>(body: impl FnOnce(&Realm) -> Result<T, RubyError>) -> Result<T, RubyError> {
     let game = GAME.lock();
     if matches!(*game.borrow(), Game::Closed) {
-        *game.borrow_mut() = Game::Opening;
-        match open_game() {
-            Ok(realm) => *game.borrow_mut() = Game::Open(realm),
-            Err(error) => {
-                *game.borrow_mut() = Game::Closed;
-                return Err(error);
-            }
-        }
+        let opening = Opening::start(&game);
+        opening.opened(open_game()?);
     }
     let game = game.borrow();
     let Game::Open(realm) = &*game else {
@@ -169,10 +169,34 @@ pub fn enter<T>(body: impl FnOnce(&Realm) -> Result<T, RubyError>) -> Result<T, 
     body(realm)
 }
 
+// The game's realm while it opens. It goes back to closed unless it opened,
+// so an opener that fails or panics leaves the next entry to try again.
+struct Opening<'a>(&'a RefCell<Game>);
+
+impl<'a> Opening<'a> {
+    fn start(game: &'a RefCell<Game>) -> Self {
+        *game.borrow_mut() = Game::Opening;
+        Self(game)
+    }
+
+    fn opened(self, realm: Realm) {
+        *self.0.borrow_mut() = Game::Open(realm);
+    }
+}
+
+impl Drop for Opening<'_> {
+    fn drop(&mut self) {
+        let mut game = self.0.borrow_mut();
+        if matches!(*game, Game::Opening) {
+            *game = Game::Closed;
+        }
+    }
+}
+
 // Opens the game's realm the way it was prepared, holding no borrow of it, so
 // what it opens with may enter and be refused.
 fn open_game() -> Result<Realm, RubyError> {
-    let opener = OPENER.lock().unwrap();
+    let opener = opener();
     let open = opener.as_ref().ok_or_else(|| {
         RubyError::plain("the game's realm was entered before it was prepared".to_owned())
     })?;
@@ -429,8 +453,10 @@ impl RubyError {
 
 #[cfg(test)]
 mod tests {
+    use std::panic;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc;
-    use std::sync::{Mutex, MutexGuard};
+    use std::sync::{Arc, Mutex, MutexGuard};
     use std::thread;
     use std::time::Duration;
 
@@ -595,6 +621,27 @@ mod tests {
         enter(|_| Ok(())).ok();
 
         assert_eq!(outcome.try_recv().ok(), Some(true));
+    }
+
+    // @behavior RE-005
+    #[test]
+    fn an_entry_after_the_realm_panicked_while_opening_opens_it_again() {
+        let _turn = TURN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        close();
+        let opened = Arc::new(AtomicBool::new(false));
+        let first = opened.clone();
+        prepare(move || {
+            if !first.swap(true, Ordering::SeqCst) {
+                panic!("the opener panics the first time");
+            }
+            Realm::open(Thing, Silent, |_| Ok(()))
+        });
+        let panicked = panic::catch_unwind(|| enter(|_| Ok(()))).is_err();
+
+        let entered = enter(|_| Ok(()));
+
+        assert!(panicked);
+        assert!(entered.is_ok());
     }
 
     // @behavior RE-004
