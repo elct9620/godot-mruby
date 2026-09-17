@@ -78,9 +78,9 @@ Build output stays out of the repository: `vendor/` holds mruby's source and arc
 
 | Component | Godot counterpart |
 | --- | --- |
-| `RubyLanguage` in `language.rs` | `ScriptLanguageExtension` |
+| `RubyLanguage` in `language.rs`, its `Project` in `announcement.rs` | `ScriptLanguageExtension` |
 | `ResourceFormatLoaderRubyScript` in `loader.rs` | `ResourceFormatLoader` |
-| `RubyScript` in `script.rs`, its `Header` in `header.rs` | `ScriptExtension` |
+| `RubyScript` in `script.rs`, its `Header` and `Ancestry` in `header.rs` and `ancestry.rs` | `ScriptExtension` |
 | `RubyInstance` in `instance.rs` | A script instance |
 | `RubyTestRunner` in `runner.rs` | A `Node` in `runner.tscn` |
 | `settings.rs` | `ProjectSettings` under `mruby/` |
@@ -90,7 +90,7 @@ Build output stays out of the repository: `vendor/` holds mruby's source and arc
 
 Each class Godot knows answers what Godot already asks of a script language; none opens another way for Godot to reach Ruby.
 
-`ResourceFormatLoaderRubyScript` reads a file's source and runs nothing. The script answers Godot from its header, which Prism reads from that source, and only a node script makes an instance (2.4).
+`ResourceFormatLoaderRubyScript` reads a file's source and runs nothing. The script answers Godot from its header, which Prism reads from that source, and its ancestry; only a node script makes an instance (2.4), and the language announces it (2.5).
 
 The runner is an ordinary node the addon ships. `GameFiles`, `GodotLog` and the `Godot` gem are what the game's realm is given: the files under `res://`, Godot's log, and the engine's classes, specified in `.spec/behavior/engine_classes.md`. The names Godot knows are in `.spec/contract/godot.md`, and the settings in `.spec/contract/project_settings.md`.
 
@@ -134,9 +134,12 @@ lib.rs    registers Scripting and settings, prepares the realm
   ▼
 ┌─ Scripting ───────────────────────────────┐
 │  loader ──► script ◄──► language          │
-│               │    └───► header           │
-│               ▼                           │
-│            instance                       │
+│               │    │        │             │
+│               │    ▼        ▼             │
+│               │  ancestry ◄─ announcement │
+│               ▼    │                      │
+│          instance  ▼                      │
+│                  header                   │
 └──┬────────────────────────────────────────┘
    │
    │   ┌─ Testing ────────────────────────────┐
@@ -161,7 +164,7 @@ Scripting serves `.rb` files to Godot, and Testing runs a project's Ruby tests; 
 
 The realm uses no other module but `compiler`. What it needs from Godot, `game` and `log` implement for it, so every arrow into the realm is a use of it and none leaves it for Godot.
 
-`header` names a file's class by the class index's rules, `realm::key_of` and `realm::normalize`, without entering the realm. Within Scripting, `language` and `script` refer to each other, as GDExtension script languages do through the language's singleton; `instance` is handed the language by its script and reaches down only. `minitest` and `bridge` run their own Ruby through `compiler`, whose warnings `log` writes; `minitest` uses the realm only for the `Location` it writes a failure at.
+`header` and `ancestry` name files by the class index's rules, `realm::key_of`, `realm::normalize` and `realm::file_named`, without entering the realm. Within Scripting, `language` and `script` refer to each other, as GDExtension script languages do through the language's singleton; `instance` is handed the language by its script and reaches down only. `minitest` and `bridge` run their own Ruby through `compiler`, whose warnings `log` writes; `minitest` uses the realm only for the `Location` it writes a failure at.
 
 ### 2.4 Node scripts
 
@@ -179,9 +182,32 @@ node.set_script ──► instance: recorded        no Ruby runs
 node freed (any thread) ──► release(key) ──► let go at the next entry or frame
 ```
 
-The header answers what Godot asks on any thread: the engine node class the file's class extends, and the methods it defines. A script makes an instance only for a node of that class, and leaves get and set to the engine.
+The header and ancestry answer what Godot asks on any thread: the engine node class the file's class extends, through other files' classes too, and the methods it has. A script makes an instance only for a node of that class, and leaves get and set to the engine.
 
 The instance holds no Ruby value, only a key. `bridge` carries a call's arguments into Ruby and its answer back; only nil, booleans, integers and floats cross yet. Freeing a node queues its key and never waits for the realm. The rules are in `.spec/behavior/script.md` and `.spec/behavior/held_objects.md`.
+
+### 2.5 Announcement
+
+```
+the editor scans res://
+  │  language.get_global_class_name(path)
+  ▼
+announcement::Project
+  │  under a test directory        ──► not listed
+  │  header + ancestry: no node    ──► not listed
+  │  another node script's name    ──► not listed, warned of
+  ▼
+name     Boss                      the class's own name
+base     Enemy                     nearest listed ancestor, or engine class
+tool, abstract, icon               from the header
+  │
+  ▼
+the editor's class list, saved for exported games
+```
+
+A node script is listed like a GDScript's `class_name`. The list is flat, as it is for C#, so a name drops its namespaces, and node scripts sharing one are none of them listed; the scan order never picks one.
+
+The warning is written by a deferred call, since Godot asks every language for its stack as it prints. The rules are in `.spec/behavior/announcement.md`.
 
 ## 3. Realm
 
