@@ -8,3 +8,8 @@ namespace :godot do
     Godot.verify!
   end
 end
+
+desc "Open the editor on godot/ with a fresh host build"
+task editor: "extension:build" do
+  sh Godot::EXECUTABLE, "--editor", "--path", Godot::PROJECT
+end

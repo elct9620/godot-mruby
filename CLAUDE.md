@@ -24,6 +24,7 @@ bundle install
 bundle exec rake beni:build              # download mruby into vendor/ and build its archives
 bundle exec rake extension:build         # host debug build, installed into the addon's bin/
 bundle exec rake godot:verify            # headless editor pass, then its scenes and the Ruby tests
+bundle exec rake editor                  # build, then open the editor on godot/
 godot --headless --path godot res://addons/godot_mruby/runner.tscn -- --dir res://test   # the Ruby tests alone
 bundle exec rake extension:dist          # the library this platform ships (PROFILE=release|debug; macOS: lipo universal)
 bundle exec rake addon:package           # zip the addon with every platform's library and third-party licenses
@@ -40,7 +41,7 @@ sumi fmt                                 # write .spec/ in sumi's form (--check 
 
 ## Guidelines
 
-- Run Godot only with `--headless`; never start anything that opens its GUI.
+- Run Godot only with `--headless`; never start anything that opens its GUI, `rake editor` included: it is how the user sees what a headless run cannot.
 - Minimum Godot is 4.6: keep gdext's `api-4-6` feature and the `.gdextension`'s `compatibility_minimum` in step.
 - `godot/.godot/extension_list.cfg` is committed so Godot loads the addon at startup; an editor that first discovers it and quits at once crashes (godotengine/godot#111048).
 - Library file names are shared by `godot_mruby.gdextension` and `tasks/support/extension.rb`; change both together.
