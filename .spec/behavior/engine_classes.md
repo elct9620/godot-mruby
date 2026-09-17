@@ -1,6 +1,6 @@
 # Engine classes
 
-How Ruby names the engine's classes: every class the engine registers is a Ruby class under `Godot`, made at its first use and inheriting as the engine's class does, so a node script can name the class it extends.
+How Ruby names the engine's classes: every class the engine registers is a Ruby class under `Godot`, made at its first use and inheriting as the engine's class does, so a node script can name the class it extends, and a class extending one can mark itself in its body with `tool`, `abstract` and `icon`, which Godot reads from the file's source.
 
 ## Includes
 
@@ -37,3 +37,28 @@ How Ruby names the engine's classes: every class the engine registers is a Ruby 
 | Given | a file loaded by name that first uses an engine class, then raises |
 | When | Ruby uses the failing file's constant and the exception is rescued |
 | Then | the engine class is still defined under `Godot` |
+
+## `RG-005` A class extending an engine class calls `tool`, `abstract` and `icon` in its body
+
+| Step | Statement |
+| --- | --- |
+| Given | a class extending an engine class |
+| When | its body calls `tool`, `abstract` and `icon` with a path |
+| Then | the class is defined |
+
+## `RG-006` An abstract class cannot be made
+
+| Step | Statement |
+| --- | --- |
+| Given | a class extending an engine class whose body calls `abstract` |
+| When | Ruby makes an object of it |
+| Then | it raises `NotImplementedError` |
+
+## `RG-007` A class extending an abstract class is not abstract itself
+
+| Step | Statement |
+| --- | --- |
+| Given | a class extending an engine class whose body calls `abstract` |
+| Given | a class extending that class |
+| When | Ruby makes an object of the second class |
+| Then | it gets that object |
