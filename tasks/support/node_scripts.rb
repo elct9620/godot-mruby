@@ -3,8 +3,8 @@
 module Godot
   # Runs the integration-test project's scenes of node scripts and reads what
   # they print: which files a node refuses, what a script answers before its
-  # file runs, and which callbacks a node's Ruby object is given. Part of
-  # Godot.verify!.
+  # file runs, which callbacks a node's Ruby object is given, and what its
+  # methods answer Godot. Part of Godot.verify!.
   module NodeScripts
     # A scene whose nodes take a library file, a node script extending a class
     # they are not, an abstract node script and a file extending a name no
@@ -28,8 +28,8 @@ module Godot
     INHERITED_BASE_TYPE_ANSWER = "inherited base type: Node2D"
     BASE_SCRIPT_ANSWER = "base script: res://verify/script/inherit/enemy.rb"
     RAN_LINES = ["reported.rb ran", "marked.rb ran"].freeze
-    # A scene of nodes whose scripts define callbacks, what they print, and
-    # what they must never print.
+    # A scene of nodes whose scripts define callbacks and methods Godot calls,
+    # what they print, what they must never print, and the answers Godot gets.
     CALLBACKS_SCENE = "res://verify/script/callbacks/callbacks.tscn"
     READY_LINE = "ready.rb is ready"
     PROCESS_LINE = "process.rb was given a Float"
@@ -38,6 +38,7 @@ module Godot
     FAILED_PROCESS_LINE = "failing.rb processed"
     IDLE_LINE = "idle.rb ran"
     NOTIFIED_LINE = "notified.rb was notified it is ready"
+    ANSWER_LINES = ["ratio answered float 1.5", "count answered int 3"].freeze
     # A scene whose node's script inherits its only callback from another
     # file, and what that callback prints.
     INHERIT_SCENE = "res://verify/script/inherit/inherit.tscn"
@@ -115,6 +116,7 @@ module Godot
       lines = output.lines.map(&:chomp)
       verify_callbacks_called!(lines, output)
       verify_objects_built!(lines, output)
+      verify_answers_reached!(lines, output)
     end
 
     # @behavior RS-011 RS-012 RS-017
@@ -132,6 +134,14 @@ module Godot
       return if wrong.empty?
 
       raise "The callbacks scene's objects were not built as they should be #{wrong.keys}:\n#{output}"
+    end
+
+    # @behavior RS-028
+    def verify_answers_reached!(lines, output)
+      missing = ANSWER_LINES.reject { |line| lines.include?(line) }
+      return if missing.empty?
+
+      raise "The callbacks scene's answers did not reach Godot as Ruby gave them #{missing}:\n#{output}"
     end
 
     # Runs the scene whose node's only callback is inherited from another file.

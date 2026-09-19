@@ -220,3 +220,11 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | no argument, one argument, or several |
 | When | `p` is called with them |
 | Then | it answers `nil`, the argument itself, or an array of the arguments |
+
+## `RS-028` A method's answer reaches Godot as the value Ruby gave
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class defines one method answering a Float and another answering an Integer |
+| When | Godot calls each method on the node |
+| Then | the log carries the first answer as a `float` and the second as an `int`, each with its value |
