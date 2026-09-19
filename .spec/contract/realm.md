@@ -224,7 +224,7 @@ impl From<i64> for Key {}
 
 ## `Realm::build`
 
-Runs the Ruby file at a path once, and holds under a key the object a method makes with the arguments given when called on the class the path names, unless the key holds an object already; answers whether it made one, so the caller initializes only the object it made.
+Runs the Ruby file at a path once, and holds under a key the object a method makes with the arguments given when called on the class the path names, unless the key holds an object already or the file, still running, has not yet defined the class; answers which, so the caller initializes only the object it made and asks again for a class still to come.
 
 | Attribute | Value |
 | --- | --- |
@@ -232,7 +232,23 @@ Runs the Ruby file at a path once, and holds under a key the object a method mak
 
 ```rust
 impl Realm {
-    pub fn build<A: IntoValue>(&self, path: &str, key: Key, make: &CStr, args: impl IntoIterator<Item = A>) -> Result<bool, RubyError> {}
+    pub fn build<A: IntoValue>(&self, path: &str, key: Key, make: &CStr, args: impl IntoIterator<Item = A>) -> Result<Built, RubyError> {}
+}
+```
+
+## `Built`
+
+What building an object for a key came to: made now, held already, or waiting for its file to define the class.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub enum Built {
+    Made,
+    Held,
+    Waiting,
 }
 ```
 

@@ -63,6 +63,11 @@ pub(super) fn run_by_name<T>(
     execute(mrb, path, prepare, settle)
 }
 
+/// Whether the file at `path` is running now.
+pub(super) fn running(mrb: &Mrb, path: &str) -> bool {
+    matches!(runs(mrb).files.borrow().get(path), Some(Run::Running))
+}
+
 /// The files that led back to the one at `path` while it is still running,
 /// ending with it; nothing when it is not running.
 pub(super) fn cycle(mrb: &Mrb, path: &str) -> Option<Vec<String>> {

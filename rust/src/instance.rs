@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use godot::classes::{Object, Script, ScriptLanguage};
 use godot::meta::error::CallErrorType;
@@ -7,11 +7,11 @@ use godot::prelude::*;
 use godot::register::info::{MethodInfo, PropertyInfo};
 
 use crate::ancestry::Ancestry;
-use crate::bridge::{self, Owner, ToEngine, ToRuby};
+use crate::bridge::{self, Owner, Running, ToEngine, ToRuby};
 use crate::error;
 use crate::log::GodotLog;
 use crate::parser::Header;
-use crate::realm::{self, Key, RubyError};
+use crate::realm::{self, Built, Key, RubyError};
 
 /// A node's instance of a `RubyScript`. It holds no Ruby value: the node's
 /// Ruby object is built in the game's realm the first time Godot calls a
@@ -28,10 +28,13 @@ pub struct RubyInstance {
     language: Gd<ScriptLanguage>,
     // What the node prints as while its script says nothing about it.
     display: GString,
-    stage: Stage,
+    // Shared with the calls running Ruby, which give the instance up while
+    // Ruby runs, since the engine may call back into it or free it.
+    stage: Arc<Mutex<Stage>>,
 }
 
 /// How far a node's Ruby object has come.
+#[derive(Clone, Copy)]
 enum Stage {
     /// Not built yet: making a node runs no Ruby.
     Recorded,
@@ -56,37 +59,8 @@ impl RubyInstance {
             ancestry,
             language,
             display: GString::from(&owner.to_string()),
-            stage: Stage::Recorded,
+            stage: Arc::new(Mutex::new(Stage::Recorded)),
         }
-    }
-
-    // The node's Ruby object, built at the first call that needs it and
-    // initialized once it is held, unless Ruby made the node and built it.
-    fn object(&mut self) -> Option<Key> {
-        match self.stage {
-            Stage::Built(key) => return Some(key),
-            Stage::Failed => return None,
-            Stage::Recorded => {}
-        }
-        let path = self.script.get_path().to_string();
-        let key = bridge::node_key(self.owner);
-        let owner = [Owner(self.owner)];
-        let built = realm::enter(|realm| realm.build(&path, key, c"__allocate__", owner)).and_then(
-            |made| {
-                self.stage = Stage::Built(key);
-                if made {
-                    realm::enter(|realm| realm.send::<ToRuby, ToEngine>(key, "initialize", []))?;
-                }
-                Ok(key)
-            },
-        );
-        built
-            .inspect_err(|failed| {
-                failed.write(&GodotLog);
-                realm::release(key);
-                self.stage = Stage::Failed;
-            })
-            .ok()
     }
 
     // Whether the node's class defines `method` or inherits it from a file.
@@ -94,10 +68,72 @@ impl RubyInstance {
         self.header.has_method(method) || self.ancestry.has_method(method)
     }
 
+    // What a call into Ruby needs of the instance, taken before the instance
+    // is given up.
+    fn caller(&self) -> Caller {
+        Caller {
+            path: self.script.get_path().to_string(),
+            owner: self.owner,
+            stage: Arc::clone(&self.stage),
+        }
+    }
+}
+
+/// What calls a method on a node's Ruby object, holding nothing of the
+/// instance itself, so the engine may call back into the instance or free it
+/// while Ruby runs.
+struct Caller {
+    path: String,
+    owner: InstanceId,
+    stage: Arc<Mutex<Stage>>,
+}
+
+impl Caller {
+    fn stage(&self) -> Stage {
+        *self.stage.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn settle(&self, stage: Stage) {
+        *self.stage.lock().unwrap_or_else(PoisonError::into_inner) = stage;
+    }
+
+    // The node's Ruby object, built at the first call that needs it and
+    // initialized once it is held, unless Ruby made the node and built it.
+    // A call arriving while it initializes finds it held; one arriving while
+    // its file runs, before the class exists, finds none and builds nothing.
+    fn object(&self) -> Option<Key> {
+        match self.stage() {
+            Stage::Built(key) => return Some(key),
+            Stage::Failed => return None,
+            Stage::Recorded => {}
+        }
+        let key = bridge::node_key(self.owner);
+        let owner = [Owner(self.owner)];
+        let built = realm::enter(|realm| realm.build(&self.path, key, c"__allocate__", owner))
+            .and_then(|built| {
+                if built == Built::Waiting {
+                    return Ok(None);
+                }
+                self.settle(Stage::Built(key));
+                if built == Built::Made {
+                    realm::enter(|realm| realm.send::<ToRuby, ToEngine>(key, "initialize", []))?;
+                }
+                Ok(Some(key))
+            });
+        built
+            .inspect_err(|failed| {
+                failed.write(&GodotLog);
+                realm::release(key);
+                self.settle(Stage::Failed);
+            })
+            .ok()
+            .flatten()
+    }
+
     // Calls `method` on the node's Ruby object; an exception, or an argument
     // that cannot reach Ruby, is reported and answers null, as a callback
     // that returned nothing does.
-    fn send(&mut self, method: &str, args: &[&Variant]) -> Variant {
+    fn send(&self, method: &str, args: &[&Variant]) -> Variant {
         let Some(key) = self.object() else {
             return Variant::nil();
         };
@@ -121,7 +157,7 @@ impl RubyInstance {
 // Godot frees an instance with its node, on whatever thread frees the node.
 impl Drop for RubyInstance {
     fn drop(&mut self) {
-        if let Stage::Built(key) = self.stage {
+        if let Stage::Built(key) = *self.stage.lock().unwrap_or_else(PoisonError::into_inner) {
             realm::release(key);
         }
     }
@@ -159,12 +195,18 @@ impl ScriptInstance for RubyInstance {
         if !this.has(&method) {
             return Err(CallErrorType::InvalidMethod);
         }
-        Ok(this.send(&method, args))
+        let caller = this.caller();
+        let _given_up = this.base_mut();
+        let _running = Running::start(caller.owner);
+        Ok(caller.send(&method, args))
     }
 
     fn on_notification(mut this: SiMut<Self>, what: i32, _reversed: bool) {
         if this.has("_notification") {
-            this.send("_notification", &[&what.to_variant()]);
+            let caller = this.caller();
+            let _given_up = this.base_mut();
+            let _running = Running::start(caller.owner);
+            caller.send("_notification", &[&what.to_variant()]);
         }
     }
 

@@ -1,6 +1,6 @@
 # Entry
 
-How a thread goes into the game's realm: one thread at a time is inside, and a thread already inside goes on, since Godot calls back into scripts while Ruby it started is still running.
+How a thread goes into the game's realm: one thread at a time is inside, and a thread already inside goes on, since Godot calls back into scripts while Ruby it started is still running, until entries nested on one thread would outgrow the smallest stack the engine gives a thread.
 
 ## Includes
 
@@ -46,3 +46,11 @@ How a thread goes into the game's realm: one thread at a time is inside, and a t
 | Given | the game's realm, which panicked while opening at an entry |
 | When | the realm is entered again |
 | Then | the realm opens |
+
+## `RE-006` Entries nested too deep on one thread raise SystemStackError
+
+| Step | Statement |
+| --- | --- |
+| Given | a thread inside the game's realm 24 entries deep |
+| When | it enters the realm once more |
+| Then | the entry fails with `SystemStackError`, and the entries around it go on |

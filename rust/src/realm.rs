@@ -170,6 +170,11 @@ static OPENER: Mutex<Option<Opener>> = Mutex::new(None);
 // A thread inside the game's realm enters it again, since Godot calls back
 // into scripts while the Ruby it started still runs.
 static GAME: ReentrantLock<RefCell<Game>> = ReentrantLock::new(RefCell::new(Game::Closed));
+// How many entries one thread nests before the next fails: every entry past
+// the first is Ruby calling the engine calling Ruby, which takes about 12 KiB
+// of a debug build's stack and 5 KiB of a release build's, and 24 of them
+// stay within half of the 512 KiB the smallest thread stack holds.
+const DEEPEST_ENTRY: usize = 24;
 // Keys let go of on any thread, waiting for the game's realm to take them.
 static RELEASED: Mutex<Vec<Key>> = Mutex::new(Vec::new());
 
@@ -194,9 +199,14 @@ enum Game {
 
 /// Runs `body` inside the game's realm, opening the realm first, the way it
 /// was prepared, if this is its first entry. A thread already inside enters
-/// again.
+/// again, unless it is already as deep as its stack allows.
 pub fn enter<T>(body: impl FnOnce(&Realm) -> Result<T, RubyError>) -> Result<T, RubyError> {
     let game = GAME.lock();
+    if game.depth() > DEEPEST_ENTRY {
+        return Err(RubyError::plain(format!(
+            "SystemStackError: the game's realm is already entered {DEEPEST_ENTRY} deep on this thread"
+        )));
+    }
     if matches!(*game.borrow(), Game::Closed) {
         let opening = Opening::start(&game);
         opening.opened(open_game()?);
@@ -417,27 +427,30 @@ impl Realm {
 
     /// Runs the file at `path` once, and holds under `key` the object `make`
     /// answers with `args` on the class its path names, unless `key` holds
-    /// one already. Answers whether it made one, so its caller initializes
-    /// only what it made.
+    /// one already or the file, still running, has not defined the class
+    /// yet. Answers which, so its caller initializes only what it made.
     pub fn build<A: IntoValue>(
         &self,
         path: &str,
         key: Key,
         make: &CStr,
         args: impl IntoIterator<Item = A>,
-    ) -> Result<bool, RubyError> {
+    ) -> Result<Built, RubyError> {
         self.run(path)?;
         let _scope = self.mrb.arena_scope();
         let registry = &bookkeeping(&self.mrb).registry;
         let read = |error| RubyError::read(&self.mrb, Some(path), &error);
         if registry.holds(&self.mrb, key).map_err(read)? {
-            return Ok(false);
+            return Ok(Built::Held);
         }
-        let class = constants::constant_at(&self.mrb, &key_of(path)).ok_or_else(|| {
-            RubyError::plain(format!(
+        let Some(class) = constants::constant_at(&self.mrb, &key_of(path)) else {
+            if executor::running(&self.mrb, path) {
+                return Ok(Built::Waiting);
+            }
+            return Err(RubyError::plain(format!(
                 "{path} has not defined the class its path names, so no object of it is built"
-            ))
-        })?;
+            )));
+        };
         let args: Vec<Value> = args
             .into_iter()
             .map(|arg| arg.into_value(&self.mrb))
@@ -446,7 +459,7 @@ impl Realm {
             class
                 .funcall(&self.mrb, make, &args)
                 .and_then(|object| registry.hold(&self.mrb, key, object))
-                .map(|()| true)
+                .map(|()| Built::Made)
                 .map_err(read)
         })
     }
@@ -495,6 +508,17 @@ impl Realm {
             ))
         })
     }
+}
+
+/// What building an object for a key came to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Built {
+    /// Made now, for its caller to initialize.
+    Made,
+    /// Held already, made by whoever made it.
+    Held,
+    /// Not made: its file is still running and has not defined the class.
+    Waiting,
 }
 
 /// Why Ruby could not do what it was asked, read out of the realm so it can
@@ -800,6 +824,24 @@ mod tests {
         let answer = enter(|_| enter(|realm| realm.send::<_, i64>(key, "answer", no_args())));
 
         assert_eq!(answer.ok(), Some(42));
+    }
+
+    // @behavior RE-006
+    #[test]
+    fn entries_nested_too_deep_on_one_thread_raise_system_stack_error() {
+        let (_turn, key) = held_thing();
+        fn nest(depth: usize, key: Key) -> Result<i64, RubyError> {
+            enter(|realm| match depth {
+                0 => realm.send::<_, i64>(key, "answer", no_args()),
+                _ => nest(depth - 1, key),
+            })
+        }
+
+        let deepest = nest(DEEPEST_ENTRY - 1, key);
+        let beyond = nest(DEEPEST_ENTRY, key);
+
+        assert_eq!(deepest.ok(), Some(42));
+        assert!(beyond.is_err_and(|error| error.message.starts_with("SystemStackError")));
     }
 
     // @behavior RE-002

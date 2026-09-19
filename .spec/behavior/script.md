@@ -272,3 +272,35 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a class extending an engine node class that no file of the game defines |
 | When | Ruby calls `new` on the class |
 | Then | it raises `NotImplementedError` |
+
+## `RS-034` A call back into the same node reaches its Ruby object
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script's method that calls one of its node's engine methods, which calls back into the node's script |
+| When | Godot calls the method |
+| Then | the call back reaches the same Ruby object |
+
+## `RS-035` A call arriving while a node initializes reaches the object initializing
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script's class whose `initialize` calls one of its node's engine methods, which calls back into the node's script |
+| When | Ruby makes a node of the class |
+| Then | the call back reaches the object `initialize` runs on |
+
+## `RS-036` A call arriving before a file defines its class does nothing
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose statements, before its class statement, make a node carrying the file's own script and call back into it |
+| When | the file runs, and Godot later calls the node's script again |
+| Then | the first call back does nothing and reports nothing, and the later call reaches the node's Ruby object |
+
+## `RS-037` A node's script is not changed while its Ruby runs
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script's method that sets its own node's script |
+| When | Godot calls the method |
+| Then | setting the script raises `Godot::CallError`, and the node keeps its script |

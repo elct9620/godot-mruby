@@ -67,7 +67,12 @@ pub(super) struct ReentrantLockGuard<'a, T> {
 impl<T> ReentrantLockGuard<'_, T> {
     /// Whether this thread also holds the lock through another guard.
     pub fn is_nested(&self) -> bool {
-        self.lock.holder().depth > 1
+        self.depth() > 1
+    }
+
+    /// How many guards this thread holds the lock through, this one included.
+    pub fn depth(&self) -> usize {
+        self.lock.holder().depth
     }
 }
 

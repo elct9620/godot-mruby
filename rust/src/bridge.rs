@@ -11,7 +11,7 @@ mod object;
 mod value;
 mod value_type;
 
-pub use object::{Owner, node_key};
+pub use object::{Owner, Running, node_key};
 pub use value::{ToEngine, ToRuby};
 
 const FILE: &std::ffi::CStr = c"godot_mruby/bridge/godot.rb";
