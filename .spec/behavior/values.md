@@ -1,6 +1,6 @@
 # Values
 
-How a value crosses between Ruby and the engine, either way: data is copied and objects are shared, so each side keeps what it holds and an object is the same object on both. A container either crosses whole or not at all, so neither side goes on with data the other never sent.
+How a value crosses between Ruby and the engine, either way: data is copied and objects are shared, so each side keeps what it holds and an object is the same object on both. A container either crosses whole or not at all, so neither side goes on with data the other never sent. The engine's own value types, such as `Vector2`, `Color` and `NodePath`, are classes under `Godot` whose values Ruby builds and computes with as GDScript does, but never changes, since each side holds its own copy.
 
 ## Includes
 
@@ -78,3 +78,59 @@ How a value crosses between Ruby and the engine, either way: data is copied and 
 | Given | a node script's method, and an Array that holds itself |
 | When | Godot calls the method with the Array |
 | Then | the method is not called, and the log names the method and why the Array cannot cross |
+
+## `RV-010` An engine value type crosses as a value of its class under Godot
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine property holding a value type, such as a node's position |
+| When | Ruby reads it |
+| Then | it gets a value of the class under `Godot` named as the engine names the type, equal to one built from the same components |
+
+## `RV-011` Ruby builds a value with the engine's constructors
+
+| Step | Statement |
+| --- | --- |
+| Given | a value type under `Godot` |
+| When | Ruby calls `new` with arguments one of the engine's constructors takes |
+| Then | it gets the value that constructor builds, which the engine takes where it wants the type |
+
+## `RV-012` A constructor no arguments fit raises Godot::CallError as GDScript reports it
+
+| Step | Statement |
+| --- | --- |
+| Given | a value type under `Godot` |
+| When | Ruby calls `new` with arguments none of the engine's constructors takes |
+| Then | it raises `Godot::CallError` with the message GDScript reports for the same call |
+
+## `RV-013` A value answers its members, methods and constants
+
+| Step | Statement |
+| --- | --- |
+| Given | a value of a value type |
+| When | Ruby reads a member, calls a method, calls a static method on the class, and names a constant of the class |
+| Then | each answers what the engine answers for the type |
+
+## `RV-014` A value answers the engine's operators
+
+| Step | Statement |
+| --- | --- |
+| Given | values of value types, and a number |
+| When | Ruby adds, multiplies, negates and compares them |
+| Then | each answers what the engine's operator answers, and an operator the engine lacks for the operands raises `TypeError` with GDScript's message |
+
+## `RV-015` A value cannot be changed
+
+| Step | Statement |
+| --- | --- |
+| Given | a value of a value type with a member |
+| When | Ruby assigns the member |
+| Then | it raises `FrozenError`, and the value is as it was |
+
+## `RV-016` A value prints as the engine prints it
+
+| Step | Statement |
+| --- | --- |
+| Given | a value of a value type |
+| When | Ruby turns it into a String |
+| Then | it gets the String the engine prints for the value |

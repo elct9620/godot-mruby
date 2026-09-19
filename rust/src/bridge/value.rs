@@ -15,13 +15,13 @@ use godot::meta::{PackedElement, ToGodot};
 use godot::obj::Gd;
 
 use super::object::{self, EngineObject};
+use super::value_type::{self, EngineValue};
 
 /// How deep containers nest before a value stops crossing: the depth
 /// Godot's own recursive Array and Dictionary operations stop at.
 const DEPTH: usize = 100;
 
-/// An engine value as Ruby is given it. Value types without a Ruby class
-/// yet arrive as `nil`.
+/// An engine value as Ruby is given it.
 pub struct ToRuby<'a>(&'a Variant);
 
 impl<'a> ToRuby<'a> {
@@ -87,6 +87,7 @@ fn to_ruby(mrb: &Mrb, variant: &Variant) -> Value {
             .ok()
             .filter(Gd::is_instance_valid)
             .map_or_else(Value::nil, |object| object::ruby_object(mrb, object)),
+        kind if value_type::is_value_type(kind) => value_type::ruby_value(mrb, variant),
         VariantType::PACKED_BYTE_ARRAY => packed::<u8>(mrb, variant),
         VariantType::PACKED_INT32_ARRAY => packed::<i32>(mrb, variant),
         VariantType::PACKED_INT64_ARRAY => packed::<i64>(mrb, variant),
@@ -156,6 +157,9 @@ pub fn to_engine(mrb: &Mrb, value: Value, level: usize) -> Result<Variant, Strin
     }
     if let Ok(held) = <&EngineObject>::try_convert(value, mrb) {
         return held.variant();
+    }
+    if let Ok(held) = <&EngineValue>::try_convert(value, mrb) {
+        return Ok(held.variant());
     }
     let too_deep = || {
         let class = value.classname(mrb);

@@ -1,7 +1,8 @@
 # The engine's classes under Godot, as C# names them: each is made at its
 # first use from the engine's class database and inherits as it does there,
-# up to Godot::Object, which the extension defines. Its `__`-prefixed
-# methods are the extension's.
+# up to Godot::Object, which the extension defines, and each of the engine's
+# value types is a class under Godot::Value. Their `__`-prefixed methods are
+# the extension's.
 module Godot
   # What a call to the engine raises when the engine cannot run it.
   class CallError < StandardError; end
@@ -9,6 +10,7 @@ module Godot
   class << self
     def const_missing(name)
       superclass = __engine_superclass__(name)
+      return const_set(name, Class.new(Value)) if superclass.nil? && Value.__send__(:__value_type__, name)
       return super if superclass.nil?
 
       engine_class = Class.new(const_get(superclass))
@@ -125,6 +127,72 @@ module Godot
 
     def hash
       __instance_id__.hash
+    end
+  end
+
+  # A value of one of the engine's value types, such as Vector2 or Color:
+  # built by the engine's constructors, answering the engine's members,
+  # methods and operators, and never changed, since each side holds its own
+  # copy.
+  class Value
+    class << self
+      def new(*args)
+        __construct__(args)
+      end
+
+      def method_missing(name, *args, &block)
+        answered = __call_static__(name, args)
+        return super if answered.nil?
+
+        answered.first
+      end
+
+      def const_missing(name)
+        value = __constant__(name)
+        return super if value.nil?
+
+        const_set(name, value)
+      end
+
+      private :__value_type__, :__construct__, :__call_static__, :__constant__
+
+      private
+
+      # What is defined on a value type's class is the engine's, never a file's.
+      def const_added(name); end
+    end
+
+    %i[+ - * / % ** < <= > >= -@ +@].each do |operator|
+      define_method(operator) { |*other| __operate__(operator, other.first) }
+    end
+
+    def ==(other)
+      other.is_a?(Value) && __operate__(:==, other)
+    end
+    alias eql? ==
+
+    def hash
+      __hash__
+    end
+
+    def inspect
+      "#<#{self.class} #{self}>"
+    end
+
+    def method_missing(name, *args, &block)
+      raise FrozenError, "can't modify #{self.class}: build a new one instead" if name.to_s[-1] == "="
+
+      found = __member__(name) if args.empty?
+      return found.first if found
+
+      answered = __call__(name, args)
+      return super if answered.nil?
+
+      answered.first
+    end
+
+    def respond_to_missing?(name, include_private = false)
+      !__member__(name).nil? || super
     end
   end
 end

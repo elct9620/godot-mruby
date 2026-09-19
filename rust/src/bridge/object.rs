@@ -327,6 +327,27 @@ fn refused(mrb: &Mrb, error: &CallError, base: &str, method: &str) -> Error {
     call_error(mrb, &message)
 }
 
+/// GDScript's words for a call given the wrong number of arguments.
+pub(super) fn count_message(method: &str, base: &str, expected: &str) -> String {
+    format!(
+        "Invalid call to function '{method}' in base '{base}'. Expected {expected} argument(s)."
+    )
+}
+
+/// GDScript's words for a call given an argument of a type it cannot take.
+pub(super) fn type_message(
+    method: &str,
+    base: &str,
+    argument: &str,
+    from: &str,
+    to: &str,
+) -> String {
+    format!(
+        "Invalid type in function '{method}' in base '{base}'. \
+         Cannot convert argument {argument} from {from} to {to}."
+    )
+}
+
 // "function has N parameters, but received M arguments": N.
 fn expected_count(reason: &str) -> Option<&str> {
     reason
@@ -360,7 +381,7 @@ fn not_implemented(mrb: &Mrb, message: &str) -> Error {
     }
 }
 
-fn call_error(mrb: &Mrb, message: &str) -> Error {
+pub(super) fn call_error(mrb: &Mrb, message: &str) -> Error {
     let class = mrb
         .module_get(c"Godot")
         .and_then(|godot| godot.class_get(mrb, c"CallError"));

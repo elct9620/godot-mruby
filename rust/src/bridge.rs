@@ -9,6 +9,7 @@ use crate::{compiler, log};
 
 mod object;
 mod value;
+mod value_type;
 
 pub use object::{Owner, node_key};
 pub use value::{ToEngine, ToRuby};
@@ -26,6 +27,7 @@ impl Gem for Godot {
             method!(engine_superclass, 1),
         )?;
         object::define(mrb, godot)?;
+        value_type::define(mrb, godot)?;
         compiler::run(
             mrb,
             FILE,
