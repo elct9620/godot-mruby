@@ -4,6 +4,7 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 
 ## Includes
 
+- `godot/test/kernel/print_test.rb`
 - `tasks/support/announcement.rb`
 - `tasks/support/godot.rb`
 - `tasks/support/node_scripts.rb`
@@ -211,3 +212,11 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | two node scripts in different directories whose classes share a name |
 | When | the editor scans the project |
 | Then | the log carries a warning naming both files |
+
+## `RS-027` `p` answers what it is given
+
+| Step | Statement |
+| --- | --- |
+| Given | no argument, one argument, or several |
+| When | `p` is called with them |
+| Then | it answers `nil`, the argument itself, or an array of the arguments |
