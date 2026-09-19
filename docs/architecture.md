@@ -84,7 +84,7 @@ Build output stays out of the repository: `vendor/` holds mruby's source and arc
 | `RubyInstance` in `instance.rs` | A script instance |
 | `RubyTestRunner` in `runner.rs` | A `Node` in `runner.tscn` |
 | `settings.rs` | `ProjectSettings` under `mruby/` |
-| `GameFiles` in `game.rs` | `ResourceLoader` under `res://` |
+| `GameFiles`, `FilesOnDisk` in `game.rs` | `ResourceLoader` under `res://`, and the files on disk |
 | `GodotLog` in `log.rs` | Godot's log |
 | `Godot` in `bridge.rs` | `ClassDB` |
 
@@ -184,7 +184,7 @@ The instance holds no Ruby value, only a key. `bridge` carries a call's argument
 
 ```
 the editor scans res://
-  │  language.get_global_class_name(path)
+  │  language.get_global_class_name(path), read from disk
   ▼
 announcement::Project
   │  under a test directory        ──► not listed
@@ -201,7 +201,7 @@ the editor's class list, saved for exported games
 
 A node script is listed like a GDScript's `class_name`. The list is flat, as it is for C#, so a name drops its namespaces, and node scripts sharing one are none of them listed; the scan order never picks one.
 
-The warning is written by a deferred call, since Godot asks every language for its stack as it prints. The rules are in `.spec/behavior/announcement.md`.
+Godot asks every language for its stack as it prints, so the language never prints while it answers: it reads the files from disk, as GDScript does, since a load that fails prints, and writes the warning by a deferred call. The rules are in `.spec/behavior/announcement.md`, and what the editor shows in `.spec/behavior/script.md`.
 
 ## 3. Realm
 
@@ -222,12 +222,12 @@ body(&Realm)
   │  build(path)                  an object of a file's class, held by key
   │  send(key, method, args)      a held object's method
   ▼
-a Rust value, or a RubyError ──► RubyError::write
+a Rust value, or a RubyError ──► RubyError::write, at its Ruby line
 ```
 
 The realm is the one way into Ruby. A component hands `realm::enter` a body, and the body is given the realm, never its `mrb_state`.
 
-What comes back is a Rust value, or a `RubyError` the component writes to a log. Since nothing outside holds a Ruby value, the realm's inside changes without its callers changing.
+What comes back is a Rust value, or a `RubyError` the component writes to a log; an exception's backtrace goes with it, answered as the language's stack while it is written, as `.spec/behavior/report.md` claims. Since nothing outside holds a Ruby value, the realm's inside changes without its callers changing.
 
 There is one realm, the game's, entered by one thread at a time; that thread enters again when the engine calls back into scripts. Freeing a node never waits for it: the key goes into a queue that the next entry, or the next frame, empties. Its operations are specified in `.spec/contract/realm.md`.
 
