@@ -134,3 +134,35 @@ How a value crosses between Ruby and the engine, either way: data is copied and 
 | Given | a value of a value type |
 | When | Ruby turns it into a String |
 | Then | it gets the String the engine prints for the value |
+
+## `RV-017` A Proc or Method crosses as a Callable running it
+
+| Step | Statement |
+| --- | --- |
+| Given | a Proc, and a Method Ruby took from an object |
+| When | Ruby hands each to the engine and the engine calls it with arguments |
+| Then | the Proc or Method runs with those arguments in the realm that made it, and the engine gets what it answered |
+
+## `RV-018` A Proc connected to a signal runs when the signal is emitted
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine object's signal Ruby connected a Proc to |
+| When | the engine emits the signal |
+| Then | the Proc runs |
+
+## `RV-019` Any other Ruby object crosses as the same object
+
+| Step | Statement |
+| --- | --- |
+| Given | a Ruby object of a class of its own |
+| When | Ruby hands it to the engine, alone and inside an Array, and takes each back |
+| Then | Ruby gets the very object it handed, and the engine held a `RubyObject` |
+
+## `RV-020` An engine Callable crosses as a value Ruby calls
+
+| Step | Statement |
+| --- | --- |
+| Given | a Callable the engine hands Ruby |
+| When | Ruby calls `call` on it with arguments |
+| Then | the engine calls it with those arguments, and Ruby gets what it answered |

@@ -92,6 +92,18 @@ Holds a Ruby object under a key in the realm an extension's method runs in, for 
 pub fn hold(mrb: &Mrb, key: Key, object: Value) -> Result<(), Error> {}
 ```
 
+## `hold_new`
+
+Holds a Ruby object in the realm an extension's method runs in under a key the realm names, which no node's key ever is, for an extension handing the engine something that keeps only the key.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub fn hold_new(mrb: &Mrb, object: Value) -> Result<Key, Error> {}
+```
+
 ## `held`
 
 The Ruby object a key holds in the realm an extension's method runs in, if it holds one, so an object the realm holds for something outside reaches Ruby as itself.

@@ -4,7 +4,8 @@
 //! crosses as nothing.
 
 use beni::{
-    Array, Error, FromValue, Hash, IntoValue, Mrb, RString, ReprValue, Symbol, TryConvert, Value,
+    Array, Error, FromValue, Hash, IntoValue, Mrb, Proc, RString, ReprValue, Symbol, TryConvert,
+    Value,
 };
 use godot::builtin::{
     AnyArray, AnyDictionary, Color, GString, PackedArray, StringName, VarArray, VarDictionary,
@@ -14,7 +15,10 @@ use godot::classes::Object;
 use godot::meta::{PackedElement, ToGodot};
 use godot::obj::Gd;
 
+use crate::realm;
+
 use super::object::{self, EngineObject};
+use super::ruby_object::{self, RubyObject};
 use super::value_type::{self, EngineValue};
 
 /// How deep containers nest before a value stops crossing: the depth
@@ -86,7 +90,10 @@ fn to_ruby(mrb: &Mrb, variant: &Variant) -> Value {
             .try_to::<Gd<Object>>()
             .ok()
             .filter(Gd::is_instance_valid)
-            .map_or_else(Value::nil, |object| object::ruby_object(mrb, object)),
+            .map_or_else(Value::nil, |object| match object.try_cast::<RubyObject>() {
+                Ok(held) => realm::held(mrb, held.bind().key()).unwrap_or_else(Value::nil),
+                Err(object) => object::ruby_object(mrb, object),
+            }),
         kind if value_type::is_value_type(kind) => value_type::ruby_value(mrb, variant),
         VariantType::PACKED_BYTE_ARRAY => packed::<u8>(mrb, variant),
         VariantType::PACKED_INT32_ARRAY => packed::<i32>(mrb, variant),
@@ -190,8 +197,10 @@ pub fn to_engine(mrb: &Mrb, value: Value, level: usize) -> Result<Variant, Strin
         }
         return Ok(copied.to_variant());
     }
-    Err(format!(
-        "a {} cannot reach the engine",
-        value.classname(mrb)
-    ))
+    let class = value.classname(mrb);
+    let key = realm::hold_new(mrb, value).map_err(|error| error.message(mrb))?;
+    if Proc::from_value(value).is_some() || class == "Method" {
+        return Ok(ruby_object::callable(key, class).to_variant());
+    }
+    Ok(RubyObject::holding(key, &class).to_variant())
 }

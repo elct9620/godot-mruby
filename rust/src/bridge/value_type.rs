@@ -43,10 +43,15 @@ unsafe impl TypedData for EngineValue {
 
 /// The engine's value types Ruby holds as `Godot::Value`s: every type that
 /// is neither Ruby's own (nil, booleans, numbers, strings, names,
-/// containers) nor an object, a callable or a signal.
+/// containers) nor an object.
 fn value_types() -> impl Iterator<Item = VariantType> {
     (VariantType::VECTOR2.ord..=VariantType::COLOR.ord)
-        .chain([VariantType::NODE_PATH.ord, VariantType::RID.ord])
+        .chain([
+            VariantType::NODE_PATH.ord,
+            VariantType::RID.ord,
+            VariantType::CALLABLE.ord,
+            VariantType::SIGNAL.ord,
+        ])
         .map(<VariantType as EngineEnum>::from_ord)
 }
 

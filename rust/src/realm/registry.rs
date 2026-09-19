@@ -2,6 +2,8 @@
 //! keeps a key, and the object stays reachable from a hash the collector
 //! always marks, so mruby never frees what the engine still uses.
 
+use std::cell::Cell;
+
 use beni::{Error, Hash, IntoValue, Mrb, ReprValue, Value};
 
 /// What something outside a realm keeps for the Ruby object the realm holds
@@ -17,13 +19,27 @@ impl From<i64> for Key {
 
 pub(super) struct Registry {
     objects: Hash,
+    // The last key the registry named itself. It counts down from -1, since
+    // a node's key is its instance id, which is positive.
+    last: Cell<i64>,
 }
 
 impl Registry {
     pub fn new(mrb: &Mrb) -> Self {
         let objects = mrb.hash_new();
         mrb.gc_register_forever(objects.as_value());
-        Self { objects }
+        Self {
+            objects,
+            last: Cell::new(0),
+        }
+    }
+
+    /// Holds `object` under a key the registry names, which no node's is.
+    pub fn hold_new(&self, mrb: &Mrb, object: Value) -> Result<Key, Error> {
+        let key = Key(self.last.get() - 1);
+        self.hold(mrb, key, object)?;
+        self.last.set(key.0);
+        Ok(key)
     }
 
     /// Holds `object` under `key`.

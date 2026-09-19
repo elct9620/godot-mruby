@@ -8,6 +8,7 @@ use godot::obj::Singleton;
 use crate::{compiler, log};
 
 mod object;
+mod ruby_object;
 mod value;
 mod value_type;
 

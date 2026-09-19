@@ -261,6 +261,12 @@ pub fn hold(mrb: &Mrb, key: Key, object: Value) -> Result<(), Error> {
     bookkeeping(mrb).registry.hold(mrb, key, object)
 }
 
+/// Holds `object` in the realm `mrb` belongs to under a key the realm names,
+/// which no node's key ever is.
+pub fn hold_new(mrb: &Mrb, object: Value) -> Result<Key, Error> {
+    bookkeeping(mrb).registry.hold_new(mrb, object)
+}
+
 /// The Ruby object `key` holds in the realm `mrb` belongs to, if it holds
 /// one.
 pub fn held(mrb: &Mrb, key: Key) -> Option<Value> {

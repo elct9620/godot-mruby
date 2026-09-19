@@ -14,6 +14,14 @@ The Ruby script language, registered with the engine for `.rb` files.
 struct RubyLanguage;
 ```
 
+## `RubyObject`
+
+A Ruby object as the engine holds it: a reference-counted object standing for a Ruby object no engine type fits, which reaches Ruby again as that object and lets go of it once the engine drops the last reference.
+
+```rust
+struct RubyObject;
+```
+
 ## `RubyScript`
 
 The script a `.rb` file loads as, the way a `.gd` file loads as a `GDScript`.
