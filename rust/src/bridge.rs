@@ -11,17 +11,21 @@ use godot::obj::Singleton;
 
 use crate::{compiler, log};
 
+mod object;
+
 const FILE: &std::ffi::CStr = c"godot_mruby/bridge/godot.rb";
 
 pub struct Godot;
 
 impl Gem for Godot {
     fn init(mrb: &Mrb) -> Result<(), Error> {
-        mrb.define_module(c"Godot")?.define_singleton_method(
+        let godot = mrb.define_module(c"Godot")?;
+        godot.define_singleton_method(
             mrb,
             c"__engine_superclass__",
             method!(engine_superclass, 1),
         )?;
+        object::define(mrb, godot)?;
         compiler::run(
             mrb,
             FILE,
