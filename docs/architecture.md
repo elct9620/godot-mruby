@@ -180,7 +180,7 @@ node freed (any thread) ──► release(key) ──► let go at the next entr
 
 The header and ancestry answer what Godot asks on any thread: the engine node class the file's class extends, and the methods it has. A script makes an instance only for a node of that class.
 
-The instance holds no Ruby value: the realm holds the node's Ruby object under the node's instance id, so a node Ruby made with `new` and one Godot made meet the same object. While Ruby runs, the instance gives itself up, since the engine may call back into it. Freeing a node queues its key and never waits for the realm. The rules are in `.spec/behavior/script.md` and `.spec/behavior/held_objects.md`.
+The instance holds no Ruby value: the realm holds the node's Ruby object under the node's instance id, so a node Ruby made with `new` and one Godot made meet the same object. The instance goes to Godot through the extension interface rather than gdext's `ScriptInstance`, and a call copies what it needs before Ruby runs, since the engine may call back into the node or take its script away before Ruby returns. Freeing a node queues its key and never waits for the realm. The rules are in `.spec/behavior/script.md` and `.spec/behavior/held_objects.md`.
 
 ### 2.5 Announcement
 

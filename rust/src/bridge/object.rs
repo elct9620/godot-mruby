@@ -13,7 +13,6 @@ use godot::global::type_string;
 use godot::meta::ToGodot;
 use godot::meta::error::CallError;
 use godot::obj::{EngineEnum, Gd, InstanceId, Singleton};
-use std::sync::{Mutex, PoisonError};
 
 use super::value::{self, ToRuby};
 use crate::realm::{self, Key};
@@ -126,42 +125,6 @@ pub fn node_key(node: InstanceId) -> Key {
     Key::from(node.to_i64())
 }
 
-// The nodes whose Ruby object is running a call Godot made, each with how
-// many such calls are nested. Godot deletes a script instance the moment its
-// script is set, while gdext still holds it for the call, so a node running
-// Ruby keeps its script until the call returns.
-static RUNNING: Mutex<Vec<InstanceId>> = Mutex::new(Vec::new());
-
-/// Marks a node as running a call into its Ruby object for as long as it
-/// lives.
-pub struct Running(InstanceId);
-
-impl Running {
-    pub fn start(node: InstanceId) -> Self {
-        RUNNING
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .push(node);
-        Self(node)
-    }
-}
-
-impl Drop for Running {
-    fn drop(&mut self) {
-        let mut running = RUNNING.lock().unwrap_or_else(PoisonError::into_inner);
-        if let Some(index) = running.iter().rposition(|node| *node == self.0) {
-            running.swap_remove(index);
-        }
-    }
-}
-
-fn is_running(node: InstanceId) -> bool {
-    RUNNING
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-        .contains(&node)
-}
-
 /// A node's engine object as Ruby is given it, for its class to make the
 /// node's Ruby object from.
 pub struct Owner(pub InstanceId);
@@ -220,14 +183,6 @@ fn resolve(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
 fn call(mrb: &Mrb, held: &EngineObject, name: Symbol, args: Array) -> Result<Value, Error> {
     let name = name.name(mrb).unwrap_or_default();
     let mut object = held.live(mrb, &name)?;
-    if name == "set_script" && is_running(object.instance_id()) {
-        let message = format!(
-            "Cannot change the script of '{}' while its Ruby script is running a call; \
-             use call_deferred(:set_script, ...) instead.",
-            object.get_class()
-        );
-        return Err(call_error(mrb, &message));
-    }
     let args = variants(mrb, args)?;
     let answer = object
         .try_call(name.as_str(), &args)

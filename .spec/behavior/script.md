@@ -297,10 +297,10 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | When | the file runs, and Godot later calls the node's script again |
 | Then | the first call back does nothing and reports nothing, and the later call reaches the node's Ruby object |
 
-## `RS-037` A node's script is not changed while its Ruby runs
+## `RS-037` A node's script taken away while its Ruby runs lets the call finish
 
 | Step | Statement |
 | --- | --- |
-| Given | a node script's method that sets its own node's script |
+| Given | a node script's method that takes its own node's script away and then answers |
 | When | Godot calls the method |
-| Then | setting the script raises `Godot::CallError`, and the node keeps its script |
+| Then | the method runs to its end, Godot gets its answer, and the node has no script, as with GDScript |

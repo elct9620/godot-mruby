@@ -7,7 +7,6 @@ use godot::classes::{
 };
 use godot::global::Error;
 use godot::meta::conv::RawPtr;
-use godot::obj::script::create_script_instance;
 use godot::prelude::*;
 
 use crate::ancestry::{self, Ancestry, Broken};
@@ -131,8 +130,7 @@ impl IScriptExtension for RubyScript {
             language,
             &for_object,
         );
-        // SAFETY: Godot hands the instance to `for_object` and frees it with that object.
-        unsafe { create_script_instance(instance, for_object) }
+        instance.into_godot()
     }
 
     unsafe fn placeholder_instance_create_rawptr(

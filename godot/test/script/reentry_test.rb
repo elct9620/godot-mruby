@@ -31,13 +31,13 @@ class ReentryTest < Minitest::Test
   end
 
   # @behavior RS-037
-  def test_a_nodes_script_is_not_changed_while_its_ruby_runs
+  def test_a_nodes_script_taken_away_while_its_ruby_runs_lets_the_call_finish
     detach = Loader::Detach.new
 
     answer = detach.call(:detach)
 
-    assert_includes answer, "while its Ruby script is running"
-    refute_nil detach.get_script
+    assert_equal :detached, answer
+    assert_nil detach.get_script
   ensure
     detach&.free
   end

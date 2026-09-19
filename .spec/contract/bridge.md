@@ -55,32 +55,6 @@ A node as Ruby is given it, for the node script's class to make the node's Ruby 
 pub struct Owner(pub InstanceId);
 ```
 
-## `Running`
-
-Marks a node as running a call into its Ruby object while it lives, so Ruby does not set that node's script before the call returns.
-
-| Attribute | Value |
-| --- | --- |
-| internal | yes |
-
-```rust
-pub struct Running;
-```
-
-## `Running::start`
-
-Marks a node as running a call into its Ruby object until what it answers is dropped.
-
-| Attribute | Value |
-| --- | --- |
-| internal | yes |
-
-```rust
-impl Running {
-    pub fn start(node: InstanceId) -> Self {}
-}
-```
-
 ## `ToRuby`
 
 An engine value as Ruby is given it, made only once the value is known to reach Ruby, so a container nested too deep never does.
