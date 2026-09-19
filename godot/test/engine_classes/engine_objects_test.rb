@@ -39,7 +39,9 @@ class EngineObjectsTest < Minitest::Test
     node = Godot::Node.new
     node.free
 
-    assert_raises(Godot::CallError) { node.get_child_count }
+    error = assert_raises(Godot::CallError) { node.get_child_count }
+    assert_equal "Attempt to call function 'get_child_count' in base 'previously freed' on a null instance.",
+                 error.message
   end
 
   # @behavior RG-013
@@ -49,5 +51,48 @@ class EngineObjectsTest < Minitest::Test
     GC.start
 
     assert_operator counted.get_reference_count, :>=, 1
+  end
+
+  # @behavior RG-014
+  def test_ruby_reads_and_writes_an_engine_property_by_its_name
+    node = Godot::Node.new
+
+    node.process_priority = 5
+
+    assert_equal 5, node.process_priority
+  ensure
+    node&.free
+  end
+
+  # @behavior RG-015
+  def test_an_engine_class_names_its_integer_constants
+    assert_equal 13, Godot::Node::NOTIFICATION_READY
+    assert_equal 4, Godot::Node::PROCESS_MODE_DISABLED
+  end
+
+  # @behavior RG-016
+  def test_an_engine_singleton_answers_its_methods_on_its_class
+    assert_equal Godot::Engine.get_physics_ticks_per_second, Godot::Engine.physics_ticks_per_second
+    assert_operator Godot::Engine.get_physics_ticks_per_second, :>, 0
+  end
+
+  # @behavior RG-017
+  def test_an_engine_class_answers_its_static_methods
+    assert_in_delta 0.5, Godot::Tween.interpolate_value(0.0, 1.0, 0.5, 1.0, 0, 0)
+  end
+
+  # @behavior RG-018
+  def test_a_call_the_engine_refuses_raises_call_error_as_gdscript_reports_it
+    node = Godot::Node.new
+
+    too_few = assert_raises(Godot::CallError) { node.set_process_priority }
+    wrong_type = assert_raises(Godot::CallError) { node.set_process_priority(nil) }
+
+    assert_equal "Invalid call to function 'set_process_priority' in base 'Node'. Expected 1 argument(s).",
+                 too_few.message
+    assert_equal "Invalid type in function 'set_process_priority' in base 'Node'. " \
+                 "Cannot convert argument 1 from Nil to int.", wrong_type.message
+  ensure
+    node&.free
   end
 end

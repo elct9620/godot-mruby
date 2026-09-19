@@ -1,6 +1,6 @@
 # Engine classes
 
-How Ruby names and uses the engine's classes: every class the engine registers is a Ruby class under `Godot`, made at its first use and inheriting as the engine's class does, so a node script can name the class it extends, and a class extending one can mark itself in its body with `tool`, `abstract` and `icon`, which Godot reads from the file's source. Making an object of an engine class makes the engine's object, and Ruby calls the engine's methods on it by their names.
+How Ruby names and uses the engine's classes: every class the engine registers is a Ruby class under `Godot`, made at its first use and inheriting as the engine's class does, so a node script can name the class it extends, and a class extending one can mark itself in its body with `tool`, `abstract` and `icon`, which Godot reads from the file's source. Making an object of an engine class makes the engine's object, and Ruby calls the engine's methods, properties, constants, singletons and static methods by their names, failing the way GDScript's untyped calls fail.
 
 ## Includes
 
@@ -101,7 +101,7 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | --- | --- |
 | Given | an engine object that has been freed |
 | When | Ruby calls one of its engine methods |
-| Then | it raises `Godot::CallError` |
+| Then | it raises `Godot::CallError` saying, as GDScript does, that the method was called on a previously freed instance |
 
 ## `RG-013` A reference-counted object lives while Ruby holds it
 
@@ -110,3 +110,43 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | a reference-counted engine object Ruby made and nothing else refers to |
 | When | Ruby runs the garbage collector and calls one of its engine methods |
 | Then | the engine object answers |
+
+## `RG-014` Ruby reads and writes an engine property by its name
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine object with a property |
+| When | Ruby assigns the property by its name and reads it back |
+| Then | Ruby gets the value it assigned |
+
+## `RG-015` An engine class names its integer constants
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine class with an integer constant and an enum |
+| When | Ruby names the constant and one of the enum's values under the class |
+| Then | it gets the engine's integer for each |
+
+## `RG-016` An engine singleton answers its methods on its class
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine class the engine keeps a singleton of |
+| When | Ruby calls one of the singleton's methods on the class under `Godot` |
+| Then | it gets what the singleton answers |
+
+## `RG-017` An engine class answers its static methods
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine class with a static method |
+| When | Ruby calls the method on the class under `Godot` |
+| Then | it gets what the method answers |
+
+## `RG-018` A call the engine refuses raises Godot::CallError as GDScript reports it
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine object |
+| When | Ruby calls one of its engine methods with too few arguments, or with an argument of a type the method cannot take |
+| Then | it raises `Godot::CallError` with the message GDScript's untyped call reports for the same call |

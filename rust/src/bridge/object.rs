@@ -6,8 +6,12 @@ use beni::{
     Array, DataType, Error, ExceptionClass, FromValue, IntoValue, Module, Mrb, Object as _, RClass,
     RModule, ReprValue, Symbol, TryConvert, TypedData, Value, method,
 };
-use godot::classes::{ClassDb, Object, ResourceLoader, Script};
-use godot::obj::{Gd, InstanceId, Singleton};
+use godot::builtin::StringName;
+use godot::builtin::VariantType;
+use godot::classes::{ClassDb, Engine, Object, ResourceLoader, Script};
+use godot::global::type_string;
+use godot::meta::error::CallError;
+use godot::obj::{EngineEnum, Gd, InstanceId, Singleton};
 
 use super::{Answer, Argument};
 use crate::realm::{self, Key};
@@ -42,7 +46,11 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     object.define_singleton_method(mrb, c"__make__", method!(make, 0))?;
     object.define_singleton_method(mrb, c"__make_node__", method!(make_node, 0))?;
     object.define_singleton_method(mrb, c"__allocate__", method!(allocate, 1))?;
-    object.define_private_method(mrb, c"__engine_method__", method!(engine_method, 1))?;
+    object.define_singleton_method(mrb, c"__singleton__", method!(singleton, 0))?;
+    object.define_singleton_method(mrb, c"__static_method__", method!(static_method, 1))?;
+    object.define_singleton_method(mrb, c"__call_static__", method!(call_static, 2))?;
+    object.define_singleton_method(mrb, c"__engine_constant__", method!(engine_constant, 1))?;
+    object.define_private_method(mrb, c"__resolve__", method!(resolve, 1))?;
     object.define_private_method(mrb, c"__call__", method!(call, 2))?;
     Ok(())
 }
@@ -128,41 +136,173 @@ impl IntoValue for Owner {
     }
 }
 
-// Godot::Object#__engine_method__(name): whether the engine object has a
-// method of that name; false for an object carrying none.
-fn engine_method(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<bool, Error> {
+// Godot::Object#__resolve__(name): the engine method a call of `name`
+// reaches, and whether the object's engine class declares it, so every
+// object of the Ruby class answers it; nil when it reaches none, as for an
+// object carrying no engine object. A name ending in `=` reaches the
+// property's setter, and a name no method has reaches its getter.
+fn resolve(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
     let Ok(held) = <&EngineObject>::try_convert(receiver, mrb) else {
-        return Ok(false);
+        return Ok(Value::nil());
     };
-    let object = held.live(mrb)?;
-    Ok(name
-        .name(mrb)
-        .is_some_and(|name| object.has_method(name.as_str())))
+    let name = name.name(mrb).unwrap_or_default();
+    let object = held.live(mrb, &name)?;
+    let class = StringName::from(&object.get_class());
+    let mut class_db = ClassDb::singleton();
+    let (target, declared) = if let Some(property) = name.strip_suffix('=') {
+        (
+            class_db
+                .class_get_property_setter(&class, property)
+                .to_string(),
+            true,
+        )
+    } else if object.has_method(name.as_str()) {
+        let declared = class_db.class_has_method(&class, name.as_str());
+        (name, declared)
+    } else {
+        (
+            class_db
+                .class_get_property_getter(&class, name.as_str())
+                .to_string(),
+            true,
+        )
+    };
+    if target.is_empty() {
+        return Ok(Value::nil());
+    }
+    let target = Symbol::from(mrb.intern(target.as_bytes())?).as_value();
+    Ok(mrb
+        .ary_new_from_values(&[target, declared.into_value(mrb)])
+        .as_value())
 }
 
 // Godot::Object#__call__(name, args): calls the engine method `name` with
 // `args` and answers what it returns.
 fn call(mrb: &Mrb, held: &EngineObject, name: Symbol, args: Array) -> Result<Value, Error> {
-    let mut object = held.live(mrb)?;
     let name = name.name(mrb).unwrap_or_default();
-    let args = (0..args.len())
-        .map(|index| Answer::try_convert(args.entry(mrb, index as isize), mrb).map(|Answer(v)| v))
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut object = held.live(mrb, &name)?;
+    let args = variants(mrb, args)?;
     let answer = object
         .try_call(name.as_str(), &args)
-        .map_err(|error| call_error(mrb, &error.to_string()))?;
+        .map_err(|error| refused(mrb, &error, &object.get_class().to_string(), &name))?;
     Ok(Argument(&answer).into_value(mrb))
 }
 
+// Godot::Object.__singleton__: the engine's singleton of the receiver's
+// engine class, or nil when the engine keeps none.
+fn singleton(mrb: &Mrb, class: RClass) -> Value {
+    let name = engine_name(mrb, class);
+    Engine::singleton()
+        .get_singleton(&name)
+        .map(|object| mrb.wrap_as(EngineObject(object), class).as_value())
+        .unwrap_or_else(Value::nil)
+}
+
+// Godot::Object.__static_method__(name): whether the receiver's engine class
+// has a method of that name to call on the class.
+fn static_method(mrb: &Mrb, class: RClass, name: Symbol) -> bool {
+    let name = name.name(mrb).unwrap_or_default();
+    ClassDb::singleton().class_has_method(&engine_name(mrb, class), name.as_str())
+}
+
+// Godot::Object.__call_static__(name, args): calls the static method `name`
+// of the receiver's engine class with `args`.
+fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: Array) -> Result<Value, Error> {
+    let name = name.name(mrb).unwrap_or_default();
+    let class = engine_name(mrb, class);
+    let args = variants(mrb, args)?;
+    let answer = ClassDb::singleton()
+        .try_class_call_static(&class, name.as_str(), &args)
+        .map_err(|error| refused(mrb, &error, &class, &name))?;
+    Ok(Argument(&answer).into_value(mrb))
+}
+
+// Godot::Object.__engine_constant__(name): the integer constant or enum
+// value of that name the receiver's engine class has, or nil.
+fn engine_constant(mrb: &Mrb, class: RClass, name: Symbol) -> Value {
+    let name = name.name(mrb).unwrap_or_default();
+    let class = engine_name(mrb, class);
+    let class_db = ClassDb::singleton();
+    if !class_db.class_has_integer_constant(&class, name.as_str()) {
+        return Value::nil();
+    }
+    class_db
+        .class_get_integer_constant(&class, name.as_str())
+        .into_value(mrb)
+}
+
+// The engine class an engine class under Godot stands for.
+fn engine_name(mrb: &Mrb, class: RClass) -> String {
+    let path = class.path(mrb).unwrap_or_default();
+    path.strip_prefix("Godot::").unwrap_or(&path).to_owned()
+}
+
+fn variants(mrb: &Mrb, args: Array) -> Result<Vec<godot::builtin::Variant>, Error> {
+    (0..args.len())
+        .map(|index| Answer::try_convert(args.entry(mrb, index as isize), mrb).map(|Answer(v)| v))
+        .collect()
+}
+
 impl EngineObject {
-    // The engine object, or the Godot::CallError a freed one raises.
-    fn live(&self, mrb: &Mrb) -> Result<Gd<Object>, Error> {
+    // The engine object, or the Godot::CallError calling `method` on a freed
+    // one raises, worded as GDScript words it.
+    fn live(&self, mrb: &Mrb, method: &str) -> Result<Gd<Object>, Error> {
         if self.0.is_instance_valid() {
             Ok(self.0.clone())
         } else {
-            Err(call_error(mrb, "the engine object was freed"))
+            let message = format!(
+                "Attempt to call function '{method}' in base 'previously freed' on a null instance."
+            );
+            Err(call_error(mrb, &message))
         }
     }
+}
+
+// The Godot::CallError a call the engine refused raises, worded as GDScript
+// words the same failure of an untyped call. gdext hands the engine's
+// reason only as text, so the argument and types are read back from it.
+fn refused(mrb: &Mrb, error: &CallError, base: &str, method: &str) -> Error {
+    let reason = error.message(false);
+    let reason = reason.rsplit("Reason: ").next().unwrap_or_default();
+    let message = if let Some(expected) = expected_count(reason) {
+        format!(
+            "Invalid call to function '{method}' in base '{base}'. Expected {expected} argument(s)."
+        )
+    } else if let Some((argument, from, to)) = conversion(reason) {
+        format!(
+            "Invalid type in function '{method}' in base '{base}'. \
+             Cannot convert argument {argument} from {from} to {to}."
+        )
+    } else {
+        format!("Invalid call to function '{method}' in base '{base}': {reason}")
+    };
+    call_error(mrb, &message)
+}
+
+// "function has N parameters, but received M arguments": N.
+fn expected_count(reason: &str) -> Option<&str> {
+    reason
+        .strip_prefix("function has ")?
+        .split_once(" parameter")
+        .map(|(count, _)| count)
+}
+
+// "parameter #I -- cannot convert from FROM to TO": I and the two types as
+// GDScript names them.
+fn conversion(reason: &str) -> Option<(&str, String, String)> {
+    let (argument, types) = reason
+        .strip_prefix("parameter #")?
+        .split_once(" -- cannot convert from ")?;
+    let (from, to) = types.split_once(" to ")?;
+    Some((argument, type_named(from)?, type_named(to)?))
+}
+
+// The name GDScript gives the variant type gdext debug-prints as `debug`.
+fn type_named(debug: &str) -> Option<String> {
+    (0..VariantType::MAX.ord)
+        .map(<VariantType as EngineEnum>::from_ord)
+        .find(|kind| format!("{kind:?}") == debug)
+        .map(|kind| type_string(i64::from(kind.ord)).to_string())
 }
 
 fn not_implemented(mrb: &Mrb, message: &str) -> Error {
