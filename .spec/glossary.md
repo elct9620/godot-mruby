@@ -74,3 +74,15 @@ What a node script tells the editor to list it by, as `class_name` does for a GD
 ### Library file
 
 A file that is not a node script: it loads by name and is never a node's script.
+
+### Engine class
+
+A class the engine registers, and the Ruby class under `Godot` that stands for it, made at its first use and inheriting as the engine's does, up to `Godot::Object`. A node script's class extends one, itself or through its ancestry.
+
+### Engine object
+
+An object of an engine class, which the engine and Ruby share: Ruby holds the engine's object itself, so the same object reaches either side as itself, and Ruby calls its methods, properties and signals by their names.
+
+### Value type
+
+One of the engine's own values that are neither Ruby's nor objects, such as `Vector2`, `Color` or `NodePath`: a class under `Godot::Value` whose values the engine builds and computes with, and which never change, since each side holds its own copy.
