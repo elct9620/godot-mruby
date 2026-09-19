@@ -1,7 +1,9 @@
-//! The game's Ruby files, as the game's realm is given them: every `.rb`
-//! file Godot lists under `res://`, with the source Godot holds for each.
+//! The game's Ruby files: every `.rb` file Godot lists under `res://`, with
+//! the source Godot holds for each as the game's realm is given them, or as
+//! each is on disk for what the editor asks while it scans.
 
-use godot::classes::{Os, ResourceLoader, Script};
+use godot::classes::{FileAccess, Os, ResourceLoader, Script};
+use godot::global::Error;
 use godot::obj::Singleton;
 
 use crate::parser::Header;
@@ -64,6 +66,31 @@ impl Files for GameFiles {
             writes: header.writes().to_vec(),
             extends,
         }
+    }
+}
+
+/// The game's files as they are on disk, for answering what the editor asks
+/// of a file as it scans the project. GDScript reads its own this way: the
+/// editor asks while it holds the language, so a failed load, which Godot
+/// prints, cannot happen here, and a file that cannot be read is no class.
+pub struct FilesOnDisk;
+
+impl Files for FilesOnDisk {
+    fn paths(&self) -> Vec<String> {
+        GameFiles.paths()
+    }
+
+    fn source(&self, path: &str) -> Result<String, String> {
+        let source = FileAccess::get_file_as_string(path);
+        match FileAccess::get_open_error() {
+            Error::OK => Ok(source.to_string()),
+            error => Err(format!("{error:?}")),
+        }
+    }
+
+    // A scan runs no file.
+    fn declared(&self, _path: &str) -> Declared {
+        Declared::default()
     }
 }
 

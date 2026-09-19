@@ -9,7 +9,7 @@ use godot::meta::conv::RawPtr;
 use godot::prelude::*;
 
 use crate::announcement::{Project, Unannounced};
-use crate::game::GameFiles;
+use crate::game::FilesOnDisk;
 use crate::realm::Location;
 use crate::script::RubyScript;
 use crate::{bridge, settings, warn};
@@ -343,7 +343,7 @@ impl IScriptLanguageExtension for RubyLanguage {
     // lists the file as a class by the name answered.
     fn get_global_class_name(&self, path: GString) -> AnyDictionary {
         let test_directories = settings::test_directories();
-        let project = Project::new(&GameFiles, &test_directories, &bridge::is_node_class);
+        let project = Project::new(&FilesOnDisk, &test_directories, &bridge::is_node_class);
         match project.announce(&path.to_string()) {
             Ok(announcement) => vdict! {
                 "name" => announcement.name,

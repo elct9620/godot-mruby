@@ -228,3 +228,11 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a node script whose class defines one method answering a Float and another answering an Integer |
 | When | Godot calls each method on the node |
 | Then | the log carries the first answer as a `float` and the second as an `int`, each with its value |
+
+## `RS-029` The editor passes over a node script it cannot read
+
+| Step | Statement |
+| --- | --- |
+| Given | a project holding a node script nobody may read |
+| When | the editor scans the project |
+| Then | the log says nothing about that file |

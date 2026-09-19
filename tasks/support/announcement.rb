@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require "fileutils"
+require "tmpdir"
+
 module Godot
   # Scans the integration-test project in the editor and reads how its node
   # scripts are announced: the class list the editor writes, and what it warns
@@ -15,6 +18,11 @@ module Godot
     TWINS = "res://verify/script/announce"
     TWINS_WARNING = "WARNING: #{TWINS}/left/twin.rb and #{TWINS}/right/twin.rb " \
                     "define node scripts named Twin, so none is listed by that name".freeze
+    # A node script the editor cannot read, and what a scan must never print
+    # while the language answers for it.
+    UNREADABLE = "unreadable.rb"
+    UNREADABLE_SOURCE = "class Unreadable < Godot::Node\nend\n"
+    PANIC = "already bound"
 
     module_function
 
@@ -24,6 +32,7 @@ module Godot
 
       verify_listed!(project)
       verify_twins_warned!(output)
+      verify_unreadable_skipped!(project)
     end
 
     # @behavior RS-025
@@ -32,6 +41,30 @@ module Godot
       return if entries.any? { |entry| BOSS_ENTRY.all? { |line| entry.include?(line) } }
 
       raise "The editor did not list boss.rb by its announcement #{BOSS_ENTRY}:\n#{entries.join("}, {")}"
+    end
+
+    # @behavior RS-029
+    def verify_unreadable_skipped!(project)
+      output, status = scan_with_unreadable(project)
+      return if output.nil?
+      return if status.success? && !output.include?(PANIC) && !output.include?("res://#{UNREADABLE}")
+
+      raise "The editor did not pass over #{UNREADABLE} quietly:\n#{output}"
+    end
+
+    # Scans a copy of the project holding a node script nobody may read, and
+    # answers nothing where the system still lets its owner read it, as
+    # Windows does.
+    def scan_with_unreadable(project)
+      Dir.mktmpdir do |dir|
+        copy = File.join(dir, "project")
+        FileUtils.cp_r(project, copy)
+        FileUtils.rm_rf(File.join(copy, ".godot", "editor"))
+        unreadable = File.join(copy, UNREADABLE)
+        File.write(unreadable, UNREADABLE_SOURCE)
+        File.chmod(0o000, unreadable)
+        File.readable?(unreadable) ? nil : Godot.run_editor(copy)
+      end
     end
 
     # @behavior RS-026
