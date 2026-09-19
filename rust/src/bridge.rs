@@ -1,7 +1,7 @@
 //! What Ruby sees of the engine: the `Godot` module, a gem every game realm
 //! opens with, and the values that cross between the engine and Ruby.
 
-use beni::{Error, FromValue, Gem, IntoValue, Mrb, Object, Symbol, Value, method};
+use beni::{Error, FromValue, Gem, IntoValue, Mrb, Object, ReprValue, Symbol, Value, method};
 use godot::builtin::{Variant, VariantType};
 use godot::classes::ClassDb;
 use godot::meta::ToGodot;
@@ -54,9 +54,7 @@ impl IntoValue for Argument<'_> {
     fn into_value(self, mrb: &Mrb) -> Value {
         match self.0.get_type() {
             VariantType::BOOL => self.0.to::<bool>().into_value(mrb),
-            // beni has `IntoValue` for i32 but not i64, so an integer goes
-            // through `Value::from_int`.
-            VariantType::INT => Value::from_int(mrb, self.0.to::<i64>()),
+            VariantType::INT => self.0.to::<i64>().into_value(mrb),
             VariantType::FLOAT => self.0.to::<f64>().into_value(mrb),
             _ => Value::nil(),
         }

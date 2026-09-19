@@ -2,7 +2,7 @@ use std::cell::{Cell, RefCell};
 use std::ffi::CStr;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
-use beni::{Error, FromValue, Gem, IntoValue, Mrb, Value};
+use beni::{Error, FromValue, Gem, IntoValue, Mrb, ReprValue, Value};
 
 use crate::compiler;
 
@@ -327,13 +327,9 @@ impl Realm {
         let _scope = self.mrb.arena_scope();
         let answer = self
             .mrb
-            .intern(receiver.as_bytes())
-            .and_then(|name| {
-                self.mrb
-                    .object_class()
-                    .to_value(&self.mrb)
-                    .const_get(&self.mrb, name.to_sym())
-            })
+            .object_class()
+            .as_value()
+            .const_get(&self.mrb, receiver)
             .and_then(|receiver| receiver.funcall(&self.mrb, method, &[arg.into_value(&self.mrb)]))
             .map_err(|error| RubyError::read(&self.mrb, None, &error))?;
         self.taken(answer, || {
@@ -381,10 +377,7 @@ impl Realm {
         let answer = bookkeeping(&self.mrb)
             .registry
             .object(&self.mrb, key)
-            .and_then(|object| {
-                let name = self.mrb.intern(method.as_bytes())?;
-                object.funcall(&self.mrb, name, &args)
-            })
+            .and_then(|object| object.funcall(&self.mrb, method, &args))
             .map_err(|error| RubyError::read(&self.mrb, None, &error))?;
         self.taken(answer, || format!("#{method}"))
     }

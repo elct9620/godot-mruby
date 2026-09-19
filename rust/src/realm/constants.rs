@@ -3,7 +3,9 @@
 //! what a running file creates; every other miss and addition is left to
 //! Ruby through `super`.
 
-use beni::{Error, FromValue, IntoValue, Module, Mrb, RClass, RModule, Symbol, Value, method};
+use beni::{
+    Error, FromValue, IntoValue, Module, Mrb, RClass, RModule, ReprValue, Symbol, Value, method,
+};
 
 use super::index::{self, Named, Namespace};
 use super::{Extends, bookkeeping, compile, executor};
@@ -155,7 +157,7 @@ pub(super) fn constant_at(mrb: &Mrb, key: &[String]) -> Option<Value> {
 }
 
 fn object(mrb: &Mrb) -> Value {
-    mrb.object_class().to_value(mrb)
+    mrb.object_class().as_value()
 }
 
 // The constant `scope` holds whose name the class index matches to
@@ -166,10 +168,9 @@ fn constant_matching(mrb: &Mrb, scope: Value, segment: &str) -> Option<Value> {
         .and_then(|constants| constants.ensure_array(mrb))
         .ok()?;
     let name = (0..constants.len())
-        .map(|index| constants.entry(index as isize))
+        .map(|index| constants.entry(mrb, index as isize))
         .find(|name| index::normalize(&name.to_string(mrb)) == segment)?;
-    let name = name.to_sym(mrb).ok()?.to_sym();
-    scope.const_get(mrb, name).ok()
+    scope.const_get(mrb, name.to_sym(mrb).ok()?).ok()
 }
 
 // What `name` names from inside `receiver`: mruby hands const_missing the
@@ -214,7 +215,7 @@ fn constant_from(mrb: &Mrb, path: &str, outer: &[String], name: &str) -> Result<
     }
     run_by_name(mrb, path).map_err(|error| placed(mrb, path, error))?;
     let scope = named_scope(mrb, outer)?;
-    let symbol = mrb.intern(name.as_bytes())?.to_sym();
+    let symbol = mrb.intern(name.as_bytes())?;
     if scope.const_defined_at(mrb, symbol) {
         scope.const_get(mrb, symbol)
     } else {
@@ -255,13 +256,12 @@ fn namespace_module(
 // The module the names in `outer` spell exactly, from Object.
 fn named_scope(mrb: &Mrb, outer: &[String]) -> Result<Value, Error> {
     outer.iter().try_fold(object(mrb), |scope, name| {
-        scope.const_get(mrb, mrb.intern(name.as_bytes())?.to_sym())
+        scope.const_get(mrb, name.as_str())
     })
 }
 
 fn define_module(mrb: &Mrb, scope: Value, name: &str) -> Result<Value, Error> {
-    let name = mrb.intern(name.as_bytes())?.to_sym();
-    let module = mrb.module_new().to_value(mrb);
+    let module = mrb.module_new().as_value();
     let defining = &bookkeeping(mrb).defining_namespace;
     defining.set(true);
     let defined = scope.const_set(mrb, name, module);
@@ -273,7 +273,7 @@ fn name_error(mrb: &Mrb, message: &str, name: &str) -> Error {
     let error = mrb.exc_get(c"NameError").and_then(|class| {
         let arguments = [
             mrb.str_new(message.as_bytes()).as_value(),
-            mrb.intern(name.as_bytes())?.as_value(),
+            Symbol::from(mrb.intern(name.as_bytes())?).as_value(),
         ];
         class.into_value(mrb).funcall(mrb, c"new", &arguments)
     });

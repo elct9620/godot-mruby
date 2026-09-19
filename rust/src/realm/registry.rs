@@ -4,7 +4,7 @@
 
 use std::cell::Cell;
 
-use beni::{Error, Hash, Mrb, Value};
+use beni::{Error, Hash, IntoValue, Mrb, ReprValue, Value};
 
 /// A Ruby object a realm holds for something outside it, which keeps the key
 /// rather than the object.
@@ -56,9 +56,7 @@ impl Registry {
 }
 
 impl Key {
-    // beni has `IntoValue` for i32 but not i64, so the key goes through
-    // `Value::from_int`.
     fn to_value(self, mrb: &Mrb) -> Value {
-        Value::from_int(mrb, self.0)
+        self.0.into_value(mrb)
     }
 }

@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::ffi::CString;
 
 use super::{bookkeeping, compile};
-use beni::{Error, Mrb, Value};
+use beni::{Error, Mrb, ReprValue, Value};
 
 /// How far a file has run in a realm.
 #[derive(Clone, Copy)]
@@ -140,8 +140,8 @@ fn source_of(mrb: &Mrb, path: &str) -> Result<String, Error> {
 // goes before the class.
 fn take_away(mrb: &Mrb, frame: &Frame) {
     for (scope, name) in frame.created.iter().rev() {
-        if let (Some(scope), Ok(name)) = (defined_scope(mrb, scope), mrb.intern(name.as_bytes())) {
-            scope.const_remove(mrb, name.to_sym()).ok();
+        if let Some(scope) = defined_scope(mrb, scope) {
+            scope.const_remove(mrb, name.as_str()).ok();
         }
     }
 }
@@ -151,8 +151,8 @@ fn take_away(mrb: &Mrb, frame: &Frame) {
 fn defined_scope(mrb: &Mrb, scope: &[String]) -> Option<Value> {
     scope
         .iter()
-        .try_fold(mrb.object_class().to_value(mrb), |outer, name| {
-            let name = mrb.intern(name.as_bytes()).ok()?.to_sym();
+        .try_fold(mrb.object_class().as_value(), |outer, name| {
+            let name = mrb.intern(name.as_bytes()).ok()?;
             if outer.const_defined_at(mrb, name) {
                 outer.const_get(mrb, name).ok()
             } else {

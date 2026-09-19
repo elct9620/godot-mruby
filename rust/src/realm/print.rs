@@ -2,8 +2,8 @@
 //! to the process's output: without an IO gem mruby has no output of its own,
 //! and every realm prints.
 
-use beni::format::Rest;
-use beni::{Error, Module, Mrb, Value, method};
+use beni::scan_args::scan_args;
+use beni::{Error, Module, Mrb, ReprValue, Value, method};
 
 use super::bookkeeping;
 
@@ -14,9 +14,14 @@ pub(super) fn define(mrb: &Mrb) -> Result<(), Error> {
     kernel.define_private_method(mrb, c"p", method!(p, -1))
 }
 
+// Every argument of the call, as `*args` takes them.
+fn arguments(mrb: &Mrb) -> Result<Vec<Value>, Error> {
+    Ok(scan_args::<(), (), Vec<Value>, (), (), ()>(mrb)?.splat)
+}
+
 fn puts(mrb: &Mrb, _receiver: Value) -> Result<Value, Error> {
     let log = &bookkeeping(mrb).log;
-    let args = mrb.get_args::<Rest>()?;
+    let args = arguments(mrb)?;
     if args.is_empty() {
         log.message("");
     }
@@ -28,7 +33,7 @@ fn puts(mrb: &Mrb, _receiver: Value) -> Result<Value, Error> {
 }
 
 fn print(mrb: &Mrb, _receiver: Value) -> Result<Value, Error> {
-    let args = mrb.get_args::<Rest>()?;
+    let args = arguments(mrb)?;
     let text: String = args.iter().map(|arg| arg.to_string(mrb)).collect();
     bookkeeping(mrb).log.raw(&text);
     Ok(Value::nil())
@@ -36,11 +41,11 @@ fn print(mrb: &Mrb, _receiver: Value) -> Result<Value, Error> {
 
 fn p(mrb: &Mrb, _receiver: Value) -> Result<Value, Error> {
     let log = &bookkeeping(mrb).log;
-    let args = mrb.get_args::<Rest>()?;
-    for arg in args {
+    let args = arguments(mrb)?;
+    for arg in &args {
         log.message(&arg.inspect(mrb));
     }
-    Ok(match args {
+    Ok(match args.as_slice() {
         [] => Value::nil(),
         [arg] => *arg,
         args => mrb.ary_new_from_values(args).as_value(),

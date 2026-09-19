@@ -3,7 +3,7 @@
 
 use std::ffi::CStr;
 
-use beni::{Error, Gem, IntoValue, Module, Mrb, Value, method};
+use beni::{Error, Gem, IntoValue, Module, Mrb, ReprValue, Symbol, Value, method};
 
 use crate::realm::Location;
 use crate::{compiler, error, log};
@@ -80,12 +80,12 @@ impl IntoValue for Options {
                 self.exclude
                     .map(|value| mrb.str_new(value.as_bytes()).as_value()),
             ),
-            ("seed", self.seed.map(|seed| Value::from_int(mrb, seed))),
+            ("seed", self.seed.map(|seed| seed.into_value(mrb))),
         ];
         for (key, value) in entries {
             if let Some(value) = value {
                 let key = mrb.intern(key.as_bytes()).expect("a short name interns");
-                hash.set(mrb, key.as_value(), value)
+                hash.set(mrb, Symbol::from(key).as_value(), value)
                     .expect("a fresh hash takes a symbol key");
             }
         }
