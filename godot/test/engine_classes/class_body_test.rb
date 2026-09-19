@@ -19,9 +19,10 @@ class ClassBodyTest < Minitest::Test
 
   # @behavior RG-007
   def test_a_class_extending_an_abstract_class_is_not_abstract_itself
-    enemy = Class.new(Godot::Node) { abstract }
-    boss = Class.new(enemy)
+    rabbit = Loader::Rabbit.new
 
-    assert_instance_of boss, boss.new
+    assert_instance_of Loader::Rabbit, rabbit
+  ensure
+    rabbit&.free
   end
 end

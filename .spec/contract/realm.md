@@ -1,6 +1,6 @@
 # Realm
 
-The one way the extension runs Ruby. A component enters the game's realm and asks it to run a file, install an extension, or call a constant's method, and gets Rust values back; nothing outside the realm holds its `mrb_state` or a Ruby value, so what the realm keeps inside can change without its callers changing. What a realm needs from its host it is given as it opens, so it never asks who the host is.
+The one way the extension runs Ruby. A component enters the game's realm and asks it to run a file, install an extension, or call a constant's method, and gets Rust values back; no component outside the realm holds its `mrb_state` or a Ruby value, so what the realm keeps inside can change without its callers changing. An extension's methods run inside the realm with its `mrb_state`, and reach the realm's own state only through the functions taking one. What a realm needs from its host it is given as it opens, so it never asks who the host is.
 
 ## Includes
 
@@ -78,6 +78,30 @@ The file a constant path written inside namespaces names, looked up among paths 
 
 ```rust
 pub fn file_named(paths: Vec<String>, scope: &[String], names: &[String]) -> Option<String> {}
+```
+
+## `hold`
+
+Holds a Ruby object under a key in the realm an extension's method runs in, for an extension making an object something outside keeps the key for.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub fn hold(mrb: &Mrb, key: Key, object: Value) -> Result<(), Error> {}
+```
+
+## `file_defining`
+
+The file the class index of the realm an extension's method runs in names for a constant path, written from `Object`.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub fn file_defining(mrb: &Mrb, names: &[String]) -> Option<String> {}
 ```
 
 ## `release`
@@ -174,7 +198,7 @@ impl Realm {
 
 ## `Key`
 
-A Ruby object a realm holds for something outside it, which keeps the key rather than the object.
+What something outside a realm keeps for the Ruby object the realm holds for it, rather than the object; the outside names it, so a node's key is the node's instance id and the node's Ruby object is found from the node alone.
 
 | Attribute | Value |
 | --- | --- |
@@ -182,11 +206,13 @@ A Ruby object a realm holds for something outside it, which keeps the key rather
 
 ```rust
 pub struct Key;
+
+impl From<i64> for Key {}
 ```
 
 ## `Realm::build`
 
-Runs the Ruby file at a path once, and makes an object of the class its path names, held by the realm under the key it answers.
+Runs the Ruby file at a path once, and holds under a key the object a method makes with the arguments given when called on the class the path names, unless the key holds an object already; answers whether it made one, so the caller initializes only the object it made.
 
 | Attribute | Value |
 | --- | --- |
@@ -194,7 +220,7 @@ Runs the Ruby file at a path once, and makes an object of the class its path nam
 
 ```rust
 impl Realm {
-    pub fn build(&self, path: &str) -> Result<Key, RubyError> {}
+    pub fn build<A: IntoValue>(&self, path: &str, key: Key, make: &CStr, args: impl IntoIterator<Item = A>) -> Result<bool, RubyError> {}
 }
 ```
 

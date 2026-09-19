@@ -42,14 +42,23 @@ module Godot
         @abstract = true
       end
 
+      # An engine class makes the engine's object; a node script's class
+      # makes a node carrying its script, freed if it fails to initialize.
       def new(*args, **kwargs, &block)
         raise NotImplementedError, "#{self} is an abstract class and cannot be instantiated." if @abstract == true
         return __make__ if @engine_class == true
 
-        super
+        node = __make_node__
+        begin
+          node.__send__(:initialize, *args, **kwargs, &block)
+        rescue Exception # rubocop:disable Lint/RescueException
+          node.free
+          raise
+        end
+        node
       end
 
-      private :__make__
+      private :__make__, :__make_node__, :__allocate__
     end
 
     def method_missing(name, *args)

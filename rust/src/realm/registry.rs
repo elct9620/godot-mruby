@@ -2,46 +2,47 @@
 //! keeps a key, and the object stays reachable from a hash the collector
 //! always marks, so mruby never frees what the engine still uses.
 
-use std::cell::Cell;
-
 use beni::{Error, Hash, IntoValue, Mrb, ReprValue, Value};
 
-/// A Ruby object a realm holds for something outside it, which keeps the key
-/// rather than the object.
+/// What something outside a realm keeps for the Ruby object the realm holds
+/// for it; the outside names it, as a node by its instance id.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Key(i64);
 
+impl From<i64> for Key {
+    fn from(key: i64) -> Self {
+        Self(key)
+    }
+}
+
 pub(super) struct Registry {
     objects: Hash,
-    last: Cell<i64>,
 }
 
 impl Registry {
     pub fn new(mrb: &Mrb) -> Self {
         let objects = mrb.hash_new();
         mrb.gc_register_forever(objects.as_value());
-        Self {
-            objects,
-            last: Cell::new(0),
-        }
+        Self { objects }
     }
 
-    /// Holds `object` under a key no other object has had in this realm.
-    pub fn hold(&self, mrb: &Mrb, object: Value) -> Result<Key, Error> {
-        let key = Key(self.last.get() + 1);
-        self.objects.set(mrb, key.to_value(mrb), object)?;
-        self.last.set(key.0);
-        Ok(key)
+    /// Holds `object` under `key`.
+    pub fn hold(&self, mrb: &Mrb, key: Key, object: Value) -> Result<(), Error> {
+        self.objects.set(mrb, key.to_value(mrb), object)
+    }
+
+    /// Whether `key` holds an object.
+    pub fn holds(&self, mrb: &Mrb, key: Key) -> Result<bool, Error> {
+        self.objects.contains_key(mrb, key.to_value(mrb))
     }
 
     /// The object `key` holds; a key released already holds none.
     pub fn object(&self, mrb: &Mrb, key: Key) -> Result<Value, Error> {
-        let held = key.to_value(mrb);
-        if !self.objects.contains_key(mrb, held)? {
+        if !self.holds(mrb, key)? {
             let class = mrb.exc_get(c"RuntimeError")?;
             return Err(Error::new(mrb, class, "the object was released"));
         }
-        self.objects.get(mrb, held)
+        self.objects.get(mrb, key.to_value(mrb))
     }
 
     /// Lets go of the object `key` holds, for the collector to free.

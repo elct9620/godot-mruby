@@ -5,7 +5,9 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 ## Includes
 
 - `godot/test/kernel/print_test.rb`
+- `godot/test/script/**/*.rb`
 - `tasks/support/announcement.rb`
+- `tasks/support/callbacks.rb`
 - `tasks/support/godot.rb`
 - `tasks/support/node_scripts.rb`
 
@@ -236,3 +238,37 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a project holding a node script nobody may read |
 | When | the editor scans the project |
 | Then | the log says nothing about that file |
+
+## `RS-030` A node script's Ruby object is its node
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose script's callback calls one of the node's engine methods on itself |
+| When | the scene runs |
+| Then | the log carries what the engine answered for that node |
+
+## `RS-031` A node script's class makes a node carrying its script
+
+| Step | Statement |
+| --- | --- |
+| Given | the class a node script defines, whose `initialize` takes arguments |
+| When | Ruby calls `new` on the class with arguments |
+| Then | Ruby gets an object of the class, initialized with those arguments, that answers the engine methods of the node class it extends |
+| Then | Godot's calls on that node reach the same object |
+
+## `RS-032` A node that fails to initialize is freed
+
+| Step | Statement |
+| --- | --- |
+| Given | the class a node script defines, whose `initialize` raises |
+| When | Ruby calls `new` on the class |
+| Then | the exception reaches the caller |
+| Then | the node it made has been freed |
+
+## `RS-033` A class no node script defines makes no node
+
+| Step | Statement |
+| --- | --- |
+| Given | a class extending an engine node class that no file of the game defines |
+| When | Ruby calls `new` on the class |
+| Then | it raises `NotImplementedError` |

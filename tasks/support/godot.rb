@@ -4,6 +4,7 @@ require "open3"
 
 require_relative "announcement"
 require_relative "loader"
+require_relative "callbacks"
 require_relative "node_scripts"
 require_relative "ruby_tests"
 require_relative "test_settings"

@@ -245,6 +245,22 @@ fn open_game() -> Result<Realm, RubyError> {
     open()
 }
 
+/// Holds `object` under `key` in the realm `mrb` belongs to, for an
+/// extension making an object something outside keeps the key for.
+pub fn hold(mrb: &Mrb, key: Key, object: Value) -> Result<(), Error> {
+    bookkeeping(mrb).registry.hold(mrb, key, object)
+}
+
+/// The file the class index of the realm `mrb` belongs to names for the
+/// constant `names` spells from Object.
+pub fn file_defining(mrb: &Mrb, names: &[String]) -> Option<String> {
+    let key: Vec<String> = names.iter().map(|name| normalize(name)).collect();
+    match bookkeeping(mrb).index.borrow().named(&key)? {
+        index::Named::File(path) => Some(path),
+        index::Named::Namespace(_) => None,
+    }
+}
+
 /// Lets go of the object `key` holds at the realm's next entry or frame,
 /// never waiting for the realm, so whatever frees a node never waits for Ruby.
 pub fn release(key: Key) {
@@ -393,21 +409,39 @@ impl Realm {
         }
     }
 
-    /// Runs the file at `path` once, and makes an object of the class its
-    /// path names, held by the realm under the key this answers.
-    pub fn build(&self, path: &str) -> Result<Key, RubyError> {
+    /// Runs the file at `path` once, and holds under `key` the object `make`
+    /// answers with `args` on the class its path names, unless `key` holds
+    /// one already. Answers whether it made one, so its caller initializes
+    /// only what it made.
+    pub fn build<A: IntoValue>(
+        &self,
+        path: &str,
+        key: Key,
+        make: &CStr,
+        args: impl IntoIterator<Item = A>,
+    ) -> Result<bool, RubyError> {
         self.run(path)?;
         let _scope = self.mrb.arena_scope();
+        let registry = &bookkeeping(&self.mrb).registry;
+        let read = |error| RubyError::read(&self.mrb, Some(path), &error);
+        if registry.holds(&self.mrb, key).map_err(read)? {
+            return Ok(false);
+        }
         let class = constants::constant_at(&self.mrb, &key_of(path)).ok_or_else(|| {
             RubyError::plain(format!(
                 "{path} has not defined the class its path names, so no object of it is built"
             ))
         })?;
+        let args: Vec<Value> = args
+            .into_iter()
+            .map(|arg| arg.into_value(&self.mrb))
+            .collect();
         self.started_as(Started::Call, || {
             class
-                .funcall(&self.mrb, c"new", &[])
-                .and_then(|object| bookkeeping(&self.mrb).registry.hold(&self.mrb, object))
-                .map_err(|error| RubyError::read(&self.mrb, Some(path), &error))
+                .funcall(&self.mrb, make, &args)
+                .and_then(|object| registry.hold(&self.mrb, key, object))
+                .map(|()| true)
+                .map_err(read)
         })
     }
 
@@ -638,7 +672,9 @@ mod tests {
         let turn = TURN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         close();
         prepare(|| Realm::open(Thing, Silent, |_| Ok(())));
-        let key = enter(|realm| realm.build(THING)).unwrap_or_else(|_| panic!("a Thing is built"));
+        let key = Key::from(1);
+        enter(|realm| realm.build(THING, key, c"new", no_args()))
+            .unwrap_or_else(|_| panic!("a Thing is built"));
         (turn, key)
     }
 

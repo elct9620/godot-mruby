@@ -7,16 +7,18 @@ use godot::prelude::*;
 use godot::register::info::{MethodInfo, PropertyInfo};
 
 use crate::ancestry::Ancestry;
-use crate::bridge::{Answer, Argument};
+use crate::bridge::{self, Answer, Argument, Owner};
 use crate::log::GodotLog;
 use crate::parser::Header;
 use crate::realm::{self, Key, RubyError};
 
 /// A node's instance of a `RubyScript`. It holds no Ruby value: the node's
 /// Ruby object is built in the game's realm the first time Godot calls a
-/// method its class defines, and the instance keeps the realm's key for it.
+/// method its class defines, unless Ruby made the node, and the realm holds
+/// it under the node's key.
 pub struct RubyInstance {
     script: Gd<Script>,
+    owner: InstanceId,
     // The header and ancestry its script had as the instance was made, which
     // answer which methods the node's class has without entering the realm.
     header: Arc<Header>,
@@ -48,6 +50,7 @@ impl RubyInstance {
     ) -> Self {
         Self {
             script,
+            owner: owner.instance_id(),
             header,
             ancestry,
             language,
@@ -56,7 +59,8 @@ impl RubyInstance {
         }
     }
 
-    // The node's Ruby object, built at the first call that needs it.
+    // The node's Ruby object, built at the first call that needs it and
+    // initialized once it is held, unless Ruby made the node and built it.
     fn object(&mut self) -> Option<Key> {
         match self.stage {
             Stage::Built(key) => return Some(key),
@@ -64,17 +68,24 @@ impl RubyInstance {
             Stage::Recorded => {}
         }
         let path = self.script.get_path().to_string();
-        match realm::enter(|realm| realm.build(&path)) {
-            Ok(key) => {
+        let key = bridge::node_key(self.owner);
+        let owner = [Owner(self.owner)];
+        let built = realm::enter(|realm| realm.build(&path, key, c"__allocate__", owner)).and_then(
+            |made| {
                 self.stage = Stage::Built(key);
-                Some(key)
-            }
-            Err(failed) => {
+                if made {
+                    realm::enter(|realm| realm.send::<Argument, Answer>(key, "initialize", []))?;
+                }
+                Ok(key)
+            },
+        );
+        built
+            .inspect_err(|failed| {
                 failed.write(&GodotLog);
+                realm::release(key);
                 self.stage = Stage::Failed;
-                None
-            }
-        }
+            })
+            .ok()
     }
 
     // Whether the node's class defines `method` or inherits it from a file.

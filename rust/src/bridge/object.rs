@@ -6,10 +6,11 @@ use beni::{
     Array, DataType, Error, ExceptionClass, FromValue, IntoValue, Module, Mrb, Object as _, RClass,
     RModule, ReprValue, Symbol, TryConvert, TypedData, Value, method,
 };
-use godot::classes::{ClassDb, Object};
-use godot::obj::{Gd, Singleton};
+use godot::classes::{ClassDb, Object, ResourceLoader, Script};
+use godot::obj::{Gd, InstanceId, Singleton};
 
 use super::{Answer, Argument};
+use crate::realm::{self, Key};
 
 /// The engine object a Ruby object of an engine class stands for. Holding
 /// it keeps a reference-counted object alive until Ruby lets go of it.
@@ -39,6 +40,8 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     let object = godot.define_class(mrb, c"Object", mrb.object_class())?;
     object.set_instance_data_tt(mrb)?;
     object.define_singleton_method(mrb, c"__make__", method!(make, 0))?;
+    object.define_singleton_method(mrb, c"__make_node__", method!(make_node, 0))?;
+    object.define_singleton_method(mrb, c"__allocate__", method!(allocate, 1))?;
     object.define_private_method(mrb, c"__engine_method__", method!(engine_method, 1))?;
     object.define_private_method(mrb, c"__call__", method!(call, 2))?;
     Ok(())
@@ -55,12 +58,74 @@ fn make(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
     let name = path.strip_prefix("Godot::").unwrap_or(&path);
     let class_db = ClassDb::singleton();
     if !class_db.can_instantiate(name) {
-        let not_implemented = mrb.exc_get(c"NotImplementedError")?;
         let message = format!("the engine makes no objects of {path}");
-        return Err(Error::new(mrb, not_implemented, &message));
+        return Err(not_implemented(mrb, &message));
     }
     let object = class_db.instantiate(name).to::<Gd<Object>>();
     Ok(mrb.wrap_as(EngineObject(object), class).as_value())
+}
+
+// Godot::Object.__make_node__: a new node of the engine class the
+// receiver's file extends, carrying that file's script, and the receiver's
+// object for it, uninitialized and held under the node's key.
+fn make_node(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
+    let path = class.path(mrb);
+    let script = path
+        .as_ref()
+        .and_then(|path| {
+            let names: Vec<String> = path.split("::").map(str::to_owned).collect();
+            realm::file_defining(mrb, &names)
+        })
+        .and_then(|file| ResourceLoader::singleton().load(&file))
+        .and_then(|resource| resource.try_cast::<Script>().ok())
+        .filter(|script| !script.get_instance_base_type().is_empty());
+    let class_name = || {
+        path.clone()
+            .unwrap_or_else(|| "an unnamed class".to_owned())
+    };
+    let Some(script) = script else {
+        let message = format!(
+            "no node script defines {}, so it makes no node",
+            class_name()
+        );
+        return Err(not_implemented(mrb, &message));
+    };
+    let mut node = ClassDb::singleton()
+        .instantiate(&script.get_instance_base_type())
+        .to::<Gd<Object>>();
+    node.set_script(&script);
+    if node.get_script().is_none() {
+        node.free();
+        let message = format!("{}'s script refused its node here", class_name());
+        return Err(not_implemented(mrb, &message));
+    }
+    let object = mrb.wrap_as(EngineObject(node.clone()), class).as_value();
+    realm::hold(mrb, node_key(node.instance_id()), object)?;
+    Ok(object)
+}
+
+// Godot::Object.__allocate__(owner): the receiver's object for the engine
+// object `owner` stands for, uninitialized.
+fn allocate(mrb: &Mrb, class: RClass, owner: &EngineObject) -> Value {
+    mrb.wrap_as(EngineObject(owner.0.clone()), class).as_value()
+}
+
+/// The key a realm holds a node's Ruby object under.
+pub fn node_key(node: InstanceId) -> Key {
+    Key::from(node.to_i64())
+}
+
+/// A node's engine object as Ruby is given it, for its class to make the
+/// node's Ruby object from.
+pub struct Owner(pub InstanceId);
+
+impl IntoValue for Owner {
+    fn into_value(self, mrb: &Mrb) -> Value {
+        match Gd::<Object>::try_from_instance_id(self.0) {
+            Ok(owner) => mrb.wrap(EngineObject(owner)).as_value(),
+            Err(_) => Value::nil(),
+        }
+    }
 }
 
 // Godot::Object#__engine_method__(name): whether the engine object has a
@@ -97,6 +162,13 @@ impl EngineObject {
         } else {
             Err(call_error(mrb, "the engine object was freed"))
         }
+    }
+}
+
+fn not_implemented(mrb: &Mrb, message: &str) -> Error {
+    match mrb.exc_get(c"NotImplementedError") {
+        Ok(class) => Error::new(mrb, class, message),
+        Err(error) => error,
     }
 }
 

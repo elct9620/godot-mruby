@@ -13,6 +13,8 @@ use crate::{compiler, log};
 
 mod object;
 
+pub use object::{Owner, node_key};
+
 const FILE: &std::ffi::CStr = c"godot_mruby/bridge/godot.rb";
 
 pub struct Godot;

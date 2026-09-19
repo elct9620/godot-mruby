@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://verify/script/callbacks/ready.rb" id="1"]
 [ext_resource type="Script" path="res://verify/script/callbacks/process.rb" id="2"]
@@ -8,6 +8,7 @@
 [ext_resource type="Script" path="res://verify/script/callbacks/notified.rb" id="6"]
 [ext_resource type="Script" path="res://verify/script/callbacks/answers.rb" id="7"]
 [ext_resource type="Script" path="res://verify/script/callbacks/ask.gd" id="8"]
+[ext_resource type="Script" path="res://verify/script/callbacks/itself.rb" id="9"]
 
 [node name="Callbacks" type="Node"]
 
@@ -38,3 +39,6 @@ script = ExtResource("7")
 
 [node name="Ask" type="Node" parent="."]
 script = ExtResource("8")
+
+[node name="Itself" type="Node" parent="."]
+script = ExtResource("9")
