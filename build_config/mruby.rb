@@ -5,7 +5,7 @@ MRuby::Lockfile.disable
 # The fewest gems the extension needs; anything that reaches the host (IO,
 # sockets, directories) stays out, since Ruby reaches the host through Godot's
 # API.
-GEMS = %w[mruby-compiler mruby-metaprog mruby-random mruby-sprintf].freeze
+GEMS = %w[mruby-compiler mruby-math mruby-metaprog mruby-random mruby-sprintf].freeze
 
 # What every build shares, as each goes into the same shipped library. That
 # library is a shared one, so the archive's code is compiled
