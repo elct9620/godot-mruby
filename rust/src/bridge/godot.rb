@@ -116,5 +116,15 @@ module Godot
     def respond_to_missing?(name, include_private = false)
       !__resolve__(name).nil? || super
     end
+
+    # Two Ruby objects for one engine object are equal.
+    def ==(other)
+      other.is_a?(Godot::Object) && __instance_id__ == other.__send__(:__instance_id__)
+    end
+    alias eql? ==
+
+    def hash
+      __instance_id__.hash
+    end
   end
 end

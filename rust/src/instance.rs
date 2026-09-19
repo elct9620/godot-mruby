@@ -7,7 +7,8 @@ use godot::prelude::*;
 use godot::register::info::{MethodInfo, PropertyInfo};
 
 use crate::ancestry::Ancestry;
-use crate::bridge::{self, Answer, Argument, Owner};
+use crate::bridge::{self, Owner, ToEngine, ToRuby};
+use crate::error;
 use crate::log::GodotLog;
 use crate::parser::Header;
 use crate::realm::{self, Key, RubyError};
@@ -74,7 +75,7 @@ impl RubyInstance {
             |made| {
                 self.stage = Stage::Built(key);
                 if made {
-                    realm::enter(|realm| realm.send::<Argument, Answer>(key, "initialize", []))?;
+                    realm::enter(|realm| realm.send::<ToRuby, ToEngine>(key, "initialize", []))?;
                 }
                 Ok(key)
             },
@@ -93,15 +94,23 @@ impl RubyInstance {
         self.header.has_method(method) || self.ancestry.has_method(method)
     }
 
-    // Calls `method` on the node's Ruby object; an exception is reported and
-    // answers null, as a callback that returned nothing does.
+    // Calls `method` on the node's Ruby object; an exception, or an argument
+    // that cannot reach Ruby, is reported and answers null, as a callback
+    // that returned nothing does.
     fn send(&mut self, method: &str, args: &[&Variant]) -> Variant {
         let Some(key) = self.object() else {
             return Variant::nil();
         };
-        let args = args.iter().map(|arg| Argument(arg));
-        realm::enter(|realm| realm.send::<_, Answer>(key, method, args))
-            .map(|Answer(answer)| answer)
+        let checked = args.iter().map(|arg| ToRuby::checked(arg));
+        let args = match checked.collect::<Result<Vec<_>, _>>() {
+            Ok(args) => args,
+            Err(reason) => {
+                error!("#{method} was not called: {reason}");
+                return Variant::nil();
+            }
+        };
+        realm::enter(|realm| realm.send::<_, ToEngine>(key, method, args))
+            .map(|ToEngine(answer)| answer)
             .unwrap_or_else(|failed: RubyError| {
                 failed.write(&GodotLog);
                 Variant::nil()

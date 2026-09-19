@@ -5,6 +5,9 @@ extends Node
 # back from each.
 func _ready() -> void:
 	var answers := get_node("../Answers")
-	for method in ["ratio", "count"]:
+	for method in ["ratio", "count", "looped"]:
 		var answer: Variant = answers.call(method)
 		print(method, " answered ", type_string(typeof(answer)), " ", answer)
+	var looped := []
+	looped.append(looped)
+	answers.call("take", looped)

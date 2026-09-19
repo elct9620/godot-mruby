@@ -92,6 +92,18 @@ Holds a Ruby object under a key in the realm an extension's method runs in, for 
 pub fn hold(mrb: &Mrb, key: Key, object: Value) -> Result<(), Error> {}
 ```
 
+## `held`
+
+The Ruby object a key holds in the realm an extension's method runs in, if it holds one, so an object the realm holds for something outside reaches Ruby as itself.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub fn held(mrb: &Mrb, key: Key) -> Option<Value> {}
+```
+
 ## `file_defining`
 
 The file the class index of the realm an extension's method runs in names for a constant path, written from `Object`.

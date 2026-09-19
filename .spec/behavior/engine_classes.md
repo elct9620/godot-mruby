@@ -150,3 +150,11 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | an engine object |
 | When | Ruby calls one of its engine methods with too few arguments, or with an argument of a type the method cannot take |
 | Then | it raises `Godot::CallError` with the message GDScript's untyped call reports for the same call |
+
+## `RG-019` An engine method named like a Ruby method is reached through call
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine object whose engine class has a method Ruby's `Object` also defines |
+| When | Ruby calls the name, and calls `call` with the name |
+| Then | the first keeps Ruby's meaning, and `call` reaches the engine's method |

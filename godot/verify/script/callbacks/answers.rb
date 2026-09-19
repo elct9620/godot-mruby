@@ -9,6 +9,15 @@ module Verify
         def count
           3
         end
+
+        def looped
+          looped = []
+          looped << looped
+        end
+
+        def take(_value)
+          puts "take was called"
+        end
       end
     end
   end

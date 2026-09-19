@@ -95,4 +95,12 @@ class EngineObjectsTest < Minitest::Test
   ensure
     node&.free
   end
+
+  # @behavior RG-019
+  def test_an_engine_method_named_like_a_ruby_method_is_reached_through_call
+    peer = Godot::WebSocketPeer.new
+
+    assert_equal Godot::WebSocketPeer, peer.send(:class)
+    assert_kind_of Integer, peer.call(:send, [104, 105])
+  end
 end

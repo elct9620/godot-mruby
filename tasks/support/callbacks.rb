@@ -17,6 +17,14 @@ module Godot
     IDLE_LINE = "idle.rb ran"
     NOTIFIED_LINE = "notified.rb was notified it is ready"
     ANSWER_LINES = ["ratio answered float 1.5", "count answered int 3"].freeze
+    # What Godot gets for an answer that cannot cross, and the log's reason.
+    REFUSED_ANSWER_LINES = ["looped answered Nil <null>",
+                            "ERROR: #looped answered [[...]]: an Array nested more than 100 deep cannot " \
+                            "reach the engine"].freeze
+    # What the log says of an argument that cannot cross, and the line the
+    # method would print were it called.
+    REFUSED_ARGUMENT_LINE = "ERROR: #take was not called: an Array nested more than 100 deep cannot reach Ruby"
+    TAKEN_LINE = "take was called"
     ITSELF_LINE = "itself.rb is inside the tree: true"
 
     module_function
@@ -30,6 +38,8 @@ module Godot
       verify_callbacks_called!(lines, output)
       verify_objects_built!(lines, output)
       verify_answers_reached!(lines, output)
+      verify_refused_answer!(lines, output)
+      verify_refused_argument!(lines, output)
     end
 
     # @behavior RS-011 RS-012 RS-017 RS-030
@@ -55,6 +65,21 @@ module Godot
       return if missing.empty?
 
       raise "The callbacks scene's answers did not reach Godot as Ruby gave them #{missing}:\n#{output}"
+    end
+
+    # @behavior RV-008
+    def verify_refused_answer!(lines, output)
+      missing = REFUSED_ANSWER_LINES.reject { |line| lines.include?(line) }
+      return if missing.empty?
+
+      raise "The callbacks scene's answer that cannot cross did not reach Godot as null #{missing}:\n#{output}"
+    end
+
+    # @behavior RV-009
+    def verify_refused_argument!(lines, output)
+      return if lines.include?(REFUSED_ARGUMENT_LINE) && !lines.include?(TAKEN_LINE)
+
+      raise "The callbacks scene's argument that cannot cross reached Ruby:\n#{output}"
     end
   end
 end

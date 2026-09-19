@@ -251,6 +251,12 @@ pub fn hold(mrb: &Mrb, key: Key, object: Value) -> Result<(), Error> {
     bookkeeping(mrb).registry.hold(mrb, key, object)
 }
 
+/// The Ruby object `key` holds in the realm `mrb` belongs to, if it holds
+/// one.
+pub fn held(mrb: &Mrb, key: Key) -> Option<Value> {
+    bookkeeping(mrb).registry.object(mrb, key).ok()
+}
+
 /// The file the class index of the realm `mrb` belongs to names for the
 /// constant `names` spells from Object.
 pub fn file_defining(mrb: &Mrb, names: &[String]) -> Option<String> {

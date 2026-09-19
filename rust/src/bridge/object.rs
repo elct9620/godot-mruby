@@ -10,10 +10,11 @@ use godot::builtin::StringName;
 use godot::builtin::VariantType;
 use godot::classes::{ClassDb, Engine, Object, ResourceLoader, Script};
 use godot::global::type_string;
+use godot::meta::ToGodot;
 use godot::meta::error::CallError;
 use godot::obj::{EngineEnum, Gd, InstanceId, Singleton};
 
-use super::{Answer, Argument};
+use super::value::{self, ToRuby};
 use crate::realm::{self, Key};
 
 /// The engine object a Ruby object of an engine class stands for. Holding
@@ -52,6 +53,7 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     object.define_singleton_method(mrb, c"__engine_constant__", method!(engine_constant, 1))?;
     object.define_private_method(mrb, c"__resolve__", method!(resolve, 1))?;
     object.define_private_method(mrb, c"__call__", method!(call, 2))?;
+    object.define_private_method(mrb, c"__instance_id__", method!(instance_id, 0))?;
     Ok(())
 }
 
@@ -185,7 +187,13 @@ fn call(mrb: &Mrb, held: &EngineObject, name: Symbol, args: Array) -> Result<Val
     let answer = object
         .try_call(name.as_str(), &args)
         .map_err(|error| refused(mrb, &error, &object.get_class().to_string(), &name))?;
-    Ok(Argument(&answer).into_value(mrb))
+    answered(mrb, &answer)
+}
+
+// Godot::Object#__instance_id__: the engine object's instance id, which
+// two Ruby objects for one engine object share.
+fn instance_id(_mrb: &Mrb, held: &EngineObject) -> i64 {
+    held.0.instance_id_unchecked().to_i64()
 }
 
 // Godot::Object.__singleton__: the engine's singleton of the receiver's
@@ -214,7 +222,36 @@ fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: Array) -> Result<Va
     let answer = ClassDb::singleton()
         .try_class_call_static(&class, name.as_str(), &args)
         .map_err(|error| refused(mrb, &error, &class, &name))?;
-    Ok(Argument(&answer).into_value(mrb))
+    answered(mrb, &answer)
+}
+
+// What the engine answered, as Ruby is given it, or the Godot::CallError an
+// answer that cannot reach Ruby raises.
+fn answered(mrb: &Mrb, answer: &godot::builtin::Variant) -> Result<Value, Error> {
+    ToRuby::checked(answer)
+        .map(|answer| answer.into_value(mrb))
+        .map_err(|reason| call_error(mrb, &reason))
+}
+
+/// The Ruby object for an engine object: the one the realm holds for the
+/// node, or an object of its engine class under Godot.
+pub fn ruby_object(mrb: &Mrb, object: Gd<Object>) -> Value {
+    if let Some(held) = realm::held(mrb, node_key(object.instance_id())) {
+        return held;
+    }
+    let class = mrb
+        .module_get(c"Godot")
+        .and_then(|godot| {
+            let name = object.get_class().to_string();
+            godot.as_value().const_get(mrb, name.as_str())
+        })
+        .ok()
+        .and_then(RClass::from_value)
+        .or_else(|| root(mrb).ok());
+    match class {
+        Some(class) => mrb.wrap_as(EngineObject(object), class).as_value(),
+        None => Value::nil(),
+    }
 }
 
 // Godot::Object.__engine_constant__(name): the integer constant or enum
@@ -237,13 +274,24 @@ fn engine_name(mrb: &Mrb, class: RClass) -> String {
     path.strip_prefix("Godot::").unwrap_or(&path).to_owned()
 }
 
+// `args` as the engine takes them, or the Godot::CallError one that cannot
+// reach it raises, before the engine is given any.
 fn variants(mrb: &Mrb, args: Array) -> Result<Vec<godot::builtin::Variant>, Error> {
-    (0..args.len())
-        .map(|index| Answer::try_convert(args.entry(mrb, index as isize), mrb).map(|Answer(v)| v))
+    args.entries(mrb)
+        .map(|arg| value::to_engine(mrb, arg, 1).map_err(|reason| call_error(mrb, &reason)))
         .collect()
 }
 
 impl EngineObject {
+    /// The engine object as the engine takes it, unless it was freed.
+    pub fn variant(&self) -> Result<godot::builtin::Variant, String> {
+        if self.0.is_instance_valid() {
+            Ok(self.0.to_variant())
+        } else {
+            Err("a freed engine object cannot reach the engine".to_owned())
+        }
+    }
+
     // The engine object, or the Godot::CallError calling `method` on a freed
     // one raises, worded as GDScript words it.
     fn live(&self, mrb: &Mrb, method: &str) -> Result<Gd<Object>, Error> {
