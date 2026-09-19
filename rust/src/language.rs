@@ -355,6 +355,7 @@ fn warn_of_shared_name(path: String, name: String, others: Vec<String>) {
         let at = Location {
             file: path.clone(),
             line: 1,
+            function: String::new(),
         };
         warn!(
             at: &at,

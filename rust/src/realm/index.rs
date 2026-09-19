@@ -279,5 +279,6 @@ fn at(path: &str) -> Location {
     Location {
         file: path.to_owned(),
         line: 1,
+        function: String::new(),
     }
 }

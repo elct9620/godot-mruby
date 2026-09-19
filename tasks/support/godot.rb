@@ -32,7 +32,8 @@ module Godot
   REPORTS = {
     "WARNING: else without rescue is useless" => "(res://verify/report/warning.rb:9)",
     %(SCRIPT ERROR: syntax error, unexpected "'end'", expecting end of file) =>
-      "(res://verify/report/syntax_error.rb:12)"
+      "(res://verify/report/syntax_error.rb:12)",
+    "SCRIPT ERROR: wrong key" => "unlock (res://verify/report/raising.rb:10)"
   }.freeze
 
   module_function
@@ -101,7 +102,7 @@ module Godot
   end
 
   # Runs the report scene and looks for each report followed by its location.
-  # @behavior RR-001 RR-002
+  # @behavior RR-001 RR-002 RR-003
   def verify_reports!(project = PROJECT)
     output, status = run_scene(project, REPORT_SCENE, "--quit-after", "3")
     lines = output.lines.map(&:strip)

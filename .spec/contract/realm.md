@@ -384,7 +384,7 @@ pub enum Level {}
 
 ## `Location`
 
-A line of a Ruby file.
+A line of a Ruby file, and the method it is in when it names one.
 
 | Attribute | Value |
 | --- | --- |

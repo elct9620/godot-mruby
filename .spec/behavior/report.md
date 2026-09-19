@@ -28,3 +28,11 @@ How what mruby has to say about a Ruby file reaches Godot: through the log, at t
 | Given | a node whose script is a `.rb` file that does not parse |
 | When | the scene runs |
 | Then | the log carries the compiler's error as a script error at the file's `res://` path and the line the compiler names |
+
+## `RR-003` An exception appears as a script error at the Ruby line that raised it
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose callback calls a method that raises |
+| When | the scene runs |
+| Then | the log carries the exception's message as a script error at the method, file and line that raised it |

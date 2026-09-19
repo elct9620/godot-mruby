@@ -34,7 +34,7 @@ module Godot
     READY_LINE = "ready.rb is ready"
     PROCESS_LINE = "process.rb was given a Float"
     BUILT_LINE = "built.rb built an object"
-    FAILED_LINE = "ERROR: res://verify/script/callbacks/failing.rb: failing.rb cannot be built"
+    FAILED_LINE = "SCRIPT ERROR: failing.rb cannot be built"
     FAILED_PROCESS_LINE = "failing.rb processed"
     IDLE_LINE = "idle.rb ran"
     NOTIFIED_LINE = "notified.rb was notified it is ready"

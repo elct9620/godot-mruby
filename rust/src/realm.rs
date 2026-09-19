@@ -36,10 +36,11 @@ pub enum Level {
     ScriptError,
 }
 
-/// A line of a Ruby file.
+/// A line of a Ruby file, and the method it is in when it names one.
 pub struct Location {
     pub file: String,
     pub line: u32,
+    pub function: String,
 }
 
 /// The Ruby files a realm runs: which there are, for its class index, and
@@ -114,6 +115,7 @@ fn compile(mrb: &Mrb, name: &CStr, source: &str) -> Result<(), Error> {
         let at = Location {
             file: file.clone().into_owned(),
             line: warning.line,
+            function: String::new(),
         };
         bookkeeping(mrb)
             .log
@@ -417,8 +419,9 @@ impl RubyError {
     }
 
     // A syntax error names its own line, the way Godot reports a script that
-    // does not parse; an exception renders only through the realm it was
-    // raised in.
+    // does not parse; an exception is a script error at the deepest line its
+    // backtrace names, as GDScript reports one raised at run time. Both read
+    // through the realm they came from.
     fn read(mrb: &Mrb, path: Option<&str>, error: &Error) -> Self {
         let named = |message: String| match path {
             Some(path) => format!("{path}: {message}"),
@@ -431,9 +434,19 @@ impl RubyError {
                 at: path.map(|path| Location {
                     file: path.to_owned(),
                     line: parse.line().into(),
+                    function: String::new(),
                 }),
             },
-            Error::Exception(_) => Self::plain(named(error.message(mrb))),
+            Error::Exception(_) => {
+                match error.backtrace(mrb).iter().find_map(|frame| located(frame)) {
+                    Some(at) => Self {
+                        level: Level::ScriptError,
+                        message: error.message(mrb),
+                        at: Some(at),
+                    },
+                    None => Self::plain(named(error.message(mrb))),
+                }
+            }
             _ => Self::plain(named(error.to_string())),
         }
     }
@@ -443,6 +456,20 @@ impl RubyError {
     pub fn write(&self, log: &impl Log) {
         log.record(self.level, self.at.as_ref(), &self.message);
     }
+}
+
+// The place a backtrace frame names, as mruby writes one: `file:line`, then
+// `:in method` when it is in one. A frame without a line, `(unknown):0`,
+// places nothing.
+fn located(frame: &str) -> Option<Location> {
+    let (place, function) = frame.rsplit_once(":in ").unwrap_or((frame, ""));
+    let (file, line) = place.rsplit_once(':')?;
+    let line = line.parse().ok().filter(|&line| line > 0)?;
+    Some(Location {
+        file: file.to_owned(),
+        line,
+        function: function.to_owned(),
+    })
 }
 
 #[cfg(test)]

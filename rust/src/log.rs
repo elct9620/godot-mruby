@@ -38,6 +38,7 @@ pub fn compiler_warnings(file: &CStr) -> impl FnMut(Warning) {
         let at = Location {
             file: file.clone(),
             line: warning.line,
+            function: String::new(),
         };
         crate::warn!(at: &at, "{}", warning.message);
     }
@@ -48,7 +49,7 @@ pub fn write<'a>(level: Level, at: impl Into<Option<&'a Location>>, message: fmt
     let message = message.to_string();
     let source = match at.into() {
         Some(at) => PrintSource {
-            function: "",
+            function: &at.function,
             file: &at.file,
             line: at.line,
         },

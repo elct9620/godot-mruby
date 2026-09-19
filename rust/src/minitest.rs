@@ -50,6 +50,7 @@ fn log_error(
     let at = file.map(|file| Location {
         file,
         line: line.and_then(|line| line.try_into().ok()).unwrap_or(0),
+        function: String::new(),
     });
     error!(at: at.as_ref(), "{message}");
     Value::nil()
