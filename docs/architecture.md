@@ -86,13 +86,14 @@ Build output stays out of the repository: `vendor/` holds mruby's source and arc
 | `settings.rs` | `ProjectSettings` under `mruby/` |
 | `GameFiles`, `FilesOnDisk` in `game.rs` | `ResourceLoader` under `res://`, and the files on disk |
 | `GodotLog` in `log.rs` | Godot's log |
-| `Godot` in `bridge.rs` | `ClassDB` |
+| `Godot` in `bridge.rs` and `bridge/` | `ClassDB`, the engine's singletons, value types and utility functions |
+| `RubyObject` in `bridge/ruby_object.rs` | A `RefCounted` standing for a Ruby object |
 
 Each class Godot knows answers what Godot already asks of a script language; none opens another way for Godot to reach Ruby.
 
 `ResourceFormatLoaderRubyScript` reads a file's source and runs nothing. The script answers Godot from its header, which Prism reads from that source, and its ancestry; only a node script makes an instance (2.4), and the language announces it (2.5).
 
-The runner is an ordinary node the addon ships. `GameFiles`, `GodotLog` and the `Godot` gem are what the game's realm is given: the files under `res://`, Godot's log, and the engine's classes, specified in `.spec/behavior/engine_classes.md`. The names Godot knows are in `.spec/contract/godot.md`, and the settings in `.spec/contract/project_settings.md`.
+The runner is an ordinary node the addon ships. `GameFiles`, `GodotLog` and the `Godot` gem are what the game's realm is given: the files under `res://`, Godot's log, and the engine (2.6). The names Godot knows are in `.spec/contract/godot.md`, and the settings in `.spec/contract/project_settings.md`.
 
 ### 2.2 Lifecycle
 
@@ -141,7 +142,7 @@ lib.rs    registers Scripting and settings, prepares the realm
    │                                               │
    ▼                                               ▼
 ┌─ Given to the realm ──────────────────────────────────────┐
-│  game ──► settings        log        bridge               │
+│  game ──► settings        bridge ──► log                  │
 └──┬────────────────────────────────────────────────────────┘
    │
    ▼
@@ -167,8 +168,9 @@ node.set_script ──► instance: recorded        no Ruby runs
                        │
                        │ first call of a method the header has
                        ▼
-                    realm.build ──► built(key) ──► calls sent to the object
-                       │
+                    realm.build(node key) ──► made: initialize ──► built
+                       │   held already (Player.new made it) ──► built
+                       │   file still running, no class yet ──► recorded
                        │ the file or initialize raised: reported once
                        ▼
                     failed: calls nothing again
@@ -176,9 +178,9 @@ node.set_script ──► instance: recorded        no Ruby runs
 node freed (any thread) ──► release(key) ──► let go at the next entry or frame
 ```
 
-The header and ancestry answer what Godot asks on any thread: the engine node class the file's class extends, through other files' classes too, and the methods it has. A script makes an instance only for a node of that class, and leaves get and set to the engine.
+The header and ancestry answer what Godot asks on any thread: the engine node class the file's class extends, and the methods it has. A script makes an instance only for a node of that class.
 
-The instance holds no Ruby value, only a key. `bridge` carries a call's arguments into Ruby and its answer back; only nil, booleans, integers and floats cross yet. Freeing a node queues its key and never waits for the realm. The rules are in `.spec/behavior/script.md` and `.spec/behavior/held_objects.md`.
+The instance holds no Ruby value: the realm holds the node's Ruby object under the node's instance id, so a node Ruby made with `new` and one Godot made meet the same object. While Ruby runs, the instance gives itself up, since the engine may call back into it. Freeing a node queues its key and never waits for the realm. The rules are in `.spec/behavior/script.md` and `.spec/behavior/held_objects.md`.
 
 ### 2.5 Announcement
 
@@ -203,6 +205,20 @@ A node script is listed like a GDScript's `class_name`. The list is flat, as it 
 
 Godot asks every language for its stack as it prints, so the language never prints while it answers: it reads the files from disk, as GDScript does, since a load that fails prints, and writes the warning by a deferred call. The rules are in `.spec/behavior/announcement.md`, and what the editor shows in `.spec/behavior/script.md`.
 
+### 2.6 Bridge
+
+```
+Ruby                          bridge                                engine
+node.position = v    ─►  EngineObject(Gd) ─► ClassDB setter ─►  the node
+Godot::Vector2.new   ─►  EngineValue ─► the engine's variant calls
+Godot.lerp(a, b, t)  ─►  one row of the utility table ─► godot::global
+method(:hurt)        ─►  Callable holding a realm key ─────►  kept by the engine
+any other object     ─►  RubyObject holding a realm key ───►  kept by the engine
+◄── answers: data copied, objects shared; a script's node comes back as its Ruby object
+```
+
+The `Godot` gem is all Ruby sees of the engine. An engine object carries the engine's object itself, so a reference-counted one lives while Ruby holds it; a value type carries a copy and never changes. What Ruby hands the engine that the engine keeps, it keeps as a key, released when the engine lets go. What crosses, and how a refused call fails, is in `.spec/behavior/engine_classes.md`, `.spec/behavior/values.md` and `.spec/behavior/math.md`; what the instance relies on is in `.spec/contract/bridge.md`.
+
 ## 3. Realm
 
 ### 3.1 Entry
@@ -219,7 +235,7 @@ body(&Realm)
   │  run(path)                    a file, once
   │  install::<G: Gem>()          an extension
   │  call(receiver, method, arg)  a constant's method
-  │  build(path)                  an object of a file's class, held by key
+  │  build(path, key, make, args) an object of a file's class, held by key
   │  send(key, method, args)      a held object's method
   ▼
 a Rust value, or a RubyError ──► RubyError::write, at its Ruby line
@@ -229,7 +245,7 @@ The realm is the one way into Ruby. A component hands `realm::enter` a body, and
 
 What comes back is a Rust value, or a `RubyError` the component writes to a log; an exception's backtrace goes with it, answered as the language's stack while it is written, as `.spec/behavior/report.md` claims. Since nothing outside holds a Ruby value, the realm's inside changes without its callers changing.
 
-There is one realm, the game's, entered by one thread at a time; that thread enters again when the engine calls back into scripts. Freeing a node never waits for it: the key goes into a queue that the next entry, or the next frame, empties. Its operations are specified in `.spec/contract/realm.md`.
+There is one realm, the game's, entered by one thread at a time; that thread enters again when the engine calls back into scripts, up to 24 entries deep, which the smallest thread stack holds. Freeing a node never waits for it: the key goes into a queue that the next entry, or the next frame, empties. Its operations are specified in `.spec/contract/realm.md`.
 
 ### 3.2 Internals
 
@@ -272,6 +288,6 @@ Ruby in the realm sees Godot, and Minitest in a test run
 
 A gem is an extension: beni's `Gem`, mruby's gem init convention. What every realm of a kind has is installed by its opener's `extend`, before the class index takes the files in, so a file naming one of its constants is warned about; what only one use needs is installed by whoever needs it, and the install warns of an indexed file naming what it added. Only the test runner installs `Minitest`, so a shipped game never has it.
 
-A gem is handed the state only inside its `init`, and never touches the realm's bookkeeping.
+A gem's methods run with the state, and reach the realm's bookkeeping only through the realm's functions that take it: holding an object under a key, finding it again, and asking the class index for a file.
 
 The line between the two: what every realm is, its output and its hooks, belongs to the realm; what only some realms need is a gem. The framework is specified in `.spec/contract/minitest.md` and `.spec/behavior/minitest.md`.
