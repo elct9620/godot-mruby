@@ -7,6 +7,11 @@ module Godot
   # What a call to the engine raises when the engine cannot run it.
   class CallError < StandardError; end
 
+  # The engine's utility functions Ruby lacks, such as lerp and randf.
+  __utilities__.each do |name|
+    singleton_class.__send__(:define_method, name) { |*args| __utility__(name, args) }
+  end
+
   class << self
     def const_missing(name)
       superclass = __engine_superclass__(name)
@@ -18,7 +23,7 @@ module Godot
       const_set(name, engine_class)
     end
 
-    private :__engine_superclass__
+    private :__engine_superclass__, :__utilities__, :__utility__
 
     private
 

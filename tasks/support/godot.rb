@@ -36,6 +36,8 @@ module Godot
       "(res://verify/report/syntax_error.rb:12)",
     "SCRIPT ERROR: wrong key" => "unlock (res://verify/report/raising.rb:10)"
   }.freeze
+  # What the report scene's Ruby reports through Godot's own functions.
+  PUSHED = ["ERROR: push_error from mruby", "WARNING: push_warning from mruby"].freeze
   # The backtrace Godot prints after the report scene's exception: the frames
   # Ruby called through, and nothing after them.
   BACKTRACE = [
@@ -116,10 +118,17 @@ module Godot
     output, status = run_scene(project, REPORT_SCENE, "--quit-after", "3")
     lines = output.lines.map(&:strip)
     missing = REPORTS.reject { |report, location| reported?(lines, report, location) }
+    missing.merge!(unpushed(lines))
     missing[:backtrace] = BACKTRACE unless backtraced?(lines)
     return if status.success? && missing.empty?
 
     raise "The report scene's Ruby was not reported where it was written #{missing}:\n#{output}"
+  end
+
+  # What the report scene pushed that the log does not carry.
+  # @behavior RC-006
+  def unpushed(lines)
+    PUSHED.reject { |line| lines.include?(line) }.to_h { |line| [line, "anywhere"] }
   end
 
   def reported?(lines, report, location)
