@@ -32,11 +32,13 @@ pub struct Realm {
 pub enum Level {
     Error,
     Warn,
-    /// A Ruby file that does not parse, the way Godot reports a GDScript one.
+    /// Ruby that fails as a script: a file that does not parse, or an
+    /// exception it raises, the way Godot reports a GDScript one.
     ScriptError,
 }
 
 /// A line of a Ruby file, and the method it is in when it names one.
+#[derive(Clone)]
 pub struct Location {
     pub file: String,
     pub line: u32,
@@ -87,6 +89,11 @@ pub trait Log: Send {
     /// it has one.
     #[track_caller]
     fn record(&self, level: Level, at: Option<&Location>, text: &str);
+    /// An exception, a script error at the first frame of its backtrace,
+    /// with the frames that name a line, most recent first.
+    fn exception(&self, text: &str, backtrace: &[Location]) {
+        self.record(Level::ScriptError, backtrace.first(), text);
+    }
 }
 
 /// What a realm keeps beside its `mrb_state`, in the state's user data so
@@ -99,6 +106,39 @@ struct Bookkeeping {
     registry: Registry,
     // Set while the realm defines a directory's module, which no file created.
     defining_namespace: Cell<bool>,
+    // How the Ruby running now started, while any does.
+    outermost: Cell<Option<Started>>,
+}
+
+// The realm's outermost Ruby while it runs, forgotten once it returns or
+// panics; an entry inside it leaves it as it is.
+struct Outermost<'a>(Option<&'a Cell<Option<Started>>>);
+
+impl<'a> Outermost<'a> {
+    fn start(outermost: &'a Cell<Option<Started>>, started: Started) -> Self {
+        if outermost.get().is_some() {
+            return Self(None);
+        }
+        outermost.set(Some(started));
+        Self(Some(outermost))
+    }
+}
+
+impl Drop for Outermost<'_> {
+    fn drop(&mut self) {
+        if let Some(outermost) = self.0 {
+            outermost.set(None);
+        }
+    }
+}
+
+/// How the realm's outermost Ruby started. mruby runs a file's top level from
+/// Rust in its base frame and leaves it there once the file has run, so under
+/// a call from Rust a backtrace ends with a top level that finished.
+#[derive(Clone, Copy)]
+enum Started {
+    Run,
+    Call,
 }
 
 // The bookkeeping `mrb`'s realm put there as it opened.
@@ -253,6 +293,7 @@ impl Realm {
             runs: executor::Runs::default(),
             registry: Registry::new(&mrb),
             defining_namespace: Cell::default(),
+            outermost: Cell::default(),
         };
         if mrb.set_user_data(bookkeeping).is_err() {
             return Err(RubyError::plain(
@@ -309,13 +350,15 @@ impl Realm {
     /// has run in this realm already, whether it succeeded or not.
     pub fn run(&self, path: &str) -> Result<(), RubyError> {
         let _scope = self.mrb.arena_scope();
-        executor::run(
-            &self.mrb,
-            path,
-            || constants::ensure_opened(&self.mrb, path),
-            |extends| constants::keep_extends(&self.mrb, path, extends),
-        )
-        .map_err(|error| RubyError::read(&self.mrb, Some(path), &error))
+        self.started_as(Started::Run, || {
+            executor::run(
+                &self.mrb,
+                path,
+                || constants::ensure_opened(&self.mrb, path),
+                |extends| constants::keep_extends(&self.mrb, path, extends),
+            )
+            .map_err(|error| RubyError::read(&self.mrb, Some(path), &error))
+        })
     }
 
     /// Calls `method` on the constant `receiver` names with `arg`, and answers
@@ -327,13 +370,16 @@ impl Realm {
         arg: A,
     ) -> Result<R, RubyError> {
         let _scope = self.mrb.arena_scope();
-        let answer = self
-            .mrb
-            .object_class()
-            .as_value()
-            .const_get(&self.mrb, receiver)
-            .and_then(|receiver| receiver.funcall(&self.mrb, method, &[arg.into_value(&self.mrb)]))
-            .map_err(|error| RubyError::read(&self.mrb, None, &error))?;
+        let answer = self.started_as(Started::Call, || {
+            self.mrb
+                .object_class()
+                .as_value()
+                .const_get(&self.mrb, receiver)
+                .and_then(|receiver| {
+                    receiver.funcall(&self.mrb, method, &[arg.into_value(&self.mrb)])
+                })
+                .map_err(|error| RubyError::read(&self.mrb, None, &error))
+        })?;
         self.taken(answer, || {
             format!("{receiver}.{}", method.to_string_lossy())
         })
@@ -357,10 +403,12 @@ impl Realm {
                 "{path} has not defined the class its path names, so no object of it is built"
             ))
         })?;
-        class
-            .funcall(&self.mrb, c"new", &[])
-            .and_then(|object| bookkeeping(&self.mrb).registry.hold(&self.mrb, object))
-            .map_err(|error| RubyError::read(&self.mrb, Some(path), &error))
+        self.started_as(Started::Call, || {
+            class
+                .funcall(&self.mrb, c"new", &[])
+                .and_then(|object| bookkeeping(&self.mrb).registry.hold(&self.mrb, object))
+                .map_err(|error| RubyError::read(&self.mrb, Some(path), &error))
+        })
     }
 
     /// Calls `method` with `args` on the object `key` holds, and answers what
@@ -376,12 +424,20 @@ impl Realm {
             .into_iter()
             .map(|arg| arg.into_value(&self.mrb))
             .collect();
-        let answer = bookkeeping(&self.mrb)
-            .registry
-            .object(&self.mrb, key)
-            .and_then(|object| object.funcall(&self.mrb, method, &args))
-            .map_err(|error| RubyError::read(&self.mrb, None, &error))?;
+        let answer = self.started_as(Started::Call, || {
+            bookkeeping(&self.mrb)
+                .registry
+                .object(&self.mrb, key)
+                .and_then(|object| object.funcall(&self.mrb, method, &args))
+                .map_err(|error| RubyError::read(&self.mrb, None, &error))
+        })?;
         self.taken(answer, || format!("#{method}"))
+    }
+
+    // Runs `ruby`, which Rust starts; it is the outermost Ruby when none runs.
+    fn started_as<T>(&self, started: Started, ruby: impl FnOnce() -> T) -> T {
+        let _outermost = Outermost::start(&bookkeeping(&self.mrb).outermost, started);
+        ruby()
     }
 
     // `answer` as the Rust value its caller takes, or why it is not one.
@@ -407,6 +463,7 @@ pub struct RubyError {
     level: Level,
     message: String,
     at: Option<Location>,
+    backtrace: Vec<Location>,
 }
 
 impl RubyError {
@@ -415,12 +472,13 @@ impl RubyError {
             level: Level::Error,
             message,
             at: None,
+            backtrace: Vec::new(),
         }
     }
 
     // A syntax error names its own line, the way Godot reports a script that
-    // does not parse; an exception is a script error at the deepest line its
-    // backtrace names, as GDScript reports one raised at run time. Both read
+    // does not parse; an exception carries the frames of its backtrace that
+    // name a line, as GDScript reports one raised at run time. Both read
     // through the realm they came from.
     fn read(mrb: &Mrb, path: Option<&str>, error: &Error) -> Self {
         let named = |message: String| match path {
@@ -436,15 +494,19 @@ impl RubyError {
                     line: parse.line().into(),
                     function: String::new(),
                 }),
+                backtrace: Vec::new(),
             },
             Error::Exception(_) => {
-                match error.backtrace(mrb).iter().find_map(|frame| located(frame)) {
-                    Some(at) => Self {
+                let backtrace = raised_frames(mrb, error);
+                if backtrace.is_empty() {
+                    Self::plain(named(error.message(mrb)))
+                } else {
+                    Self {
                         level: Level::ScriptError,
                         message: error.message(mrb),
-                        at: Some(at),
-                    },
-                    None => Self::plain(named(error.message(mrb))),
+                        at: None,
+                        backtrace,
+                    }
                 }
             }
             _ => Self::plain(named(error.to_string())),
@@ -454,8 +516,30 @@ impl RubyError {
     /// Writes the error to `log`, at its Ruby line when it has one.
     #[track_caller]
     pub fn write(&self, log: &impl Log) {
-        log.record(self.level, self.at.as_ref(), &self.message);
+        if self.backtrace.is_empty() {
+            log.record(self.level, self.at.as_ref(), &self.message);
+        } else {
+            log.exception(&self.message, &self.backtrace);
+        }
     }
+}
+
+// The frames of `error`'s backtrace that name a line, most recent first.
+// Under a call from Rust, the top level mruby's base frame kept from the last
+// file it ran is not one Ruby called through, so it is left out.
+fn raised_frames(mrb: &Mrb, error: &Error) -> Vec<Location> {
+    let mut frames: Vec<Location> = error
+        .backtrace(mrb)
+        .iter()
+        .filter_map(|frame| located(frame))
+        .collect();
+    let under_call = mrb
+        .user_data::<Bookkeeping>()
+        .is_some_and(|kept| matches!(kept.outermost.get(), Some(Started::Call)));
+    if under_call && frames.last().is_some_and(|frame| frame.function.is_empty()) {
+        frames.pop();
+    }
+    frames
 }
 
 // The place a backtrace frame names, as mruby writes one: `file:line`, then
@@ -501,6 +585,7 @@ mod tests {
                 "  def answer = 42\n",
                 "  def ratio = 1.5\n",
                 "  def name = \"thing\"\n",
+                "  def fail = raise(\"failed\")\n",
                 "end\n"
             )
             .to_owned())
@@ -509,6 +594,35 @@ mod tests {
         fn declared(&self, _path: &str) -> Declared {
             Declared::default()
         }
+    }
+
+    const RAISING: &str = "res://raising.rb";
+
+    // A file whose top level raises on its second line.
+    struct Raising;
+
+    impl Files for Raising {
+        fn paths(&self) -> Vec<String> {
+            vec![RAISING.to_owned()]
+        }
+
+        fn source(&self, _path: &str) -> Result<String, String> {
+            Ok("ready = true\nraise \"raised at the top\"\n".to_owned())
+        }
+
+        fn declared(&self, _path: &str) -> Declared {
+            Declared::default()
+        }
+    }
+
+    // The frames an error carries, each as `file:line:method`.
+    fn frames(error: Option<RubyError>) -> Vec<String> {
+        error
+            .map(|error| error.backtrace)
+            .unwrap_or_default()
+            .iter()
+            .map(|frame| format!("{}:{}:{}", frame.file, frame.line, frame.function))
+            .collect()
     }
 
     struct Silent;
@@ -565,6 +679,31 @@ mod tests {
             message.as_deref(),
             Some("#name answered \"thing\": String cannot be converted to Integer")
         );
+    }
+
+    // @behavior RR-004
+    #[test]
+    fn a_raised_backtrace_holds_only_the_frames_ruby_called_through() {
+        let (_turn, key) = held_thing();
+
+        let sent = enter(|realm| realm.send::<_, i64>(key, "fail", no_args()));
+
+        assert_eq!(frames(sent.err()), ["res://thing.rb:5:fail"]);
+    }
+
+    // @behavior RR-005
+    #[test]
+    fn a_backtrace_raised_by_a_files_top_level_after_a_call_holds_that_top_level() {
+        let _turn = TURN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        close();
+        prepare(|| Realm::open(Raising, Silent, |_| Ok(())));
+
+        let ran = enter(|realm| {
+            realm.call::<_, bool>("Integer", c"===", 4_i64)?;
+            realm.run(RAISING)
+        });
+
+        assert_eq!(frames(ran.err()), ["res://raising.rb:2:"]);
     }
 
     // @behavior RO-002

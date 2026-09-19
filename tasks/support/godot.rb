@@ -35,6 +35,13 @@ module Godot
       "(res://verify/report/syntax_error.rb:12)",
     "SCRIPT ERROR: wrong key" => "unlock (res://verify/report/raising.rb:10)"
   }.freeze
+  # The backtrace Godot prints after the report scene's exception: the frames
+  # Ruby called through, and nothing after them.
+  BACKTRACE = [
+    "Ruby backtrace (most recent call first):",
+    "[0] unlock (res://verify/report/raising.rb:10)",
+    "[1] _ready (res://verify/report/raising.rb:6)"
+  ].freeze
 
   module_function
 
@@ -101,12 +108,14 @@ module Godot
     raise "The script did not run the source Godot holds for it:\n#{output}"
   end
 
-  # Runs the report scene and looks for each report followed by its location.
-  # @behavior RR-001 RR-002 RR-003
+  # Runs the report scene and looks for each report followed by its location,
+  # and for the exception's backtrace.
+  # @behavior RR-001 RR-002 RR-003 RR-004
   def verify_reports!(project = PROJECT)
     output, status = run_scene(project, REPORT_SCENE, "--quit-after", "3")
     lines = output.lines.map(&:strip)
     missing = REPORTS.reject { |report, location| reported?(lines, report, location) }
+    missing[:backtrace] = BACKTRACE unless backtraced?(lines)
     return if status.success? && missing.empty?
 
     raise "The report scene's Ruby was not reported where it was written #{missing}:\n#{output}"
@@ -114,6 +123,12 @@ module Godot
 
   def reported?(lines, report, location)
     lines.each_cons(2).any? { |line, at| line == report && at.start_with?("at:") && at.end_with?(location) }
+  end
+
+  def backtraced?(lines)
+    [*lines, ""].each_cons(BACKTRACE.size + 1).any? do |*frames, after|
+      frames == BACKTRACE && !after.start_with?("[")
+    end
   end
 
   # Opens the project in the editor, which scans it, and quits.

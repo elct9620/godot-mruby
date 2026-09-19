@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::ffi::c_void;
 use std::sync::Mutex;
 
@@ -15,9 +16,9 @@ use crate::{bridge, settings, warn};
 
 /// The Ruby script language, registered with the engine for `.rb` files.
 ///
-/// Every virtual answers from constants: Godot asks the language for a
-/// backtrace while it prints an error, from whichever thread raised it, so
-/// nothing here may wait on anything.
+/// Every virtual answers from constants or the calling thread's own state:
+/// Godot asks the language for a backtrace while it prints an error, from
+/// whichever thread raised it, so nothing here may wait on anything.
 #[derive(GodotClass)]
 #[class(base = ScriptLanguageExtension, init, tool)]
 pub struct RubyLanguage {
@@ -25,6 +26,20 @@ pub struct RubyLanguage {
 }
 
 static REGISTERED: Mutex<Option<InstanceId>> = Mutex::new(None);
+
+thread_local! {
+    // What the language answers as this thread's stack. It holds no Godot
+    // value, since a thread's locals outlive the engine.
+    static STACK: RefCell<Vec<Location>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Runs `write` while the language answers `backtrace` as this thread's
+/// stack, so what it writes to Godot's log carries the frames.
+pub fn answering_stack(backtrace: &[Location], write: impl FnOnce()) {
+    let answered = STACK.replace(backtrace.to_vec());
+    write();
+    STACK.set(answered);
+}
 
 pub fn register() {
     let language = RubyLanguage::new_alloc();
@@ -256,8 +271,22 @@ impl IScriptLanguageExtension for RubyLanguage {
         GString::new()
     }
 
+    // mruby 4.0 has no public API answering the stack Ruby is running, so
+    // only an exception being written has frames to answer.
     fn debug_get_current_stack_info(&mut self) -> Array<AnyDictionary> {
-        Array::new()
+        STACK.with_borrow(|stack| {
+            stack
+                .iter()
+                .map(|frame| {
+                    vdict! {
+                        "file" => frame.file.as_str(),
+                        "func" => frame.function.as_str(),
+                        "line" => frame.line,
+                    }
+                    .upcast_any_dictionary()
+                })
+                .collect()
+        })
     }
 
     fn reload_all_scripts(&mut self) {}

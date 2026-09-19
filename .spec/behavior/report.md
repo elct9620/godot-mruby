@@ -11,6 +11,7 @@ How what mruby has to say about a Ruby file reaches Godot: through the log, at t
 
 ## Includes
 
+- `rust/src/realm.rs`
 - `tasks/support/godot.rb`
 
 ## `RR-001` A compiler warning appears as a warning at its Ruby line
@@ -36,3 +37,20 @@ How what mruby has to say about a Ruby file reaches Godot: through the log, at t
 | Given | a node script whose callback calls a method that raises |
 | When | the scene runs |
 | Then | the log carries the exception's message as a script error at the method, file and line that raised it |
+
+## `RR-004` An exception carries the backtrace Ruby called through
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose callback calls a method that raises |
+| When | the scene runs |
+| Then | the log follows the exception with its Ruby backtrace, most recent call first, each frame at its method, file and line |
+| Then | the backtrace ends with the callback Godot called |
+
+## `RR-005` An exception a file's top level raises carries that top level
+
+| Step | Statement |
+| --- | --- |
+| Given | a Ruby file whose top level raises |
+| When | the file runs |
+| Then | the exception's backtrace holds the file's top level at the line that raised |

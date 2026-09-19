@@ -370,6 +370,20 @@ pub trait Log {
 }
 ```
 
+## `Log::exception`
+
+An exception, as a script error at the first frame of its backtrace, with the frames that name a line, most recent first.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub trait Log {
+    fn exception(&self, text: &str, backtrace: &[Location]);
+}
+```
+
 ## `Level`
 
 How serious a record is.

@@ -10,6 +10,7 @@ use godot::global::{PrintLevel, PrintRecord, PrintSource, godot_print, print_cus
 use godot::prelude::ToGodot;
 
 use crate::compiler::Warning;
+use crate::language;
 use crate::realm::{self, Level, Location};
 
 /// Godot's log as a realm writes to it.
@@ -27,6 +28,18 @@ impl realm::Log for GodotLog {
     #[track_caller]
     fn record(&self, level: Level, at: Option<&Location>, text: &str) {
         write(level, at, format_args!("{text}"));
+    }
+
+    // Godot asks every language for its stack as it prints, so the language
+    // answers the exception's backtrace while it is written.
+    fn exception(&self, text: &str, backtrace: &[Location]) {
+        language::answering_stack(backtrace, || {
+            write(
+                Level::ScriptError,
+                backtrace.first(),
+                format_args!("{text}"),
+            );
+        });
     }
 }
 
