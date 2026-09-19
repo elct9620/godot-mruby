@@ -2,7 +2,7 @@ use std::cell::{Cell, RefCell};
 use std::ffi::CStr;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
-use beni::{Error, FromValue, Gem, IntoValue, Mrb, ReprValue, Value};
+use beni::{Error, Gem, IntoValue, Mrb, ReprValue, TryConvert, Value};
 
 use crate::compiler;
 
@@ -317,8 +317,8 @@ impl Realm {
     }
 
     /// Calls `method` on the constant `receiver` names with `arg`, and answers
-    /// what it returned as a Rust value.
-    pub fn call<A: IntoValue, R: FromValue>(
+    /// what it returned as `R`, converted as mruby converts an argument.
+    pub fn call<A: IntoValue, R: TryConvert>(
         &self,
         receiver: &str,
         method: &CStr,
@@ -362,8 +362,8 @@ impl Realm {
     }
 
     /// Calls `method` with `args` on the object `key` holds, and answers what
-    /// it returned as a Rust value.
-    pub fn send<A: IntoValue, R: FromValue>(
+    /// it returned as `R`, converted as mruby converts an argument.
+    pub fn send<A: IntoValue, R: TryConvert>(
         &self,
         key: Key,
         method: &str,
@@ -383,16 +383,17 @@ impl Realm {
     }
 
     // `answer` as the Rust value its caller takes, or why it is not one.
-    fn taken<R: FromValue>(
+    fn taken<R: TryConvert>(
         &self,
         answer: Value,
         called: impl FnOnce() -> String,
     ) -> Result<R, RubyError> {
-        R::from_value(answer).ok_or_else(|| {
+        R::try_convert(answer, &self.mrb).map_err(|error| {
             RubyError::plain(format!(
-                "{} answered {}, which is not what its caller takes",
+                "{} answered {}: {}",
                 called(),
-                answer.inspect(&self.mrb)
+                answer.inspect(&self.mrb),
+                error.message(&self.mrb)
             ))
         })
     }
@@ -468,7 +469,14 @@ mod tests {
         }
 
         fn source(&self, _path: &str) -> Result<String, String> {
-            Ok("class Thing\n  def answer\n    42\n  end\nend\n".to_owned())
+            Ok(concat!(
+                "class Thing\n",
+                "  def answer = 42\n",
+                "  def ratio = 1.5\n",
+                "  def name = \"thing\"\n",
+                "end\n"
+            )
+            .to_owned())
         }
 
         fn declared(&self, _path: &str) -> Declared {
@@ -506,6 +514,30 @@ mod tests {
         let sent = enter(|realm| realm.send::<_, i64>(key, "answer", no_args()));
 
         assert!(sent.is_err());
+    }
+
+    // @behavior RO-004
+    #[test]
+    fn an_answer_converts_to_what_its_caller_takes_as_an_argument_does() {
+        let (_turn, key) = held_thing();
+
+        let sent = enter(|realm| realm.send::<_, i64>(key, "ratio", no_args()));
+
+        assert_eq!(sent.ok(), Some(1));
+    }
+
+    // @behavior RO-005
+    #[test]
+    fn an_answer_the_caller_cannot_take_names_the_call_and_why() {
+        let (_turn, key) = held_thing();
+
+        let sent = enter(|realm| realm.send::<_, i64>(key, "name", no_args()));
+
+        let message = sent.err().map(|error| error.message);
+        assert_eq!(
+            message.as_deref(),
+            Some("#name answered \"thing\": String cannot be converted to Integer")
+        );
     }
 
     // @behavior RO-002

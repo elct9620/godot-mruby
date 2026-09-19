@@ -160,7 +160,7 @@ impl Realm {
 
 ## `Realm::call`
 
-Calls a method on the constant a name spells, and answers what it returned as a Rust value.
+Calls a method on the constant a name spells, and answers what it returned as the Rust type asked for, converted as mruby converts a method's argument.
 
 | Attribute | Value |
 | --- | --- |
@@ -168,7 +168,7 @@ Calls a method on the constant a name spells, and answers what it returned as a 
 
 ```rust
 impl Realm {
-    pub fn call<A: IntoValue, R: FromValue>(&self, receiver: &str, method: &CStr, arg: A) -> Result<R, RubyError> {}
+    pub fn call<A: IntoValue, R: TryConvert>(&self, receiver: &str, method: &CStr, arg: A) -> Result<R, RubyError> {}
 }
 ```
 
@@ -200,7 +200,7 @@ impl Realm {
 
 ## `Realm::send`
 
-Calls a method on the object a key holds, and answers what it returned as a Rust value.
+Calls a method on the object a key holds, and answers what it returned as the Rust type asked for, converted as mruby converts a method's argument.
 
 | Attribute | Value |
 | --- | --- |
@@ -208,7 +208,7 @@ Calls a method on the object a key holds, and answers what it returned as a Rust
 
 ```rust
 impl Realm {
-    pub fn send<A: IntoValue, R: FromValue>(&self, key: Key, method: &str, args: impl IntoIterator<Item = A>) -> Result<R, RubyError> {}
+    pub fn send<A: IntoValue, R: TryConvert>(&self, key: Key, method: &str, args: impl IntoIterator<Item = A>) -> Result<R, RubyError> {}
 }
 ```
 

@@ -1,7 +1,9 @@
 //! What Ruby sees of the engine: the `Godot` module, a gem every game realm
 //! opens with, and the values that cross between the engine and Ruby.
 
-use beni::{Error, FromValue, Gem, IntoValue, Mrb, Object, ReprValue, Symbol, Value, method};
+use beni::{
+    Error, FromValue, Gem, IntoValue, Mrb, Object, ReprValue, Symbol, TryConvert, Value, method,
+};
 use godot::builtin::{Variant, VariantType};
 use godot::classes::ClassDb;
 use godot::meta::ToGodot;
@@ -66,8 +68,10 @@ impl IntoValue for Argument<'_> {
 /// what a callback answers is mostly the value of its last line.
 pub struct Answer(pub Variant);
 
-impl FromValue for Answer {
-    fn from_value(value: Value) -> Option<Self> {
+// The engine type follows the Ruby value's own type, so each branch downcasts
+// rather than converts: converting would turn a Float into an integer.
+impl TryConvert for Answer {
+    fn try_convert(value: Value, _mrb: &Mrb) -> Result<Self, Error> {
         let variant = if value.is_true() {
             true.to_variant()
         } else if value.is_false() {
@@ -79,6 +83,6 @@ impl FromValue for Answer {
         } else {
             Variant::nil()
         };
-        Some(Self(variant))
+        Ok(Self(variant))
     }
 }
