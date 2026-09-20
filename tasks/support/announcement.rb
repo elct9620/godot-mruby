@@ -18,6 +18,9 @@ module Godot
     TWINS = "res://verify/script/announce"
     TWINS_WARNING = "WARNING: #{TWINS}/left/twin.rb and #{TWINS}/right/twin.rb " \
                     "define node scripts named Twin, so none is listed by that name".freeze
+    # The twins are the project's only node scripts meant to share a name, so
+    # any other pair sharing one is a file that took a name already spelled.
+    SHARED_NAME = /define node scripts named (?<name>\w+), so none is listed/
     # A node script the editor cannot read, and what a scan must never print
     # while the language answers for it.
     UNREADABLE = "unreadable.rb"
@@ -32,6 +35,7 @@ module Godot
 
       verify_listed!(project)
       verify_twins_warned!(output)
+      verify_names_apart!(output)
       verify_unreadable_skipped!(project)
     end
 
@@ -65,6 +69,15 @@ module Godot
         File.chmod(0o000, unreadable)
         File.readable?(unreadable) ? nil : Godot.run_editor(copy)
       end
+    end
+
+    # Every node script but the twins has a name of its own, so a fixture
+    # never takes one another file already spells.
+    def verify_names_apart!(output)
+      shared = output.scan(SHARED_NAME).flatten.uniq - ["Twin"]
+      return if shared.empty?
+
+      raise "Node scripts other than the twins share a name #{shared}:\n#{output}"
     end
 
     # @behavior RS-026

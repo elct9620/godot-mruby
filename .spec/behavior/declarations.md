@@ -278,3 +278,11 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | Given | a node whose object wrote an instance variable named as a property only the node's class has, not the class its script extends |
 | When | Godot sets that property |
 | Then | the engine's property is what answers the value |
+
+## `RD-035` A variable named as a property of the node's own class is untouched
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose object wrote an instance variable named as a property only the node's class has |
+| When | Godot sets that property |
+| Then | the variable the object wrote holds what it held |
