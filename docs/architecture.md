@@ -88,6 +88,7 @@ Build output stays out of the repository: `vendor/` holds mruby's source and arc
 | `GodotLog` in `log.rs` | Godot's log |
 | `Godot` in `bridge.rs` and `bridge/` | `ClassDB`, the engine's singletons, value types and utility functions |
 | `RubyObject` in `bridge/ruby_object.rs` | A `RefCounted` standing for a Ruby object |
+| `Snapshot` in `snapshot.rs` | What Godot asks a script about its class |
 
 Each class Godot knows answers what Godot already asks of a script language; none opens another way for Godot to reach Ruby.
 
@@ -178,7 +179,7 @@ node.set_script ──► instance: recorded        no Ruby runs
 node freed (any thread) ──► release(key) ──► let go at the next entry or frame
 ```
 
-The header and ancestry answer what Godot asks on any thread: the engine node class the file's class extends, and the methods it has. A script makes an instance only for a node of that class.
+The header and ancestry answer what Godot asks on any thread: the engine node class the file's class extends, and the methods it has before its file runs; once it has run, the snapshot answers for the class it ended up with (2.7). A script makes an instance only for a node of that class.
 
 The instance holds no Ruby value: the realm holds the node's Ruby object under the node's instance id, so a node Ruby made with `new` and one Godot made meet the same object. The instance goes to Godot through the extension interface rather than gdext's `ScriptInstance`, and a call copies what it needs before Ruby runs, since the engine may call back into the node or take its script away before Ruby returns. Freeing a node queues its key and never waits for the realm. The rules are in `.spec/behavior/script.md` and `.spec/behavior/held_objects.md`.
 
@@ -218,6 +219,20 @@ any other object     ─►  RubyObject holding a realm key ───►  kept b
 ```
 
 The `Godot` gem is all Ruby sees of the engine. An engine object carries the engine's object itself, so a reference-counted one lives while Ruby holds it; a value type carries a copy and never changes. What Ruby hands the engine that the engine keeps, it keeps as a key, released when the engine lets go. What crosses, and how a refused call fails, is in `.spec/behavior/engine_classes.md`, `.spec/behavior/values.md` and `.spec/behavior/math.md`; what the instance relies on is in `.spec/contract/bridge.md`.
+
+### 2.7 Snapshot
+
+```
+class body runs ──► its declarations, and the methods the class ends up with
+                         │ the file's run commits
+                         ▼
+                    one immutable value, published
+                         │ read by path: the script's own, then its ancestry
+                         ▼
+has_signal, get_script_signal_list, has_method, get_script_method_list
+```
+
+A Ruby class takes its shape as its body runs, so what a class has cannot be read from the source alone. The realm publishes what a file's class has when that file's run commits, and everything answering Godot reads the published value rather than entering the realm, on whatever thread Godot asks from. A file that has not run has none, and its header answers instead. What a class declares is in `.spec/behavior/declarations.md`, and the published shape in `.spec/contract/snapshot.md`.
 
 ## 3. Realm
 
