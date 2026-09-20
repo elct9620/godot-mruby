@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
-require "fileutils"
 require "open3"
-require "tmpdir"
 
 module Godot
   # Opens a scene in a headless editor and reads what it printed: a node whose
@@ -25,25 +23,13 @@ module Godot
 
     # @behavior RS-045
     def verify!(project)
-      output = in_copy(project) { |copy| open_scene(copy) }
+      output = open_scene(project)
       raise "The editor did not reach #{SCENE}:\n#{output}" unless output.include?(REACHED)
 
       refusals = output.lines.grep(/#{Regexp.escape(REFUSED)} '#{DECLARED}'/)
       return if refusals.empty?
 
       raise "The editor refused a connection a node script declares:\n#{refusals.join}"
-    end
-
-    # The editor writes its caches and its layout into the project it opens,
-    # so the check opens a copy and leaves the project being worked on as it
-    # was; of `.godot` the copy keeps what a fresh checkout has.
-    def in_copy(project)
-      Dir.mktmpdir do |dir|
-        copy = File.join(dir, "project")
-        FileUtils.cp_r(project, copy)
-        FileUtils.rm_rf(Dir.glob(File.join(copy, ".godot", "*")) - [File.join(copy, EXTENSION_LIST)])
-        yield copy
-      end
     end
 
     def open_scene(project)
