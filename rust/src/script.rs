@@ -86,16 +86,8 @@ impl RubyScript {
     // The properties the class exported, its ancestors' included, nearest
     // first; none until the file has run.
     fn properties(&self) -> Vec<Property> {
-        let snapshot = snapshot::latest();
-        let mut properties: Vec<Property> = Vec::new();
-        for path in self.declaring_files() {
-            for property in snapshot.properties(&path) {
-                if !properties.iter().any(|kept| kept.name == property.name) {
-                    properties.push(property.clone());
-                }
-            }
-        }
-        properties
+        let paths = self.declaring_files();
+        snapshot::latest().properties_of(paths.iter().map(String::as_str))
     }
 
     // The property of that name the class exported, if it exported one.

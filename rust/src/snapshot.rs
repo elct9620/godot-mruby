@@ -78,6 +78,21 @@ impl Snapshot {
             .map_or(&[], |class| class.properties.as_slice())
     }
 
+    /// The properties the classes of the files at `paths` exported, the
+    /// first file's first and one to a name, as a class has what it
+    /// exported and what it inherits.
+    pub fn properties_of<'a>(&self, paths: impl IntoIterator<Item = &'a str>) -> Vec<Property> {
+        let mut properties: Vec<Property> = Vec::new();
+        for path in paths {
+            for property in self.properties(path) {
+                if !properties.iter().any(|kept| kept.name == property.name) {
+                    properties.push(property.clone());
+                }
+            }
+        }
+        properties
+    }
+
     /// The methods the class of the file at `path` defines; none for a file
     /// that has not run.
     pub fn methods(&self, path: &str) -> &[String] {

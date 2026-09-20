@@ -9,9 +9,11 @@
 use std::ffi::c_void;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use godot::classes::{Object, Script, ScriptLanguage};
+use godot::classes::{ClassDb, Object, Script, ScriptLanguage};
 use godot::meta::conv::RawPtr;
+use godot::obj::{EngineBitfield, EngineEnum};
 use godot::prelude::*;
+use godot::register::info::{PropertyHint, PropertyUsageFlags};
 use godot::sys;
 
 use crate::ancestry::Ancestry;
@@ -20,7 +22,7 @@ use crate::error;
 use crate::log::GodotLog;
 use crate::parser::Header;
 use crate::realm::{self, Built, Key, RubyError};
-use crate::snapshot;
+use crate::snapshot::{self, Property};
 
 /// A node's instance of a `RubyScript`. It holds no Ruby value: the node's
 /// Ruby object is built in the game's realm the first time Godot calls a
@@ -99,6 +101,29 @@ impl RubyInstance {
                 .ancestry
                 .paths()
                 .any(|path| snapshot.has_method(path, method))
+    }
+
+    // The properties the node's class exported, its ancestors' included;
+    // none until its file has run.
+    fn properties(&self) -> Vec<Property> {
+        let paths = std::iter::once(self.path.as_str()).chain(self.ancestry.paths());
+        snapshot::latest().properties_of(paths)
+    }
+
+    // Whether the node's class exported a property of that name.
+    fn exports(&self, name: &str) -> bool {
+        self.properties()
+            .iter()
+            .any(|property| property.name == name)
+    }
+
+    // Whether the node's engine class has a property of that name, which is
+    // the engine's to answer even where the Ruby object holds one too.
+    fn engine_property(&self, name: &str) -> bool {
+        let engine_class = self.ancestry.engine_class();
+        let mut class_db = ClassDb::singleton();
+        !class_db.class_get_property_setter(engine_class, name).is_empty()
+            || !class_db.class_get_property_getter(engine_class, name).is_empty()
     }
 
     // What a call into Ruby needs of the instance, taken before Ruby runs.
@@ -196,14 +221,86 @@ impl Caller {
     }
 }
 
+// Writes `value` to the property `name` of the object `key` holds: through
+// the property's setter when its class exported it, and otherwise into an
+// instance variable the object wrote itself. Whether it was written is what
+// Godot takes for an answer, so a refusal leaves the name to the engine.
+fn write(key: Key, name: &str, exported: bool, value: &Variant) -> bool {
+    let Ok(value) = ToRuby::checked(value) else {
+        return false;
+    };
+    let written = if exported {
+        let setter = format!("{name}=");
+        realm::enter(|realm| realm.send::<_, ToEngine>(key, &setter, [value])).map(|_| true)
+    } else {
+        let variable = StringName::from(name).to_variant();
+        let Ok(variable) = ToRuby::checked(&variable) else {
+            return false;
+        };
+        realm::enter(|realm| realm.send::<_, bool>(key, "__write_variable__", [variable, value]))
+    };
+    written.unwrap_or_else(|failed: RubyError| {
+        failed.write(&GodotLog);
+        false
+    })
+}
+
+// What the property `name` of the object `key` holds: what the property's
+// getter answers when its class exported it, and otherwise an instance
+// variable the object wrote itself; nothing when it wrote none.
+fn read(key: Key, name: &str, exported: bool) -> Option<Variant> {
+    let answered = if exported {
+        realm::enter(|realm| realm.send::<ToRuby, ToEngine>(key, name, []))
+            .map(|ToEngine(answer)| Some(answer))
+    } else {
+        let variable = StringName::from(name).to_variant();
+        let variable = ToRuby::checked(&variable).ok()?;
+        realm::enter(|realm| realm.send::<_, ToEngine>(key, "__read_variable__", [variable])).map(
+            |ToEngine(answer)| {
+                (!answer.is_nil()).then(|| answer.to::<VarArray>().at(0))
+            },
+        )
+    };
+    answered.unwrap_or_else(|failed: RubyError| {
+        failed.write(&GodotLog);
+        None
+    })
+}
+
+// An exported property as Godot reads it from an instance: the strings it
+// points at are the array's own, taken back when Godot hands the array to
+// `free_property_list`.
+fn property_info(property: &Property) -> sys::GDExtensionPropertyInfo {
+    let usage = PropertyUsageFlags::DEFAULT.ord() | PropertyUsageFlags::SCRIPT_VARIABLE.ord();
+    sys::GDExtensionPropertyInfo {
+        type_: property.kind.ord() as sys::GDExtensionVariantType,
+        name: owned(StringName::from(&property.name)),
+        class_name: owned(StringName::default()),
+        hint: PropertyHint::NONE.ord() as u32,
+        hint_string: owned(GString::default()),
+        usage: usage as u32,
+    }
+}
+
+// A string the array holds for Godot to read until it hands the array back,
+// as the pointer the engine's property info keeps it under.
+fn owned<T, P>(string: T) -> *mut P {
+    Box::into_raw(Box::new(string)).cast::<P>()
+}
+
+// SAFETY: `string` is what `owned` made for this array, taken back once.
+unsafe fn taken<T, P>(string: *mut P) {
+    drop(unsafe { Box::from_raw(string.cast::<T>()) });
+}
+
 // What Godot calls on a Ruby instance. A callback not given leaves Godot's
-// default: no properties of the script's own, no fallback, nothing to
-// revert; properties wait for exports.
+// default: no fallback, nothing to revert, and the property state Godot
+// gathers from the property list and `get`.
 static INFO: sys::GDExtensionScriptInstanceInfo3 = sys::GDExtensionScriptInstanceInfo3 {
-    set_func: None,
-    get_func: None,
-    get_property_list_func: None,
-    free_property_list_func: None,
+    set_func: Some(set),
+    get_func: Some(get),
+    get_property_list_func: Some(get_property_list),
+    free_property_list_func: Some(free_property_list),
     get_class_category_func: None,
     property_can_revert_func: None,
     property_get_revert_func: None,
@@ -242,6 +339,101 @@ unsafe fn instance<'a>(data: sys::GDExtensionScriptInstanceDataPtr) -> &'a RubyI
 // `StringName` lays out as.
 unsafe fn name(method: sys::GDExtensionConstStringNamePtr) -> String {
     unsafe { &*method.cast::<StringName>() }.to_string()
+}
+
+// A property of the node's class is its Ruby object's to answer, so the
+// object is built as a call builds it; one the engine class has is the
+// engine's, even where the object holds a variable of that name.
+unsafe extern "C" fn set(
+    data: sys::GDExtensionScriptInstanceDataPtr,
+    property: sys::GDExtensionConstStringNamePtr,
+    value: sys::GDExtensionConstVariantPtr,
+) -> sys::GDExtensionBool {
+    // SAFETY: the property name lives for the call.
+    let name = unsafe { name(property) };
+    // SAFETY: the instance lives until Ruby runs, and is not used after.
+    let reached = {
+        let instance = unsafe { instance(data) };
+        let exported = instance.exports(&name);
+        if !exported && instance.engine_property(&name) {
+            return sys::GDExtensionBool::from(false);
+        }
+        (instance.caller(), exported)
+    };
+    let (caller, exported) = reached;
+    let Some(key) = caller.object() else {
+        return sys::GDExtensionBool::from(false);
+    };
+    // SAFETY: Godot hands a live variant for the call.
+    let value = unsafe { &*value.cast::<Variant>() };
+    sys::GDExtensionBool::from(write(key, &name, exported, value))
+}
+
+unsafe extern "C" fn get(
+    data: sys::GDExtensionScriptInstanceDataPtr,
+    property: sys::GDExtensionConstStringNamePtr,
+    answer: sys::GDExtensionVariantPtr,
+) -> sys::GDExtensionBool {
+    // SAFETY: the property name lives for the call.
+    let name = unsafe { name(property) };
+    // SAFETY: the instance lives until Ruby runs, and is not used after.
+    let reached = {
+        let instance = unsafe { instance(data) };
+        let exported = instance.exports(&name);
+        if !exported && instance.engine_property(&name) {
+            return sys::GDExtensionBool::from(false);
+        }
+        (instance.caller(), exported)
+    };
+    let (caller, exported) = reached;
+    let Some(key) = caller.object() else {
+        return sys::GDExtensionBool::from(false);
+    };
+    let Some(answered) = read(key, &name, exported) else {
+        return sys::GDExtensionBool::from(false);
+    };
+    // SAFETY: Godot hands a variant of its own to write the answer into.
+    unsafe { *answer.cast::<Variant>() = answered };
+    sys::GDExtensionBool::from(true)
+}
+
+// The properties of the node's class, as the array Godot reads and hands
+// back to `free_property_list`. Its class has them once its file has run, so
+// a node whose file has not run yet has none.
+unsafe extern "C" fn get_property_list(
+    data: sys::GDExtensionScriptInstanceDataPtr,
+    count: *mut u32,
+) -> *const sys::GDExtensionPropertyInfo {
+    // SAFETY: the instance lives for this call, which runs no Ruby.
+    let properties = unsafe { instance(data) }.properties();
+    let infos: Box<[sys::GDExtensionPropertyInfo]> =
+        properties.iter().map(property_info).collect();
+    // SAFETY: Godot hands a count to fill.
+    unsafe { *count = infos.len() as u32 };
+    Box::into_raw(infos).cast::<sys::GDExtensionPropertyInfo>()
+}
+
+unsafe extern "C" fn free_property_list(
+    _data: sys::GDExtensionScriptInstanceDataPtr,
+    list: *const sys::GDExtensionPropertyInfo,
+    count: u32,
+) {
+    // SAFETY: Godot hands back what `get_property_list` made, once, with the
+    // count it was given.
+    let infos = unsafe {
+        Box::from_raw(std::ptr::slice_from_raw_parts_mut(
+            list.cast_mut(),
+            count as usize,
+        ))
+    };
+    for info in &infos {
+        // SAFETY: each string is what `property_info` made for this array.
+        unsafe {
+            taken::<StringName, _>(info.name);
+            taken::<StringName, _>(info.class_name);
+            taken::<GString, _>(info.hint_string);
+        }
+    }
 }
 
 unsafe extern "C" fn has_method(

@@ -197,3 +197,43 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | Given | two nodes of a class exporting an array |
 | When | one of them changes the array it was given |
 | Then | the other's array is as it was exported |
+
+## `RD-025` A node lists the properties its class exported
+
+| Step | Statement |
+| --- | --- |
+| Given | a node of a class exporting a value |
+| When | the node is asked for its properties |
+| Then | the export is among them |
+
+## `RD-026` Godot writes an exported property through the accessor
+
+| Step | Statement |
+| --- | --- |
+| Given | a node of a class exporting a value |
+| When | Godot sets that property |
+| Then | the node's class reads the value it was set to |
+
+## `RD-027` A property the engine class has stays the engine's
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose object wrote an instance variable named as an engine property |
+| When | Godot sets that property |
+| Then | the engine's property is what answers the value |
+
+## `RD-028` Godot reads an instance variable the class did not export
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose object wrote an instance variable its class did not export |
+| When | Godot reads a property of that name |
+| Then | it answers what the variable holds |
+
+## `RD-029` Godot writes an instance variable the class did not export
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose object wrote an instance variable its class did not export |
+| When | Godot sets a property of that name |
+| Then | the class reads the value it was set to |

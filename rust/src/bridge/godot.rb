@@ -165,6 +165,27 @@ module Godot
       end
     end
 
+    # What Godot writes to a name the class did not export: the instance
+    # variable of that name, if the object has one, as GDScript reaches a
+    # member its script did not export. A name the object never wrote is
+    # none of Ruby's, so the engine is left to answer it.
+    def __write_variable__(name, value)
+      variable = :"@#{name}"
+      return false unless instance_variable_defined?(variable)
+
+      instance_variable_set(variable, value)
+      true
+    end
+
+    # What Godot reads from a name the class did not export, held in an
+    # array so a variable holding nil is still an answer.
+    def __read_variable__(name)
+      variable = :"@#{name}"
+      instance_variable_defined?(variable) ? [instance_variable_get(variable)] : nil
+    end
+
+    private :__write_variable__, :__read_variable__
+
     # An engine method the engine class declares is defined on the Ruby class
     # at its first call, so later calls skip method_missing.
     def method_missing(name, *args, &block)

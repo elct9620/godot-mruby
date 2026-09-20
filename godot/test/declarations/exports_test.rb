@@ -114,4 +114,57 @@ class ExportsTest < Minitest::Test
     one&.free
     other&.free
   end
+
+  # @behavior RD-025
+  def test_a_node_lists_the_properties_its_class_exported
+    turret = Loader::Turret.new
+
+    names = turret.get_property_list.map { |property| property["name"] }
+
+    assert_includes names, "range"
+  ensure
+    turret&.free
+  end
+
+  # @behavior RD-026
+  def test_godot_writes_an_exported_property_through_the_accessor
+    turret = Loader::Turret.new
+
+    turret.set(:range, 500.0)
+
+    assert_equal 500.0, turret.range
+  ensure
+    turret&.free
+  end
+
+  # @behavior RD-027
+  def test_a_property_the_engine_class_has_stays_the_engines
+    masking = Loader::Masking.new
+
+    masking.set(:position, Godot::Vector2.new(1, 2))
+
+    assert_equal Godot::Vector2.new(1, 2), masking.position
+  ensure
+    masking&.free
+  end
+
+  # @behavior RD-028
+  def test_godot_reads_an_instance_variable_the_class_did_not_export
+    holding = Loader::Holding.new
+
+    assert_equal 7, holding.get(:kept)
+  ensure
+    holding&.free
+  end
+
+  # @behavior RD-029
+  def test_godot_writes_an_instance_variable_the_class_did_not_export
+    holding = Loader::Holding.new
+
+    holding.set(:kept, 9)
+
+    assert_equal 9, holding.kept
+  ensure
+    holding&.free
+  end
 end
