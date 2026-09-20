@@ -37,6 +37,10 @@ pub struct RubyInstance {
     // answer which methods the node's class has without entering the realm.
     header: Arc<Header>,
     ancestry: Arc<Ancestry>,
+    // The engine class of the node itself, which is the script's engine
+    // class or one descending from it, and whose properties are the
+    // engine's to answer.
+    class_name: StringName,
     // The language its script reports, which Godot also asks the instance for.
     language: Gd<ScriptLanguage>,
     // What the node prints as while its script says nothing about it.
@@ -102,6 +106,7 @@ impl RubyInstance {
             owner: owner.instance_id(),
             header,
             ancestry,
+            class_name: StringName::from(&owner.get_class()),
             language,
             display: GString::from(&owner.to_string()),
             stage: Arc::new(Mutex::new(Stage::Recorded)),
@@ -199,16 +204,17 @@ impl RubyInstance {
         })
     }
 
-    // Whether the node's engine class has a property of that name, which is
-    // the engine's to answer even where the Ruby object holds one too.
+    // Whether the node's own engine class has a property of that name, which
+    // is the engine's to answer even where the Ruby object holds one too. A
+    // node may descend from the class its script extends, so the class asked
+    // is the node's rather than the script's.
     fn engine_property(&self, name: &str) -> bool {
-        let engine_class = self.ancestry.engine_class();
         let mut class_db = ClassDb::singleton();
         !class_db
-            .class_get_property_setter(engine_class, name)
+            .class_get_property_setter(&self.class_name, name)
             .is_empty()
             || !class_db
-                .class_get_property_getter(engine_class, name)
+                .class_get_property_getter(&self.class_name, name)
                 .is_empty()
     }
 

@@ -270,3 +270,11 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | Given | a node of a class exporting a value, set to another value |
 | When | the node is duplicated |
 | Then | the copy answers the value the node was set to |
+
+## `RD-034` A property only the node's own class has stays the engine's
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose object wrote an instance variable named as a property only the node's class has, not the class its script extends |
+| When | Godot sets that property |
+| Then | the engine's property is what answers the value |
