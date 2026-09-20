@@ -2,10 +2,10 @@ use std::cell::{Cell, RefCell};
 use std::ffi::CStr;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use beni::{Error, Gem, IntoValue, Mrb, ReprValue, TryConvert, Value};
+use beni::{Array, Error, FromValue, Gem, IntoValue, Mrb, ReprValue, Symbol, TryConvert, Value};
 
 use crate::compiler;
-use crate::snapshot::{self, Signal, Snapshot};
+use crate::snapshot::{self, Class, Signal, Snapshot};
 
 mod constants;
 mod executor;
@@ -146,17 +146,44 @@ enum Started {
 }
 
 impl Bookkeeping {
-    // Publishes what the file at `path` declared, now that it has run. Ruby
-    // itself asks Godot what a class has, so what a file declared is read
-    // back while the thread that ran it is still inside the realm.
-    fn declared(&self, path: &str, signals: Vec<Signal>) {
-        if signals.is_empty() && self.snapshot.borrow().signals(path).is_empty() {
-            return;
-        }
+    // Publishes what the class of the file at `path` has, now that the file
+    // has run. Ruby itself asks Godot what a class has, so a file's class is
+    // read back while the thread that ran it is still inside the realm.
+    fn ran(&self, path: &str, class: Class) {
         let mut draft = self.snapshot.borrow_mut();
-        Arc::make_mut(&mut draft).declared(path, signals);
+        Arc::make_mut(&mut draft).ran(path, class);
         snapshot::publish(Arc::clone(&draft));
     }
+}
+
+// What the class of the file at `path` has, now that the file has run: what
+// its body declared, and the methods it defines, so a method metaprogramming
+// defined is one the class has.
+fn ran(mrb: &Mrb, path: &str, signals: Vec<Signal>) {
+    let methods = methods_of(mrb, path);
+    bookkeeping(mrb).ran(path, Class { signals, methods });
+}
+
+// The names of the methods the class the file at `path` names defines
+// itself; none when the file named no class of its own.
+fn methods_of(mrb: &Mrb, path: &str) -> Vec<String> {
+    let Some(class) = constants::constant_at(mrb, &key_of(path)) else {
+        return Vec::new();
+    };
+    let own = [false.into_value(mrb)];
+    let methods = class
+        .funcall(mrb, c"instance_methods", &own)
+        .ok()
+        .and_then(Array::from_value);
+    methods
+        .map(|methods| {
+            methods
+                .entries(mrb)
+                .filter_map(Symbol::from_value)
+                .filter_map(|name| name.name(mrb))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 // The bookkeeping `mrb`'s realm put there as it opened.

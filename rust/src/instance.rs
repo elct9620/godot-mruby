@@ -20,6 +20,7 @@ use crate::error;
 use crate::log::GodotLog;
 use crate::parser::Header;
 use crate::realm::{self, Built, Key, RubyError};
+use crate::snapshot;
 
 /// A node's instance of a `RubyScript`. It holds no Ruby value: the node's
 /// Ruby object is built in the game's realm the first time Godot calls a
@@ -89,7 +90,9 @@ impl RubyInstance {
 
     // Whether the node's class defines `method` or inherits it from a file.
     fn has(&self, method: &str) -> bool {
-        self.header.has_method(method) || self.ancestry.has_method(method)
+        self.header.has_method(method)
+            || snapshot::latest().has_method(&self.path, method)
+            || self.ancestry.has_method(method)
     }
 
     // What a call into Ruby needs of the instance, taken before Ruby runs.

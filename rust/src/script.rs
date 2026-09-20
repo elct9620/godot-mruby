@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::ffi::c_void;
 use std::sync::{Arc, OnceLock};
 
@@ -62,6 +63,17 @@ impl RubyScript {
     fn signals(&self) -> Vec<Signal> {
         let path = self.base().get_path().to_string();
         snapshot::latest().signals(&path).to_vec()
+    }
+
+    // The methods the file's class has: the ones its source defines, and the
+    // ones it defined as it ran, which are the same but for metaprogramming's.
+    fn methods(&self) -> BTreeSet<String> {
+        let path = self.base().get_path().to_string();
+        self.header
+            .methods()
+            .map(str::to_owned)
+            .chain(snapshot::latest().methods(&path).iter().cloned())
+            .collect()
     }
 
     // The engine node class the file's class extends when it is a node
@@ -184,7 +196,9 @@ impl IScriptExtension for RubyScript {
 
     fn has_method(&self, method: StringName) -> bool {
         let method = method.to_string();
+        let path = self.base().get_path().to_string();
         self.header.has_method(&method)
+            || snapshot::latest().has_method(&path, &method)
             || self
                 .ancestry()
                 .as_ref()
@@ -239,7 +253,10 @@ impl IScriptExtension for RubyScript {
     fn update_exports(&mut self) {}
 
     fn get_script_method_list(&self) -> Array<AnyDictionary> {
-        Array::new()
+        self.methods()
+            .iter()
+            .map(|method| named(method.as_str()).upcast_any_dictionary())
+            .collect()
     }
 
     fn get_script_property_list(&self) -> Array<AnyDictionary> {
@@ -276,18 +293,24 @@ fn signal_info(signal: &Signal) -> AnyDictionary {
         .iter()
         .map(|parameter| parameter_info(parameter))
         .collect();
-    let mut info = VarDictionary::new();
-    info.set("name", signal.name.as_str());
+    let mut info = named(signal.name.as_str());
     info.set("args", &arguments);
     info.upcast_any_dictionary()
 }
 
 fn parameter_info(name: &str) -> AnyDictionary {
-    let mut info = VarDictionary::new();
-    info.set("name", name);
+    let mut info = named(name);
     info.set("type", VariantType::NIL.ord());
     info.set("usage", PropertyUsageFlags::NIL_IS_VARIANT);
     info.upcast_any_dictionary()
+}
+
+// What Godot reads a method, a signal or a parameter by: its name, which for
+// a method is all a Ruby class says about it.
+fn named(name: &str) -> VarDictionary {
+    let mut info = VarDictionary::new();
+    info.set("name", name);
+    info
 }
 
 // No instance: the object is left without a script instance.

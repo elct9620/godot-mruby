@@ -83,6 +83,12 @@ impl Header {
         self.methods.contains(name)
     }
 
+    /// The names of the methods the file's class defines, as its `def`
+    /// statements write them.
+    pub fn methods(&self) -> impl Iterator<Item = &str> {
+        self.methods.iter().map(String::as_str)
+    }
+
     pub fn is_tool(&self) -> bool {
         self.tool
     }

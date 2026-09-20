@@ -14,16 +14,19 @@ pub struct Signal {
     pub parameters: Vec<String>,
 }
 
-/// What the classes of a realm's files declared, as one value that never
-/// changes once it is published.
+/// What a class has once its file has run: what its body declared, and the
+/// methods it defines, those metaprogramming defined included.
+#[derive(Clone, Debug, Default)]
+pub struct Class {
+    pub signals: Vec<Signal>,
+    pub methods: Vec<String>,
+}
+
+/// What the classes of a realm's files have, as one value that never changes
+/// once it is published.
 #[derive(Clone, Debug, Default)]
 pub struct Snapshot {
     classes: HashMap<String, Class>,
-}
-
-#[derive(Clone, Debug, Default)]
-struct Class {
-    signals: Vec<Signal>,
 }
 
 impl Snapshot {
@@ -35,10 +38,23 @@ impl Snapshot {
             .map_or(&[], |class| class.signals.as_slice())
     }
 
-    /// Takes what the class of the file at `path` declared as it ran, in
-    /// place of what the file declared before it.
-    pub fn declared(&mut self, path: &str, signals: Vec<Signal>) {
-        self.classes.insert(path.to_owned(), Class { signals });
+    /// The methods the class of the file at `path` defines; none for a file
+    /// that has not run.
+    pub fn methods(&self, path: &str) -> &[String] {
+        self.classes
+            .get(path)
+            .map_or(&[], |class| class.methods.as_slice())
+    }
+
+    /// Whether the class of the file at `path` defines a method of that name.
+    pub fn has_method(&self, path: &str, name: &str) -> bool {
+        self.methods(path).iter().any(|method| method == name)
+    }
+
+    /// Takes what the class of the file at `path` has, now that the file has
+    /// run, in place of what it had before.
+    pub fn ran(&mut self, path: &str, class: Class) {
+        self.classes.insert(path.to_owned(), class);
     }
 }
 
@@ -67,29 +83,53 @@ mod tests {
         }
     }
 
+    fn bell() -> Class {
+        Class {
+            signals: vec![rung()],
+            methods: vec!["ring".to_owned()],
+        }
+    }
+
     #[test]
-    fn a_file_that_declared_nothing_has_no_signals() {
+    fn a_file_that_has_not_run_has_no_signals() {
         let snapshot = Snapshot::default();
 
         assert!(snapshot.signals("res://bell.rb").is_empty());
     }
 
     #[test]
+    fn a_file_that_has_not_run_has_no_methods() {
+        let snapshot = Snapshot::default();
+
+        assert!(!snapshot.has_method("res://bell.rb", "ring"));
+    }
+
+    #[test]
     fn a_class_answers_the_signals_its_file_declared() {
         let mut snapshot = Snapshot::default();
 
-        snapshot.declared("res://bell.rb", vec![rung()]);
+        snapshot.ran("res://bell.rb", bell());
 
         assert_eq!(snapshot.signals("res://bell.rb"), [rung()]);
     }
 
     #[test]
-    fn a_file_running_again_declares_in_place_of_what_it_declared_before() {
+    fn a_class_answers_the_methods_it_defines() {
         let mut snapshot = Snapshot::default();
 
-        snapshot.declared("res://bell.rb", vec![rung()]);
-        snapshot.declared("res://bell.rb", Vec::new());
+        snapshot.ran("res://bell.rb", bell());
+
+        assert!(snapshot.has_method("res://bell.rb", "ring"));
+    }
+
+    #[test]
+    fn a_file_running_again_stands_in_place_of_what_it_had_before() {
+        let mut snapshot = Snapshot::default();
+
+        snapshot.ran("res://bell.rb", bell());
+        snapshot.ran("res://bell.rb", Class::default());
 
         assert!(snapshot.signals("res://bell.rb").is_empty());
+        assert!(!snapshot.has_method("res://bell.rb", "ring"));
     }
 }

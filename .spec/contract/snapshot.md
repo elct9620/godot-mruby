@@ -21,9 +21,24 @@ pub struct Signal {
 }
 ```
 
+## `Class`
+
+What a class has once its file has run: what its body declared, and the methods it defines, those metaprogramming defined included.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub struct Class {
+    pub signals: Vec<Signal>,
+    pub methods: Vec<String>,
+}
+```
+
 ## `Snapshot`
 
-What the classes of a realm's files declared, as one value that never changes once it is published.
+What the classes of a realm's files have, as one value that never changes once it is published.
 
 | Attribute | Value |
 | --- | --- |
@@ -47,9 +62,9 @@ impl Snapshot {
 }
 ```
 
-## `Snapshot::declared`
+## `Snapshot::methods`
 
-Takes what the class of the file at a path declared as it ran, in place of what the file declared before it.
+The methods the class of the file at a path defines; none for a file that has not run.
 
 | Attribute | Value |
 | --- | --- |
@@ -57,7 +72,35 @@ Takes what the class of the file at a path declared as it ran, in place of what 
 
 ```rust
 impl Snapshot {
-    pub fn declared(&mut self, path: &str, signals: Vec<Signal>) {}
+    pub fn methods(&self, path: &str) -> &[String] {}
+}
+```
+
+## `Snapshot::has_method`
+
+Whether the class of the file at a path defines a method of that name.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Snapshot {
+    pub fn has_method(&self, path: &str, name: &str) -> bool {}
+}
+```
+
+## `Snapshot::ran`
+
+Takes what the class of the file at a path has, now that the file has run, in place of what it had before.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Snapshot {
+    pub fn ran(&mut self, path: &str, class: Class) {}
 }
 ```
 

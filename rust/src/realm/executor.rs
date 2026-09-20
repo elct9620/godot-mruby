@@ -6,7 +6,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::CString;
 
-use super::{bookkeeping, compile};
+use super::{bookkeeping, compile, ran};
 use crate::snapshot::Signal;
 use beni::{Error, Mrb, ReprValue, Value};
 
@@ -136,7 +136,7 @@ fn execute<T>(
         (Ok(()), frame) => {
             frame
                 .into_iter()
-                .for_each(|frame| bookkeeping(mrb).declared(&frame.path, frame.declared));
+                .for_each(|frame| ran(mrb, &frame.path, frame.declared));
             Run::Done
         }
         (Err(_), frame) => {
