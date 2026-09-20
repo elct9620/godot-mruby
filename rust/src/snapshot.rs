@@ -8,7 +8,7 @@ use std::sync::{Arc, LazyLock, PoisonError, RwLock};
 
 use godot::builtin::{PackedByteArray, Variant, VariantType};
 use godot::global::{bytes_to_var, var_to_bytes};
-use godot::register::info::PropertyHint;
+use godot::register::info::{PropertyHint, PropertyUsageFlags};
 
 /// A signal a class declared, with the names its parameters were declared
 /// with.
@@ -73,12 +73,40 @@ impl Property {
     }
 }
 
+/// A heading the editor shows the properties declared after it under, as
+/// `export_group` and its kin write one: the name it is headed with, the
+/// prefix it takes those properties by, and which kind of heading it is.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Group {
+    pub name: String,
+    pub prefix: String,
+    pub usage: PropertyUsageFlags,
+}
+
+/// What a class body declared for the editor to show, in the order it was
+/// declared: a property, or a heading the properties after it are under.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Member {
+    Property(Property),
+    Group(Group),
+}
+
+impl Member {
+    /// The property this member is, unless it is a heading.
+    pub fn property(&self) -> Option<&Property> {
+        match self {
+            Self::Property(property) => Some(property),
+            Self::Group(_) => None,
+        }
+    }
+}
+
 /// What a class has once its file has run: what its body declared, and the
 /// methods it defines, those metaprogramming defined included.
 #[derive(Clone, Debug, Default)]
 pub struct Class {
     pub signals: Vec<Signal>,
-    pub properties: Vec<Property>,
+    pub members: Vec<Member>,
     pub methods: Vec<String>,
 }
 
@@ -98,12 +126,18 @@ impl Snapshot {
             .map_or(&[], |class| class.signals.as_slice())
     }
 
-    /// The properties the class of the file at `path` exported, in the order
-    /// it declared them; none for a file that has not run.
-    pub fn properties(&self, path: &str) -> &[Property] {
+    /// What the class of the file at `path` declared for the editor, in the
+    /// order it declared it; none for a file that has not run.
+    pub fn members(&self, path: &str) -> &[Member] {
         self.classes
             .get(path)
-            .map_or(&[], |class| class.properties.as_slice())
+            .map_or(&[], |class| class.members.as_slice())
+    }
+
+    /// The properties the class of the file at `path` exported, in the order
+    /// it declared them; none for a file that has not run.
+    pub fn properties(&self, path: &str) -> impl Iterator<Item = &Property> {
+        self.members(path).iter().filter_map(Member::property)
     }
 
     /// The properties the classes of the files at `paths` exported, the
@@ -119,6 +153,28 @@ impl Snapshot {
             }
         }
         properties
+    }
+
+    /// What the classes of the files at `paths` declared for the editor, the
+    /// first file's first, as GDScript lists a script's own members before
+    /// the ones it inherits. A property is listed once, the nearest class's,
+    /// while a heading belongs to the class that wrote it.
+    pub fn members_of<'a>(&self, paths: impl IntoIterator<Item = &'a str>) -> Vec<Member> {
+        let mut members: Vec<Member> = Vec::new();
+        for path in paths {
+            for member in self.members(path) {
+                let listed = member.property().is_some_and(|property| {
+                    members
+                        .iter()
+                        .filter_map(Member::property)
+                        .any(|kept| kept.name == property.name)
+                });
+                if !listed {
+                    members.push(member.clone());
+                }
+            }
+        }
+        members
     }
 
     /// The methods the class of the file at `path` defines; none for a file
@@ -181,7 +237,7 @@ mod tests {
     fn bell() -> Class {
         Class {
             signals: vec![rung()],
-            properties: vec![tone()],
+            members: vec![Member::Property(tone())],
             methods: vec!["ring".to_owned()],
         }
     }
@@ -213,7 +269,7 @@ mod tests {
     fn a_file_that_has_not_run_has_no_properties() {
         let snapshot = Snapshot::default();
 
-        assert!(snapshot.properties("res://bell.rb").is_empty());
+        assert_eq!(snapshot.properties("res://bell.rb").count(), 0);
     }
 
     #[test]
@@ -222,7 +278,10 @@ mod tests {
 
         snapshot.ran("res://bell.rb", bell());
 
-        assert_eq!(snapshot.properties("res://bell.rb"), [tone()]);
+        assert_eq!(
+            snapshot.properties("res://bell.rb").collect::<Vec<_>>(),
+            [&tone()]
+        );
     }
 
     #[test]
@@ -242,7 +301,7 @@ mod tests {
         snapshot.ran("res://bell.rb", Class::default());
 
         assert!(snapshot.signals("res://bell.rb").is_empty());
-        assert!(snapshot.properties("res://bell.rb").is_empty());
+        assert_eq!(snapshot.properties("res://bell.rb").count(), 0);
         assert!(!snapshot.has_method("res://bell.rb", "ring"));
     }
 }

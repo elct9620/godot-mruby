@@ -13,7 +13,7 @@ use godot::classes::{ClassDb, Object, Script, ScriptLanguage};
 use godot::meta::conv::RawPtr;
 use godot::obj::{EngineBitfield, EngineEnum};
 use godot::prelude::*;
-use godot::register::info::PropertyUsageFlags;
+use godot::register::info::{PropertyHint, PropertyUsageFlags};
 use godot::sys;
 
 use crate::ancestry::Ancestry;
@@ -22,7 +22,7 @@ use crate::error;
 use crate::log::GodotLog;
 use crate::parser::Header;
 use crate::realm::{self, Built, Key, RubyError};
-use crate::snapshot::{self, Property};
+use crate::snapshot::{self, Group, Member, Property};
 
 /// A node's instance of a `RubyScript`. It holds no Ruby value: the node's
 /// Ruby object is built in the game's realm the first time Godot calls a
@@ -140,10 +140,10 @@ impl RubyInstance {
                 .any(|path| snapshot.has_method(path, method))
     }
 
-    // The properties the node's class exported, its ancestors' included;
-    // none until its file has run.
-    fn properties(&self) -> Vec<Property> {
-        properties_of(&self.path, &self.ancestry)
+    // What the node's class declared for the editor, its ancestors' included
+    // and in the order each class wrote it; none until its file has run.
+    fn members(&self) -> Vec<Member> {
+        snapshot::latest().members_of(declaring_paths(&self.path, &self.ancestry))
     }
 
     // The files the node's class takes its shape from: its own, then the
@@ -169,7 +169,6 @@ impl RubyInstance {
             .find_map(|path| {
                 snapshot
                     .properties(path)
-                    .iter()
                     .find(|property| property.name == name)
             })
             .map(Property::default_value)
@@ -199,7 +198,6 @@ impl RubyInstance {
         self.declaring_paths().any(|path| {
             snapshot
                 .properties(path)
-                .iter()
                 .any(|property| property.name == name)
         })
     }
@@ -389,6 +387,28 @@ fn read(key: Key, name: &str, exported: bool) -> Option<Variant> {
     })
 }
 
+// What a class declared as Godot reads it from an instance, a property or
+// the heading the properties after it are shown under.
+fn member_info(member: &Member) -> sys::GDExtensionPropertyInfo {
+    match member {
+        Member::Property(property) => property_info(property),
+        Member::Group(group) => group_info(group),
+    }
+}
+
+// A heading as Godot reads it from an instance: the name it is headed with,
+// the prefix it takes properties by, and the usage saying which kind it is.
+fn group_info(group: &Group) -> sys::GDExtensionPropertyInfo {
+    sys::GDExtensionPropertyInfo {
+        type_: VariantType::NIL.ord() as sys::GDExtensionVariantType,
+        name: owned(StringName::from(&group.name)),
+        class_name: owned(StringName::default()),
+        hint: PropertyHint::NONE.ord() as u32,
+        hint_string: owned(GString::from(&group.prefix)),
+        usage: group.usage.ord() as u32,
+    }
+}
+
 // An exported property as Godot reads it from an instance: the strings it
 // points at are the array's own, taken back when Godot hands the array to
 // `free_property_list`.
@@ -551,8 +571,8 @@ unsafe extern "C" fn get_property_list(
     count: *mut u32,
 ) -> *const sys::GDExtensionPropertyInfo {
     // SAFETY: the instance lives for this call, which runs no Ruby.
-    let properties = unsafe { instance(data) }.properties();
-    let infos: Box<[sys::GDExtensionPropertyInfo]> = properties.iter().map(property_info).collect();
+    let members = unsafe { instance(data) }.members();
+    let infos: Box<[sys::GDExtensionPropertyInfo]> = members.iter().map(member_info).collect();
     // SAFETY: Godot hands a count to fill.
     unsafe { *count = infos.len() as u32 };
     Box::into_raw(infos).cast::<sys::GDExtensionPropertyInfo>()

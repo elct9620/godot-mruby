@@ -8,7 +8,7 @@ use std::ffi::{CStr, CString};
 use std::sync::Arc;
 
 use super::{bookkeeping, compile, file_defining, ran};
-use crate::snapshot::{Property, Signal};
+use crate::snapshot::{Group, Member, Property, Signal};
 use beni::{Error, FromValue, Module, Mrb, RClass, ReprValue, Value};
 
 /// How far a file has run in a realm.
@@ -21,11 +21,12 @@ enum Run {
 }
 
 /// What a class declares of itself as its body runs, for the realm to
-/// publish once the file has run. One name is declared once, so the two
-/// kinds are held together.
+/// publish once the file has run. One name is declared once, so the kinds
+/// that carry a name are held together; a heading carries none.
 pub(super) enum Declaration {
     Signal(Signal),
     Property(Property),
+    Group(Group),
 }
 
 impl Declaration {
@@ -33,6 +34,7 @@ impl Declaration {
         match self {
             Self::Signal(signal) => &signal.name,
             Self::Property(property) => &property.name,
+            Self::Group(group) => &group.name,
         }
     }
 
@@ -41,6 +43,7 @@ impl Declaration {
         match self {
             Self::Signal(signal) => format!("a signal of ({})", signal.parameters.join(", ")),
             Self::Property(property) => format!("a property of {}", property.default_value()),
+            Self::Group(group) => format!("a heading named {}", group.name),
         }
     }
 }
@@ -50,6 +53,7 @@ impl PartialEq for Declaration {
         match (self, other) {
             (Self::Signal(one), Self::Signal(other)) => one == other,
             (Self::Property(one), Self::Property(other)) => one == other,
+            (Self::Group(one), Self::Group(other)) => one == other,
             _ => false,
         }
     }
@@ -192,11 +196,20 @@ fn ancestor_declaring(mrb: &Mrb, class: RClass, name: &str) -> Option<String> {
         let names: Vec<String> = path.split("::").map(str::to_owned).collect();
         let declared = file_defining(mrb, &names).is_some_and(|file| {
             snapshot.signals(&file).iter().any(|it| it.name == name)
-                || snapshot.properties(&file).iter().any(|it| it.name == name)
+                || snapshot.properties(&file).any(|it| it.name == name)
         });
         if declared {
             return Some(path);
         }
+    }
+}
+
+/// Records the heading `group` written by the file running now, which names
+/// no member of the class, so it is written as often as the class writes
+/// one. A heading written while no file runs belongs to no class.
+pub(super) fn heading(mrb: &Mrb, group: Group) {
+    if let Some(frame) = runs(mrb).frames.borrow_mut().last_mut() {
+        frame.declared.push(Declaration::Group(group));
     }
 }
 
@@ -229,8 +242,8 @@ fn execute<T>(
     let run = match (&outcome, frame) {
         (Ok(()), frame) => {
             frame.into_iter().for_each(|frame| {
-                let (signals, properties) = split(frame.declared);
-                ran(mrb, &frame.path, signals, properties);
+                let (signals, members) = split(frame.declared);
+                ran(mrb, &frame.path, signals, members);
             });
             Run::Done
         }
@@ -243,17 +256,19 @@ fn execute<T>(
     outcome
 }
 
-// What a frame declared, as the two kinds a class publishes.
-fn split(declared: Vec<Declaration>) -> (Vec<Signal>, Vec<Property>) {
+// What a frame declared, as the two kinds a class publishes: its signals,
+// and what the editor shows, which keeps the order it was declared in.
+fn split(declared: Vec<Declaration>) -> (Vec<Signal>, Vec<Member>) {
     let mut signals = Vec::new();
-    let mut properties = Vec::new();
+    let mut members = Vec::new();
     for one in declared {
         match one {
             Declaration::Signal(signal) => signals.push(signal),
-            Declaration::Property(property) => properties.push(property),
+            Declaration::Property(property) => members.push(Member::Property(property)),
+            Declaration::Group(group) => members.push(Member::Group(group)),
         }
     }
-    (signals, properties)
+    (signals, members)
 }
 
 // The source the realm's files give for the file at `path`.

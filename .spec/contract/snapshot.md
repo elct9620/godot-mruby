@@ -21,6 +21,51 @@ pub struct Signal {
 }
 ```
 
+## `Group`
+
+A heading the editor shows the properties declared after it under: the name it is headed with, the prefix it takes those properties by, and which kind of heading it is.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub struct Group {
+    pub name: String,
+    pub prefix: String,
+    pub usage: PropertyUsageFlags,
+}
+```
+
+## `Member`
+
+What a class body declared for the editor to show, in the order it was declared: a property, or a heading the properties after it are under.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub enum Member {
+    Property(Property),
+    Group(Group),
+}
+```
+
+## `Member::property`
+
+The property this member is, unless it is a heading.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Member {
+    pub fn property(&self) -> Option<&Property> {}
+}
+```
+
 ## `Class`
 
 What a class has once its file has run: what its body declared, and the methods it defines, those metaprogramming defined included.
@@ -32,7 +77,7 @@ What a class has once its file has run: what its body declared, and the methods 
 ```rust
 pub struct Class {
     pub signals: Vec<Signal>,
-    pub properties: Vec<Property>,
+    pub members: Vec<Member>,
     pub methods: Vec<String>,
 }
 ```
@@ -136,6 +181,20 @@ impl Snapshot {
 }
 ```
 
+## `Snapshot::members`
+
+What the class of the file at a path declared for the editor, in the order it declared it; none for a file that has not run.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Snapshot {
+    pub fn members(&self, path: &str) -> &[Member] {}
+}
+```
+
 ## `Snapshot::properties`
 
 The properties the class of the file at a path exported, in the order it declared them; none for a file that has not run.
@@ -146,7 +205,35 @@ The properties the class of the file at a path exported, in the order it declare
 
 ```rust
 impl Snapshot {
-    pub fn properties(&self, path: &str) -> &[Property] {}
+    pub fn properties(&self, path: &str) -> impl Iterator<Item = &Property> {}
+}
+```
+
+## `Snapshot::properties_of`
+
+The properties the classes of the files at the paths exported, the first file's first and one to a name, as a class has what it exported and what it inherits.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Snapshot {
+    pub fn properties_of<'a>(&self, paths: impl IntoIterator<Item = &'a str>) -> Vec<Property> {}
+}
+```
+
+## `Snapshot::members_of`
+
+What the classes of the files at the paths declared for the editor, the first file's first, as GDScript lists a script's own members before the ones it inherits: a property is listed once, the nearest class's, while a heading belongs to the class that wrote it.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Snapshot {
+    pub fn members_of<'a>(&self, paths: impl IntoIterator<Item = &'a str>) -> Vec<Member> {}
 }
 ```
 

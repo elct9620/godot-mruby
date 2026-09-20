@@ -17,7 +17,7 @@ use crate::game::GameFiles;
 use crate::instance::RubyInstance;
 use crate::language;
 use crate::parser::Header;
-use crate::snapshot::{self, Property, Signal};
+use crate::snapshot::{self, Group, Member, Property, Signal};
 use crate::{bridge, error};
 
 /// The script a `.rb` file loads as, the way a `.gd` file loads as a `GDScript`.
@@ -88,6 +88,13 @@ impl RubyScript {
     fn properties(&self) -> Vec<Property> {
         let paths = self.declaring_files();
         snapshot::latest().properties_of(paths.iter().map(String::as_str))
+    }
+
+    // What the class declared for the editor, its ancestors' included and
+    // in the order each class wrote it; none until the file has run.
+    fn members(&self) -> Vec<Member> {
+        let paths = self.declaring_files();
+        snapshot::latest().members_of(paths.iter().map(String::as_str))
     }
 
     // The property of that name the class exported, if it exported one.
@@ -297,7 +304,7 @@ impl IScriptExtension for RubyScript {
     }
 
     fn get_script_property_list(&self) -> Array<AnyDictionary> {
-        self.properties().iter().map(property_info).collect()
+        self.members().iter().map(member_info).collect()
     }
 
     fn get_member_line(&self, _member: StringName) -> i32 {
@@ -332,6 +339,25 @@ fn signal_info(signal: &Signal) -> AnyDictionary {
         .collect();
     let mut info = named(signal.name.as_str());
     info.set("args", &arguments);
+    info.upcast_any_dictionary()
+}
+
+// What a class declared as Godot reads it, a property or the heading the
+// properties after it are shown under.
+fn member_info(member: &Member) -> AnyDictionary {
+    match member {
+        Member::Property(property) => property_info(property),
+        Member::Group(group) => group_info(group),
+    }
+}
+
+// A heading as Godot reads it: the name it is headed with, the prefix it
+// takes properties by, and the usage saying which kind of heading it is.
+fn group_info(group: &Group) -> AnyDictionary {
+    let mut info = named(group.name.as_str());
+    info.set("type", VariantType::NIL.ord());
+    info.set("hint_string", group.prefix.as_str());
+    info.set("usage", group.usage);
     info.upcast_any_dictionary()
 }
 

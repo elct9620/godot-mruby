@@ -7,7 +7,7 @@ use beni::{
 };
 
 use crate::compiler;
-use crate::snapshot::{self, Class, Property, Signal, Snapshot};
+use crate::snapshot::{self, Class, Group, Member, Property, Signal, Snapshot};
 
 mod constants;
 mod executor;
@@ -162,13 +162,13 @@ impl Bookkeeping {
 // What the class of the file at `path` has, now that the file has run: what
 // its body declared, and the methods it defines, so a method metaprogramming
 // defined is one the class has.
-fn ran(mrb: &Mrb, path: &str, signals: Vec<Signal>, properties: Vec<Property>) {
+fn ran(mrb: &Mrb, path: &str, signals: Vec<Signal>, members: Vec<Member>) {
     let methods = methods_of(mrb, path);
     bookkeeping(mrb).ran(
         path,
         Class {
             signals,
-            properties,
+            members,
             methods,
         },
     );
@@ -324,6 +324,13 @@ pub fn declare_signal(mrb: &Mrb, class: RClass, signal: Signal) -> Result<(), Er
 /// class and is not taken.
 pub fn declare_export(mrb: &Mrb, class: RClass, property: Property) -> Result<(), Error> {
     executor::declare(mrb, class, Declaration::Property(property))
+}
+
+/// Takes `group` as written by the file running now in the realm `mrb`
+/// belongs to: a heading names no member, so nothing is refused for having
+/// been written before.
+pub fn declare_group(mrb: &Mrb, group: Group) {
+    executor::heading(mrb, group);
 }
 
 /// Whether this thread is inside the game's realm. Something outside asks

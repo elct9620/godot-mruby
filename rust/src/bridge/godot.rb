@@ -80,6 +80,22 @@ module Godot
         attr_writer name unless method_defined?(:"#{name}=")
       end
 
+      # A heading the editor shows the properties written after it under,
+      # named as GDScript's `@export_group` and its kin are. A group and a
+      # subgroup take only the properties whose names begin with `prefix`,
+      # and a category heads everything the class writes after it.
+      def export_group(name, prefix = "")
+        __declare_group__(name.to_s, prefix.to_s, "group")
+      end
+
+      def export_subgroup(name, prefix = "")
+        __declare_group__(name.to_s, prefix.to_s, "subgroup")
+      end
+
+      def export_category(name)
+        __declare_group__(name.to_s, "", "category")
+      end
+
       # An engine class makes the engine's object; a node script's class
       # makes a node carrying its script, freed if it fails to initialize.
       def new(*args, **kwargs, &block)
@@ -125,7 +141,7 @@ module Godot
       end
 
       private :__make__, :__make_node__, :__allocate__, :__singleton__, :__static_method__, :__call_static__,
-              :__engine_constant__, :__declare_signal__, :__declare_export__
+              :__engine_constant__, :__declare_signal__, :__declare_export__, :__declare_group__
 
       private
 

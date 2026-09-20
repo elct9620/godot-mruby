@@ -462,3 +462,43 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | Given | a node script whose class exports a value naming a library file's class |
 | When | the file runs |
 | Then | the refusal reads `The class "<class>" was not found in the global scope.` |
+
+## `RD-058` A heading is listed where the class wrote it
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class writes a heading before exporting a value |
+| When | the script is asked for the properties its class has |
+| Then | the heading is listed before that property |
+
+## `RD-059` A group takes the properties whose names begin with its prefix
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class writes a group with a prefix |
+| When | the script is asked for the properties its class has |
+| Then | the group is read with `aim_` |
+
+## `RD-060` A subgroup is listed as a subgroup
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class writes a subgroup |
+| When | the script is asked for the properties its class has |
+| Then | the subgroup is listed as Godot lists one |
+
+## `RD-061` A category is listed as a category
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class writes a category |
+| When | the script is asked for the properties its class has |
+| Then | the category is listed as Godot lists one |
+
+## `RD-062` A node's properties carry the headings its class wrote
+
+| Step | Statement |
+| --- | --- |
+| Given | a node of a class writing a group |
+| When | the node is asked for its properties |
+| Then | the group is among them |
