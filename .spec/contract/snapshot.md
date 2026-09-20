@@ -167,6 +167,20 @@ What the classes of a realm's files have, as one value that never changes once i
 pub struct Snapshot;
 ```
 
+## `Snapshot::has_run`
+
+Whether the file at a path has run, which tells a class with nothing to declare from one whose declarations are still to come: a file that has not run is answered from its header instead.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Snapshot {
+    pub fn has_run(&self, path: &str) -> bool {}
+}
+```
+
 ## `Snapshot::signals`
 
 The signals the class of the file at a path declared, in the order it declared them; none for a file that has not run.

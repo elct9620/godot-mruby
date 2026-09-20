@@ -304,3 +304,19 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a node script's method that takes its own node's script away and then answers |
 | When | Godot calls the method |
 | Then | the method runs to its end, Godot gets its answer, and the node has no script, as with GDScript |
+
+## `RS-038` A node script reports the signals its class declares before its file runs
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class declares a signal |
+| When | Godot asks a node with that script whether it has that signal |
+| Then | the node answers that it has |
+
+## `RS-039` A scene's connection to a declared signal is made before its file runs
+
+| Step | Statement |
+| --- | --- |
+| Given | a scene connecting a signal a node script's class declares |
+| When | the scene runs |
+| Then | the node answers that the signal is connected |

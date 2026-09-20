@@ -58,23 +58,39 @@ impl RubyScript {
         })
     }
 
-    // The files the class takes its shape from: its own, then the ones it
-    // inherits from, nearest first, since a declaration is inherited.
-    fn declaring_files(&self) -> Vec<String> {
-        let mut paths = vec![self.base().get_path().to_string()];
+    // The files the class takes its shape from, each with the header read
+    // from its source: its own, then the ones it inherits from, nearest
+    // first, since a declaration is inherited.
+    fn declaring(&self) -> Vec<(String, &Header)> {
+        let mut files = vec![(self.base().get_path().to_string(), self.header.as_ref())];
         if let Ok(ancestry) = self.ancestry() {
-            paths.extend(ancestry.paths().map(str::to_owned));
+            files.extend(
+                ancestry
+                    .files()
+                    .iter()
+                    .map(|(path, header)| (path.clone(), header)),
+            );
         }
-        paths
+        files
     }
 
-    // The signals the class has, its ancestors' included, nearest first;
-    // none until the file has run.
+    fn declaring_files(&self) -> Vec<String> {
+        self.declaring().into_iter().map(|(path, _)| path).collect()
+    }
+
+    // The signals the class has, its ancestors' included, nearest first:
+    // what each file declared as it ran, or what its header writes while it
+    // has not run, so a scene's connection is made before anything runs.
     fn signals(&self) -> Vec<Signal> {
         let snapshot = snapshot::latest();
         let mut signals: Vec<Signal> = Vec::new();
-        for path in self.declaring_files() {
-            for signal in snapshot.signals(&path) {
+        for (path, header) in self.declaring() {
+            let declared = if snapshot.has_run(&path) {
+                snapshot.signals(&path)
+            } else {
+                header.signals()
+            };
+            for signal in declared {
                 if !signals.iter().any(|kept| kept.name == signal.name) {
                     signals.push(signal.clone());
                 }

@@ -1,6 +1,6 @@
 # Header
 
-How a file's header is read from its source without running it: the constants its `module` and `class` statements write, the class the file's path names and the name it is written with, the superclass written on it and the namespaces it is looked up from, the names of the methods it defines, and the `tool`, `abstract` and `icon` its body calls.
+How a file's header is read from its source without running it: the constants its `module` and `class` statements write, the class the file's path names and the name it is written with, the superclass written on it and the namespaces it is looked up from, the names of the methods it defines, the signals its body declares, and the `tool`, `abstract` and `icon` its body calls.
 
 ## Includes
 
@@ -133,3 +133,19 @@ How a file's header is read from its source without running it: the constants it
 | Given | a file whose method body holds a `class` statement |
 | When | its header is read |
 | Then | the header does not carry that constant |
+
+## `RH-017` `signal` called in the class body carries the signal it declares
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose class body calls `signal` with a name and a parameter name |
+| When | its header is read |
+| Then | the header carries that signal with that parameter name |
+
+## `RH-018` A signal declared with a name that is not written out is not carried
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose class body calls `signal` with a local variable |
+| When | its header is read |
+| Then | the header carries no signal |

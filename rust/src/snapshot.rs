@@ -122,6 +122,13 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
+    /// Whether the file at `path` has run, which is what tells a class with
+    /// nothing to declare from one whose declarations are still to come: a
+    /// file that has not run is answered from its header instead.
+    pub fn has_run(&self, path: &str) -> bool {
+        self.classes.contains_key(path)
+    }
+
     /// The signals the class of the file at `path` declared, in the order it
     /// declared them; none for a file that has not run.
     pub fn signals(&self, path: &str) -> &[Signal] {
@@ -281,6 +288,16 @@ mod tests {
         let snapshot = Snapshot::default();
 
         assert!(!snapshot.has_method("res://bell.rb", "ring"));
+    }
+
+    #[test]
+    fn a_file_that_ran_without_declaring_anything_has_still_run() {
+        let mut snapshot = Snapshot::default();
+
+        snapshot.ran("res://bell.rb", Class::default());
+
+        assert!(snapshot.has_run("res://bell.rb"));
+        assert!(!snapshot.has_run("res://lamp.rb"));
     }
 
     #[test]

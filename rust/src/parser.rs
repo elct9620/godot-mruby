@@ -6,17 +6,19 @@ use std::collections::BTreeSet;
 use ruby_prism::{CallNode, Node, NodeList};
 
 use crate::realm;
+use crate::snapshot::Signal;
 
 /// A file's header: the constants its `module` and `class` statements write,
 /// the name the class its path names is written with, the superclass written
-/// on it, the names of the methods it defines, and the `tool`, `abstract` and
-/// `icon` its body calls.
+/// on it, the names of the methods it defines, the signals its body declares,
+/// and the `tool`, `abstract` and `icon` its body calls.
 #[derive(Debug, Default)]
 pub struct Header {
     writes: Vec<Vec<String>>,
     name: String,
     superclass: Option<Superclass>,
     methods: BTreeSet<String>,
+    signals: Vec<Signal>,
     tool: bool,
     is_abstract: bool,
     icon: Option<String>,
@@ -89,6 +91,13 @@ impl Header {
         self.methods.iter().map(String::as_str)
     }
 
+    /// The signals the class declares, in the order it declares them, as the
+    /// `signal` calls of its body write them; a call writing a name it does
+    /// not spell out declares none the header can read.
+    pub fn signals(&self) -> &[Signal] {
+        &self.signals
+    }
+
     pub fn is_tool(&self) -> bool {
         self.tool
     }
@@ -131,6 +140,11 @@ impl Header {
             (b"icon", [path]) => {
                 if let Some(path) = path.as_string_node() {
                     self.icon = Some(text(path.unescaped()));
+                }
+            }
+            (b"signal", [name, parameters @ ..]) => {
+                if let Some(signal) = declared(name, parameters) {
+                    self.signals.push(signal);
                 }
             }
             _ => {}
@@ -195,6 +209,25 @@ impl Reader {
     }
 }
 
+// The signal a `signal` call declares, as it is written: the name it is
+// emitted by and a name for each value it carries. A name written as
+// anything but a symbol or a string is the file's to work out as it runs, so
+// the header carries none of that declaration.
+fn declared(name: &Node, parameters: &[Node]) -> Option<Signal> {
+    Some(Signal {
+        name: name_of(name)?,
+        parameters: parameters.iter().map(name_of).collect::<Option<_>>()?,
+    })
+}
+
+// A name as a call writes it, which is a symbol or a string.
+fn name_of(node: &Node) -> Option<String> {
+    if let Some(symbol) = node.as_symbol_node() {
+        return Some(text(symbol.unescaped()));
+    }
+    node.as_string_node().map(|string| text(string.unescaped()))
+}
+
 fn text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
@@ -238,7 +271,7 @@ fn constant_path(node: &Node) -> Option<(Vec<String>, bool)> {
 
 #[cfg(test)]
 mod tests {
-    use super::Header;
+    use super::{Header, Signal};
 
     // The superclass's constant path, joined as it is written.
     fn superclass(header: &Header) -> Option<String> {
@@ -422,5 +455,31 @@ mod tests {
         let header = Header::read("res://boss.rb", source);
 
         assert_eq!(header.writes(), [vec!["Boss"]]);
+    }
+
+    // @behavior RH-017
+    #[test]
+    fn signal_called_in_the_class_body_carries_the_signal_it_declares() {
+        let source = "class Bell < Godot::Node2D\n  signal :rung, :times\nend\n";
+
+        let header = Header::read("res://bell.rb", source);
+
+        assert_eq!(
+            header.signals(),
+            [Signal {
+                name: "rung".to_owned(),
+                parameters: vec!["times".to_owned()],
+            }]
+        );
+    }
+
+    // @behavior RH-018
+    #[test]
+    fn a_signal_declared_with_a_name_that_is_not_written_out_is_not_carried() {
+        let source = "class Bell < Godot::Node2D\n  name = :rung\n  signal name\nend\n";
+
+        let header = Header::read("res://bell.rb", source);
+
+        assert!(header.signals().is_empty());
     }
 }

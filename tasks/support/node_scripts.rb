@@ -3,8 +3,9 @@
 module Godot
   # Runs the integration-test project's scenes of node scripts and reads what
   # they print: which files a node refuses, what a script answers before its
-  # file runs, which callbacks a node's Ruby object is given, and what its
-  # methods answer Godot. Part of Godot.verify!.
+  # file runs, whether a scene's connection to a declared signal was made,
+  # which callbacks a node's Ruby object is given, and what its methods answer
+  # Godot. Part of Godot.verify!.
   module NodeScripts
     # A scene whose nodes take a library file, a node script extending a class
     # they are not, an abstract node script and a file extending a name no
@@ -25,9 +26,11 @@ module Godot
     METHOD_ANSWER = "has _ready: true"
     TOOL_ANSWER = "is tool: true"
     ABSTRACT_ANSWER = "is abstract: true"
+    SIGNAL_ANSWER = "has wailed: true"
+    CONNECTED_ANSWER = "wailed connected: true"
     INHERITED_BASE_TYPE_ANSWER = "inherited base type: Node2D"
     BASE_SCRIPT_ANSWER = "base script: res://verify/script/inherit/enemy.rb"
-    RAN_LINES = ["reported.rb ran", "marked.rb ran"].freeze
+    RAN_LINES = ["reported.rb ran", "marked.rb ran", "siren.rb ran"].freeze
     # A scene whose node's script inherits its only callback from another
     # file, and what that callback prints.
     INHERIT_SCENE = "res://verify/script/inherit/inherit.tscn"
@@ -37,15 +40,23 @@ module Godot
 
     def verify!(project)
       verify_attach_refused!(project)
+      verify_header_answers!(project)
+      Callbacks.verify!(project)
+      Exports.verify!(project)
+      verify_inherited_callback!(project)
+    end
+
+    # Each answer the header scene prints, which Godot has to be given from a
+    # script's source while its file never runs.
+    def verify_header_answers!(project)
       verify_base_type_answered!(project)
       verify_method_answered!(project)
       verify_tool_answered!(project)
       verify_abstract_answered!(project)
+      verify_signal_answered!(project)
+      verify_signal_connected!(project)
       verify_inherited_base_type_answered!(project)
       verify_base_script_answered!(project)
-      Callbacks.verify!(project)
-      Exports.verify!(project)
-      verify_inherited_callback!(project)
     end
 
     # Runs the scene whose nodes take scripts they cannot, each refused in the log.
@@ -58,8 +69,6 @@ module Godot
       raise "The attach scene's scripts were not refused as they should be #{missing}:\n#{output}"
     end
 
-    # Runs the scene that asks a node script what Godot asks, whose answers have
-    # to come from its source while its file never runs.
     # @behavior RS-008
     def verify_base_type_answered!(project)
       verify_answer!(project, BASE_TYPE_ANSWER)
@@ -78,6 +87,16 @@ module Godot
     # @behavior RS-019
     def verify_abstract_answered!(project)
       verify_answer!(project, ABSTRACT_ANSWER)
+    end
+
+    # @behavior RS-038
+    def verify_signal_answered!(project)
+      verify_answer!(project, SIGNAL_ANSWER)
+    end
+
+    # @behavior RS-039
+    def verify_signal_connected!(project)
+      verify_answer!(project, CONNECTED_ANSWER)
     end
 
     # @behavior RS-021
