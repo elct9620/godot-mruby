@@ -336,11 +336,14 @@ fn signal_info(signal: &Signal) -> AnyDictionary {
 }
 
 // An exported property as Godot reads it: the name it is read and written
-// by, the type the value it was declared with gave it, and the usage of a
-// script's own variable, which the editor shows and a scene stores.
+// by, the type the value it was declared with gave it, the hint the editor
+// shows it with, and the usage of a script's own variable, which the editor
+// shows and a scene stores.
 fn property_info(property: &Property) -> AnyDictionary {
     let mut info = named(property.name.as_str());
     info.set("type", property.kind.ord());
+    info.set("hint", property.hint.ord());
+    info.set("hint_string", property.hint_string.as_str());
     info.set(
         "usage",
         PropertyUsageFlags::from_ord(

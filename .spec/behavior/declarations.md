@@ -310,3 +310,107 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | Given | a node script whose class exports a value of `nil`, which names no type |
 | When | the file runs |
 | Then | the refusal reads `Cannot use "export" because the type of the initialized value can't be inferred.` |
+
+## `RD-039` A range hint carries the bounds it was declared with
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a float with a range |
+| When | the script is asked for the properties its class has |
+| Then | that property carries the range hint, read with `0,360` |
+
+## `RD-040` A range hint carries the step it was declared with
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports an integer with a range and a step |
+| When | the script is asked for the properties its class has |
+| Then | that property's range is read with `1,10,2` |
+
+## `RD-041` An enum hint names the values it was declared with
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a name with the values it may take |
+| When | the script is asked for the properties its class has |
+| Then | that property carries the enum hint, read with `nearest,strongest` |
+
+## `RD-042` A flags hint names the flags it was declared with
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports an integer with the flags it holds |
+| When | the script is asked for the properties its class has |
+| Then | that property carries the flags hint, read with `water,fire` |
+
+## `RD-043` A file hint carries the filter it was declared with
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a path to a file of one kind |
+| When | the script is asked for the properties its class has |
+| Then | that property carries the file hint, read with `*.ogg` |
+
+## `RD-044` A directory hint is declared without a filter
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a path to a directory |
+| When | the script is asked for the properties its class has |
+| Then | that property carries the directory hint, read with nothing |
+
+## `RD-045` A multiline hint is declared without a filter
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a string written over several lines |
+| When | the script is asked for the properties its class has |
+| Then | that property carries the multiline hint, read with nothing |
+
+## `RD-046` A placeholder hint carries the text it was declared with
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a string with the text an empty field shows |
+| When | the script is asked for the properties its class has |
+| Then | that property carries the placeholder hint, read with `Name` |
+
+## `RD-047` A hint the exported type cannot take is refused
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a string with a range |
+| When | the file runs |
+| Then | the refusal reads `"range:" requires a variable of type "int" or "float", but type "String" was given instead.` |
+
+## `RD-048` A range leaving out its end is refused
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a value with a range written `1...9` |
+| When | the file runs |
+| Then | the declaration raises where it is written |
+
+## `RD-049` A step without a range is refused
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a value with a step and no range |
+| When | the file runs |
+| Then | the declaration raises where it is written |
+
+## `RD-050` A second hint on one property is refused
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports one value with two hints |
+| When | the file runs |
+| Then | the declaration raises where it is written |
+
+## `RD-051` A node's properties carry the hints its class declared
+
+| Step | Statement |
+| --- | --- |
+| Given | a node of a class exporting a float with a range |
+| When | the node is asked for its properties |
+| Then | that property carries the range hint, read with `0,360` |

@@ -13,7 +13,7 @@ use godot::classes::{ClassDb, Object, Script, ScriptLanguage};
 use godot::meta::conv::RawPtr;
 use godot::obj::{EngineBitfield, EngineEnum};
 use godot::prelude::*;
-use godot::register::info::{PropertyHint, PropertyUsageFlags};
+use godot::register::info::PropertyUsageFlags;
 use godot::sys;
 
 use crate::ancestry::Ancestry;
@@ -398,8 +398,8 @@ fn property_info(property: &Property) -> sys::GDExtensionPropertyInfo {
         type_: property.kind.ord() as sys::GDExtensionVariantType,
         name: owned(StringName::from(&property.name)),
         class_name: owned(StringName::default()),
-        hint: PropertyHint::NONE.ord() as u32,
-        hint_string: owned(GString::default()),
+        hint: property.hint.ord() as u32,
+        hint_string: owned(GString::from(&property.hint_string)),
         usage: usage as u32,
     }
 }

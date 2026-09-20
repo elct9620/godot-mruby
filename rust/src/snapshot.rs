@@ -8,6 +8,7 @@ use std::sync::{Arc, LazyLock, PoisonError, RwLock};
 
 use godot::builtin::{PackedByteArray, Variant, VariantType};
 use godot::global::{bytes_to_var, var_to_bytes};
+use godot::register::info::PropertyHint;
 
 /// A signal a class declared, with the names its parameters were declared
 /// with.
@@ -18,24 +19,39 @@ pub struct Signal {
 }
 
 /// A property a class exported, as Godot reads it: the name it is written
-/// and read by, the type its declared value gave it, and that value. The
-/// value is kept as the bytes the engine writes it as, since a snapshot is
-/// read from any thread while a Variant belongs to the one holding it.
+/// and read by, the type its declared value gave it, that value, and the
+/// hint the editor shows it with. The value is kept as the bytes the engine
+/// writes it as, since a snapshot is read from any thread while a Variant
+/// belongs to the one holding it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Property {
     pub name: String,
     pub kind: VariantType,
+    pub hint: PropertyHint,
+    pub hint_string: String,
     default: Vec<u8>,
 }
 
 impl Property {
     /// The property `name`, taking its type from the value it is declared
-    /// with.
+    /// with and shown as the editor shows a property of that type.
     pub fn new(name: String, default: &Variant) -> Self {
         Self {
             name,
             kind: default.get_type(),
+            hint: PropertyHint::NONE,
+            hint_string: String::new(),
             default: var_to_bytes(default).to_vec(),
+        }
+    }
+
+    /// The property as the editor is to show it, `hint_string` being what
+    /// the hint is read with.
+    pub fn hinted(self, hint: PropertyHint, hint_string: String) -> Self {
+        Self {
+            hint,
+            hint_string,
+            ..self
         }
     }
 
@@ -144,6 +160,8 @@ mod tests {
         Property {
             name: "tone".to_owned(),
             kind: VariantType::FLOAT,
+            hint: PropertyHint::NONE,
+            hint_string: String::new(),
             default: Vec::new(),
         }
     }

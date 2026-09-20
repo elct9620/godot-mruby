@@ -35,12 +35,12 @@ end
 
 ## `Godot::Object.export`
 
-A property of a class extending an engine class, taking its type from the value it is declared with. A node of the class has it as it has the engine's own properties, so the editor and the engine read and write it by that name, and the class reads and writes it as the instance variable of that name.
+A property of a class extending an engine class, taking its type from the value it is declared with. A node of the class has it as it has the engine's own properties, so the editor and the engine read and write it by that name, and the class reads and writes it as the instance variable of that name. A keyword tells the editor how to show it, each one named as the `@export_*` annotation it answers to: `range:` with a Range and an optional `step:`, `enum:` and `flags:` with the names a value may take, `file:` with the files to choose among, `dir:` and `multiline:` with `true`, and `placeholder:` with the text an empty field shows.
 
 ```ruby
 module Godot
   class Object
-    def self.export(name, default)
+    def self.export(name, default, **keywords)
     end
   end
 end

@@ -39,7 +39,7 @@ pub struct Class {
 
 ## `Property`
 
-A property a class exported, as Godot reads it: the name it is written and read by, the type its declared value gave it, and that value, kept as bytes since a snapshot is read from any thread.
+A property a class exported, as Godot reads it: the name it is written and read by, the type its declared value gave it, that value, kept as bytes since a snapshot is read from any thread, and the hint the editor shows it with.
 
 | Attribute | Value |
 | --- | --- |
@@ -49,12 +49,14 @@ A property a class exported, as Godot reads it: the name it is written and read 
 pub struct Property {
     pub name: String,
     pub kind: VariantType,
+    pub hint: PropertyHint,
+    pub hint_string: String,
 }
 ```
 
 ## `Property::new`
 
-The property of that name, taking its type from the value it is declared with.
+The property of that name, taking its type from the value it is declared with and shown as the editor shows a property of that type.
 
 | Attribute | Value |
 | --- | --- |
@@ -63,6 +65,20 @@ The property of that name, taking its type from the value it is declared with.
 ```rust
 impl Property {
     pub fn new(name: String, default: &Variant) -> Property {}
+}
+```
+
+## `Property::hinted`
+
+The property as the editor is to show it, `hint_string` being what the hint is read with.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Property {
+    pub fn hinted(self, hint: PropertyHint, hint_string: String) -> Property {}
 }
 ```
 
