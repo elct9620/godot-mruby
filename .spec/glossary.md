@@ -59,6 +59,14 @@ Where a run's words go, as one stream: messages - what Ruby prints and the run's
 
 What a Ruby file says before it runs, read from its source without running it: the constants its `module` and `class` statements write, and of the class its path names, the name it is written with, the superclass written on its class statement and the namespaces that is looked up from, the names of the methods it defines, and the `tool`, `abstract` and `icon` its body calls. Godot asks a script these on any thread, before its file has run, and a realm loads what the file writes before running it.
 
+### Snapshot
+
+What a realm has published of the classes its files define, for Godot to be answered from without entering it: for each file, what the class its path names declares and defines, gathered while the file runs and published as one value that never changes, as the outermost entry leaves the realm. Godot asks a script its shape - the methods it has, the signals it declares - on any thread, so a busy realm never holds up the editor, a loading screen or an error report. A file that has not run has none, and its header answers instead.
+
+#### Rejected
+
+- `Reflection` - reflection asks the live class, which is inside the realm; a snapshot is what the realm left outside for anyone to read.
+
 ### Ancestry
 
 The files a class inherits from through the superclasses their headers write, nearest first, and the engine class the last of them extends. Each superclass is found as the loader would find it, so the ancestry is known without running a file.
