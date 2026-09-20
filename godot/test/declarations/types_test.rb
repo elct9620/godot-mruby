@@ -38,6 +38,14 @@ class TypesTest < Minitest::Test
                  error.message
   end
 
+  # @behavior RD-066
+  def test_an_export_naming_a_class_takes_no_object_of_another_class
+    error = assert_raises(ArgumentError) { Loader::Miscast }
+
+    assert_equal %(Cannot assign a value of type Resource to variable "level" with specified type PackedScene.),
+                 error.message
+  end
+
   # @behavior RD-056
   def test_an_export_naming_neither_a_node_nor_a_resource_class_is_refused
     error = assert_raises(ArgumentError) { Loader::Countless }

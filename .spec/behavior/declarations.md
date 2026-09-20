@@ -526,3 +526,11 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | Given | a node of a class exporting a value |
 | When | the node is asked for its properties |
 | Then | one category is named after the file the class is written in |
+
+## `RD-066` An export naming a class takes no object of another class
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a class with an object of another class for its value |
+| When | the file runs |
+| Then | the declaration is refused, in the words GDScript refuses a mismatched value with |

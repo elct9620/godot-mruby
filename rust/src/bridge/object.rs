@@ -331,18 +331,65 @@ fn declare_group(mrb: &Mrb, _class: RClass, name: String, prefix: String, kind: 
 
 // The property an export naming its type declares: an object of the class
 // it names, which Godot fills in from the scene or the project's files. The
-// value it is declared with is the class's own to hold, so any value but an
-// object is refused as GDScript refuses a mismatched one.
+// value it is declared with is the class's own to hold, so a value of
+// another type is refused as GDScript refuses a mismatched one.
 fn typed(mrb: &Mrb, name: String, default: &Variant, class: &str) -> Result<Property, String> {
     let (hint, class_name) = class_named(mrb, class)?;
-    let kind = default.get_type();
-    if kind != VariantType::NIL && kind != VariantType::OBJECT {
+    if let Some(given) = mismatched(mrb, default, class) {
         return Err(format!(
-            "Cannot assign a value of type {} to variable \"{name}\" with specified type {class_name}.",
-            type_name(kind)
+            "Cannot assign a value of type {given} to variable \"{name}\" with specified type {class_name}."
         ));
     }
     Ok(Property::new(name, default).of_class(hint, class_name))
+}
+
+// What the value an export was declared with is, unless the class it names
+// takes it: nothing at all, which is what Godot fills in, or an object of
+// that class, a class descending from it included.
+fn mismatched(mrb: &Mrb, default: &Variant, class: &str) -> Option<String> {
+    let kind = default.get_type();
+    if kind == VariantType::NIL {
+        return None;
+    }
+    let Ok(object) = default.try_to::<Gd<Object>>() else {
+        return Some(type_name(kind));
+    };
+    (!is_of_class(mrb, &object, class)).then(|| class_of(&object))
+}
+
+// Whether `object` is of the class `class` names: the engine's class
+// database answers for an engine class, and a node is of a Ruby class when
+// its script is that class's file or inherits from it.
+fn is_of_class(mrb: &Mrb, object: &Gd<Object>, class: &str) -> bool {
+    if let Some(engine_class) = class.strip_prefix("Godot::") {
+        let object_class = StringName::from(&object.get_class());
+        return ClassDb::singleton().is_parent_class(&object_class, engine_class);
+    }
+    let names: Vec<String> = class.split("::").map(str::to_owned).collect();
+    let Some(file) = realm::file_defining(mrb, &names) else {
+        return false;
+    };
+    written_in(object).any(|path| path == file)
+}
+
+// The name `object`'s own class is known by: the one its node script is
+// announced under, or the engine class it is of.
+fn class_of(object: &Gd<Object>) -> String {
+    written_in(object)
+        .next()
+        .and_then(|path| announced_at(&path))
+        .unwrap_or_else(|| object.get_class().to_string())
+}
+
+// The files `object`'s script is written in, nearest first: its own and the
+// ones it inherits from, as Godot answers for them.
+fn written_in(object: &Gd<Object>) -> impl Iterator<Item = String> {
+    let mut script = object.get_script().map(Gd::upcast::<Script>);
+    std::iter::from_fn(move || {
+        let written = script.take()?;
+        script = written.get_base_script();
+        Some(written.get_path().to_string())
+    })
 }
 
 // The property an export naming no type declares: its type is the declared
@@ -392,11 +439,15 @@ fn class_named(mrb: &Mrb, class: &str) -> Result<(PropertyHint, String), String>
 // of the project defines it and nothing else is announced by that name.
 fn announced(mrb: &Mrb, class: &str) -> Option<String> {
     let names: Vec<String> = class.split("::").map(str::to_owned).collect();
-    let file = realm::file_defining(mrb, &names)?;
+    announced_at(&realm::file_defining(mrb, &names)?)
+}
+
+// The name the editor lists the file at `path` under, if it is announced.
+fn announced_at(path: &str) -> Option<String> {
     let test_directories = settings::test_directories();
     let project = Project::new(&FilesOnDisk, &test_directories, &super::is_node_class);
     project
-        .announce(&file)
+        .announce(path)
         .ok()
         .map(|announcement| announcement.name)
 }
