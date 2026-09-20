@@ -141,6 +141,12 @@ impl RubyInstance {
         properties_of(&self.path, &self.ancestry)
     }
 
+    // The files the node's class takes its shape from: its own, then the
+    // ones it inherits from, nearest first.
+    fn declaring_paths(&self) -> impl Iterator<Item = &str> {
+        declaring_paths(&self.path, &self.ancestry)
+    }
+
     // What Godot wrote to the property `name` before the node had a Ruby
     // object, if it wrote one.
     fn staged(&self, name: &str) -> Option<Variant> {
@@ -153,9 +159,14 @@ impl RubyInstance {
     // The value the class exported the property with, which answers Godot
     // while the node has no object of its own to answer from.
     fn default_value(&self, name: &str) -> Option<Variant> {
-        self.properties()
-            .iter()
-            .find(|property| property.name == name)
+        let snapshot = snapshot::latest();
+        self.declaring_paths()
+            .find_map(|path| {
+                snapshot
+                    .properties(path)
+                    .iter()
+                    .find(|property| property.name == name)
+            })
             .map(Property::default_value)
     }
 
@@ -179,9 +190,13 @@ impl RubyInstance {
 
     // Whether the node's class exported a property of that name.
     fn exports(&self, name: &str) -> bool {
-        self.properties()
-            .iter()
-            .any(|property| property.name == name)
+        let snapshot = snapshot::latest();
+        self.declaring_paths().any(|path| {
+            snapshot
+                .properties(path)
+                .iter()
+                .any(|property| property.name == name)
+        })
     }
 
     // Whether the node's engine class has a property of that name, which is
@@ -316,7 +331,13 @@ impl Caller {
 // The properties the class of the file at `path` exported, its ancestors'
 // included, nearest first.
 fn properties_of(path: &str, ancestry: &Ancestry) -> Vec<Property> {
-    snapshot::latest().properties_of(std::iter::once(path).chain(ancestry.paths()))
+    snapshot::latest().properties_of(declaring_paths(path, ancestry))
+}
+
+// The files the class of the file at `path` takes its shape from: its own,
+// then the ones it inherits from, nearest first.
+fn declaring_paths<'a>(path: &'a str, ancestry: &'a Ancestry) -> impl Iterator<Item = &'a str> {
+    std::iter::once(path).chain(ancestry.paths())
 }
 
 // Writes `value` to the property `name` of the object `key` holds: through
@@ -377,11 +398,11 @@ fn property_info(property: &Property) -> sys::GDExtensionPropertyInfo {
     }
 }
 
-// Whether a name is none of the node's class's to answer: a property its
-// engine class has is the engine's, whatever the Ruby object holds under
-// that name, and a name Godot spells with a slash is the engine's own, as
-// metadata and property groups are.
-fn not_the_classs(instance: &RubyInstance, name: &str) -> bool {
+// Whether a name is the engine's rather than the node's class's: a property
+// its engine class has is the engine's, whatever the Ruby object holds under
+// that name, and so is a name Godot spells with a slash, as metadata and
+// property groups are.
+fn the_engines_own(instance: &RubyInstance, name: &str) -> bool {
     instance.engine_property(name) || name.contains('/')
 }
 
@@ -461,7 +482,7 @@ unsafe extern "C" fn set(
     let reached = {
         let instance = unsafe { instance(data) };
         let exported = instance.exports(&name);
-        if !exported && not_the_classs(instance, &name) {
+        if !exported && the_engines_own(instance, &name) {
             return sys::GDExtensionBool::from(false);
         }
         if instance.unbuilt() && !realm::inside() {
@@ -488,7 +509,7 @@ unsafe extern "C" fn get(
     let reached = {
         let instance = unsafe { instance(data) };
         let exported = instance.exports(&name);
-        if !exported && not_the_classs(instance, &name) {
+        if !exported && the_engines_own(instance, &name) {
             return sys::GDExtensionBool::from(false);
         }
         if instance.unbuilt() && !realm::inside() {
