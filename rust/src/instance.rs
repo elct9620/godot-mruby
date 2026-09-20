@@ -6,6 +6,7 @@
 //! about to run, and touches nothing of it afterwards, as GDScript, C# and
 //! other languages' instances do.
 
+use std::collections::BTreeSet;
 use std::ffi::c_void;
 use std::sync::{Arc, Mutex, PoisonError};
 
@@ -144,7 +145,21 @@ impl RubyInstance {
     // and in the order each class wrote it; a file that has not run has the
     // properties its header writes and no heading.
     fn members(&self) -> Vec<Member> {
-        snapshot::latest().members_of(declaring(&self.path, &self.header, &self.ancestry))
+        snapshot::latest().members_of(exports_of(&self.path, &self.header, &self.ancestry))
+    }
+
+    // The methods the node's class has, its ancestors' included: the ones
+    // their sources define and the ones their classes defined as they ran.
+    fn methods(&self) -> BTreeSet<String> {
+        let snapshot = snapshot::latest();
+        declaring(&self.path, &self.header, &self.ancestry)
+            .flat_map(|(path, header)| {
+                header
+                    .methods()
+                    .map(str::to_owned)
+                    .chain(snapshot.methods(path).iter().cloned())
+            })
+            .collect()
     }
 
     // The property of that name the node's class exported, from the nearest
@@ -328,23 +343,33 @@ impl Caller {
 // The properties the class of the file at `path` exported, its ancestors'
 // included, nearest first.
 fn properties_of(path: &str, header: &Header, ancestry: &Ancestry) -> Vec<Property> {
-    snapshot::latest().properties_of(declaring(path, header, ancestry))
+    snapshot::latest().properties_of(exports_of(path, header, ancestry))
 }
 
 // The files the class of the file at `path` takes its shape from, each with
-// what its header exports: its own, then the ones it inherits from, nearest
-// first.
+// the header read from its source: its own, then the ones it inherits from,
+// nearest first.
 fn declaring<'a>(
     path: &'a str,
     header: &'a Header,
     ancestry: &'a Ancestry,
-) -> impl Iterator<Item = (&'a str, &'a [Property])> {
-    std::iter::once((path, header.exports())).chain(
+) -> impl Iterator<Item = (&'a str, &'a Header)> {
+    std::iter::once((path, header)).chain(
         ancestry
             .files()
             .iter()
-            .map(|(path, header)| (path.as_str(), header.exports())),
+            .map(|(path, header)| (path.as_str(), header)),
     )
+}
+
+// Each of those files with what its header exports, which answers for it
+// while it has not run.
+fn exports_of<'a>(
+    path: &'a str,
+    header: &'a Header,
+    ancestry: &'a Ancestry,
+) -> impl Iterator<Item = (&'a str, &'a [Property])> {
+    declaring(path, header, ancestry).map(|(path, header)| (path, header.exports()))
 }
 
 // Writes `value` to the property `name` of the object `key` holds: through
@@ -427,6 +452,35 @@ fn property_info(property: &Property) -> sys::GDExtensionPropertyInfo {
     }
 }
 
+// A method as Godot reads it from an instance: its name, which is all a Ruby
+// class says about it, and an answer of any type, as an untyped GDScript
+// method's is.
+fn method_info(name: &str) -> sys::GDExtensionMethodInfo {
+    sys::GDExtensionMethodInfo {
+        name: owned(StringName::from(name)),
+        return_value: answer_info(),
+        flags: sys::GDEXTENSION_METHOD_FLAG_NORMAL as u32,
+        id: 0,
+        argument_count: 0,
+        arguments: std::ptr::null_mut(),
+        default_argument_count: 0,
+        default_arguments: std::ptr::null_mut(),
+    }
+}
+
+// What a method answers, of any type, since a Ruby method says nothing of
+// what it returns.
+fn answer_info() -> sys::GDExtensionPropertyInfo {
+    sys::GDExtensionPropertyInfo {
+        type_: VariantType::NIL.ord() as sys::GDExtensionVariantType,
+        name: owned(StringName::default()),
+        class_name: owned(StringName::default()),
+        hint: PropertyHint::NONE.ord() as u32,
+        hint_string: owned(GString::default()),
+        usage: PropertyUsageFlags::NIL_IS_VARIANT.ord() as u32,
+    }
+}
+
 // Whether a name is the engine's rather than the node's class's: a property
 // its engine class has is the engine's, whatever the Ruby object holds under
 // that name, and so is a name Godot spells with a slash, as metadata and
@@ -459,8 +513,8 @@ static INFO: sys::GDExtensionScriptInstanceInfo3 = sys::GDExtensionScriptInstanc
     property_get_revert_func: None,
     get_owner_func: None,
     get_property_state_func: None,
-    get_method_list_func: None,
-    free_method_list_func: None,
+    get_method_list_func: Some(get_method_list),
+    free_method_list_func: Some(free_method_list),
     get_property_type_func: None,
     validate_property_func: None,
     has_method_func: Some(has_method),
@@ -610,6 +664,45 @@ unsafe extern "C" fn free_property_list(
             taken::<StringName, _>(info.name);
             taken::<StringName, _>(info.class_name);
             taken::<GString, _>(info.hint_string);
+        }
+    }
+}
+
+unsafe extern "C" fn get_method_list(
+    data: sys::GDExtensionScriptInstanceDataPtr,
+    count: *mut u32,
+) -> *const sys::GDExtensionMethodInfo {
+    // SAFETY: the instance lives for this call, which runs no Ruby.
+    let methods = unsafe { instance(data) }.methods();
+    let infos: Box<[sys::GDExtensionMethodInfo]> = methods
+        .iter()
+        .map(|method| method_info(method.as_str()))
+        .collect();
+    // SAFETY: Godot hands a count to fill.
+    unsafe { *count = infos.len() as u32 };
+    Box::into_raw(infos).cast::<sys::GDExtensionMethodInfo>()
+}
+
+unsafe extern "C" fn free_method_list(
+    _data: sys::GDExtensionScriptInstanceDataPtr,
+    list: *const sys::GDExtensionMethodInfo,
+    count: u32,
+) {
+    // SAFETY: Godot hands back what `get_method_list` made, once, with the
+    // count it was given.
+    let infos = unsafe {
+        Box::from_raw(std::ptr::slice_from_raw_parts_mut(
+            list.cast_mut(),
+            count as usize,
+        ))
+    };
+    for info in &infos {
+        // SAFETY: each string is what `method_info` made for this array.
+        unsafe {
+            taken::<StringName, _>(info.name);
+            taken::<StringName, _>(info.return_value.name);
+            taken::<StringName, _>(info.return_value.class_name);
+            taken::<GString, _>(info.return_value.hint_string);
         }
     }
 }

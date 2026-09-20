@@ -345,3 +345,19 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a node script whose class exports a property with a value a call answers |
 | When | Godot reads that property before the file runs |
 | Then | the node answers nothing |
+
+## `RS-043` A node lists the methods its class defines
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class defines a method |
+| When | Godot asks a node with that script for its methods |
+| Then | the list names that method |
+
+## `RS-044` A node lists the methods its class inherits from another file
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class defines no method and inherits one from another file |
+| When | Godot asks a node with that script for its methods |
+| Then | the list names the inherited method |

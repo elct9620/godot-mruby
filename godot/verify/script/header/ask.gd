@@ -20,12 +20,26 @@ func _ready() -> void:
 	print("volume: ", $Siren.get("volume"))
 	print("volume listed: ", $Siren.get_property_list().any(func(p): return p.name == "volume"))
 	print("heard at: ", $Siren.get("heard_at"))
+	print("wail listed: ", listed($Siren, "wail"))
 	var boss: Script = load("res://verify/script/inherit/boss.rb")
 	print("inherited base type: ", boss.get_instance_base_type())
 	print("base script: ", boss.get_base_script().resource_path)
+	var inheriting := Node2D.new()
+	inheriting.set_script(boss)
+	print("inherited method listed: ", listed(inheriting, "charge"))
+	inheriting.set_script(null)
+	inheriting.free()
 
 
 # What the scene connected the declared signal to; the file never runs, so
 # nothing ever emits it.
 func _on_wailed(_times: int) -> void:
 	pass
+
+
+# Whether a node answers that it has the method of that name among the ones
+# it lists.
+func listed(node: Node, method: String) -> bool:
+	return node.get_method_list().any(
+		func(described: Dictionary) -> bool: return described.name == method
+	)

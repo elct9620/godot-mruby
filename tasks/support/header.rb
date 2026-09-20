@@ -21,6 +21,8 @@ module Godot
     # A value the class builds as it runs is not one the source writes, so
     # the script has none to answer with until the file has run.
     UNWRITTEN_EXPORT_ANSWER = "heard at: <null>"
+    METHOD_LISTED_ANSWER = "wail listed: true"
+    INHERITED_METHOD_LISTED_ANSWER = "inherited method listed: true"
     INHERITED_BASE_TYPE_ANSWER = "inherited base type: Node2D"
     BASE_SCRIPT_ANSWER = "base script: res://verify/script/inherit/enemy.rb"
     RAN_LINES = ["reported.rb ran", "marked.rb ran", "siren.rb ran"].freeze
@@ -59,6 +61,8 @@ module Godot
       verify_export_answered!(lines, output)
       verify_export_listed!(lines, output)
       verify_unwritten_export_answered!(lines, output)
+      verify_method_listed!(lines, output)
+      verify_inherited_method_listed!(lines, output)
     end
 
     # @behavior RS-008
@@ -79,6 +83,16 @@ module Godot
     # @behavior RS-019
     def verify_abstract_answered!(lines, output)
       verify_answer!(lines, output, ABSTRACT_ANSWER)
+    end
+
+    # @behavior RS-043
+    def verify_method_listed!(lines, output)
+      verify_answer!(lines, output, METHOD_LISTED_ANSWER)
+    end
+
+    # @behavior RS-044
+    def verify_inherited_method_listed!(lines, output)
+      verify_answer!(lines, output, INHERITED_METHOD_LISTED_ANSWER)
     end
 
     # @behavior RS-021
