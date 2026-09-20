@@ -20,6 +20,15 @@ class MethodsTest < Minitest::Test
     bell&.free
   end
 
+  # @behavior RD-010
+  def test_a_node_has_a_method_the_class_its_class_extends_defined_as_it_ran
+    chime = Loader::Chime.new
+
+    assert chime.has_method(:toll)
+  ensure
+    chime&.free
+  end
+
   # @behavior RD-006
   def test_a_callback_a_class_defined_as_it_ran_is_called_on_the_node
     bell = Loader::Bell.new

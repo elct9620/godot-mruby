@@ -26,6 +26,11 @@ impl Ancestry {
         &self.engine_class
     }
 
+    /// The paths of the files the class inherits from, nearest first.
+    pub fn paths(&self) -> impl Iterator<Item = &str> {
+        self.files.iter().map(|(path, _)| path.as_str())
+    }
+
     /// Whether a file the class inherits from defines the method `name`.
     pub fn has_method(&self, name: &str) -> bool {
         self.files.iter().any(|(_, header)| header.has_method(name))

@@ -58,11 +58,29 @@ impl RubyScript {
         })
     }
 
-    // The signals the file's class declared, as the realm last published
-    // them; none until the file has run.
+    // The files the class takes its shape from: its own, then the ones it
+    // inherits from, nearest first, since a declaration is inherited.
+    fn declaring_files(&self) -> Vec<String> {
+        let mut paths = vec![self.base().get_path().to_string()];
+        if let Ok(ancestry) = self.ancestry() {
+            paths.extend(ancestry.paths().map(str::to_owned));
+        }
+        paths
+    }
+
+    // The signals the class has, its ancestors' included, nearest first;
+    // none until the file has run.
     fn signals(&self) -> Vec<Signal> {
-        let path = self.base().get_path().to_string();
-        snapshot::latest().signals(&path).to_vec()
+        let snapshot = snapshot::latest();
+        let mut signals: Vec<Signal> = Vec::new();
+        for path in self.declaring_files() {
+            for signal in snapshot.signals(&path) {
+                if !signals.iter().any(|kept| kept.name == signal.name) {
+                    signals.push(signal.clone());
+                }
+            }
+        }
+        signals
     }
 
     // The methods the file's class has: the ones its source defines, and the
@@ -196,13 +214,16 @@ impl IScriptExtension for RubyScript {
 
     fn has_method(&self, method: StringName) -> bool {
         let method = method.to_string();
-        let path = self.base().get_path().to_string();
+        let snapshot = snapshot::latest();
         self.header.has_method(&method)
-            || snapshot::latest().has_method(&path, &method)
             || self
                 .ancestry()
                 .as_ref()
                 .is_ok_and(|ancestry| ancestry.has_method(&method))
+            || self
+                .declaring_files()
+                .iter()
+                .any(|path| snapshot.has_method(path, &method))
     }
 
     fn has_static_method(&self, _method: StringName) -> bool {

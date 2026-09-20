@@ -31,6 +31,31 @@ class SignalsTest < Minitest::Test
     bell&.free
   end
 
+  # @behavior RD-007
+  def test_a_signal_declared_again_with_other_parameters_is_refused
+    assert_raises(ArgumentError) { Loader::Clashing }
+  end
+
+  # @behavior RD-008
+  def test_a_signal_declared_again_as_it_stands_is_no_new_signal
+    repeating = Loader::Repeating.new
+
+    rung = repeating.get_signal_list.select { |signal| signal["name"] == "rung" }
+
+    assert_equal 1, rung.size
+  ensure
+    repeating&.free
+  end
+
+  # @behavior RD-009
+  def test_a_node_has_the_signal_the_class_its_class_extends_declared
+    chime = Loader::Chime.new
+
+    assert chime.has_signal(:rung)
+  ensure
+    chime&.free
+  end
+
   def hear(times)
     (@heard ||= []) << times
   end

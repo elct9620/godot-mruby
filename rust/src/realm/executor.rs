@@ -4,7 +4,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 
 use super::{bookkeeping, compile, ran};
 use crate::snapshot::Signal;
@@ -99,11 +99,37 @@ pub(super) fn record(mrb: &Mrb, scope: Vec<String>, name: String) {
     }
 }
 
-/// Records that the class of the file running now declared `signal`.
-pub(super) fn declare(mrb: &Mrb, signal: Signal) {
-    if let Some(frame) = runs(mrb).frames.borrow_mut().last_mut() {
+/// Records that the class of the file running now declared `signal`. A
+/// signal is declared once: declaring it again as it stands is nothing new,
+/// and declaring it with other parameters is refused where it is written.
+pub(super) fn declare(mrb: &Mrb, signal: Signal) -> Result<(), Error> {
+    let mut frames = runs(mrb).frames.borrow_mut();
+    let Some(frame) = frames.last_mut() else {
+        return Ok(());
+    };
+    let declared = frame
+        .declared
+        .iter()
+        .find(|declared| declared.name == signal.name)
+        .cloned();
+    let Some(declared) = declared else {
         frame.declared.push(signal);
+        return Ok(());
+    };
+    drop(frames);
+    if declared.parameters == signal.parameters {
+        return Ok(());
     }
+    Err(raising(
+        mrb,
+        c"ArgumentError",
+        &format!(
+            "{} is already declared with ({}), so it cannot be declared with ({})",
+            signal.name,
+            declared.parameters.join(", "),
+            signal.parameters.join(", ")
+        ),
+    ))
 }
 
 fn runs(mrb: &Mrb) -> &Runs {
@@ -182,7 +208,11 @@ fn defined_scope(mrb: &Mrb, scope: &[String]) -> Option<Value> {
 }
 
 fn refused(mrb: &Mrb, message: &str) -> Error {
-    match mrb.exc_get(c"RuntimeError") {
+    raising(mrb, c"RuntimeError", message)
+}
+
+fn raising(mrb: &Mrb, class: &CStr, message: &str) -> Error {
+    match mrb.exc_get(class) {
         Ok(class) => Error::new(mrb, class, message),
         Err(error) => error,
     }

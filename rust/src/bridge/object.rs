@@ -259,13 +259,18 @@ pub fn ruby_object(mrb: &Mrb, object: Gd<Object>) -> Value {
 // Godot::Object.__declare_signal__(name, parameters): takes the signal the
 // class declares as its body runs, for the realm to publish once the file
 // has run.
-fn declare_signal(mrb: &Mrb, _class: RClass, name: String, parameters: Array) -> Value {
+fn declare_signal(
+    mrb: &Mrb,
+    _class: RClass,
+    name: String,
+    parameters: Array,
+) -> Result<Value, Error> {
     let parameters = parameters
         .entries(mrb)
         .filter_map(String::from_value)
         .collect();
-    realm::declare_signal(mrb, Signal { name, parameters });
-    Value::nil()
+    realm::declare_signal(mrb, Signal { name, parameters })?;
+    Ok(Value::nil())
 }
 
 // Godot::Object.__engine_constant__(name): the integer constant or enum

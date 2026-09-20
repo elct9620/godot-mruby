@@ -88,11 +88,17 @@ impl RubyInstance {
         }
     }
 
-    // Whether the node's class defines `method` or inherits it from a file.
+    // Whether the node's class defines `method` or inherits it from a file,
+    // whether its source writes it or its class defined it as it ran.
     fn has(&self, method: &str) -> bool {
+        let snapshot = snapshot::latest();
         self.header.has_method(method)
-            || snapshot::latest().has_method(&self.path, method)
             || self.ancestry.has_method(method)
+            || snapshot.has_method(&self.path, method)
+            || self
+                .ancestry
+                .paths()
+                .any(|path| snapshot.has_method(path, method))
     }
 
     // What a call into Ruby needs of the instance, taken before Ruby runs.

@@ -301,10 +301,11 @@ fn open_game() -> Result<Realm, RubyError> {
 }
 
 /// Takes `signal` as declared by the class of the file running now in the
-/// realm `mrb` belongs to; a declaration made while no file runs belongs to
-/// no class and is not taken.
-pub fn declare_signal(mrb: &Mrb, signal: Signal) {
-    executor::declare(mrb, signal);
+/// realm `mrb` belongs to, refusing a second declaration of that name with
+/// other parameters; a declaration made while no file runs belongs to no
+/// class and is not taken.
+pub fn declare_signal(mrb: &Mrb, signal: Signal) -> Result<(), Error> {
+    executor::declare(mrb, signal)
 }
 
 /// Holds `object` under `key` in the realm `mrb` belongs to, for an

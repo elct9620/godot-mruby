@@ -53,3 +53,35 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | Given | a node of a class that defined an engine callback as its body ran |
 | When | the engine notifies the node |
 | Then | the callback is called with the notification |
+
+## `RD-007` A signal declared again with other parameters is refused
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class declares one signal with two sets of parameters |
+| When | the file runs |
+| Then | the declaration raises where it is written |
+
+## `RD-008` A signal declared again as it stands is no new signal
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class declares one signal twice with the same parameters |
+| When | a node of that class is asked for its signals |
+| Then | the signal is among them once |
+
+## `RD-009` A node has the signal the class its class extends declared
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class extends another file's class, which declares a signal |
+| When | a node of that class is asked whether it has the signal |
+| Then | it answers that it has it |
+
+## `RD-010` A node has a method the class its class extends defined as it ran
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class extends another file's class, which defined a method as its body ran |
+| When | a node of that class is asked whether it has the method |
+| Then | it answers that it has it |
