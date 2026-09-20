@@ -80,6 +80,18 @@ The file a constant path written inside namespaces names, looked up among paths 
 pub fn file_named(paths: Vec<String>, scope: &[String], names: &[String]) -> Option<String> {}
 ```
 
+## `inside`
+
+Whether this thread is inside the game's realm, which something outside asks before reaching for what only the realm can answer, since entering it from another thread waits for the one inside.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub fn inside() -> bool {}
+```
+
 ## `hold`
 
 Holds a Ruby object under a key in the realm an extension's method runs in, for an extension making an object something outside keeps the key for.

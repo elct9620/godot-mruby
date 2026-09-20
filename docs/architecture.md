@@ -229,10 +229,10 @@ class body runs ──► its declarations, and the methods the class ends up wi
                     one immutable value, published
                          │ read by path: the script's own, then its ancestry
                          ▼
-has_signal, get_script_signal_list, has_method, get_script_method_list
+has_signal, get_property_list, has_method, and the default each property was exported with
 ```
 
-A Ruby class takes its shape as its body runs, so what a class has cannot be read from the source alone. The realm publishes what a file's class has when that file's run commits, and everything answering Godot reads the published value rather than entering the realm, on whatever thread Godot asks from. A file that has not run has none, and its header answers instead. What a class declares is in `.spec/behavior/declarations.md`, and the published shape in `.spec/contract/snapshot.md`.
+A Ruby class takes its shape as its body runs, so what a class has cannot be read from the source alone. The realm publishes what a file's class has when that file's run commits, and everything answering Godot reads the published value rather than entering the realm, on whatever thread Godot asks from. A file that has not run has none, and its header answers instead. A property's value is the node's own, held by its Ruby object: the instance keeps what Godot writes until that object exists, and answers from what it kept or from the published default. What a class declares is in `.spec/behavior/declarations.md`, and the published shape in `.spec/contract/snapshot.md`.
 
 ## 3. Realm
 
