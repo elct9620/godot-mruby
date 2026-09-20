@@ -151,7 +151,7 @@ impl Caller {
         }
         let key = bridge::node_key(self.owner);
         let owner = [Owner(self.owner)];
-        let built = realm::enter(|realm| realm.build(&self.path, key, c"__allocate__", owner))
+        let built = realm::enter(|realm| realm.build(&self.path, key, c"__build__", owner))
             .and_then(|built| {
                 if built == Built::Waiting {
                     return Ok(None);

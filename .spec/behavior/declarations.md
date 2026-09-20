@@ -165,3 +165,35 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | Given | a node script whose class declares a signal the class it extends declared |
 | When | the file runs |
 | Then | the declaration raises where it is written |
+
+## `RD-021` A node answers an exported property by the accessors its class gets
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a value |
+| When | a node of that class is asked for that property |
+| Then | it answers the value it was exported with |
+
+## `RD-022` A class's own accessor stands in place of the one an export would define
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a value and defines a reader of that name |
+| When | a node of that class is asked for that property |
+| Then | the class's own reader answers |
+
+## `RD-023` An exported value is written before the object is initialized
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a value and reads it in `initialize` |
+| When | a node of that class is made |
+| Then | `initialize` read the value it was exported with |
+
+## `RD-024` Each node has its own copy of a container it was exported
+
+| Step | Statement |
+| --- | --- |
+| Given | two nodes of a class exporting an array |
+| When | one of them changes the array it was given |
+| Then | the other's array is as it was exported |

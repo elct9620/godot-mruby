@@ -68,6 +68,9 @@ module Godot
         end
 
         __declare_export__(name.to_s, default)
+        __exports__[name.to_sym] = default
+        attr_reader name unless method_defined?(name)
+        attr_writer name unless method_defined?(:"#{name}=")
       end
 
       # An engine class makes the engine's object; a node script's class
@@ -76,7 +79,7 @@ module Godot
         raise NotImplementedError, "#{self} is an abstract class and cannot be instantiated." if @abstract == true
         return __make__ if @engine_class == true
 
-        node = __make_node__
+        node = __write_defaults__(__make_node__)
         begin
           node.__send__(:initialize, *args, **kwargs, &block)
         rescue Exception # rubocop:disable Lint/RescueException
@@ -118,6 +121,37 @@ module Godot
               :__engine_constant__, :__declare_signal__, :__declare_export__
 
       private
+
+      # The class's object for a node the engine made, ready to initialize.
+      def __build__(owner)
+        __write_defaults__(__allocate__(owner))
+      end
+
+      # `object` with the value each exported property was declared with in
+      # the instance variable of its name, written before anything
+      # initializes it. A value that can change in place is copied, so no
+      # two objects share one; the engine's own values never change, so they
+      # are shared as they are.
+      def __write_defaults__(object)
+        __defaults__.each do |name, value|
+          value = value.dup if value.is_a?(::Array) || value.is_a?(::Hash) || value.is_a?(::String)
+          object.instance_variable_set(:"@#{name}", value)
+        end
+        object
+      end
+
+      # The value each property an object of the class is given, what it
+      # inherits first, since a class exports no name its ancestors did.
+      def __defaults__
+        inherited = superclass.respond_to?(:__defaults__, true) ? superclass.__send__(:__defaults__) : {}
+        inherited.merge(__exports__)
+      end
+
+      # What the class itself exported, by name, with the value each was
+      # declared with.
+      def __exports__
+        @__exports__ ||= {}
+      end
 
       # The engine's singleton of this engine class, kept once asked for.
       def engine_singleton
