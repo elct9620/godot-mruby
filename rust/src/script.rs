@@ -11,6 +11,7 @@ use godot::meta::conv::RawPtr;
 use godot::obj::{EngineBitfield, EngineEnum};
 use godot::prelude::*;
 use godot::register::info::PropertyUsageFlags;
+use godot::sys::{self, GodotFfi};
 
 use crate::ancestry::{self, Ancestry, Broken};
 use crate::game::GameFiles;
@@ -140,6 +141,26 @@ impl RubyScript {
             .collect()
     }
 
+    // Tells a placeholder what the class exports and the value each was
+    // declared with, which is all the editor has to show it while no object
+    // of the class exists.
+    fn fill(&self, placeholder: sys::GDExtensionScriptInstancePtr) {
+        let properties: Array<AnyDictionary> = self.members().iter().map(member_info).collect();
+        let mut values = VarDictionary::new();
+        for property in self.properties() {
+            values.set(&StringName::from(&property.name), &property.default_value());
+        }
+        // SAFETY: the placeholder is one the engine made for this script,
+        // and both values outlive the call.
+        unsafe {
+            sys::interface_fn!(placeholder_script_instance_update)(
+                placeholder,
+                properties.sys(),
+                values.sys(),
+            );
+        }
+    }
+
     // The engine node class the file's class extends when it is a node
     // script, or why it is none.
     fn node_class(&self) -> Result<StringName, Broken> {
@@ -219,11 +240,28 @@ impl IScriptExtension for RubyScript {
         instance.into_godot()
     }
 
+    // The editor makes no instance, so Godot asks for its own placeholder
+    // and shows the node what that carries. The file never runs there, so
+    // what it carries is the header's answer.
     unsafe fn placeholder_instance_create_rawptr(
         &self,
-        _for_object: Gd<Object>,
+        for_object: Gd<Object>,
     ) -> RawPtr<*mut c_void> {
-        refused()
+        let Some(language) = self.get_language() else {
+            return refused();
+        };
+        // SAFETY: the interface is initialized while the extension runs, and
+        // Godot frees the placeholder with the object it was made for.
+        let placeholder = unsafe {
+            sys::interface_fn!(placeholder_script_instance_create)(
+                language.obj_sys(),
+                self.to_gd().obj_sys(),
+                for_object.obj_sys(),
+            )
+        };
+        self.fill(placeholder);
+        // SAFETY: the pointer is the placeholder Godot just made.
+        unsafe { RawPtr::new(placeholder.cast::<c_void>()) }
     }
 
     fn instance_has(&self, _object: Gd<Object>) -> bool {

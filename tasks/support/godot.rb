@@ -5,6 +5,7 @@ require "open3"
 require_relative "announcement"
 require_relative "loader"
 require_relative "callbacks"
+require_relative "editor"
 require_relative "exports"
 require_relative "header"
 require_relative "node_scripts"
@@ -70,6 +71,7 @@ module Godot
     verify_scripts_run!(project)
     verify_source_held!(project)
     NodeScripts.verify!(project)
+    Editor.verify!(project)
     Announcement.verify!(project)
     verify_reports!(project)
     RubyTests.verify!(project)

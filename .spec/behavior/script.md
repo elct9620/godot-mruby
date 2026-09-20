@@ -9,6 +9,7 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 - `tasks/support/announcement.rb`
 - `tasks/support/callbacks.rb`
 - `tasks/support/godot.rb`
+- `tasks/support/editor.rb`
 - `tasks/support/header.rb`
 - `tasks/support/node_scripts.rb`
 
@@ -361,3 +362,11 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a node script whose class defines no method and inherits one from another file |
 | When | Godot asks a node with that script for its methods |
 | Then | the list names the inherited method |
+
+## `RS-045` A node in the editor is given a placeholder for its script
+
+| Step | Statement |
+| --- | --- |
+| Given | a scene whose node's script is a node script declaring a signal |
+| When | the editor opens that scene |
+| Then | the node's connection to that signal is made |
