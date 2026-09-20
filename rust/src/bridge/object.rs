@@ -276,17 +276,20 @@ fn declare_signal(
 
 // Godot::Object.__declare_export__(name, default): takes the property the
 // class exports as its body runs, its type read from the value it is
-// declared with, for the realm to publish once the file has run.
+// declared with, for the realm to publish once the file has run. A
+// declaration GDScript would refuse is refused in GDScript's own words, so
+// the two languages read the same when the same mistake is made.
 fn declare_export(mrb: &Mrb, class: RClass, name: String, default: Value) -> Result<Value, Error> {
     let default =
         value::to_engine(mrb, default, 1).map_err(|reason| argument_error(mrb, &reason))?;
     if default.get_type() == VariantType::NIL {
-        let message = format!("{name} is exported with no value, so it has no type");
-        return Err(argument_error(mrb, &message));
+        let message =
+            "Cannot use \"export\" because the type of the initialized value can't be inferred.";
+        return Err(argument_error(mrb, message));
     }
     if let Some(engine_class) = engine_member(mrb, class, &name) {
         let message =
-            format!("{name} is already a member of {engine_class}, so it cannot be exported");
+            format!("Member \"{name}\" redefined (original in native class '{engine_class}')");
         return Err(argument_error(mrb, &message));
     }
     realm::declare_export(mrb, class, Property::new(name, &default))?;

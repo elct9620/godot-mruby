@@ -180,4 +180,26 @@ class ExportsTest < Minitest::Test
     turret&.free
     copy&.free
   end
+
+  # @behavior RD-036
+  def test_a_name_a_ruby_superclass_declared_is_refused_in_gdscripts_words
+    error = assert_raises(ArgumentError) { Loader::Shadowing }
+
+    assert_equal 'The member "mode" already exists in parent class Loader::Turret.', error.message
+  end
+
+  # @behavior RD-037
+  def test_a_name_the_engine_class_has_is_refused_in_gdscripts_words
+    error = assert_raises(ArgumentError) { Loader::Overriding }
+
+    assert_equal %(Member "position" redefined (original in native class 'Node2D')), error.message
+  end
+
+  # @behavior RD-038
+  def test_an_export_naming_no_type_is_refused_in_gdscripts_words
+    error = assert_raises(ArgumentError) { Loader::Valueless }
+
+    assert_equal %(Cannot use "export" because the type of the initialized value can't be inferred.),
+                 error.message
+  end
 end

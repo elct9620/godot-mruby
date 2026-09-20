@@ -286,3 +286,27 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | Given | a node whose object wrote an instance variable named as a property only the node's class has |
 | When | Godot sets that property |
 | Then | the variable the object wrote is unchanged |
+
+## `RD-036` A name a Ruby superclass declared is refused in GDScript's words
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a name the class it extends exported |
+| When | the file runs |
+| Then | the refusal reads `The member "<name>" already exists in parent class <class>.` |
+
+## `RD-037` A name the engine class has is refused in GDScript's words
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a name its engine class has a property of |
+| When | the file runs |
+| Then | the refusal reads `Member "<name>" redefined (original in native class '<class>')` |
+
+## `RD-038` An export naming no type is refused in GDScript's words
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a value of `nil`, which names no type |
+| When | the file runs |
+| Then | the refusal reads `Cannot use "export" because the type of the initialized value can't be inferred.` |

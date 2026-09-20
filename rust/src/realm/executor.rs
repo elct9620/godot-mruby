@@ -138,16 +138,16 @@ pub(super) fn record(mrb: &Mrb, scope: Vec<String>, name: String) {
 /// Records what `class`, whose file is running now, declares of itself. A
 /// name is declared once: declaring it again as it stands is nothing new,
 /// declaring it differently is refused where it is written, and a name an
-/// ancestor declared is the ancestor's.
+/// ancestor declared is the ancestor's, refused in GDScript's own words so
+/// that the same mistake reads the same in both languages.
 pub(super) fn declare(mrb: &Mrb, class: RClass, declared: Declaration) -> Result<(), Error> {
     if let Some(ancestor) = ancestor_declaring(mrb, class, declared.name()) {
         return Err(raising(
             mrb,
             c"ArgumentError",
             &format!(
-                "{} is already declared by {ancestor}, so {} cannot declare it",
-                declared.name(),
-                class.path(mrb).unwrap_or_default()
+                "The member \"{}\" already exists in parent class {ancestor}.",
+                declared.name()
             ),
         ));
     }
