@@ -1,4 +1,8 @@
 class ExportsTest < Minitest::Test
+  # @GlobalScope's PropertyUsageFlags value marking a script's own variable,
+  # which the headings in a property list carry none of.
+  SCRIPT_VARIABLE = 4096
+
   # @behavior RD-011
   def test_an_exported_property_is_one_the_script_has
     turret = Loader::Turret.new
@@ -26,7 +30,7 @@ class ExportsTest < Minitest::Test
     cannon = Loader::Cannon.new
     script = Godot::ResourceLoader.load("res://loader/cannon.rb")
 
-    names = script.get_script_property_list.map { |property| property["name"] }
+    names = exported_names(script)
 
     assert_equal %w[barrel mode range], names
   ensure
@@ -179,6 +183,14 @@ class ExportsTest < Minitest::Test
   ensure
     turret&.free
     copy&.free
+  end
+
+  # The names of the properties a script has, without the headings they are
+  # listed under.
+  def exported_names(script)
+    script.get_script_property_list
+          .select { |member| member["usage"] & SCRIPT_VARIABLE != 0 }
+          .map { |property| property["name"] }
   end
 
   # @behavior RD-036

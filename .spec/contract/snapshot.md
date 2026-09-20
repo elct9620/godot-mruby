@@ -23,7 +23,7 @@ pub struct Signal {
 
 ## `Group`
 
-A heading the editor shows the properties declared after it under: the name it is headed with, the prefix it takes those properties by, and which kind of heading it is.
+A heading the editor shows the properties under, as `export_group` and its kin write one, or as a class is headed by the file it is written in: the name it is headed with, what the heading is read with — the prefix a group takes its properties by, or the path a class's category is at — and which kind of heading it is.
 
 | Attribute | Value |
 | --- | --- |
@@ -32,7 +32,7 @@ A heading the editor shows the properties declared after it under: the name it i
 ```rust
 pub struct Group {
     pub name: String,
-    pub prefix: String,
+    pub hint_string: String,
     pub usage: PropertyUsageFlags,
 }
 ```
@@ -223,9 +223,9 @@ impl Snapshot {
 }
 ```
 
-## `Snapshot::members_of`
+## `Snapshot::listing_of`
 
-What the classes of the files at the paths declared for the editor, the first file's first, as GDScript lists a script's own members before the ones it inherits: a property is listed once, the nearest class's, while a heading belongs to the class that wrote it.
+What the editor lists for the classes of the files at the paths: each class's own category and then what it declared, the first file's first, as GDScript lists a script's members before the ones it inherits. A property is listed once, the nearest class's, while a heading belongs to the class that wrote it.
 
 | Attribute | Value |
 | --- | --- |
@@ -233,7 +233,7 @@ What the classes of the files at the paths declared for the editor, the first fi
 
 ```rust
 impl Snapshot {
-    pub fn members_of<'a>(&self, paths: impl IntoIterator<Item = &'a str>) -> Vec<Member> {}
+    pub fn listing_of<'a>(&self, paths: impl IntoIterator<Item = &'a str>) -> Vec<Member> {}
 }
 ```
 

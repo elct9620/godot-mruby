@@ -94,7 +94,7 @@ impl RubyScript {
     // in the order each class wrote it; none until the file has run.
     fn members(&self) -> Vec<Member> {
         let paths = self.declaring_files();
-        snapshot::latest().members_of(paths.iter().map(String::as_str))
+        snapshot::latest().listing_of(paths.iter().map(String::as_str))
     }
 
     // The property of that name the class exported, if it exported one.
@@ -356,7 +356,7 @@ fn member_info(member: &Member) -> AnyDictionary {
 fn group_info(group: &Group) -> AnyDictionary {
     let mut info = named(group.name.as_str());
     info.set("type", VariantType::NIL.ord());
-    info.set("hint_string", group.prefix.as_str());
+    info.set("hint_string", group.hint_string.as_str());
     info.set("usage", group.usage);
     info.upcast_any_dictionary()
 }

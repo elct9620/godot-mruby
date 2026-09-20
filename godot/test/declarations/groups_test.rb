@@ -44,7 +44,42 @@ class GroupsTest < Minitest::Test
     panel&.free
   end
 
+  # @behavior RD-063
+  def test_a_scripts_members_are_headed_by_a_category_for_its_class
+    first = inherited.first
+
+    assert_equal "cannon.rb", first["name"]
+    assert_equal CATEGORY, first["usage"]
+  end
+
+  # @behavior RD-064
+  def test_each_class_a_script_inherits_from_is_headed_by_a_category_of_its_own
+    names = inherited.map { |member| member["name"] }
+
+    assert_operator names.index("turret.rb"), :<, names.index("mode")
+  end
+
+  # @behavior RD-065
+  def test_a_nodes_properties_are_headed_by_one_category_for_its_class
+    cannon = Loader::Cannon.new
+
+    headings = cannon.get_property_list.select { |member| member["name"] == "cannon.rb" }
+
+    assert_equal 1, headings.size
+    assert_equal CATEGORY, headings.first["usage"]
+  ensure
+    cannon&.free
+  end
+
   private
+
+  # What the cannon's script says it has, its class's and the class it
+  # extends alike.
+  def inherited
+    Loader::Cannon
+    Godot::ResourceLoader.load("res://loader/cannon.rb").get_script_property_list
+  end
+
 
   # What the panel's script says it has, headings and properties alike.
   def listed

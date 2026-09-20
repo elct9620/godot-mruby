@@ -143,7 +143,7 @@ impl RubyInstance {
     // What the node's class declared for the editor, its ancestors' included
     // and in the order each class wrote it; none until its file has run.
     fn members(&self) -> Vec<Member> {
-        snapshot::latest().members_of(declaring_paths(&self.path, &self.ancestry))
+        snapshot::latest().listing_of(declaring_paths(&self.path, &self.ancestry))
     }
 
     // The files the node's class takes its shape from: its own, then the
@@ -404,7 +404,7 @@ fn group_info(group: &Group) -> sys::GDExtensionPropertyInfo {
         name: owned(StringName::from(&group.name)),
         class_name: owned(StringName::default()),
         hint: PropertyHint::NONE.ord() as u32,
-        hint_string: owned(GString::from(&group.prefix)),
+        hint_string: owned(GString::from(&group.hint_string)),
         usage: group.usage.ord() as u32,
     }
 }
@@ -451,7 +451,7 @@ static INFO: sys::GDExtensionScriptInstanceInfo3 = sys::GDExtensionScriptInstanc
     get_func: Some(get),
     get_property_list_func: Some(get_property_list),
     free_property_list_func: Some(free_property_list),
-    get_class_category_func: None,
+    get_class_category_func: Some(get_class_category),
     property_can_revert_func: None,
     property_get_revert_func: None,
     get_owner_func: None,
@@ -566,6 +566,16 @@ unsafe extern "C" fn get(
 // The properties of the node's class, as the array Godot reads and hands
 // back to `free_property_list`. Its class has them once its file has run, so
 // a node whose file has not run yet has none.
+// Godot heads an instance's properties with its script's own category when
+// the instance names none; the list carries one for every class in the
+// chain, so it is answered with none of its own.
+unsafe extern "C" fn get_class_category(
+    _data: sys::GDExtensionScriptInstanceDataPtr,
+    _category: *mut sys::GDExtensionPropertyInfo,
+) -> sys::GDExtensionBool {
+    sys::GDExtensionBool::from(false)
+}
+
 unsafe extern "C" fn get_property_list(
     data: sys::GDExtensionScriptInstanceDataPtr,
     count: *mut u32,

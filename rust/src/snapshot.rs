@@ -73,13 +73,15 @@ impl Property {
     }
 }
 
-/// A heading the editor shows the properties declared after it under, as
-/// `export_group` and its kin write one: the name it is headed with, the
-/// prefix it takes those properties by, and which kind of heading it is.
+/// A heading the editor shows the properties under, as `export_group` and
+/// its kin write one, or as a class is headed by the file it is written in:
+/// the name it is headed with, what the heading is read with — the prefix a
+/// group takes its properties by, or the path a class's category is at —
+/// and which kind of heading it is.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Group {
     pub name: String,
-    pub prefix: String,
+    pub hint_string: String,
     pub usage: PropertyUsageFlags,
 }
 
@@ -155,13 +157,15 @@ impl Snapshot {
         properties
     }
 
-    /// What the classes of the files at `paths` declared for the editor, the
-    /// first file's first, as GDScript lists a script's own members before
-    /// the ones it inherits. A property is listed once, the nearest class's,
-    /// while a heading belongs to the class that wrote it.
-    pub fn members_of<'a>(&self, paths: impl IntoIterator<Item = &'a str>) -> Vec<Member> {
+    /// What the editor lists for the classes of the files at `paths`: each
+    /// class's own category and then what it declared, the first file's
+    /// first, as GDScript lists a script's members before the ones it
+    /// inherits. A property is listed once, the nearest class's, while a
+    /// heading belongs to the class that wrote it.
+    pub fn listing_of<'a>(&self, paths: impl IntoIterator<Item = &'a str>) -> Vec<Member> {
         let mut members: Vec<Member> = Vec::new();
         for path in paths {
+            members.push(Member::Group(category(path)));
             for member in self.members(path) {
                 let listed = member.property().is_some_and(|property| {
                     members
@@ -194,6 +198,17 @@ impl Snapshot {
     /// run, in place of what it had before.
     pub fn ran(&mut self, path: &str, class: Class) {
         self.classes.insert(path.to_owned(), class);
+    }
+}
+
+// The category the editor heads a class's own members with, as it heads a
+// GDScript's with the script it is written in: the file's name, read with
+// the path it is at.
+fn category(path: &str) -> Group {
+    Group {
+        name: path.rsplit('/').next().unwrap_or(path).to_owned(),
+        hint_string: path.to_owned(),
+        usage: PropertyUsageFlags::CATEGORY,
     }
 }
 

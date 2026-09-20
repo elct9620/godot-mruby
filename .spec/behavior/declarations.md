@@ -502,3 +502,27 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | Given | a node of a class writing a group |
 | When | the node is asked for its properties |
 | Then | the group is among them |
+
+## `RD-063` A script's members are headed by a category for its class
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a value |
+| When | the script is asked for the properties its class has |
+| Then | the first is a category named after the file the class is written in |
+
+## `RD-064` Each class a script inherits from is headed by a category of its own
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class extends another file's class, which exports a value |
+| When | the script is asked for the properties its class has |
+| Then | a category named after that file is listed before the properties it exported |
+
+## `RD-065` A node's properties are headed by one category for its class
+
+| Step | Statement |
+| --- | --- |
+| Given | a node of a class exporting a value |
+| When | the node is asked for its properties |
+| Then | one category is named after the file the class is written in |

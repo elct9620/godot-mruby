@@ -322,7 +322,7 @@ fn declare_group(mrb: &Mrb, _class: RClass, name: String, prefix: String, kind: 
         mrb,
         Group {
             name,
-            prefix,
+            hint_string: prefix,
             usage,
         },
     );
