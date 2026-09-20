@@ -285,4 +285,4 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | --- | --- |
 | Given | a node whose object wrote an instance variable named as a property only the node's class has |
 | When | Godot sets that property |
-| Then | the variable the object wrote holds what it held |
+| Then | the variable the object wrote is unchanged |
