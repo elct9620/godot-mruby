@@ -82,6 +82,20 @@ impl Property {
 }
 ```
 
+## `Property::of_class`
+
+The property as an object of the class `class` names, which Godot fills in: its type is the object's rather than the declared value's, as a class names a type no value has to carry.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Property {
+    pub fn of_class(self, hint: PropertyHint, class: String) -> Property {}
+}
+```
+
 ## `Property::default_value`
 
 The value the property was declared with.

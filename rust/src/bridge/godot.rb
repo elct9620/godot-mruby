@@ -66,7 +66,9 @@ module Godot
       # answers to: `range:` with a Range and an optional `step:`, `enum:`
       # and `flags:` with the names a value may take, `file:` with the
       # files to choose among, `dir:` and `multiline:` with `true`, and
-      # `placeholder:` with the text an empty field shows.
+      # `placeholder:` with the text an empty field shows. `type:` names the
+      # class of an object Godot fills in, in place of a value naming the
+      # type itself.
       def export(name, default, **keywords)
         if ::Object.method_defined?(name)
           raise ArgumentError, "#{name} is a method every object answers, so it cannot be exported"
@@ -170,6 +172,7 @@ module Godot
         hint = named.first
         return ["range", __bounds__(keywords[:range], step)] if hint == :range
         raise ArgumentError, %("step:" needs a "range:" to step through.) unless step.nil?
+        return ["type", __class_named__(keywords[:type])] if hint == :type
         return ["none", ""] if hint.nil?
 
         [hint.to_s, __read_with__(hint, keywords[hint])]
@@ -186,6 +189,17 @@ module Godot
         when :placeholder then value.to_s
         else raise ArgumentError, %("#{hint}:" is not a hint a property can be exported with.)
         end
+      end
+
+      # The class a property names its type by, as the realm spells it. Only
+      # a class names a type, so anything else is refused where it is
+      # written.
+      def __class_named__(named)
+        unless named.is_a?(::Module)
+          raise ArgumentError, %("type:" needs a class, but #{named.inspect} was given instead.)
+        end
+
+        named.to_s
       end
 
       # A range hint's bounds as the engine reads them, the step included

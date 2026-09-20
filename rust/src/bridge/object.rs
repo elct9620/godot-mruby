@@ -7,7 +7,7 @@ use beni::{
     RModule, ReprValue, Symbol, TryConvert, TypedData, Value, method,
 };
 use godot::builtin::StringName;
-use godot::builtin::VariantType;
+use godot::builtin::{Variant, VariantType};
 use godot::classes::{ClassDb, Engine, Object, ResourceLoader, Script};
 use godot::global::type_string;
 use godot::meta::ToGodot;
@@ -16,7 +16,10 @@ use godot::obj::{EngineEnum, Gd, InstanceId, Singleton};
 use godot::register::info::PropertyHint;
 
 use super::value::{self, ToRuby};
+use crate::announcement::Project;
+use crate::game::FilesOnDisk;
 use crate::realm::{self, Key};
+use crate::settings;
 use crate::snapshot::{Property, Signal};
 
 /// The engine object a Ruby object of an engine class stands for. Holding
@@ -231,7 +234,7 @@ fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: Array) -> Result<Va
 
 // What the engine answered, as Ruby is given it, or the Godot::CallError an
 // answer that cannot reach Ruby raises.
-fn answered(mrb: &Mrb, answer: &godot::builtin::Variant) -> Result<Value, Error> {
+fn answered(mrb: &Mrb, answer: &Variant) -> Result<Value, Error> {
     ToRuby::checked(answer)
         .map(|answer| answer.into_value(mrb))
         .map_err(|reason| call_error(mrb, &reason))
@@ -291,21 +294,95 @@ fn declare_export(
 ) -> Result<Value, Error> {
     let default =
         value::to_engine(mrb, default, 1).map_err(|reason| argument_error(mrb, &reason))?;
-    if default.get_type() == VariantType::NIL {
-        let message =
-            "Cannot use \"export\" because the type of the initialized value can't be inferred.";
-        return Err(argument_error(mrb, message));
-    }
     if let Some(engine_class) = engine_member(mrb, class, &name) {
         let message =
             format!("Member \"{name}\" redefined (original in native class '{engine_class}')");
         return Err(argument_error(mrb, &message));
     }
-    let hint =
-        hint_taking(&hint, default.get_type()).map_err(|reason| argument_error(mrb, &reason))?;
-    let property = Property::new(name, &default).hinted(hint, hint_string);
+    let property = match hint.as_str() {
+        "type" => typed(mrb, name, &default, &hint_string),
+        _ => hinted(name, &default, &hint, hint_string),
+    }
+    .map_err(|reason| argument_error(mrb, &reason))?;
     realm::declare_export(mrb, class, property)?;
     Ok(Value::nil())
+}
+
+// The property an export naming its type declares: an object of the class
+// it names, which Godot fills in from the scene or the project's files. The
+// value it is declared with is the class's own to hold, so any value but an
+// object is refused as GDScript refuses a mismatched one.
+fn typed(mrb: &Mrb, name: String, default: &Variant, class: &str) -> Result<Property, String> {
+    let (hint, class_name) = class_named(mrb, class)?;
+    let kind = default.get_type();
+    if kind != VariantType::NIL && kind != VariantType::OBJECT {
+        return Err(format!(
+            "Cannot assign a value of type {} to variable \"{name}\" with specified type {class_name}.",
+            type_name(kind)
+        ));
+    }
+    Ok(Property::new(name, default).of_class(hint, class_name))
+}
+
+// The property an export naming no type declares: its type is the declared
+// value's, so a value naming none is refused, and the keyword naming a hint
+// tells the editor how to show it.
+fn hinted(
+    name: String,
+    default: &Variant,
+    hint: &str,
+    hint_string: String,
+) -> Result<Property, String> {
+    if default.get_type() == VariantType::NIL {
+        return Err(
+            "Cannot use \"export\" because the type of the initialized value can't be inferred."
+                .to_owned(),
+        );
+    }
+    let hint = hint_taking(hint, default.get_type())?;
+    Ok(Property::new(name, default).hinted(hint, hint_string))
+}
+
+// The hint an exported object takes from the class it names, and the name
+// the editor reads that class by: a resource is chosen among the project's
+// files and a node among the scene's, while a class of neither kind is no
+// type an export can take. A Ruby class is named by the announcement the
+// editor lists it under, so one no announcement names is out of reach.
+fn class_named(mrb: &Mrb, class: &str) -> Result<(PropertyHint, String), String> {
+    if let Some(engine_class) = class.strip_prefix("Godot::") {
+        let class_db = ClassDb::singleton();
+        if !class_db.class_exists(engine_class) {
+            return Err(unnamed(class));
+        }
+        if class_db.is_parent_class(engine_class, "Resource") {
+            return Ok((PropertyHint::RESOURCE_TYPE, engine_class.to_owned()));
+        }
+        if class_db.is_parent_class(engine_class, "Node") {
+            return Ok((PropertyHint::NODE_TYPE, engine_class.to_owned()));
+        }
+        return Err("Export type can only be built-in, a resource, a node, or an enum.".to_owned());
+    }
+    announced(mrb, class)
+        .map(|name| (PropertyHint::NODE_TYPE, name))
+        .ok_or_else(|| unnamed(class))
+}
+
+// The name the editor lists the Ruby class `class` under, if a node script
+// of the project defines it and nothing else is announced by that name.
+fn announced(mrb: &Mrb, class: &str) -> Option<String> {
+    let names: Vec<String> = class.split("::").map(str::to_owned).collect();
+    let file = realm::file_defining(mrb, &names)?;
+    let test_directories = settings::test_directories();
+    let project = Project::new(&FilesOnDisk, &test_directories, &super::is_node_class);
+    project
+        .announce(&file)
+        .ok()
+        .map(|announcement| announcement.name)
+}
+
+// GDScript's words for a type nothing in the project is known by.
+fn unnamed(class: &str) -> String {
+    format!("The class \"{class}\" was not found in the global scope.")
 }
 
 // The hint the keyword `name` stands for, unless the exported type cannot be
@@ -412,7 +489,7 @@ fn engine_name(mrb: &Mrb, class: RClass) -> String {
 
 // `args` as the engine takes them, or the Godot::CallError one that cannot
 // reach it raises, before the engine is given any.
-fn variants(mrb: &Mrb, args: Array) -> Result<Vec<godot::builtin::Variant>, Error> {
+fn variants(mrb: &Mrb, args: Array) -> Result<Vec<Variant>, Error> {
     args.entries(mrb)
         .map(|arg| value::to_engine(mrb, arg, 1).map_err(|reason| call_error(mrb, &reason)))
         .collect()
@@ -420,7 +497,7 @@ fn variants(mrb: &Mrb, args: Array) -> Result<Vec<godot::builtin::Variant>, Erro
 
 impl EngineObject {
     /// The engine object as the engine takes it, unless it was freed.
-    pub fn variant(&self) -> Result<godot::builtin::Variant, String> {
+    pub fn variant(&self) -> Result<Variant, String> {
         if self.0.is_instance_valid() {
             Ok(self.0.to_variant())
         } else {

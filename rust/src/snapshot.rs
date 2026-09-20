@@ -55,6 +55,18 @@ impl Property {
         }
     }
 
+    /// The property as an object of the class `class` names, which Godot
+    /// fills in: its type is the object's rather than the declared value's,
+    /// as a class names a type no value has to carry.
+    pub fn of_class(self, hint: PropertyHint, class: String) -> Self {
+        Self {
+            kind: VariantType::OBJECT,
+            hint,
+            hint_string: class,
+            ..self
+        }
+    }
+
     /// The value the property was declared with.
     pub fn default_value(&self) -> Variant {
         bytes_to_var(&PackedByteArray::from(self.default.as_slice()))

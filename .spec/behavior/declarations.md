@@ -414,3 +414,51 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | Given | a node of a class exporting a float with a range |
 | When | the node is asked for its properties |
 | Then | that property carries the range hint, read with `0,360` |
+
+## `RD-052` An export naming a node class is read as a node of it
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a value of `nil` naming an engine node class |
+| When | the script is asked for the properties its class has |
+| Then | that property is an object carrying the node hint, read with `Marker2D` |
+
+## `RD-053` An export naming a resource class is read as a resource of it
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a value of `nil` naming an engine resource class |
+| When | the script is asked for the properties its class has |
+| Then | that property carries the resource hint, read with `PackedScene` |
+
+## `RD-054` An export naming a Ruby class is read by the name it was announced under
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a value of `nil` naming another file's node class |
+| When | the script is asked for the properties its class has |
+| Then | that property carries the node hint, read with the name the editor lists that class under |
+
+## `RD-055` An export naming a type takes no value of another type
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a number naming a node class |
+| When | the file runs |
+| Then | the refusal reads `Cannot assign a value of type int to variable "spot" with specified type Marker2D.` |
+
+## `RD-056` An export naming neither a node nor a resource class is refused
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a value naming an engine class of neither kind |
+| When | the file runs |
+| Then | the refusal reads `Export type can only be built-in, a resource, a node, or an enum.` |
+
+## `RD-057` An export naming a class no announcement lists is refused
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a value naming a library file's class |
+| When | the file runs |
+| Then | the refusal reads `The class "<class>" was not found in the global scope.` |
