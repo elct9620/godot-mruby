@@ -32,7 +32,51 @@ What a class has once its file has run: what its body declared, and the methods 
 ```rust
 pub struct Class {
     pub signals: Vec<Signal>,
+    pub properties: Vec<Property>,
     pub methods: Vec<String>,
+}
+```
+
+## `Property`
+
+A property a class exported, as Godot reads it: the name it is written and read by, the type its declared value gave it, and that value, kept as bytes since a snapshot is read from any thread.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub struct Property {
+    pub name: String,
+    pub kind: VariantType,
+}
+```
+
+## `Property::new`
+
+The property of that name, taking its type from the value it is declared with.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Property {
+    pub fn new(name: String, default: &Variant) -> Property {}
+}
+```
+
+## `Property::default_value`
+
+The value the property was declared with.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Property {
+    pub fn default_value(&self) -> Variant {}
 }
 ```
 
@@ -59,6 +103,20 @@ The signals the class of the file at a path declared, in the order it declared t
 ```rust
 impl Snapshot {
     pub fn signals(&self, path: &str) -> &[Signal] {}
+}
+```
+
+## `Snapshot::properties`
+
+The properties the class of the file at a path exported, in the order it declared them; none for a file that has not run.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Snapshot {
+    pub fn properties(&self, path: &str) -> &[Property] {}
 }
 ```
 

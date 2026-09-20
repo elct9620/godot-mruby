@@ -2,10 +2,12 @@ use std::cell::{Cell, RefCell};
 use std::ffi::CStr;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use beni::{Array, Error, FromValue, Gem, IntoValue, Mrb, ReprValue, Symbol, TryConvert, Value};
+use beni::{
+    Array, Error, FromValue, Gem, IntoValue, Mrb, RClass, ReprValue, Symbol, TryConvert, Value,
+};
 
 use crate::compiler;
-use crate::snapshot::{self, Class, Signal, Snapshot};
+use crate::snapshot::{self, Class, Property, Signal, Snapshot};
 
 mod constants;
 mod executor;
@@ -14,6 +16,7 @@ mod print;
 mod reentrant;
 mod registry;
 
+use executor::Declaration;
 use index::ClassIndex;
 pub use index::{file_named, key_of, normalize};
 use reentrant::ReentrantLock;
@@ -159,9 +162,16 @@ impl Bookkeeping {
 // What the class of the file at `path` has, now that the file has run: what
 // its body declared, and the methods it defines, so a method metaprogramming
 // defined is one the class has.
-fn ran(mrb: &Mrb, path: &str, signals: Vec<Signal>) {
+fn ran(mrb: &Mrb, path: &str, signals: Vec<Signal>, properties: Vec<Property>) {
     let methods = methods_of(mrb, path);
-    bookkeeping(mrb).ran(path, Class { signals, methods });
+    bookkeeping(mrb).ran(
+        path,
+        Class {
+            signals,
+            properties,
+            methods,
+        },
+    );
 }
 
 // The names of the methods the class the file at `path` names defines
@@ -300,12 +310,20 @@ fn open_game() -> Result<Realm, RubyError> {
     open()
 }
 
-/// Takes `signal` as declared by the class of the file running now in the
-/// realm `mrb` belongs to, refusing a second declaration of that name with
-/// other parameters; a declaration made while no file runs belongs to no
+/// Takes `signal` as declared by `class`, whose file is running now in the
+/// realm `mrb` belongs to, refusing a name the class or one of its ancestors
+/// declared already; a declaration made while no file runs belongs to no
 /// class and is not taken.
-pub fn declare_signal(mrb: &Mrb, signal: Signal) -> Result<(), Error> {
-    executor::declare(mrb, signal)
+pub fn declare_signal(mrb: &Mrb, class: RClass, signal: Signal) -> Result<(), Error> {
+    executor::declare(mrb, class, Declaration::Signal(signal))
+}
+
+/// Takes `property` as exported by `class`, whose file is running now in the
+/// realm `mrb` belongs to, refusing a name the class or one of its ancestors
+/// declared already; a declaration made while no file runs belongs to no
+/// class and is not taken.
+pub fn declare_export(mrb: &Mrb, class: RClass, property: Property) -> Result<(), Error> {
+    executor::declare(mrb, class, Declaration::Property(property))
 }
 
 /// Holds `object` under `key` in the realm `mrb` belongs to, for an

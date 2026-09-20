@@ -39,8 +39,8 @@ module Godot
     # What a class extending an engine class calls in its body. Godot reads
     # `tool` and `icon` from the file's source, so they do nothing as the
     # body runs; `abstract` marks only the class calling it, as Active
-    # Record's `abstract_class` does; `signal` is taken by the realm, which
-    # publishes it for Godot once the file has run.
+    # Record's `abstract_class` does; `signal` and `export` are taken by the
+    # realm, which publishes them for Godot once the file has run.
     class << self
       def tool; end
 
@@ -55,6 +55,19 @@ module Godot
       # own signals, so it is connected to and emitted by their names.
       def signal(name, *parameters)
         __declare_signal__(name.to_s, parameters.map { |parameter| parameter.to_s })
+      end
+
+      # A property of the class, taking its type from the value it is
+      # declared with. The engine and the editor read and write it by that
+      # name, and the class keeps it in the instance variable of that name.
+      # A name every Ruby object answers is refused, since the accessors
+      # would take that answer away.
+      def export(name, default)
+        if ::Object.method_defined?(name)
+          raise ArgumentError, "#{name} is a method every object answers, so it cannot be exported"
+        end
+
+        __declare_export__(name.to_s, default)
       end
 
       # An engine class makes the engine's object; a node script's class
@@ -102,7 +115,7 @@ module Godot
       end
 
       private :__make__, :__make_node__, :__allocate__, :__singleton__, :__static_method__, :__call_static__,
-              :__engine_constant__, :__declare_signal__
+              :__engine_constant__, :__declare_signal__, :__declare_export__
 
       private
 

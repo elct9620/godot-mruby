@@ -5,10 +5,11 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::{CStr, CString};
+use std::sync::Arc;
 
-use super::{bookkeeping, compile, ran};
-use crate::snapshot::Signal;
-use beni::{Error, Mrb, ReprValue, Value};
+use super::{bookkeeping, compile, file_defining, ran};
+use crate::snapshot::{Property, Signal};
+use beni::{Error, FromValue, Module, Mrb, RClass, ReprValue, Value};
 
 /// How far a file has run in a realm.
 #[derive(Clone, Copy)]
@@ -19,12 +20,47 @@ enum Run {
     Failed,
 }
 
+/// What a class declares of itself as its body runs, for the realm to
+/// publish once the file has run. One name is declared once, so the two
+/// kinds are held together.
+pub(super) enum Declaration {
+    Signal(Signal),
+    Property(Property),
+}
+
+impl Declaration {
+    fn name(&self) -> &str {
+        match self {
+            Self::Signal(signal) => &signal.name,
+            Self::Property(property) => &property.name,
+        }
+    }
+
+    // What the declaration says the name is, as a refusal spells it out.
+    fn written(&self) -> String {
+        match self {
+            Self::Signal(signal) => format!("a signal of ({})", signal.parameters.join(", ")),
+            Self::Property(property) => format!("a property of {}", property.default_value()),
+        }
+    }
+}
+
+impl PartialEq for Declaration {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Signal(one), Self::Signal(other)) => one == other,
+            (Self::Property(one), Self::Property(other)) => one == other,
+            _ => false,
+        }
+    }
+}
+
 /// A file running now, the constants it has created so far, each as the
 /// names of its namespace and its own, and what its class has declared.
 struct Frame {
     path: String,
     created: Vec<(Vec<String>, String)>,
-    declared: Vec<Signal>,
+    declared: Vec<Declaration>,
 }
 
 /// How far each file has run in a realm, and the files running now.
@@ -99,37 +135,69 @@ pub(super) fn record(mrb: &Mrb, scope: Vec<String>, name: String) {
     }
 }
 
-/// Records that the class of the file running now declared `signal`. A
-/// signal is declared once: declaring it again as it stands is nothing new,
-/// and declaring it with other parameters is refused where it is written.
-pub(super) fn declare(mrb: &Mrb, signal: Signal) -> Result<(), Error> {
+/// Records what `class`, whose file is running now, declares of itself. A
+/// name is declared once: declaring it again as it stands is nothing new,
+/// declaring it differently is refused where it is written, and a name an
+/// ancestor declared is the ancestor's.
+pub(super) fn declare(mrb: &Mrb, class: RClass, declared: Declaration) -> Result<(), Error> {
+    if let Some(ancestor) = ancestor_declaring(mrb, class, declared.name()) {
+        return Err(raising(
+            mrb,
+            c"ArgumentError",
+            &format!(
+                "{} is already declared by {ancestor}, so {} cannot declare it",
+                declared.name(),
+                class.path(mrb).unwrap_or_default()
+            ),
+        ));
+    }
     let mut frames = runs(mrb).frames.borrow_mut();
     let Some(frame) = frames.last_mut() else {
         return Ok(());
     };
-    let declared = frame
+    let Some(standing) = frame
         .declared
         .iter()
-        .find(|declared| declared.name == signal.name)
-        .cloned();
-    let Some(declared) = declared else {
-        frame.declared.push(signal);
+        .find(|standing| standing.name() == declared.name())
+    else {
+        frame.declared.push(declared);
         return Ok(());
     };
-    drop(frames);
-    if declared.parameters == signal.parameters {
+    if standing == &declared {
         return Ok(());
     }
-    Err(raising(
-        mrb,
-        c"ArgumentError",
-        &format!(
-            "{} is already declared with ({}), so it cannot be declared with ({})",
-            signal.name,
-            declared.parameters.join(", "),
-            signal.parameters.join(", ")
-        ),
-    ))
+    let refusal = format!(
+        "{} is already declared as {}, so it cannot be declared as {}",
+        declared.name(),
+        standing.written(),
+        declared.written()
+    );
+    drop(frames);
+    Err(raising(mrb, c"ArgumentError", &refusal))
+}
+
+// The ancestor of `class` that declared `name`, if one did. Each Ruby
+// superclass names a file, and what that file declared is published once it
+// has run; the engine's own members are asked of the engine instead, so the
+// walk stops at the engine class.
+fn ancestor_declaring(mrb: &Mrb, class: RClass, name: &str) -> Option<String> {
+    let snapshot = Arc::clone(&bookkeeping(mrb).snapshot.borrow());
+    let mut current = class.as_value();
+    loop {
+        current = current.funcall(mrb, c"superclass", &[]).ok()?;
+        let path = RClass::from_value(current)?.path(mrb)?;
+        if path.starts_with("Godot::") {
+            return None;
+        }
+        let names: Vec<String> = path.split("::").map(str::to_owned).collect();
+        let declared = file_defining(mrb, &names).is_some_and(|file| {
+            snapshot.signals(&file).iter().any(|it| it.name == name)
+                || snapshot.properties(&file).iter().any(|it| it.name == name)
+        });
+        if declared {
+            return Some(path);
+        }
+    }
 }
 
 fn runs(mrb: &Mrb) -> &Runs {
@@ -160,9 +228,10 @@ fn execute<T>(
     let frame = runs.frames.borrow_mut().pop();
     let run = match (&outcome, frame) {
         (Ok(()), frame) => {
-            frame
-                .into_iter()
-                .for_each(|frame| ran(mrb, &frame.path, frame.declared));
+            frame.into_iter().for_each(|frame| {
+                let (signals, properties) = split(frame.declared);
+                ran(mrb, &frame.path, signals, properties);
+            });
             Run::Done
         }
         (Err(_), frame) => {
@@ -172,6 +241,19 @@ fn execute<T>(
     };
     runs.files.borrow_mut().insert(path.to_owned(), run);
     outcome
+}
+
+// What a frame declared, as the two kinds a class publishes.
+fn split(declared: Vec<Declaration>) -> (Vec<Signal>, Vec<Property>) {
+    let mut signals = Vec::new();
+    let mut properties = Vec::new();
+    for one in declared {
+        match one {
+            Declaration::Signal(signal) => signals.push(signal),
+            Declaration::Property(property) => properties.push(property),
+        }
+    }
+    (signals, properties)
 }
 
 // The source the realm's files give for the file at `path`.

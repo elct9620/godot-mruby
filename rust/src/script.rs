@@ -8,7 +8,7 @@ use godot::classes::{
 };
 use godot::global::Error;
 use godot::meta::conv::RawPtr;
-use godot::obj::EngineEnum;
+use godot::obj::{EngineBitfield, EngineEnum};
 use godot::prelude::*;
 use godot::register::info::PropertyUsageFlags;
 
@@ -17,7 +17,7 @@ use crate::game::GameFiles;
 use crate::instance::RubyInstance;
 use crate::language;
 use crate::parser::Header;
-use crate::snapshot::{self, Signal};
+use crate::snapshot::{self, Property, Signal};
 use crate::{bridge, error};
 
 /// The script a `.rb` file loads as, the way a `.gd` file loads as a `GDScript`.
@@ -81,6 +81,29 @@ impl RubyScript {
             }
         }
         signals
+    }
+
+    // The properties the class exported, its ancestors' included, nearest
+    // first; none until the file has run.
+    fn properties(&self) -> Vec<Property> {
+        let snapshot = snapshot::latest();
+        let mut properties: Vec<Property> = Vec::new();
+        for path in self.declaring_files() {
+            for property in snapshot.properties(&path) {
+                if !properties.iter().any(|kept| kept.name == property.name) {
+                    properties.push(property.clone());
+                }
+            }
+        }
+        properties
+    }
+
+    // The property of that name the class exported, if it exported one.
+    fn property(&self, name: &StringName) -> Option<Property> {
+        let name = name.to_string();
+        self.properties()
+            .into_iter()
+            .find(|property| property.name == name)
     }
 
     // The methods the file's class has: the ones its source defines, and the
@@ -263,12 +286,13 @@ impl IScriptExtension for RubyScript {
         self.signals().iter().map(signal_info).collect()
     }
 
-    fn has_property_default_value(&self, _property: StringName) -> bool {
-        false
+    fn has_property_default_value(&self, property: StringName) -> bool {
+        self.property(&property).is_some()
     }
 
-    fn get_property_default_value(&self, _property: StringName) -> Variant {
-        Variant::nil()
+    fn get_property_default_value(&self, property: StringName) -> Variant {
+        self.property(&property)
+            .map_or_else(Variant::nil, |property| property.default_value())
     }
 
     fn update_exports(&mut self) {}
@@ -281,7 +305,7 @@ impl IScriptExtension for RubyScript {
     }
 
     fn get_script_property_list(&self) -> Array<AnyDictionary> {
-        Array::new()
+        self.properties().iter().map(property_info).collect()
     }
 
     fn get_member_line(&self, _member: StringName) -> i32 {
@@ -316,6 +340,21 @@ fn signal_info(signal: &Signal) -> AnyDictionary {
         .collect();
     let mut info = named(signal.name.as_str());
     info.set("args", &arguments);
+    info.upcast_any_dictionary()
+}
+
+// An exported property as Godot reads it: the name it is read and written
+// by, the type the value it was declared with gave it, and the usage of a
+// script's own variable, which the editor shows and a scene stores.
+fn property_info(property: &Property) -> AnyDictionary {
+    let mut info = named(property.name.as_str());
+    info.set("type", property.kind.ord());
+    info.set(
+        "usage",
+        PropertyUsageFlags::from_ord(
+            PropertyUsageFlags::DEFAULT.ord() | PropertyUsageFlags::SCRIPT_VARIABLE.ord(),
+        ),
+    );
     info.upcast_any_dictionary()
 }
 

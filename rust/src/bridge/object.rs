@@ -16,7 +16,7 @@ use godot::obj::{EngineEnum, Gd, InstanceId, Singleton};
 
 use super::value::{self, ToRuby};
 use crate::realm::{self, Key};
-use crate::snapshot::Signal;
+use crate::snapshot::{Property, Signal};
 
 /// The engine object a Ruby object of an engine class stands for. Holding
 /// it keeps a reference-counted object alive until Ruby lets go of it.
@@ -53,6 +53,7 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     object.define_singleton_method(mrb, c"__call_static__", method!(call_static, 2))?;
     object.define_singleton_method(mrb, c"__engine_constant__", method!(engine_constant, 1))?;
     object.define_singleton_method(mrb, c"__declare_signal__", method!(declare_signal, 2))?;
+    object.define_singleton_method(mrb, c"__declare_export__", method!(declare_export, 2))?;
     object.define_private_method(mrb, c"__resolve__", method!(resolve, 1))?;
     object.define_private_method(mrb, c"__call__", method!(call, 2))?;
     object.define_private_method(mrb, c"__instance_id__", method!(instance_id, 0))?;
@@ -261,7 +262,7 @@ pub fn ruby_object(mrb: &Mrb, object: Gd<Object>) -> Value {
 // has run.
 fn declare_signal(
     mrb: &Mrb,
-    _class: RClass,
+    class: RClass,
     name: String,
     parameters: Array,
 ) -> Result<Value, Error> {
@@ -269,8 +270,57 @@ fn declare_signal(
         .entries(mrb)
         .filter_map(String::from_value)
         .collect();
-    realm::declare_signal(mrb, Signal { name, parameters })?;
+    realm::declare_signal(mrb, class, Signal { name, parameters })?;
     Ok(Value::nil())
+}
+
+// Godot::Object.__declare_export__(name, default): takes the property the
+// class exports as its body runs, its type read from the value it is
+// declared with, for the realm to publish once the file has run.
+fn declare_export(mrb: &Mrb, class: RClass, name: String, default: Value) -> Result<Value, Error> {
+    let default =
+        value::to_engine(mrb, default, 1).map_err(|reason| argument_error(mrb, &reason))?;
+    if default.get_type() == VariantType::NIL {
+        let message = format!("{name} is exported with no value, so it has no type");
+        return Err(argument_error(mrb, &message));
+    }
+    if let Some(engine_class) = engine_member(mrb, class, &name) {
+        let message =
+            format!("{name} is already a member of {engine_class}, so it cannot be exported");
+        return Err(argument_error(mrb, &message));
+    }
+    realm::declare_export(mrb, class, Property::new(name, &default))?;
+    Ok(Value::nil())
+}
+
+// The engine class `class` extends that has a member of that name, if one
+// has: a signal, a property or an integer constant, which is what GDScript
+// refuses a member for redefining.
+fn engine_member(mrb: &Mrb, class: RClass, name: &str) -> Option<String> {
+    let engine_class = engine_ancestor(mrb, class)?;
+    let mut class_db = ClassDb::singleton();
+    let has = class_db.class_has_signal(engine_class.as_str(), name)
+        || class_db.class_has_integer_constant(engine_class.as_str(), name)
+        || !class_db
+            .class_get_property_setter(engine_class.as_str(), name)
+            .is_empty()
+        || !class_db
+            .class_get_property_getter(engine_class.as_str(), name)
+            .is_empty();
+    has.then_some(engine_class)
+}
+
+// The engine class `class` extends, itself or through its superclasses, as
+// the engine names it.
+fn engine_ancestor(mrb: &Mrb, class: RClass) -> Option<String> {
+    let mut current = class.as_value();
+    loop {
+        let path = RClass::from_value(current)?.path(mrb)?;
+        if let Some(name) = path.strip_prefix("Godot::") {
+            return Some(name.to_owned());
+        }
+        current = current.funcall(mrb, c"superclass", &[]).ok()?;
+    }
 }
 
 // Godot::Object.__engine_constant__(name): the integer constant or enum
@@ -391,6 +441,13 @@ fn type_named(debug: &str) -> Option<String> {
         .map(<VariantType as EngineEnum>::from_ord)
         .find(|kind| format!("{kind:?}") == debug)
         .map(|kind| type_string(i64::from(kind.ord)).to_string())
+}
+
+fn argument_error(mrb: &Mrb, message: &str) -> Error {
+    match mrb.exc_get(c"ArgumentError") {
+        Ok(class) => Error::new(mrb, class, message),
+        Err(error) => error,
+    }
 }
 
 fn not_implemented(mrb: &Mrb, message: &str) -> Error {

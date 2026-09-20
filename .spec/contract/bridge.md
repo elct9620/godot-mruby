@@ -33,6 +33,19 @@ module Godot
 end
 ```
 
+## `Godot::Object.export`
+
+A property of a class extending an engine class, taking its type from the value it is declared with. A node of the class has it as it has the engine's own properties, so the editor and the engine read and write it by that name, and the class reads and writes it as the instance variable of that name.
+
+```ruby
+module Godot
+  class Object
+    def self.export(name, default)
+    end
+  end
+end
+```
+
 ## `is_node_class`
 
 Whether the engine class a name spells is a node class, the only kind a node script extends.

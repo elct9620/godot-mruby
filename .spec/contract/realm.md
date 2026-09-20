@@ -130,14 +130,26 @@ pub fn file_defining(mrb: &Mrb, names: &[String]) -> Option<String> {}
 
 ## `declare_signal`
 
-Takes a signal as declared by the class of the file running now in the realm an extension's method runs in, which the realm publishes once that file has run; a declaration made while no file runs belongs to no class and is not taken.
+Takes a signal as declared by the class of the file running now in the realm an extension's method runs in, which the realm publishes once that file has run; a name a class or one of its ancestors declared already is refused, and a declaration made while no file runs belongs to no class and is not taken.
 
 | Attribute | Value |
 | --- | --- |
 | internal | yes |
 
 ```rust
-pub fn declare_signal(mrb: &Mrb, signal: Signal) {}
+pub fn declare_signal(mrb: &Mrb, class: RClass, signal: Signal) {}
+```
+
+## `declare_export`
+
+Takes a property as exported by the class of the file running now in the realm an extension's method runs in, which the realm publishes once that file has run; a name a class or one of its ancestors declared already is refused, and a declaration made while no file runs belongs to no class and is not taken.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub fn declare_export(mrb: &Mrb, class: RClass, property: Property) {}
 ```
 
 ## `release`
