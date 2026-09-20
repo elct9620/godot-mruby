@@ -179,7 +179,7 @@ node.set_script ──► instance: recorded        no Ruby runs
 node freed (any thread) ──► release(key) ──► let go at the next entry or frame
 ```
 
-The header and ancestry answer what Godot asks on any thread: the engine node class the file's class extends, and the methods it has before its file runs; once it has run, the snapshot answers for the class it ended up with (2.7). A script makes an instance only for a node of that class.
+The header and ancestry answer what Godot asks on any thread before the file runs: the engine node class it extends, and what its source writes out — methods, signals and exported values; once it has run, the snapshot answers for the class it became (2.7). A script makes an instance only for a node of that class.
 
 The instance holds no Ruby value: the realm holds the node's Ruby object under the node's instance id, so a node Ruby made with `new` and one Godot made meet the same object. The instance goes to Godot through the extension interface rather than gdext's `ScriptInstance`, and a call copies what it needs before Ruby runs, since the engine may call back into the node or take its script away before Ruby returns. Freeing a node queues its key and never waits for the realm. The rules are in `.spec/behavior/script.md` and `.spec/behavior/held_objects.md`.
 
@@ -232,7 +232,7 @@ class body runs ──► its declarations, and the methods the class ends up wi
 has_signal, get_property_list, has_method, and the default each property was exported with
 ```
 
-A Ruby class takes its shape as its body runs, so what a class has cannot be read from the source alone. The realm publishes what a file's class has when that file's run commits, and everything answering Godot reads the published value rather than entering the realm, on whatever thread Godot asks from. A file that has not run has none, and its header answers instead. A property's value is the node's own, held by its Ruby object: the instance keeps what Godot writes until that object exists, and answers from what it kept or from the published default. What a class declares is in `.spec/behavior/declarations.md`, and the published shape in `.spec/contract/snapshot.md`.
+A Ruby class takes its shape as its body runs, so what a class has cannot be read from the source alone. The realm publishes what a file's class has when that file's run commits, and everything answering Godot reads the published value rather than entering the realm, on whatever thread Godot asks from. A file that has not run is answered from its header instead, so a scene connects to a signal declared there before anything enters the realm, while a hint, a heading or a member metaprogramming defined waits for the run. A property's value is the node's own, held by its Ruby object: the instance keeps what Godot writes until that object exists, and answers from what it kept or from the published default. What a class declares is in `.spec/behavior/declarations.md`, and the published shape in `.spec/contract/snapshot.md`.
 
 ## 3. Realm
 
