@@ -143,7 +143,7 @@ impl RubyInstance {
     // What the node's class declared for the editor, its ancestors' included
     // and in the order each class wrote it; none until its file has run.
     fn members(&self) -> Vec<Member> {
-        snapshot::latest().listing_of(declaring_paths(&self.path, &self.ancestry))
+        snapshot::latest().members_of(declaring_paths(&self.path, &self.ancestry))
     }
 
     // The files the node's class takes its shape from: its own, then the

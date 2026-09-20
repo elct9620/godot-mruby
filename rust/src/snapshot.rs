@@ -157,12 +157,12 @@ impl Snapshot {
         properties
     }
 
-    /// What the editor lists for the classes of the files at `paths`: each
+    /// What the classes of the files at `paths` have the editor show: each
     /// class's own category and then what it declared, the first file's
     /// first, as GDScript lists a script's members before the ones it
     /// inherits. A property is listed once, the nearest class's, while a
     /// heading belongs to the class that wrote it.
-    pub fn listing_of<'a>(&self, paths: impl IntoIterator<Item = &'a str>) -> Vec<Member> {
+    pub fn members_of<'a>(&self, paths: impl IntoIterator<Item = &'a str>) -> Vec<Member> {
         let mut members: Vec<Member> = Vec::new();
         for path in paths {
             members.push(Member::Group(category(path)));

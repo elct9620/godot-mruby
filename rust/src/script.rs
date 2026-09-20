@@ -94,7 +94,7 @@ impl RubyScript {
     // in the order each class wrote it; none until the file has run.
     fn members(&self) -> Vec<Member> {
         let paths = self.declaring_files();
-        snapshot::latest().listing_of(paths.iter().map(String::as_str))
+        snapshot::latest().members_of(paths.iter().map(String::as_str))
     }
 
     // The property of that name the class exported, if it exported one.

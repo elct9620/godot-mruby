@@ -302,7 +302,7 @@ fn declare_export(
     }
     let property = match hint.as_str() {
         "type" => typed(mrb, name, &default, &hint_string),
-        _ => hinted(name, &default, &hint, hint_string),
+        _ => inferred(name, &default, &hint, hint_string),
     }
     .map_err(|reason| argument_error(mrb, &reason))?;
     realm::declare_export(mrb, class, property)?;
@@ -348,7 +348,7 @@ fn typed(mrb: &Mrb, name: String, default: &Variant, class: &str) -> Result<Prop
 // The property an export naming no type declares: its type is the declared
 // value's, so a value naming none is refused, and the keyword naming a hint
 // tells the editor how to show it.
-fn hinted(
+fn inferred(
     name: String,
     default: &Variant,
     hint: &str,
@@ -360,7 +360,7 @@ fn hinted(
                 .to_owned(),
         );
     }
-    let hint = hint_taking(hint, default.get_type())?;
+    let hint = hint_named(hint, default.get_type())?;
     Ok(Property::new(name, default).hinted(hint, hint_string))
 }
 
@@ -406,11 +406,11 @@ fn unnamed(class: &str) -> String {
     format!("The class \"{class}\" was not found in the global scope.")
 }
 
-// The hint the keyword `name` stands for, unless the exported type cannot be
+// The hint the keyword `name` spells, unless the exported type cannot be
 // read with it. Each one takes the types the `@export_*` annotation it
 // answers to takes, and a type none of them takes is refused in GDScript's
 // words. Ruby names the hint, so a name none of them spells is no hint.
-fn hint_taking(name: &str, kind: VariantType) -> Result<PropertyHint, String> {
+fn hint_named(name: &str, kind: VariantType) -> Result<PropertyHint, String> {
     let (hint, takes): (PropertyHint, &[VariantType]) = match name {
         "range" => (PropertyHint::RANGE, &[VariantType::INT, VariantType::FLOAT]),
         "enum" => (
