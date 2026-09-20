@@ -189,8 +189,12 @@ impl RubyInstance {
     fn engine_property(&self, name: &str) -> bool {
         let engine_class = self.ancestry.engine_class();
         let mut class_db = ClassDb::singleton();
-        !class_db.class_get_property_setter(engine_class, name).is_empty()
-            || !class_db.class_get_property_getter(engine_class, name).is_empty()
+        !class_db
+            .class_get_property_setter(engine_class, name)
+            .is_empty()
+            || !class_db
+                .class_get_property_getter(engine_class, name)
+                .is_empty()
     }
 
     // What a call into Ruby needs of the instance, taken before Ruby runs.
@@ -349,11 +353,8 @@ fn read(key: Key, name: &str, exported: bool) -> Option<Variant> {
     } else {
         let variable = StringName::from(name).to_variant();
         let variable = ToRuby::checked(&variable).ok()?;
-        realm::enter(|realm| realm.send::<_, ToEngine>(key, "__read_variable__", [variable])).map(
-            |ToEngine(answer)| {
-                (!answer.is_nil()).then(|| answer.to::<VarArray>().at(0))
-            },
-        )
+        realm::enter(|realm| realm.send::<_, ToEngine>(key, "__read_variable__", [variable]))
+            .map(|ToEngine(answer)| (!answer.is_nil()).then(|| answer.to::<VarArray>().at(0)))
     };
     answered.unwrap_or_else(|failed: RubyError| {
         failed.write(&GodotLog);
@@ -491,7 +492,9 @@ unsafe extern "C" fn get(
             return sys::GDExtensionBool::from(false);
         }
         if instance.unbuilt() && !realm::inside() {
-            let staged = instance.staged(&name).or_else(|| instance.default_value(&name));
+            let staged = instance
+                .staged(&name)
+                .or_else(|| instance.default_value(&name));
             let Some(answered) = staged else {
                 return sys::GDExtensionBool::from(false);
             };
@@ -522,8 +525,7 @@ unsafe extern "C" fn get_property_list(
 ) -> *const sys::GDExtensionPropertyInfo {
     // SAFETY: the instance lives for this call, which runs no Ruby.
     let properties = unsafe { instance(data) }.properties();
-    let infos: Box<[sys::GDExtensionPropertyInfo]> =
-        properties.iter().map(property_info).collect();
+    let infos: Box<[sys::GDExtensionPropertyInfo]> = properties.iter().map(property_info).collect();
     // SAFETY: Godot hands a count to fill.
     unsafe { *count = infos.len() as u32 };
     Box::into_raw(infos).cast::<sys::GDExtensionPropertyInfo>()
