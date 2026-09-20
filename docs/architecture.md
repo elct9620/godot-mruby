@@ -179,7 +179,7 @@ node.set_script ──► instance: recorded        no Ruby runs
 node freed (any thread) ──► release(key) ──► let go at the next entry or frame
 ```
 
-The header and ancestry answer what Godot asks on any thread before the file runs: the engine node class it extends, and what its source writes out — methods, signals and exported values; once it has run, the snapshot answers for the class it became (2.7). A script makes an instance only for a node of that class.
+The header and ancestry answer Godot on any thread before the file runs: the engine node class it extends, and what its source writes out — methods, signals and exported values; once it has run, the snapshot answers for the class it became (2.7). A script makes an instance only for such a node.
 
 The instance holds no Ruby value: the realm holds the node's Ruby object under the node's instance id, so a node Ruby made with `new` and one Godot made meet the same object. The instance goes to Godot through the extension interface rather than gdext's `ScriptInstance`, and a call copies what it needs before Ruby runs, since the engine may call back into the node or take its script away before Ruby returns. Freeing a node queues its key and never waits for the realm. The rules are in `.spec/behavior/script.md` and `.spec/behavior/held_objects.md`.
 
@@ -303,6 +303,6 @@ Ruby in the realm sees Godot, and Minitest in a test run
 
 A gem is an extension: beni's `Gem`, mruby's gem init convention. What every realm of a kind has is installed by its opener's `extend`, before the class index takes the files in, so a file naming one of its constants is warned about; what only one use needs is installed by whoever needs it, and the install warns of an indexed file naming what it added. Only the test runner installs `Minitest`, so a shipped game never has it.
 
-A gem's methods run with the state, and reach the realm's bookkeeping only through the realm's functions that take it: holding an object under a key, finding it again, and asking the class index for a file.
+A gem's methods run with the state, and reach the realm's bookkeeping only through the functions that take it: holding an object under a key, finding it again, and asking the class index for a file.
 
-The line between the two: what every realm is, its output and its hooks, belongs to the realm; what only some realms need is a gem. The framework is specified in `.spec/contract/minitest.md` and `.spec/behavior/minitest.md`.
+The line: what every realm is, output and hooks included, belongs to the realm; what only some need is a gem. The framework is specified in `.spec/contract/minitest.md` and `.spec/behavior/minitest.md`.
