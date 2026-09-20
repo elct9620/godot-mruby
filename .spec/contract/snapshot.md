@@ -225,7 +225,7 @@ impl Snapshot {
 
 ## `Snapshot::properties_of`
 
-The properties the classes of the files at the paths exported, the first file's first and one to a name, as a class has what it exported and what it inherits.
+The properties the classes of the files exported, the first file's first and one to a name, as a class has what it exported and what it inherits. Each file comes with what its header writes, which answers for it until it has run.
 
 | Attribute | Value |
 | --- | --- |
@@ -233,13 +233,17 @@ The properties the classes of the files at the paths exported, the first file's 
 
 ```rust
 impl Snapshot {
-    pub fn properties_of<'a>(&self, paths: impl IntoIterator<Item = &'a str>) -> Vec<Property> {}
+    pub fn properties_of<'a>(
+        &self,
+        files: impl IntoIterator<Item = (&'a str, &'a [Property])>,
+    ) -> Vec<Property> {
+    }
 }
 ```
 
 ## `Snapshot::members_of`
 
-What the classes of the files at the paths have the editor show: each class's own category and then what it declared, the first file's first, as GDScript lists a script's members before the ones it inherits. A property is listed once, the nearest class's, while a heading belongs to the class that wrote it. Only a build of the editor carries the categories, as GDScript's are compiled out of a game's.
+What the classes of the files have the editor show: each class's own category and then what it declared, the first file's first, as GDScript lists a script's members before the ones it inherits. A property is listed once, the nearest class's, while a heading belongs to the class that wrote it. Only a build of the editor carries the categories, as GDScript's are compiled out of a game's. Each file comes with what its header writes, which answers for it until it has run, the headings being what running adds.
 
 | Attribute | Value |
 | --- | --- |
@@ -247,7 +251,11 @@ What the classes of the files at the paths have the editor show: each class's ow
 
 ```rust
 impl Snapshot {
-    pub fn members_of<'a>(&self, paths: impl IntoIterator<Item = &'a str>) -> Vec<Member> {}
+    pub fn members_of<'a>(
+        &self,
+        files: impl IntoIterator<Item = (&'a str, &'a [Property])>,
+    ) -> Vec<Member> {
+    }
 }
 ```
 

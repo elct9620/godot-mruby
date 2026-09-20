@@ -100,17 +100,25 @@ impl RubyScript {
     }
 
     // The properties the class exported, its ancestors' included, nearest
-    // first; none until the file has run.
+    // first: what each file declared as it ran, or what its header writes
+    // while it has not run.
     fn properties(&self) -> Vec<Property> {
-        let paths = self.declaring_files();
-        snapshot::latest().properties_of(paths.iter().map(String::as_str))
+        let files = self.declaring();
+        let exported = files
+            .iter()
+            .map(|(path, header)| (path.as_str(), header.exports()));
+        snapshot::latest().properties_of(exported)
     }
 
     // What the class declared for the editor, its ancestors' included and
-    // in the order each class wrote it; none until the file has run.
+    // in the order each class wrote it; a file that has not run has the
+    // properties its header writes and no heading.
     fn members(&self) -> Vec<Member> {
-        let paths = self.declaring_files();
-        snapshot::latest().members_of(paths.iter().map(String::as_str))
+        let files = self.declaring();
+        let exported = files
+            .iter()
+            .map(|(path, header)| (path.as_str(), header.exports()));
+        snapshot::latest().members_of(exported)
     }
 
     // The property of that name the class exported, if it exported one.

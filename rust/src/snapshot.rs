@@ -151,13 +151,17 @@ impl Snapshot {
         self.members(path).iter().filter_map(Member::property)
     }
 
-    /// The properties the classes of the files at `paths` exported, the
+    /// The properties the classes of the files at `files` exported, the
     /// first file's first and one to a name, as a class has what it
-    /// exported and what it inherits.
-    pub fn properties_of<'a>(&self, paths: impl IntoIterator<Item = &'a str>) -> Vec<Property> {
+    /// exported and what it inherits. Each file comes with what its header
+    /// writes, which answers for it until it has run.
+    pub fn properties_of<'a>(
+        &self,
+        files: impl IntoIterator<Item = (&'a str, &'a [Property])>,
+    ) -> Vec<Property> {
         let mut properties: Vec<Property> = Vec::new();
-        for path in paths {
-            for property in self.properties(path) {
+        for (path, exported) in files {
+            for property in self.exported(path, exported) {
                 if !properties.iter().any(|kept| kept.name == property.name) {
                     properties.push(property.clone());
                 }
@@ -166,18 +170,33 @@ impl Snapshot {
         properties
     }
 
-    /// What the classes of the files at `paths` have the editor show: each
+    // The properties the class of the file at `path` has: the ones it
+    // exported as it ran, or the ones its header writes while it has not run.
+    fn exported<'a>(&'a self, path: &str, exported: &'a [Property]) -> Vec<&'a Property> {
+        if self.has_run(path) {
+            self.properties(path).collect()
+        } else {
+            exported.iter().collect()
+        }
+    }
+
+    /// What the classes of the files at `files` have the editor show: each
     /// class's own category and then what it declared, the first file's
     /// first, as GDScript lists a script's members before the ones it
     /// inherits. A property is listed once, the nearest class's, while a
-    /// heading belongs to the class that wrote it.
-    pub fn members_of<'a>(&self, paths: impl IntoIterator<Item = &'a str>) -> Vec<Member> {
+    /// heading belongs to the class that wrote it. Each file comes with what
+    /// its header writes, which answers for it until it has run, headings
+    /// included in what running adds.
+    pub fn members_of<'a>(
+        &self,
+        files: impl IntoIterator<Item = (&'a str, &'a [Property])>,
+    ) -> Vec<Member> {
         let mut members: Vec<Member> = Vec::new();
-        for path in paths {
+        for (path, exported) in files {
             if in_editor() {
                 members.push(Member::Group(category(path)));
             }
-            for member in self.members(path) {
+            for member in self.declared(path, exported) {
                 let listed = member.property().is_some_and(|property| {
                     members
                         .iter()
@@ -185,11 +204,22 @@ impl Snapshot {
                         .any(|kept| kept.name == property.name)
                 });
                 if !listed {
-                    members.push(member.clone());
+                    members.push(member);
                 }
             }
         }
         members
+    }
+
+    // What the class of the file at `path` declared for the editor: what it
+    // declared as it ran, or the properties its header writes while it has
+    // not run, which carry no heading of their own.
+    fn declared(&self, path: &str, exported: &[Property]) -> Vec<Member> {
+        if self.has_run(path) {
+            self.members(path).to_vec()
+        } else {
+            exported.iter().cloned().map(Member::Property).collect()
+        }
     }
 
     /// The methods the class of the file at `path` defines; none for a file

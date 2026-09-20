@@ -141,15 +141,18 @@ impl RubyInstance {
     }
 
     // What the node's class declared for the editor, its ancestors' included
-    // and in the order each class wrote it; none until its file has run.
+    // and in the order each class wrote it; a file that has not run has the
+    // properties its header writes and no heading.
     fn members(&self) -> Vec<Member> {
-        snapshot::latest().members_of(declaring_paths(&self.path, &self.ancestry))
+        snapshot::latest().members_of(declaring(&self.path, &self.header, &self.ancestry))
     }
 
-    // The files the node's class takes its shape from: its own, then the
-    // ones it inherits from, nearest first.
-    fn declaring_paths(&self) -> impl Iterator<Item = &str> {
-        declaring_paths(&self.path, &self.ancestry)
+    // The property of that name the node's class exported, from the nearest
+    // class exporting one.
+    fn property(&self, name: &str) -> Option<Property> {
+        properties_of(&self.path, &self.header, &self.ancestry)
+            .into_iter()
+            .find(|property| property.name == name)
     }
 
     // What Godot wrote to the property `name` before the node had a Ruby
@@ -164,14 +167,7 @@ impl RubyInstance {
     // The value the class exported the property with, which answers Godot
     // while the node has no object of its own to answer from.
     fn default_value(&self, name: &str) -> Option<Variant> {
-        let snapshot = snapshot::latest();
-        self.declaring_paths()
-            .find_map(|path| {
-                snapshot
-                    .properties(path)
-                    .find(|property| property.name == name)
-            })
-            .map(Property::default_value)
+        self.property(name).map(|property| property.default_value())
     }
 
     // Whether the node has no Ruby object yet, so what Godot writes has
@@ -194,12 +190,7 @@ impl RubyInstance {
 
     // Whether the node's class exported a property of that name.
     fn exports(&self, name: &str) -> bool {
-        let snapshot = snapshot::latest();
-        self.declaring_paths().any(|path| {
-            snapshot
-                .properties(path)
-                .any(|property| property.name == name)
-        })
+        self.property(name).is_some()
     }
 
     // Whether the node's own engine class has a property of that name, which
@@ -221,6 +212,7 @@ impl RubyInstance {
         Caller {
             path: self.path.clone(),
             owner: self.owner,
+            header: Arc::clone(&self.header),
             ancestry: Arc::clone(&self.ancestry),
             stage: Arc::clone(&self.stage),
             staged: Arc::clone(&self.staged),
@@ -244,6 +236,7 @@ impl Drop for RubyInstance {
 struct Caller {
     path: String,
     owner: InstanceId,
+    header: Arc<Header>,
     ancestry: Arc<Ancestry>,
     stage: Arc<Mutex<Stage>>,
     staged: Arc<Mutex<Staged>>,
@@ -301,7 +294,7 @@ impl Caller {
         if staged.is_empty() {
             return;
         }
-        let properties = properties_of(&self.path, &self.ancestry);
+        let properties = properties_of(&self.path, &self.header, &self.ancestry);
         for (name, value) in staged {
             let exported = properties.iter().any(|property| property.name == name);
             write(key, &name, exported, &value);
@@ -334,14 +327,24 @@ impl Caller {
 
 // The properties the class of the file at `path` exported, its ancestors'
 // included, nearest first.
-fn properties_of(path: &str, ancestry: &Ancestry) -> Vec<Property> {
-    snapshot::latest().properties_of(declaring_paths(path, ancestry))
+fn properties_of(path: &str, header: &Header, ancestry: &Ancestry) -> Vec<Property> {
+    snapshot::latest().properties_of(declaring(path, header, ancestry))
 }
 
-// The files the class of the file at `path` takes its shape from: its own,
-// then the ones it inherits from, nearest first.
-fn declaring_paths<'a>(path: &'a str, ancestry: &'a Ancestry) -> impl Iterator<Item = &'a str> {
-    std::iter::once(path).chain(ancestry.paths())
+// The files the class of the file at `path` takes its shape from, each with
+// what its header exports: its own, then the ones it inherits from, nearest
+// first.
+fn declaring<'a>(
+    path: &'a str,
+    header: &'a Header,
+    ancestry: &'a Ancestry,
+) -> impl Iterator<Item = (&'a str, &'a [Property])> {
+    std::iter::once((path, header.exports())).chain(
+        ancestry
+            .files()
+            .iter()
+            .map(|(path, header)| (path.as_str(), header.exports())),
+    )
 }
 
 // Writes `value` to the property `name` of the object `key` holds: through

@@ -3,15 +3,17 @@
 
 use std::collections::BTreeSet;
 
-use ruby_prism::{CallNode, Node, NodeList};
+use godot::builtin::{GString, StringName, VarArray, VarDictionary, Variant};
+use godot::meta::ToGodot;
+use ruby_prism::{CallNode, Integer, Node, NodeList};
 
 use crate::realm;
-use crate::snapshot::Signal;
+use crate::snapshot::{Property, Signal};
 
 /// A file's header: the constants its `module` and `class` statements write,
 /// the name the class its path names is written with, the superclass written
-/// on it, the names of the methods it defines, the signals its body declares,
-/// and the `tool`, `abstract` and `icon` its body calls.
+/// on it, the names of the methods it defines, the signals and properties
+/// its body declares, and the `tool`, `abstract` and `icon` its body calls.
 #[derive(Debug, Default)]
 pub struct Header {
     writes: Vec<Vec<String>>,
@@ -19,6 +21,7 @@ pub struct Header {
     superclass: Option<Superclass>,
     methods: BTreeSet<String>,
     signals: Vec<Signal>,
+    exports: Vec<Property>,
     tool: bool,
     is_abstract: bool,
     icon: Option<String>,
@@ -98,6 +101,15 @@ impl Header {
         &self.signals
     }
 
+    /// The properties the class exports, in the order it declares them, as
+    /// the `export` calls of its body write them. A value the call does not
+    /// write out is the file's to work out as it runs, and the hint and the
+    /// type a keyword names are read only then, so a property here carries
+    /// the name and the value alone.
+    pub fn exports(&self) -> &[Property] {
+        &self.exports
+    }
+
     pub fn is_tool(&self) -> bool {
         self.tool
     }
@@ -145,6 +157,11 @@ impl Header {
             (b"signal", [name, parameters @ ..]) => {
                 if let Some(signal) = declared(name, parameters) {
                     self.signals.push(signal);
+                }
+            }
+            (b"export", [name, default, ..]) => {
+                if let Some(property) = exported(name, default) {
+                    self.exports.push(property);
                 }
             }
             _ => {}
@@ -218,6 +235,67 @@ fn declared(name: &Node, parameters: &[Node]) -> Option<Signal> {
         name: name_of(name)?,
         parameters: parameters.iter().map(name_of).collect::<Option<_>>()?,
     })
+}
+
+// The property an `export` call declares, as it is written: the name Godot
+// reads it by and the value it is declared with, which gives it its type. A
+// value written as anything but a literal is the file's to work out as it
+// runs, so the header carries none of that declaration.
+fn exported(name: &Node, default: &Node) -> Option<Property> {
+    Some(Property::new(name_of(name)?, &literal(default)?))
+}
+
+// The value a literal writes, as the engine takes it, following the Ruby
+// value's own class as a value crossing from a running file does. A literal
+// holding anything else, such as a constant or a call, writes none.
+fn literal(node: &Node) -> Option<Variant> {
+    if node.as_true_node().is_some() {
+        return Some(true.to_variant());
+    }
+    if node.as_false_node().is_some() {
+        return Some(false.to_variant());
+    }
+    if let Some(number) = node.as_integer_node() {
+        return whole(&number.value()).map(|number| number.to_variant());
+    }
+    if let Some(number) = node.as_float_node() {
+        return Some(number.value().to_variant());
+    }
+    if let Some(string) = node.as_string_node() {
+        return Some(GString::from(&text(string.unescaped())).to_variant());
+    }
+    if let Some(symbol) = node.as_symbol_node() {
+        return Some(StringName::from(&text(symbol.unescaped())).to_variant());
+    }
+    if let Some(array) = node.as_array_node() {
+        let mut copied = VarArray::new();
+        for element in array.elements().iter() {
+            copied.push(&literal(&element)?);
+        }
+        return Some(copied.to_variant());
+    }
+    if let Some(hash) = node.as_hash_node() {
+        let mut copied = VarDictionary::new();
+        for element in hash.elements().iter() {
+            let entry = element.as_assoc_node()?;
+            copied.set(&literal(&entry.key())?, &literal(&entry.value())?);
+        }
+        return Some(copied.to_variant());
+    }
+    None
+}
+
+// The number an integer literal writes, unless it is larger than the
+// engine's own integers hold.
+fn whole(number: &Integer) -> Option<i64> {
+    let (negative, digits) = number.to_u32_digits();
+    let mut whole: i64 = 0;
+    for digit in digits.iter().rev() {
+        whole = whole
+            .checked_mul(i64::from(u32::MAX) + 1)?
+            .checked_add(i64::from(*digit))?;
+    }
+    Some(if negative { -whole } else { whole })
 }
 
 // A name as a call writes it, which is a symbol or a string.

@@ -9,6 +9,7 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 - `tasks/support/announcement.rb`
 - `tasks/support/callbacks.rb`
 - `tasks/support/godot.rb`
+- `tasks/support/header.rb`
 - `tasks/support/node_scripts.rb`
 
 ## `RS-001` A script attached to a node runs
@@ -320,3 +321,27 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a scene connecting a signal a node script's class declares |
 | When | the scene runs |
 | Then | the node answers that the signal is connected |
+
+## `RS-040` A node script answers an exported property's value before its file runs
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a property, on a node a scene wrote nothing to |
+| When | Godot reads that property |
+| Then | the node answers the value the export was declared with |
+
+## `RS-041` A node script lists an exported property before its file runs
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a property |
+| When | Godot asks a node with that script for its properties |
+| Then | the list names that property |
+
+## `RS-042` A node script answers nothing for an export whose value is not written out
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a property with a value a call answers |
+| When | Godot reads that property before the file runs |
+| Then | the node answers nothing |

@@ -57,7 +57,7 @@ Where a run's words go, as one stream: messages - what Ruby prints and the run's
 
 ### Header
 
-What a Ruby file says before it runs, read from its source without running it: the constants its `module` and `class` statements write, and of the class its path names, the name it is written with, the superclass written on its class statement and the namespaces that is looked up from, the names of the methods it defines, the signals its body declares, and the `tool`, `abstract` and `icon` its body calls. Godot asks a script these on any thread, before its file has run, and a realm loads what the file writes before running it.
+What a Ruby file says before it runs, read from its source without running it: the constants its `module` and `class` statements write, and of the class its path names, the name it is written with, the superclass written on its class statement and the namespaces that is looked up from, the names of the methods it defines, the signals its body declares, the properties it exports with a value its source writes out, and the `tool`, `abstract` and `icon` its body calls. Godot asks a script these on any thread, before its file has run, and a realm loads what the file writes before running it.
 
 ### Snapshot
 

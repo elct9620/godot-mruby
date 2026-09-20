@@ -1,6 +1,6 @@
 # Header
 
-How a file's header is read from its source without running it: the constants its `module` and `class` statements write, the class the file's path names and the name it is written with, the superclass written on it and the namespaces it is looked up from, the names of the methods it defines, the signals its body declares, and the `tool`, `abstract` and `icon` its body calls.
+How a file's header is read from its source without running it: the constants its `module` and `class` statements write, the class the file's path names and the name it is written with, the superclass written on it and the namespaces it is looked up from, the names of the methods it defines, the signals and properties its body declares, and the `tool`, `abstract` and `icon` its body calls.
 
 ## Includes
 
