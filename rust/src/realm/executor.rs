@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::ffi::CString;
 
 use super::{bookkeeping, compile};
+use crate::snapshot::Signal;
 use beni::{Error, Mrb, ReprValue, Value};
 
 /// How far a file has run in a realm.
@@ -18,11 +19,12 @@ enum Run {
     Failed,
 }
 
-/// A file running now, and the constants it has created so far, each as the
-/// names of its namespace and its own.
+/// A file running now, the constants it has created so far, each as the
+/// names of its namespace and its own, and what its class has declared.
 struct Frame {
     path: String,
     created: Vec<(Vec<String>, String)>,
+    declared: Vec<Signal>,
 }
 
 /// How far each file has run in a realm, and the files running now.
@@ -97,6 +99,13 @@ pub(super) fn record(mrb: &Mrb, scope: Vec<String>, name: String) {
     }
 }
 
+/// Records that the class of the file running now declared `signal`.
+pub(super) fn declare(mrb: &Mrb, signal: Signal) {
+    if let Some(frame) = runs(mrb).frames.borrow_mut().last_mut() {
+        frame.declared.push(signal);
+    }
+}
+
 fn runs(mrb: &Mrb) -> &Runs {
     &bookkeeping(mrb).runs
 }
@@ -114,6 +123,7 @@ fn execute<T>(
     runs.frames.borrow_mut().push(Frame {
         path: path.to_owned(),
         created: Vec::new(),
+        declared: Vec::new(),
     });
     let outcome = prepare().and_then(|prepared| {
         let source = source_of(mrb, path)?;
@@ -123,7 +133,12 @@ fn execute<T>(
     });
     let frame = runs.frames.borrow_mut().pop();
     let run = match (&outcome, frame) {
-        (Ok(()), _) => Run::Done,
+        (Ok(()), frame) => {
+            frame
+                .into_iter()
+                .for_each(|frame| bookkeeping(mrb).declared(&frame.path, frame.declared));
+            Run::Done
+        }
         (Err(_), frame) => {
             frame.iter().for_each(|frame| take_away(mrb, frame));
             Run::Failed

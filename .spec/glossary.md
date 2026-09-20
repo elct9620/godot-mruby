@@ -61,7 +61,7 @@ What a Ruby file says before it runs, read from its source without running it: t
 
 ### Snapshot
 
-What a realm has published of the classes its files define, for Godot to be answered from without entering it: for each file, what the class its path names declares and defines, gathered while the file runs and published as one value that never changes, as the outermost entry leaves the realm. Godot asks a script its shape - the methods it has, the signals it declares - on any thread, so a busy realm never holds up the editor, a loading screen or an error report. A file that has not run has none, and its header answers instead.
+What a realm has published of the classes its files define, for Godot to be answered from without entering it: for each file, what the class its path names declares and defines, gathered while the file runs and published, as one value that never changes, once that file has run. Godot asks a script its shape - the methods it has, the signals it declares - on any thread, so a busy realm never holds up the editor, a loading screen or an error report. A file that has not run has none, and its header answers instead.
 
 #### Rejected
 

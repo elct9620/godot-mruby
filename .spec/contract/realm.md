@@ -128,6 +128,18 @@ The file the class index of the realm an extension's method runs in names for a 
 pub fn file_defining(mrb: &Mrb, names: &[String]) -> Option<String> {}
 ```
 
+## `declare_signal`
+
+Takes a signal as declared by the class of the file running now in the realm an extension's method runs in, which the realm publishes once that file has run; a declaration made while no file runs belongs to no class and is not taken.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub fn declare_signal(mrb: &Mrb, signal: Signal) {}
+```
+
 ## `release`
 
 Lets go of the object a key of the game's realm holds, at the realm's next entry or frame; it never waits for the realm, so a node is freed on any thread without waiting for Ruby.

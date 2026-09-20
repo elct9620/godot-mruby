@@ -36,10 +36,11 @@ module Godot
   class Object
     @engine_class = true
 
-    # What a class extending an engine class calls in its body. The file's
-    # source is what Godot reads them from, so `tool` and `icon` do nothing
-    # as the body runs; `abstract` marks only the class calling it, as
-    # Active Record's `abstract_class` does.
+    # What a class extending an engine class calls in its body. Godot reads
+    # `tool` and `icon` from the file's source, so they do nothing as the
+    # body runs; `abstract` marks only the class calling it, as Active
+    # Record's `abstract_class` does; `signal` is taken by the realm, which
+    # publishes it for Godot once the file has run.
     class << self
       def tool; end
 
@@ -47,6 +48,13 @@ module Godot
 
       def abstract
         @abstract = true
+      end
+
+      # A signal of the class, named as Godot names it, with a name for each
+      # value it is emitted with. A node of the class has it as the engine's
+      # own signals, so it is connected to and emitted by their names.
+      def signal(name, *parameters)
+        __declare_signal__(name.to_s, parameters.map { |parameter| parameter.to_s })
       end
 
       # An engine class makes the engine's object; a node script's class
@@ -94,7 +102,7 @@ module Godot
       end
 
       private :__make__, :__make_node__, :__allocate__, :__singleton__, :__static_method__, :__call_static__,
-              :__engine_constant__
+              :__engine_constant__, :__declare_signal__
 
       private
 

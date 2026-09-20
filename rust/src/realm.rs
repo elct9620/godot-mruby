@@ -1,10 +1,11 @@
 use std::cell::{Cell, RefCell};
 use std::ffi::CStr;
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use beni::{Error, Gem, IntoValue, Mrb, ReprValue, TryConvert, Value};
 
 use crate::compiler;
+use crate::snapshot::{self, Signal, Snapshot};
 
 mod constants;
 mod executor;
@@ -104,6 +105,9 @@ struct Bookkeeping {
     index: RefCell<ClassIndex>,
     runs: executor::Runs,
     registry: Registry,
+    // What the files that have run declare, published once each of them has
+    // run, so what any thread reads is never half-declared.
+    snapshot: RefCell<Arc<Snapshot>>,
     // Set while the realm defines a directory's module, which no file created.
     defining_namespace: Cell<bool>,
     // How the Ruby running now started, while any does.
@@ -139,6 +143,20 @@ impl Drop for Outermost<'_> {
 enum Started {
     Run,
     Call,
+}
+
+impl Bookkeeping {
+    // Publishes what the file at `path` declared, now that it has run. Ruby
+    // itself asks Godot what a class has, so what a file declared is read
+    // back while the thread that ran it is still inside the realm.
+    fn declared(&self, path: &str, signals: Vec<Signal>) {
+        if signals.is_empty() && self.snapshot.borrow().signals(path).is_empty() {
+            return;
+        }
+        let mut draft = self.snapshot.borrow_mut();
+        Arc::make_mut(&mut draft).declared(path, signals);
+        snapshot::publish(Arc::clone(&draft));
+    }
 }
 
 // The bookkeeping `mrb`'s realm put there as it opened.
@@ -255,6 +273,13 @@ fn open_game() -> Result<Realm, RubyError> {
     open()
 }
 
+/// Takes `signal` as declared by the class of the file running now in the
+/// realm `mrb` belongs to; a declaration made while no file runs belongs to
+/// no class and is not taken.
+pub fn declare_signal(mrb: &Mrb, signal: Signal) {
+    executor::declare(mrb, signal);
+}
+
 /// Holds `object` under `key` in the realm `mrb` belongs to, for an
 /// extension making an object something outside keeps the key for.
 pub fn hold(mrb: &Mrb, key: Key, object: Value) -> Result<(), Error> {
@@ -310,6 +335,7 @@ pub fn close() {
     }
     *game.borrow_mut() = Game::Closed;
     RELEASED.lock().unwrap().clear();
+    snapshot::publish(Arc::default());
 }
 
 impl Realm {
@@ -330,6 +356,7 @@ impl Realm {
             index: RefCell::default(),
             runs: executor::Runs::default(),
             registry: Registry::new(&mrb),
+            snapshot: RefCell::default(),
             defining_namespace: Cell::default(),
             outermost: Cell::default(),
         };

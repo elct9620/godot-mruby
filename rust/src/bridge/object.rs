@@ -16,6 +16,7 @@ use godot::obj::{EngineEnum, Gd, InstanceId, Singleton};
 
 use super::value::{self, ToRuby};
 use crate::realm::{self, Key};
+use crate::snapshot::Signal;
 
 /// The engine object a Ruby object of an engine class stands for. Holding
 /// it keeps a reference-counted object alive until Ruby lets go of it.
@@ -51,6 +52,7 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     object.define_singleton_method(mrb, c"__static_method__", method!(static_method, 1))?;
     object.define_singleton_method(mrb, c"__call_static__", method!(call_static, 2))?;
     object.define_singleton_method(mrb, c"__engine_constant__", method!(engine_constant, 1))?;
+    object.define_singleton_method(mrb, c"__declare_signal__", method!(declare_signal, 2))?;
     object.define_private_method(mrb, c"__resolve__", method!(resolve, 1))?;
     object.define_private_method(mrb, c"__call__", method!(call, 2))?;
     object.define_private_method(mrb, c"__instance_id__", method!(instance_id, 0))?;
@@ -252,6 +254,18 @@ pub fn ruby_object(mrb: &Mrb, object: Gd<Object>) -> Value {
         Some(class) => mrb.wrap_as(EngineObject(object), class).as_value(),
         None => Value::nil(),
     }
+}
+
+// Godot::Object.__declare_signal__(name, parameters): takes the signal the
+// class declares as its body runs, for the realm to publish once the file
+// has run.
+fn declare_signal(mrb: &Mrb, _class: RClass, name: String, parameters: Array) -> Value {
+    let parameters = parameters
+        .entries(mrb)
+        .filter_map(String::from_value)
+        .collect();
+    realm::declare_signal(mrb, Signal { name, parameters });
+    Value::nil()
 }
 
 // Godot::Object.__engine_constant__(name): the integer constant or enum

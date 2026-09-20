@@ -7,13 +7,16 @@ use godot::classes::{
 };
 use godot::global::Error;
 use godot::meta::conv::RawPtr;
+use godot::obj::EngineEnum;
 use godot::prelude::*;
+use godot::register::info::PropertyUsageFlags;
 
 use crate::ancestry::{self, Ancestry, Broken};
 use crate::game::GameFiles;
 use crate::instance::RubyInstance;
 use crate::language;
 use crate::parser::Header;
+use crate::snapshot::{self, Signal};
 use crate::{bridge, error};
 
 /// The script a `.rb` file loads as, the way a `.gd` file loads as a `GDScript`.
@@ -52,6 +55,13 @@ impl RubyScript {
             let path = self.base().get_path().to_string();
             ancestry::read(&path, &self.header, &GameFiles).map(Arc::new)
         })
+    }
+
+    // The signals the file's class declared, as the realm last published
+    // them; none until the file has run.
+    fn signals(&self) -> Vec<Signal> {
+        let path = self.base().get_path().to_string();
+        snapshot::latest().signals(&path).to_vec()
     }
 
     // The engine node class the file's class extends when it is a node
@@ -207,12 +217,15 @@ impl IScriptExtension for RubyScript {
         language::registered().map(Gd::upcast)
     }
 
-    fn has_script_signal(&self, _signal: StringName) -> bool {
-        false
+    fn has_script_signal(&self, signal: StringName) -> bool {
+        let signal = signal.to_string();
+        self.signals()
+            .iter()
+            .any(|declared| declared.name == signal)
     }
 
     fn get_script_signal_list(&self) -> Array<AnyDictionary> {
-        Array::new()
+        self.signals().iter().map(signal_info).collect()
     }
 
     fn has_property_default_value(&self, _property: StringName) -> bool {
@@ -252,6 +265,29 @@ impl IScriptExtension for RubyScript {
     fn get_rpc_config(&self) -> Variant {
         Variant::nil()
     }
+}
+
+// A declared signal as Godot reads it, which takes a method's shape: the
+// signal's name, and a parameter for each value it carries, of any type as
+// an untyped GDScript signal's parameters are.
+fn signal_info(signal: &Signal) -> AnyDictionary {
+    let arguments: Array<AnyDictionary> = signal
+        .parameters
+        .iter()
+        .map(|parameter| parameter_info(parameter))
+        .collect();
+    let mut info = VarDictionary::new();
+    info.set("name", signal.name.as_str());
+    info.set("args", &arguments);
+    info.upcast_any_dictionary()
+}
+
+fn parameter_info(name: &str) -> AnyDictionary {
+    let mut info = VarDictionary::new();
+    info.set("name", name);
+    info.set("type", VariantType::NIL.ord());
+    info.set("usage", PropertyUsageFlags::NIL_IS_VARIANT);
+    info.upcast_any_dictionary()
 }
 
 // No instance: the object is left without a script instance.

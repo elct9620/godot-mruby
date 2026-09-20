@@ -6,6 +6,7 @@ How a node's script instance and the rest of the extension reach what Ruby sees 
 
 - `rust/src/bridge.rs`
 - `rust/src/bridge/**/*.rs`
+- `rust/src/bridge/**/*.rb`
 
 ## `Godot`
 
@@ -17,6 +18,19 @@ The gem every game realm installs: the `Godot` module, its engine classes, value
 
 ```rust
 pub struct Godot;
+```
+
+## `Godot::Object.signal`
+
+A signal of a class extending an engine class, named as Godot names it, with a name for each value it is emitted with. A node of the class has it as it has the engine's own signals, so it is connected to and emitted by those names.
+
+```ruby
+module Godot
+  class Object
+    def self.signal(name, *parameters)
+    end
+  end
+end
 ```
 
 ## `is_node_class`

@@ -16,6 +16,7 @@ mod realm;
 mod runner;
 mod script;
 mod settings;
+mod snapshot;
 
 struct GodotMruby;
 
