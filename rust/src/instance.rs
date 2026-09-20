@@ -44,6 +44,37 @@ pub struct RubyInstance {
     // Shared with the calls running Ruby, which outlive the instance when
     // Ruby takes its node's script away.
     stage: Arc<Mutex<Stage>>,
+    // What Godot wrote to the node's properties before it had a Ruby object,
+    // waiting for the object to be built.
+    staged: Arc<Mutex<Staged>>,
+}
+
+/// What Godot wrote to a node's properties before it had a Ruby object, in
+/// the order it wrote them: a node made for a scene is given the scene's
+/// values before anything builds it.
+#[derive(Default)]
+struct Staged(Vec<(String, Variant)>);
+
+// SAFETY: the mutex holding it lets one thread reach it at a time, and the
+// engine's values are shared across threads under gdext's
+// experimental-threads.
+unsafe impl Send for Staged {}
+
+impl Staged {
+    // What was written to the property `name`, if anything was.
+    fn value(&self, name: &str) -> Option<Variant> {
+        self.0
+            .iter()
+            .find(|(written, _)| written == name)
+            .map(|(_, value)| value.clone())
+    }
+
+    // Keeps `value` for the property `name`, in place of what was written to
+    // it before.
+    fn keep(&mut self, name: &str, value: &Variant) {
+        self.0.retain(|(written, _)| written != name);
+        self.0.push((name.to_owned(), value.clone()));
+    }
 }
 
 /// How far a node's Ruby object has come.
@@ -74,6 +105,7 @@ impl RubyInstance {
             language,
             display: GString::from(&owner.to_string()),
             stage: Arc::new(Mutex::new(Stage::Recorded)),
+            staged: Arc::new(Mutex::new(Staged::default())),
         }
     }
 
@@ -106,8 +138,43 @@ impl RubyInstance {
     // The properties the node's class exported, its ancestors' included;
     // none until its file has run.
     fn properties(&self) -> Vec<Property> {
-        let paths = std::iter::once(self.path.as_str()).chain(self.ancestry.paths());
-        snapshot::latest().properties_of(paths)
+        properties_of(&self.path, &self.ancestry)
+    }
+
+    // What Godot wrote to the property `name` before the node had a Ruby
+    // object, if it wrote one.
+    fn staged(&self, name: &str) -> Option<Variant> {
+        self.staged
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .value(name)
+    }
+
+    // The value the class exported the property with, which answers Godot
+    // while the node has no object of its own to answer from.
+    fn default_value(&self, name: &str) -> Option<Variant> {
+        self.properties()
+            .iter()
+            .find(|property| property.name == name)
+            .map(Property::default_value)
+    }
+
+    // Whether the node has no Ruby object yet, so what Godot writes has
+    // nowhere to go but the instance.
+    fn unbuilt(&self) -> bool {
+        matches!(
+            *self.stage.lock().unwrap_or_else(PoisonError::into_inner),
+            Stage::Recorded
+        )
+    }
+
+    // Keeps `value` for the property `name` until the node's Ruby object is
+    // built, which is when a class's own values are written too.
+    fn stage(&self, name: &str, value: &Variant) {
+        self.staged
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .keep(name, value);
     }
 
     // Whether the node's class exported a property of that name.
@@ -131,7 +198,9 @@ impl RubyInstance {
         Caller {
             path: self.path.clone(),
             owner: self.owner,
+            ancestry: Arc::clone(&self.ancestry),
             stage: Arc::clone(&self.stage),
+            staged: Arc::clone(&self.staged),
         }
     }
 }
@@ -152,7 +221,9 @@ impl Drop for RubyInstance {
 struct Caller {
     path: String,
     owner: InstanceId,
+    ancestry: Arc<Ancestry>,
     stage: Arc<Mutex<Stage>>,
+    staged: Arc<Mutex<Staged>>,
 }
 
 impl Caller {
@@ -185,6 +256,7 @@ impl Caller {
                 if built == Built::Made {
                     realm::enter(|realm| realm.send::<ToRuby, ToEngine>(key, "initialize", []))?;
                 }
+                self.write_staged(key);
                 Ok(Some(key))
             });
         built
@@ -195,6 +267,22 @@ impl Caller {
             })
             .ok()
             .flatten()
+    }
+
+    // Writes what Godot wrote to the node's properties before it had an
+    // object, in the order it wrote them and after `initialize`, so a class
+    // sets itself up before the scene it was made for has its say.
+    fn write_staged(&self, key: Key) {
+        let staged =
+            std::mem::take(&mut self.staged.lock().unwrap_or_else(PoisonError::into_inner).0);
+        if staged.is_empty() {
+            return;
+        }
+        let properties = properties_of(&self.path, &self.ancestry);
+        for (name, value) in staged {
+            let exported = properties.iter().any(|property| property.name == name);
+            write(key, &name, exported, &value);
+        }
     }
 
     // Calls `method` on the node's Ruby object; an exception, or an argument
@@ -219,6 +307,12 @@ impl Caller {
                 Variant::nil()
             })
     }
+}
+
+// The properties the class of the file at `path` exported, its ancestors'
+// included, nearest first.
+fn properties_of(path: &str, ancestry: &Ancestry) -> Vec<Property> {
+    snapshot::latest().properties_of(std::iter::once(path).chain(ancestry.paths()))
 }
 
 // Writes `value` to the property `name` of the object `key` holds: through
@@ -282,6 +376,14 @@ fn property_info(property: &Property) -> sys::GDExtensionPropertyInfo {
     }
 }
 
+// Whether a name is none of the node's class's to answer: a property its
+// engine class has is the engine's, whatever the Ruby object holds under
+// that name, and a name Godot spells with a slash is the engine's own, as
+// metadata and property groups are.
+fn not_the_classs(instance: &RubyInstance, name: &str) -> bool {
+    instance.engine_property(name) || name.contains('/')
+}
+
 // A string the array holds for Godot to read until it hands the array back,
 // as the pointer the engine's property info keeps it under.
 fn owned<T, P>(string: T) -> *mut P {
@@ -341,9 +443,10 @@ unsafe fn name(method: sys::GDExtensionConstStringNamePtr) -> String {
     unsafe { &*method.cast::<StringName>() }.to_string()
 }
 
-// A property of the node's class is its Ruby object's to answer, so the
-// object is built as a call builds it; one the engine class has is the
-// engine's, even where the object holds a variable of that name.
+// A property of the node's class is its Ruby object's to answer, so a
+// thread inside the realm has the object built as a call builds it, and one
+// outside leaves the value with the instance rather than waiting for the
+// realm: the object is given it once something builds it.
 unsafe extern "C" fn set(
     data: sys::GDExtensionScriptInstanceDataPtr,
     property: sys::GDExtensionConstStringNamePtr,
@@ -351,12 +454,18 @@ unsafe extern "C" fn set(
 ) -> sys::GDExtensionBool {
     // SAFETY: the property name lives for the call.
     let name = unsafe { name(property) };
+    // SAFETY: Godot hands a live variant for the call.
+    let value = unsafe { &*value.cast::<Variant>() };
     // SAFETY: the instance lives until Ruby runs, and is not used after.
     let reached = {
         let instance = unsafe { instance(data) };
         let exported = instance.exports(&name);
-        if !exported && instance.engine_property(&name) {
+        if !exported && not_the_classs(instance, &name) {
             return sys::GDExtensionBool::from(false);
+        }
+        if instance.unbuilt() && !realm::inside() {
+            instance.stage(&name, value);
+            return sys::GDExtensionBool::from(true);
         }
         (instance.caller(), exported)
     };
@@ -364,8 +473,6 @@ unsafe extern "C" fn set(
     let Some(key) = caller.object() else {
         return sys::GDExtensionBool::from(false);
     };
-    // SAFETY: Godot hands a live variant for the call.
-    let value = unsafe { &*value.cast::<Variant>() };
     sys::GDExtensionBool::from(write(key, &name, exported, value))
 }
 
@@ -380,8 +487,17 @@ unsafe extern "C" fn get(
     let reached = {
         let instance = unsafe { instance(data) };
         let exported = instance.exports(&name);
-        if !exported && instance.engine_property(&name) {
+        if !exported && not_the_classs(instance, &name) {
             return sys::GDExtensionBool::from(false);
+        }
+        if instance.unbuilt() && !realm::inside() {
+            let staged = instance.staged(&name).or_else(|| instance.default_value(&name));
+            let Some(answered) = staged else {
+                return sys::GDExtensionBool::from(false);
+            };
+            // SAFETY: Godot hands a variant of its own to write into.
+            unsafe { *answer.cast::<Variant>() = answered };
+            return sys::GDExtensionBool::from(true);
         }
         (instance.caller(), exported)
     };

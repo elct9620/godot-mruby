@@ -53,6 +53,12 @@ impl<T> ReentrantLock<T> {
         }
     }
 
+    /// Whether this thread holds the lock, which it answers without waiting
+    /// for the thread that does.
+    pub fn held_here(&self) -> bool {
+        self.holder().thread == Some(thread::current().id())
+    }
+
     // The holder is only ever changed whole, so a panic leaves it consistent.
     fn holder(&self) -> MutexGuard<'_, Holder> {
         self.holder.lock().unwrap_or_else(PoisonError::into_inner)

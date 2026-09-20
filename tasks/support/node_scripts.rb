@@ -44,6 +44,7 @@ module Godot
       verify_inherited_base_type_answered!(project)
       verify_base_script_answered!(project)
       Callbacks.verify!(project)
+      Exports.verify!(project)
       verify_inherited_callback!(project)
     end
 

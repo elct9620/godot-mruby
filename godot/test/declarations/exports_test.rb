@@ -167,4 +167,17 @@ class ExportsTest < Minitest::Test
   ensure
     holding&.free
   end
+
+  # @behavior RD-033
+  def test_a_copy_of_a_node_carries_what_its_properties_hold
+    turret = Loader::Turret.new
+    turret.set(:range, 500.0)
+
+    copy = turret.duplicate
+
+    assert_equal 500.0, copy.get(:range)
+  ensure
+    turret&.free
+    copy&.free
+  end
 end

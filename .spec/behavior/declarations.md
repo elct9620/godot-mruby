@@ -5,6 +5,7 @@ What a node script's class says about itself as its body runs, and how Godot is 
 ## Includes
 
 - `godot/test/declarations/**/*.rb`
+- `tasks/support/exports.rb`
 
 ## `RD-001` A node has the signal its class declared
 
@@ -237,3 +238,35 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | Given | a node whose object wrote an instance variable its class did not export |
 | When | Godot sets a property of that name |
 | Then | the class reads the value it was set to |
+
+## `RD-030` A property answers what a scene wrote before the node has an object
+
+| Step | Statement |
+| --- | --- |
+| Given | a scene setting an exported property of a node whose Ruby object nothing has built |
+| When | Godot reads that property |
+| Then | it answers what the scene wrote |
+
+## `RD-031` A scene's value reaches the node's Ruby object once it is built
+
+| Step | Statement |
+| --- | --- |
+| Given | a scene setting an exported property of a node whose Ruby object nothing has built |
+| When | something builds the node's Ruby object |
+| Then | the class reads what the scene wrote |
+
+## `RD-032` A property answers the class's default while the node has no object
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose class has run and whose Ruby object nothing has built |
+| When | Godot reads an exported property the scene set nothing on |
+| Then | it answers the value the class exported |
+
+## `RD-033` A copy of a node carries what its properties hold
+
+| Step | Statement |
+| --- | --- |
+| Given | a node of a class exporting a value, set to another value |
+| When | the node is duplicated |
+| Then | the copy answers the value the node was set to |

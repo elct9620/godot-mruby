@@ -326,6 +326,13 @@ pub fn declare_export(mrb: &Mrb, class: RClass, property: Property) -> Result<()
     executor::declare(mrb, class, Declaration::Property(property))
 }
 
+/// Whether this thread is inside the game's realm. Something outside asks
+/// before reaching for what only the realm can answer, since entering it
+/// from another thread waits for the one inside.
+pub fn inside() -> bool {
+    GAME.held_here()
+}
+
 /// Holds `object` under `key` in the realm `mrb` belongs to, for an
 /// extension making an object something outside keeps the key for.
 pub fn hold(mrb: &Mrb, key: Key, object: Value) -> Result<(), Error> {
