@@ -4,10 +4,12 @@
 //! whole, since a realm publishes a class only once its file has run.
 
 use std::collections::HashMap;
-use std::sync::{Arc, LazyLock, PoisonError, RwLock};
+use std::sync::{Arc, LazyLock, OnceLock, PoisonError, RwLock};
 
 use godot::builtin::{PackedByteArray, Variant, VariantType};
+use godot::classes::Os;
 use godot::global::{bytes_to_var, var_to_bytes};
+use godot::obj::Singleton;
 use godot::register::info::{PropertyHint, PropertyUsageFlags};
 
 /// A signal a class declared, with the names its parameters were declared
@@ -165,7 +167,9 @@ impl Snapshot {
     pub fn members_of<'a>(&self, paths: impl IntoIterator<Item = &'a str>) -> Vec<Member> {
         let mut members: Vec<Member> = Vec::new();
         for path in paths {
-            members.push(Member::Group(category(path)));
+            if in_editor() {
+                members.push(Member::Group(category(path)));
+            }
             for member in self.members(path) {
                 let listed = member.property().is_some_and(|property| {
                     members
@@ -199,6 +203,14 @@ impl Snapshot {
     pub fn ran(&mut self, path: &str, class: Class) {
         self.classes.insert(path.to_owned(), class);
     }
+}
+
+// Whether this is a build of the editor, which is what a category is for:
+// GDScript's are compiled out of a game's build, so a game's properties
+// carry none either. The build never changes, so the engine is asked once.
+fn in_editor() -> bool {
+    static EDITOR: OnceLock<bool> = OnceLock::new();
+    *EDITOR.get_or_init(|| Os::singleton().has_feature("editor"))
 }
 
 // The category the editor heads a class's own members with, as it heads a

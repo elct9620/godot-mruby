@@ -225,7 +225,7 @@ impl Snapshot {
 
 ## `Snapshot::members_of`
 
-What the classes of the files at the paths have the editor show: each class's own category and then what it declared, the first file's first, as GDScript lists a script's members before the ones it inherits. A property is listed once, the nearest class's, while a heading belongs to the class that wrote it.
+What the classes of the files at the paths have the editor show: each class's own category and then what it declared, the first file's first, as GDScript lists a script's members before the ones it inherits. A property is listed once, the nearest class's, while a heading belongs to the class that wrote it. Only a build of the editor carries the categories, as GDScript's are compiled out of a game's.
 
 | Attribute | Value |
 | --- | --- |
