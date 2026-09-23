@@ -9,6 +9,8 @@ module Godot
   # what it printed. No export template is needed: the editor's own build runs
   # the pack, and the project's export preset declares `template`, the feature
   # an export template's build carries, so the game answers as a shipped one.
+  # That build also carries `editor`, which an export template's does not, so
+  # a game property still comes with its category here; no check reads one.
   # Part of Godot.verify!.
   module ExportedGame
     PRESET = "Verify"
