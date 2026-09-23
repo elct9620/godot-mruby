@@ -15,5 +15,5 @@ config/features=PackedStringArray("4.7")
 
 [mruby]
 
-loader/root_directories=PackedStringArray("res://src")
-test/directories=PackedStringArray("res://test", "res://verify/runner/order", "res://verify/runner/skip", "res://verify/runner/failing/assertion", "res://verify/runner/failing/error", "res://verify/runner/failing/syntax", "res://verify/runner/failing/missing", "res://verify/loader/late", "res://verify/loader/failing/raising")
+loader/root_directories=PackedStringArray("res://src", "res://integration/loader/taken")
+test/directories=PackedStringArray("res://test", "res://integration/runner/order", "res://integration/runner/skip", "res://integration/runner/failing/assertion", "res://integration/runner/failing/error", "res://integration/runner/failing/syntax", "res://integration/runner/failing/missing", "res://integration/loader/late", "res://integration/loader/failing/raising")

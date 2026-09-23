@@ -13,7 +13,8 @@ The full source layout, and how the parts fit together, is in `docs/architecture
 | `.spec/` | Specification verified by sumitsubo (`sumi`): glossary, contract, behavior |
 | `rust/src/realm.rs` | The one way into Ruby; its pieces are under `src/realm/` |
 | `godot/project.godot` | Lists the test directories the runner and `godot:verify` use |
-| `godot/test/unit/` | Ruby unit tests, one directory per `.spec/behavior` file they claim, with the files they load by name beside them; `godot/comparable.rb`, `godot/godot.rb` and `godot/minitest.rb` spell names the realm already has, which the class index warns about |
+| `godot/test/unit/` | Ruby unit tests, one directory per `.spec/behavior` file they claim, with the files they load by name beside them |
+| `godot/integration/` | What only a log or a run's outcome shows, one directory per `.spec/behavior` file, read by `tasks/support/` |
 | `build_config/mruby.rb` | mruby build config (host + x86_64 cross build) |
 | `.github/workflows/pipeline.yml` | Reusable check → build → package → integration → publish; `ci.yml` calls it |
 

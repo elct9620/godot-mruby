@@ -23,18 +23,18 @@ module Godot
   # What gdext prints once the engine has called into the library.
   LOADED = "Initialize godot-rust"
   FAILED = /^(ERROR|SCRIPT ERROR):/
-  PRINTS_SCENE = "res://verify/script/prints.tscn"
+  PRINTS_SCENE = "res://integration/script/prints.tscn"
   # What the prints scene's Ruby prints. Each line must appear exactly once:
   # the scene attaches the same file to two nodes, and a file runs once.
   PRINTED_LINES = ["puts from mruby", "print from mruby", ":p_from_mruby"].freeze
-  REPORT_SCENE = "res://verify/report/report.tscn"
+  REPORT_SCENE = "res://integration/report/report.tscn"
   # What mruby says about the report scene's files, each as the line Godot
   # prints it on and the Ruby location Godot puts on the line after.
   REPORTS = {
-    "WARNING: else without rescue is useless" => "(res://verify/report/warning.rb:9)",
+    "WARNING: else without rescue is useless" => "(res://integration/report/warning.rb:9)",
     %(SCRIPT ERROR: syntax error, unexpected "'end'", expecting end of file) =>
-      "(res://verify/report/syntax_error.rb:12)",
-    "SCRIPT ERROR: wrong key" => "unlock (res://verify/report/raising.rb:10)"
+      "(res://integration/report/syntax_error.rb:12)",
+    "SCRIPT ERROR: wrong key" => "unlock (res://integration/report/raising.rb:10)"
   }.freeze
   # What the report scene's Ruby reports through Godot's own functions.
   PUSHED = ["ERROR: push_error from mruby", "WARNING: push_warning from mruby"].freeze
@@ -42,8 +42,8 @@ module Godot
   # Ruby called through, and nothing after them.
   BACKTRACE = [
     "Ruby backtrace (most recent call first):",
-    "[0] unlock (res://verify/report/raising.rb:10)",
-    "[1] _ready (res://verify/report/raising.rb:6)"
+    "[0] unlock (res://integration/report/raising.rb:10)",
+    "[1] _ready (res://integration/report/raising.rb:6)"
   ].freeze
   # The checks kept in modules of their own.
   CHECKS = [NodeScripts, Editor, Announcement, RubyTests, Loader, TestSettings, ExportedGame].freeze

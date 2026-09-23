@@ -7,7 +7,7 @@ module Godot
   # script is a node script is given Godot's placeholder, so what the class
   # declares reaches the node while no Ruby runs. Part of Godot.verify!.
   module Editor
-    SCENE = "res://verify/script/header/header.tscn"
+    SCENE = "res://integration/script/header/header.tscn"
     # The line the editor prints as it takes the scene in, which is what says
     # the run reached it; the editor scans the whole project first, so the run
     # is given frames enough to get there and quits by itself. A run told to

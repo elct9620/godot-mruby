@@ -10,53 +10,53 @@ module Godot
     RUNNER_FRAMES = "60"
     TESTS = "res://test"
     PASSED = /^(\d+) runs, \d+ assertions, 0 failures, 0 errors, \d+ skips$/
+    RUNNER_TESTS = "res://integration/runner"
     # Runs that have to pass, each with the runner's options and the summary it
     # has to end on: a directory whose one test passes and the other skips,
     # and runs narrowed by a filter.
     PASSING = {
-      %w[--dir res://verify/runner/skip] =>
-        /^2 runs, \d+ assertions, 0 failures, 0 errors, 1 skips$/,
-      %w[--dir res://verify/runner/order --include AlphaOrderTest#test_a] =>
+      %W[--dir #{RUNNER_TESTS}/skip] => /^2 runs, \d+ assertions, 0 failures, 0 errors, 1 skips$/,
+      %W[--dir #{RUNNER_TESTS}/order --include AlphaOrderTest#test_a] =>
         /^1 runs, \d+ assertions, 0 failures, 0 errors, 0 skips$/,
-      %w[--dir res://verify/runner/skip --exclude SkipTest#test_skips] =>
+      %W[--dir #{RUNNER_TESTS}/skip --exclude SkipTest#test_skips] =>
         /^1 runs, \d+ assertions, 0 failures, 0 errors, 0 skips$/
     }.freeze
     # A test directory whose tests print their names as they run, the seeds
     # tried on it, and how a run prints its seed and each test it ran.
-    ORDER = "res://verify/runner/order"
+    ORDER = "#{RUNNER_TESTS}/order".freeze
     SEEDS = %w[1 2 3 4 5].freeze
     SEED = /^Run options: --seed (\d+)$/
     RAN = /ran (\w+#test_\w+)/
     # Runs that have to fail, each as the runner's options and what the run
     # has to print on the way, in the order it prints it: one per way a run
-    # fails, all under godot/verify/runner/failing/ except the filter that
+    # fails, all under godot/integration/runner/failing/ except the filter that
     # names no test, the directories that are not the project's test
     # directories, and a seed that is not a number. An error's calls end at the
     # test method, so its frame is the last before the report's blank line.
     FAILING = {
-      %w[--dir res://verify/runner/failing/assertion] => [
+      %W[--dir #{RUNNER_TESTS}/failing/assertion] => [
         "teardown ran after a failure",
-        "FailedAssertionTest#test_one_equals_two [res://verify/runner/failing/assertion/failed_assertion_test.rb:9]:",
+        "FailedAssertionTest#test_one_equals_two [#{RUNNER_TESTS}/failing/assertion/failed_assertion_test.rb:9]:",
         "ERROR: FailedAssertionTest#test_one_equals_two: Expected: 1",
-        "(res://verify/runner/failing/assertion/failed_assertion_test.rb:9)"
+        "(#{RUNNER_TESTS}/failing/assertion/failed_assertion_test.rb:9)"
       ],
-      %w[--dir res://verify/runner/failing/error] => [
-        "RaisedErrorTest#test_raises_an_argument_error [res://verify/runner/failing/error/raised_error_test.rb:10]:",
+      %W[--dir #{RUNNER_TESTS}/failing/error] => [
+        "RaisedErrorTest#test_raises_an_argument_error [#{RUNNER_TESTS}/failing/error/raised_error_test.rb:10]:",
         "ArgumentError: not an assertion",
-        "    res://verify/runner/failing/error/raised_error_test.rb:10:in refuse_the_item",
-        "    res://verify/runner/failing/error/raised_error_test.rb:6:in test_raises_an_argument_error\n\n",
+        "    #{RUNNER_TESTS}/failing/error/raised_error_test.rb:10:in refuse_the_item",
+        "    #{RUNNER_TESTS}/failing/error/raised_error_test.rb:6:in test_raises_an_argument_error\n\n",
         "ERROR: RaisedErrorTest#test_raises_an_argument_error: ArgumentError: not an assertion",
-        "(res://verify/runner/failing/error/raised_error_test.rb:10)"
+        "(#{RUNNER_TESTS}/failing/error/raised_error_test.rb:10)"
       ],
-      %w[--dir res://verify/runner/failing/syntax] => [
-        "(res://verify/runner/failing/syntax/broken_syntax_test.rb:4)",
+      %W[--dir #{RUNNER_TESTS}/failing/syntax] => [
+        "(#{RUNNER_TESTS}/failing/syntax/broken_syntax_test.rb:4)",
         "0 runs, 0 assertions"
       ],
-      %w[--dir res://verify/runner/failing/missing] => [
-        "The test directory res://verify/runner/failing/missing does not exist"
+      %W[--dir #{RUNNER_TESTS}/failing/missing] => [
+        "The test directory #{RUNNER_TESTS}/failing/missing does not exist"
       ],
       %w[--dir res://test --include test_nothing] => ["ERROR: Nothing ran for filter: test_nothing"],
-      %w[--dir res://verify/script] => ["ERROR: res://verify/script is not one of the project's test directories"],
+      %w[--dir res://src] => ["ERROR: res://src is not one of the project's test directories"],
       %w[--dir res://] => ["ERROR: res:// cannot be a test directory"],
       %w[--dir res://test --seed x] => ["ERROR: --seed takes a whole number, not x"]
     }.freeze

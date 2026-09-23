@@ -13,8 +13,8 @@ module Godot
   # a game property still comes with its category here; no check reads one.
   # Part of Godot.verify!.
   module ExportedGame
-    PRESET = "Verify"
-    LEFTOVER_SCENE = "res://verify/export/leftover.tscn"
+    PRESET = "Integration"
+    LEFTOVER_SCENE = "res://integration/export/leftover.tscn"
     # What the leftover scene loads under a test directory, which is a root
     # directory, as the constant its path names from there.
     LEFTOVER = "class Leftover\nend\n"
@@ -22,13 +22,13 @@ module Godot
     # The run ends within its first frames; this only stops one that never
     # does from hanging the check.
     FRAMES = "60"
-    SHIPPED_SCENE = "res://verify/export/shipped.tscn"
+    SHIPPED_SCENE = "res://integration/export/shipped.tscn"
     # Paths an export has to leave out, and a game file it has to ship, which
     # tells a game missing everything from one missing only its tests.
     LEFT_OUT_PATHS = ["res://test/unit/engine_classes/engine_classes_test.rb",
                       "res://addons/godot_mruby/runner.tscn"].freeze
-    GAME_FILE = "res://verify/export/seeker.rb"
-    REFUSED_SCENE = "res://verify/export/refused.tscn"
+    GAME_FILE = "res://integration/export/seeker.rb"
+    REFUSED_SCENE = "res://integration/export/refused.tscn"
     REFUSED = "ERROR: The test runner does not run in an exported game"
 
     module_function

@@ -9,13 +9,13 @@ module Godot
     # A scene whose nodes take a library file, a node script extending a class
     # they are not, an abstract node script and a file extending a name no
     # file spells, and the errors refusing each.
-    ATTACH_SCENE = "res://verify/script/attach/attach.tscn"
+    ATTACH_SCENE = "res://integration/script/attach/attach.tscn"
     REFUSALS = [
-      "ERROR: res://verify/script/attach/library.rb defines no class extending an engine node class, " \
+      "ERROR: res://integration/script/attach/library.rb defines no class extending an engine node class, " \
       "so it cannot be a node's script",
-      "ERROR: res://verify/script/attach/planar.rb extends Node2D, so it cannot be the script of a Node",
+      "ERROR: res://integration/script/attach/planar.rb extends Node2D, so it cannot be the script of a Node",
       'ERROR: Node "Abstract" previously had a script, but that script is now abstract.',
-      "ERROR: res://verify/script/attach/orphan.rb extends Missing, which no one file names, " \
+      "ERROR: res://integration/script/attach/orphan.rb extends Missing, which no one file names, " \
       "so it cannot be a node's script"
     ].freeze
 

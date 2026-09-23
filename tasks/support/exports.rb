@@ -7,7 +7,7 @@ module Godot
   # built, and what a node the scene set nothing on answers. Part of
   # NodeScripts.verify!.
   module Exports
-    SCENE = "res://verify/script/exports/exports.tscn"
+    SCENE = "res://integration/declarations/exports/exports.tscn"
     # The scene sets the property before anything builds the node's object,
     # so the answer is the scene's; the object is given it once it is built,
     # and a node the scene set nothing on answers what its class exported.

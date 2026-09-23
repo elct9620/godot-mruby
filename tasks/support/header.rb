@@ -8,7 +8,7 @@ module Godot
   module Header
     # The scene, the answers it prints, and the line the file prints if it
     # ever runs.
-    SCENE = "res://verify/script/header/header.tscn"
+    SCENE = "res://integration/script/header/header.tscn"
     EXPORT_ANSWER = "volume: 11"
     # A value the class builds as it runs is not one the source writes, so
     # the script has none to answer with until the file has run.

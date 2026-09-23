@@ -8,7 +8,7 @@ module Godot
   module Callbacks
     # The scene, what its scripts print, what they must never print, and the
     # answers Godot gets.
-    SCENE = "res://verify/script/callbacks/callbacks.tscn"
+    SCENE = "res://integration/script/callbacks/callbacks.tscn"
     READY_LINE = "ready.rb is ready"
     PROCESS_LINE = "process.rb was given a Float"
     BUILT_LINE = "built.rb built an object"

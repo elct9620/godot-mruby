@@ -58,7 +58,7 @@ mruby carries only the gems `build_config/mruby.rb` lists, and none that reaches
 │  ├─ addons/godot_mruby/  the shipped addon
 │  ├─ src/                 the game's files, named from the top level
 │  ├─ test/unit/           the extension's tests, in Ruby, by what they claim
-│  └─ verify/              scenes and runs godot:verify reads
+│  └─ integration/         scenes and runs godot:verify reads, by spec
 ├─ .spec/                  glossary, contract, behavior
 ├─ Rakefile, tasks/        task entry points
 │  └─ support/             the tasks' logic
@@ -66,7 +66,7 @@ mruby carries only the gems `build_config/mruby.rb` lists, and none that reaches
 └─ .claude/hooks/          edit-time format, stop-time gate
 ```
 
-The extension is tested through itself: `godot/test/` holds Ruby tests of the extension, run by its own test runner. What a Ruby test cannot observe, `godot:verify` reads from the log of the scenes and runs under `verify/`. A test's files it reaches by name sit beside it.
+The extension is tested through itself: `godot/test/` holds Ruby tests of the extension, run by its own test runner. What a Ruby test cannot observe, `godot:verify` reads from the log of the scenes and runs under `integration/`. A test's files it reaches by name sit beside it.
 
 A `.rake` file is thin glue; what a task does lives in `tasks/support/`.
 
