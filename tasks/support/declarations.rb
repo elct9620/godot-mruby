@@ -5,8 +5,8 @@ module Godot
   # property a scene sets, and reads what it prints: what the property answers
   # before the node has a Ruby object, what the object was given once it was
   # built, and what a node the scene set nothing on answers. Part of
-  # NodeScripts.verify!.
-  module Exports
+  # Godot.verify!.
+  module Declarations
     SCENE = "res://integration/declarations/exports/exports.tscn"
     # The scene sets the property before anything builds the node's object,
     # so the answer is the scene's; the object is given it once it is built,

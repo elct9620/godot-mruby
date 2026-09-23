@@ -12,7 +12,7 @@ module Godot
   # That build also carries `editor`, which an export template's does not, so
   # a game property still comes with its category here; no check reads one.
   # Part of Godot.verify!.
-  module ExportedGame
+  module Export
     PRESET = "Integration"
     LEFTOVER_SCENE = "res://integration/export/leftover.tscn"
     # What the leftover scene loads under a test directory, which is a root

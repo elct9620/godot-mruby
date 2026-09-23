@@ -5,12 +5,11 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 ## Includes
 
 - `godot/test/unit/script/**/*_test.rb`
-- `tasks/support/announcement.rb`
-- `tasks/support/callbacks.rb`
-- `tasks/support/godot.rb`
-- `tasks/support/editor.rb`
-- `tasks/support/header.rb`
-- `tasks/support/node_scripts.rb`
+- `tasks/support/script/announcement.rb`
+- `tasks/support/script/callbacks.rb`
+- `tasks/support/script/editor.rb`
+- `tasks/support/script/header.rb`
+- `tasks/support/script.rb`
 
 ## `RS-001` A script attached to a node runs
 

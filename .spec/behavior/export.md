@@ -5,7 +5,7 @@ How a game ships without its tests: each layer keeps test code out of an exporte
 ## Includes
 
 - `rust/src/settings.rs`
-- `tasks/support/exported_game.rb`
+- `tasks/support/export.rb`
 
 ## `RX-001` An exported game's class index leaves out a test directory
 

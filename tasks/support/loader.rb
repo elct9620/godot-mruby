@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "ruby_tests"
+require_relative "runner"
 
 module Godot
   # Runs the integration-test project's checks of the loader that read
@@ -50,19 +50,19 @@ module Godot
     # name the class index refused or found hidden.
     # @behavior RL-001 RL-002 RL-003 RL-024 RL-025
     def verify_warnings!(project)
-      output, status = RubyTests.run(project, "--dir", RubyTests::TESTS)
+      output, status = Runner.run(project, "--dir", Runner::TESTS)
       missing = WARNINGS.reject { |warning| output.include?(warning) }
       return if status.success? && missing.empty?
 
-      raise "A run of #{RubyTests::TESTS} did not warn as it should #{missing}:\n#{output}"
+      raise "A run of #{Runner::TESTS} did not warn as it should #{missing}:\n#{output}"
     end
 
     # Runs the test whose constant's file raises, which has to fail with the
     # error at the file's line.
     # @behavior RL-021
     def verify_raised!(project)
-      output, status = RubyTests.run(project, "--dir", RAISING)
-      missing = RubyTests.missing_in_order(output, RAISED)
+      output, status = Runner.run(project, "--dir", RAISING)
+      missing = Runner.missing_in_order(output, RAISED)
       return if status.exitstatus == 1 && missing.empty?
 
       raise "A run of #{RAISING} did not fail as it should #{missing}:\n#{output}"
@@ -72,7 +72,7 @@ module Godot
     # own test alone.
     # @behavior RL-013
     def verify_late!(project)
-      output, status = RubyTests.run(project, "--dir", LATE)
+      output, status = Runner.run(project, "--dir", LATE)
       return if status.success? && output.match?(LATE_SUMMARY)
 
       raise "A run of #{LATE} ran a test class loaded by name:\n#{output}"

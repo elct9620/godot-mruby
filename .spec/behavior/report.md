@@ -12,7 +12,7 @@ How what mruby has to say about a Ruby file reaches Godot: through the log, at t
 ## Includes
 
 - `rust/src/realm.rs`
-- `tasks/support/godot.rb`
+- `tasks/support/report.rb`
 
 ## `RR-001` A compiler warning appears as a warning at its Ruby line
 

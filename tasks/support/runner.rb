@@ -3,7 +3,7 @@
 module Godot
   # Runs the integration-test project's Ruby tests through the addon's runner
   # scene and reads what the runs report. Part of Godot.verify!.
-  module RubyTests
+  module Runner
     RUNNER_SCENE = "res://addons/godot_mruby/runner.tscn"
     # The runner answers within the frame it starts in; this only stops a
     # runner that never quits from hanging the check.

@@ -4,8 +4,8 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 
 ## Includes
 
-- `tasks/support/ruby_tests.rb`
-- `tasks/support/test_settings.rb`
+- `tasks/support/runner.rb`
+- `tasks/support/runner/settings.rb`
 
 ## `RT-001` A test method of a test class runs
 

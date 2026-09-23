@@ -5,7 +5,7 @@ How Ruby computes in a realm: Ruby's own `Math`, `rand` and `srand` behave as Ru
 ## Includes
 
 - `godot/test/unit/math/**/*_test.rb`
-- `tasks/support/godot.rb`
+- `tasks/support/report.rb`
 
 ## `RC-001` Ruby has Math
 
