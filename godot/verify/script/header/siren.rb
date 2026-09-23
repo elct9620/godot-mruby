@@ -11,10 +11,6 @@ module Verify
 
         export :volume, 11
         export :heard_at, Godot::Vector2.new(1, 2)
-
-        def wail
-          emit_signal(:wailed, 2)
-        end
       end
     end
   end

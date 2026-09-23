@@ -1,10 +1,8 @@
-# Prints if it ever runs, which asking about it must not make it do.
-module Verify
+module Unit
   module Script
     module Header
+      # A node script whose file a test asks about and never runs.
       class Reported < Godot::Node2D
-        puts "reported.rb ran"
-
         def _ready
         end
       end
