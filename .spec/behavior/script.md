@@ -48,9 +48,9 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 
 | Step | Statement |
 | --- | --- |
-| Given | a node script defining a callback, whose source Godot was given in place of what the file holds |
-| When | a node with that script enters the scene |
-| Then | the text the given source prints appears in the log |
+| Given | a node script whose source Godot was given in place of what the file holds |
+| When | a method of a node with that script is called |
+| Then | the method the given source defines answers |
 
 ## `RS-006` A library file cannot be a node's script
 

@@ -27,10 +27,6 @@ module Godot
   # What the prints scene's Ruby prints. Each line must appear exactly once:
   # the scene attaches the same file to two nodes, and a file runs once.
   PRINTED_LINES = ["puts from mruby", "print from mruby", ":p_from_mruby"].freeze
-  # A scene that gives Godot another source for a Ruby file before a node runs
-  # it, and the line only that source prints.
-  SOURCE_SCENE = "res://verify/script/held.tscn"
-  HELD_LINE = "held.rb as Godot holds it"
   REPORT_SCENE = "res://verify/report/report.tscn"
   # What mruby says about the report scene's files, each as the line Godot
   # prints it on and the Ruby location Godot puts on the line after.
@@ -72,7 +68,6 @@ module Godot
   def verify!(project = PROJECT)
     verify_loaded!(project)
     verify_scripts_run!(project)
-    verify_source_held!(project)
     verify_reports!(project)
     CHECKS.each { |check| check.verify!(project) }
   end
@@ -101,16 +96,6 @@ module Godot
     return if status.success? && output.lines.grep(FAILED).empty? && counts.values.all?(1)
 
     raise "The prints scene's Ruby did not print each line once #{counts}:\n#{output}"
-  end
-
-  # Runs the scene that changes a script's source in Godot, whose Ruby has to
-  # be the changed source rather than the file's.
-  # @behavior RS-005
-  def verify_source_held!(project = PROJECT)
-    output, status = run_scene(project, SOURCE_SCENE, "--quit-after", "3")
-    return if status.success? && output.lines.grep(FAILED).empty? && output.lines.map(&:chomp).include?(HELD_LINE)
-
-    raise "The script did not run the source Godot holds for it:\n#{output}"
   end
 
   # Runs the report scene and looks for each report followed by its location,
