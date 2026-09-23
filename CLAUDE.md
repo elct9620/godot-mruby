@@ -12,7 +12,8 @@ The full source layout, and how the parts fit together, is in `docs/architecture
 |---|---|
 | `.spec/` | Specification verified by sumitsubo (`sumi`): glossary, contract, behavior |
 | `rust/src/realm.rs` | The one way into Ruby; its pieces are under `src/realm/` |
-| `godot/project.godot` | Lists the test directories the runner and `godot:verify` use |
+| `godot/project.godot` | Lists the test directories the runner and `godot:verify` use, and the root directories named from the top level |
+| `godot/src/` | The game's code, a root directory, so its files are named from the top level |
 | `godot/test/unit/` | Ruby unit tests, one directory per `.spec/behavior` file they claim, with the files they load by name beside them |
 | `godot/integration/` | What only a log or a run's outcome shows, one directory per `.spec/behavior` file, read by `tasks/support/` |
 | `build_config/mruby.rb` | mruby build config (host + x86_64 cross build) |
@@ -46,7 +47,7 @@ sumi fmt                                 # write .spec/ in sumi's form (--check 
 - Minimum Godot is 4.6: keep gdext's `api-4-6` feature and the `.gdextension`'s `compatibility_minimum` in step.
 - `godot/.godot/extension_list.cfg` is committed so Godot loads the addon at startup; an editor that first discovers it and quits at once crashes (godotengine/godot#111048).
 - Library file names are shared by `godot_mruby.gdextension` and `tasks/support/extension.rb`; change both together.
-- A scenario is claimed where its outcome is observed: a Ruby test under `godot/test/`, or a check in `tasks/support/` reading the log; a fixture claims nothing.
+- A scenario is claimed where its outcome is observed: a Ruby test under `godot/test/unit/<spec>/`, or, when only a log or a run's outcome shows it, a check in `tasks/support/<spec>` reading `godot/integration/<spec>/`; a fixture claims nothing.
 - Put task logic in `tasks/support/` (the only Ruby RuboCop checks) and keep `.rake` files as thin glue.
 - beni skips `beni:build` while an archive exists, so a config change needs `beni:clean` first.
 - Hooks format on edit and gate lint/tests at stop; formatting is settled before commit, not at stop.

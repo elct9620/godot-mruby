@@ -56,9 +56,8 @@ mruby carries only the gems `build_config/mruby.rb` lists, and none that reaches
 ├─ build_config/           mruby's build: gems, cross build
 ├─ godot/                  the project the extension is tested in
 │  ├─ addons/godot_mruby/  the shipped addon
-│  ├─ src/                 the game's files, named from the top level
-│  ├─ test/unit/           the extension's tests, in Ruby, by what they claim
-│  └─ integration/         scenes and runs godot:verify reads, by spec
+│  ├─ src/, test/unit/     the game's code, and its tests (see 1.4)
+│  └─ integration/         scenes and runs godot:verify reads
 ├─ .spec/                  glossary, contract, behavior
 ├─ Rakefile, tasks/        task entry points
 │  └─ support/             the tasks' logic
@@ -66,11 +65,23 @@ mruby carries only the gems `build_config/mruby.rb` lists, and none that reaches
 └─ .claude/hooks/          edit-time format, stop-time gate
 ```
 
-The extension is tested through itself: `godot/test/` holds Ruby tests of the extension, run by its own test runner. What a Ruby test cannot observe, `godot:verify` reads from the log of the scenes and runs under `integration/`. A test's files it reaches by name sit beside it.
+A module in `rust/src/` is named after the Godot extension point it implements, as `language` and `script` are, or after what it produces or does, as `header` and `bridge` are; one with parts of its own keeps them in a directory of its name.
 
 A `.rake` file is thin glue; what a task does lives in `tasks/support/`.
 
 Build output stays out of the repository: `vendor/` holds mruby's source and archives, `rust/target/` the crate's builds, `bin/` the installed library, and `pkg/` the package.
+
+### 1.4 Tests
+
+```
+godot/
+├─ src/                  the game's code, named from the top level
+├─ test/unit/<spec>/     Minitest judges, in the game's realm
+└─ integration/<spec>/   godot:verify judges, from a log or a run's outcome
+                         └─ read by tasks/support/<spec>.rb or <spec>/
+```
+
+The extension is tested through itself, and `godot/` is sorted by who judges an outcome, then by the `.spec/behavior` file it claims. The extension's own runner judges `test/unit/<spec>/`, whose files loaded by name sit beside their tests. `godot:verify` judges `integration/<spec>/`, for what no Ruby test can observe: a log line, a run's exit, the editor, an exported game. Its checks are named after the same spec, and GDScript stays only where a check must ask from outside the realm.
 
 ## 2. Extension
 
