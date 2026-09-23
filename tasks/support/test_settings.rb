@@ -51,10 +51,11 @@ module Godot
       raise "The test pattern #{PATTERN} did not narrow the run:\n#{output}"
     end
 
-    # Removes the [mruby] section from the project's settings.
+    # Removes the test settings from the project's settings, keeping the
+    # others the project's files are named by.
     def unset_test_settings(project)
       path = File.join(project, "project.godot")
-      File.write(path, File.read(path).gsub(/^\[mruby\]\n(?:[^\[].*\n|\n)*/, ""))
+      File.write(path, File.read(path).gsub(%r{^test/.*\n}, ""))
     end
   end
 end

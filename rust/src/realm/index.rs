@@ -5,15 +5,83 @@ use super::{Level, Location, Log};
 const ROOT: &str = "res://";
 
 /// A realm's map from constant paths to the files named after them, by
-/// Zeitwerk's rules: `res://` is the root, every directory a namespace, and
-/// a file names the constant its path spells. Each segment is matched without
-/// underscores or case, so `http_client.rb` may define `HttpClient` or
-/// `HTTPClient`. A name the index cannot hold is warned about as it arrives.
+/// Zeitwerk's rules: every directory below a root directory is a namespace,
+/// and a file names the constant its path spells from the nearest root
+/// directory it sits under. Each segment is matched without underscores or
+/// case, so `http_client.rb` may define `HttpClient` or `HTTPClient`. A name
+/// the index cannot hold is warned about as it arrives.
 #[derive(Default)]
 pub struct ClassIndex {
+    roots: Roots,
     files: BTreeMap<Key, String>,
     namespaces: BTreeMap<Key, Namespace>,
     refused: BTreeSet<Key>,
+}
+
+/// The root directories files are named from: `res://`, and the directories
+/// inside it whose files are named from the top level too, each of which is
+/// no namespace of the one it sits in.
+#[derive(Clone, Debug, Default)]
+pub struct Roots(Vec<String>);
+
+impl Roots {
+    /// The root directories `directories` names besides `res://`, each written
+    /// with or without its trailing slash; `res://` itself and a directory
+    /// outside it add nothing.
+    pub fn new(directories: impl IntoIterator<Item = String>) -> Self {
+        Self(
+            directories
+                .into_iter()
+                .map(|directory| format!("{}/", directory.trim_end_matches('/')))
+                .filter(|directory| directory.starts_with(ROOT) && directory.len() > ROOT.len())
+                .collect(),
+        )
+    }
+
+    /// The constant path the file at `path` spells, as the index matches it.
+    pub fn key_of(&self, path: &str) -> Key {
+        self.segments(path)
+            .1
+            .iter()
+            .map(|segment| normalize(segment))
+            .collect()
+    }
+
+    // The nearest root directory `path` sits under, and the segments of its
+    // path from there.
+    fn segments<'a>(&'a self, path: &'a str) -> (&'a str, Vec<&'a str>) {
+        let root = self
+            .0
+            .iter()
+            .map(String::as_str)
+            .filter(|root| path.starts_with(root))
+            .max_by_key(|root| root.len())
+            .unwrap_or(ROOT);
+        let segments = path[root.len()..]
+            .trim_end_matches(".rb")
+            .split('/')
+            .collect();
+        (root, segments)
+    }
+
+    // The constant a path spells as Zeitwerk camelizes it: `http_client` is
+    // `HttpClient`.
+    fn name_of(&self, path: &str) -> String {
+        self.segments(path)
+            .1
+            .iter()
+            .map(|segment| camelize(segment))
+            .collect::<Vec<_>>()
+            .join("::")
+    }
+
+    fn namespace_of(&self, path: &str) -> String {
+        let name = self.name_of(path);
+        name.rsplit_once("::")
+            .map_or(String::from("Object"), |(namespace, _)| {
+                namespace.to_owned()
+            })
+    }
 }
 
 /// A constant path as the index matches it: one segment per namespace, each
@@ -37,6 +105,19 @@ pub struct Namespace {
 }
 
 impl ClassIndex {
+    /// An index naming the files it takes in from `roots`.
+    pub fn new(roots: Roots) -> Self {
+        Self {
+            roots,
+            ..Self::default()
+        }
+    }
+
+    /// The constant path the file at `path` spells, as the index matches it.
+    pub fn key_of(&self, path: &str) -> Key {
+        self.roots.key_of(path)
+    }
+
     /// Takes in the files at `paths`, refusing a name two files spell and a
     /// name `defined` says the realm already has.
     pub fn add(
@@ -47,7 +128,7 @@ impl ClassIndex {
     ) {
         let mut added = BTreeSet::new();
         for path in paths {
-            let key = key_of(&path);
+            let key = self.key_of(&path);
             self.add_namespaces(&path);
             if self.refused.contains(&key) {
                 continue;
@@ -58,14 +139,14 @@ impl ClassIndex {
                     Some(&at(&path)),
                     &format!(
                         "{other} and {path} both name {}, so neither loads by name",
-                        name_of(&other)
+                        self.roots.name_of(&other)
                     ),
                 );
                 self.refused.insert(key);
                 continue;
             }
             if defined(&key) {
-                warn_of_defined(&path, log);
+                self.warn_of_defined(&path, log);
                 self.refused.insert(key);
                 continue;
             }
@@ -85,7 +166,7 @@ impl ClassIndex {
     pub fn refuse_defined(&mut self, keys: impl IntoIterator<Item = Key>, log: &dyn Log) {
         for key in keys {
             if let Some(path) = self.files.remove(&key) {
-                warn_of_defined(&path, log);
+                self.warn_of_defined(&path, log);
                 self.refused.insert(key);
             }
         }
@@ -117,24 +198,36 @@ impl ClassIndex {
     /// Whether the file at `path` is one the index names.
     pub fn names(&self, path: &str) -> bool {
         self.files
-            .get(&key_of(path))
+            .get(&self.key_of(path))
             .is_some_and(|named| named == path)
     }
 
-    // Every directory a file sits in is a namespace, named by the first
-    // directory to spell it.
+    // Every directory a file sits in below its root directory is a
+    // namespace, which directories under other root directories may spell
+    // too, named by the first directory to spell it.
     fn add_namespaces(&mut self, path: &str) {
-        let segments = segments(path);
+        let (root, segments) = self.roots.segments(path);
         for depth in 1..segments.len() {
             let key = segments[..depth]
                 .iter()
                 .map(|segment| normalize(segment))
                 .collect();
             self.namespaces.entry(key).or_insert_with(|| Namespace {
-                directory: format!("{ROOT}{}/", segments[..depth].join("/")),
+                directory: format!("{root}{}/", segments[..depth].join("/")),
                 name: camelize(segments[depth - 1]),
             });
         }
+    }
+
+    fn warn_of_defined(&self, path: &str, log: &dyn Log) {
+        log.record(
+            Level::Warn,
+            Some(&at(path)),
+            &format!(
+                "{path} names {}, which the realm already has, so it never loads by name",
+                self.roots.name_of(path)
+            ),
+        );
     }
 
     // Ruby finds an outer constant before asking for an inner one of the same
@@ -158,9 +251,9 @@ impl ClassIndex {
                             Some(&at(inner_path)),
                             &format!(
                                 "{outer_path} names {}, which hides {} from Ruby inside {} once it has loaded",
-                            name_of(outer_path),
-                            name_of(inner_path),
-                            namespace_of(inner_path)
+                            self.roots.name_of(outer_path),
+                            self.roots.name_of(inner_path),
+                            self.roots.namespace_of(inner_path)
                             ),
                         );
                     }
@@ -168,17 +261,6 @@ impl ClassIndex {
             }
         }
     }
-}
-
-fn warn_of_defined(path: &str, log: &dyn Log) {
-    log.record(
-        Level::Warn,
-        Some(&at(path)),
-        &format!(
-            "{path} names {}, which the realm already has, so it never loads by name",
-            name_of(path)
-        ),
-    );
 }
 
 // Whether `outer` shares `inner`'s last segment from a namespace `inner`'s
@@ -189,18 +271,17 @@ fn hides(outer: &Key, inner: &Key) -> bool {
         && inner.starts_with(&outer[..outer.len() - 1])
 }
 
-fn segments(path: &str) -> Vec<&str> {
-    path.trim_start_matches(ROOT)
-        .trim_end_matches(".rb")
-        .split('/')
-        .collect()
-}
-
 /// The file a constant path written inside the namespaces `scope` spells
-/// names among `paths`, found as a realm's loader finds it: each name from
-/// the innermost namespace outward, and a name two files spell naming none.
-pub fn file_named(paths: Vec<String>, scope: &[String], names: &[String]) -> Option<String> {
-    let mut index = ClassIndex::default();
+/// names among `paths` named from `roots`, found as a realm's loader finds
+/// it: each name from the innermost namespace outward, and a name two files
+/// spell naming none.
+pub fn file_named(
+    paths: Vec<String>,
+    roots: Roots,
+    scope: &[String],
+    names: &[String],
+) -> Option<String> {
+    let mut index = ClassIndex::new(roots);
     index.add(paths, |_| false, &Unheard);
     let mut scope = scope.to_vec();
     let mut named = None;
@@ -227,14 +308,6 @@ impl Log for Unheard {
     fn record(&self, _level: Level, _at: Option<&Location>, _text: &str) {}
 }
 
-/// The constant path the file at `path` spells, as the index matches it.
-pub fn key_of(path: &str) -> Key {
-    segments(path)
-        .iter()
-        .map(|segment| normalize(segment))
-        .collect()
-}
-
 /// A segment as the index matches it.
 pub fn normalize(segment: &str) -> String {
     segment
@@ -242,24 +315,6 @@ pub fn normalize(segment: &str) -> String {
         .filter(|c| *c != '_')
         .flat_map(char::to_lowercase)
         .collect()
-}
-
-// The constant a path spells as Zeitwerk camelizes it: `http_client` is
-// `HttpClient`.
-fn name_of(path: &str) -> String {
-    segments(path)
-        .iter()
-        .map(|segment| camelize(segment))
-        .collect::<Vec<_>>()
-        .join("::")
-}
-
-fn namespace_of(path: &str) -> String {
-    let name = name_of(path);
-    name.rsplit_once("::")
-        .map_or(String::from("Object"), |(namespace, _)| {
-            namespace.to_owned()
-        })
 }
 
 fn camelize(segment: &str) -> String {
@@ -280,5 +335,43 @@ fn at(path: &str) -> Location {
         file: path.to_owned(),
         line: 1,
         function: String::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Roots;
+
+    fn roots(directories: &[&str]) -> Roots {
+        Roots::new(directories.iter().map(|directory| (*directory).to_owned()))
+    }
+
+    #[test]
+    fn a_file_is_named_from_the_nearest_root_directory_it_sits_under() {
+        let roots = roots(&["res://src", "res://src/ui/"]);
+
+        assert_eq!(roots.key_of("res://src/ui/hud.rb"), ["hud"]);
+        assert_eq!(
+            roots.key_of("res://src/items/potion.rb"),
+            ["items", "potion"]
+        );
+        assert_eq!(
+            roots.key_of("res://tools/http_client.rb"),
+            ["tools", "httpclient"]
+        );
+    }
+
+    #[test]
+    fn a_directory_only_sharing_a_root_directorys_prefix_is_named_from_res() {
+        let roots = roots(&["res://src"]);
+
+        assert_eq!(roots.key_of("res://srcs/player.rb"), ["srcs", "player"]);
+    }
+
+    #[test]
+    fn res_itself_and_a_directory_outside_it_add_no_root_directory() {
+        let roots = roots(&["res://", "user://saves"]);
+
+        assert_eq!(roots.key_of("res://saves/slot.rb"), ["saves", "slot"]);
     }
 }

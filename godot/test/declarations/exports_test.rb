@@ -5,8 +5,8 @@ class ExportsTest < Minitest::Test
 
   # @behavior RD-011
   def test_an_exported_property_is_one_the_script_has
-    turret = Loader::Turret.new
-    script = Godot::ResourceLoader.load("res://loader/turret.rb")
+    turret = Turret.new
+    script = Godot::ResourceLoader.load("res://src/turret.rb")
 
     names = script.get_script_property_list.map { |property| property["name"] }
 
@@ -17,8 +17,8 @@ class ExportsTest < Minitest::Test
 
   # @behavior RD-012
   def test_an_export_takes_its_type_from_the_value_it_was_declared_with
-    turret = Loader::Turret.new
-    script = Godot::ResourceLoader.load("res://loader/turret.rb")
+    turret = Turret.new
+    script = Godot::ResourceLoader.load("res://src/turret.rb")
 
     assert_equal 300.0, script.get_property_default_value(:range)
   ensure
@@ -81,7 +81,7 @@ class ExportsTest < Minitest::Test
 
   # @behavior RD-021
   def test_a_node_answers_an_exported_property_by_the_accessor_its_class_gets
-    turret = Loader::Turret.new
+    turret = Turret.new
 
     assert_equal :nearest, turret.mode
   ensure
@@ -121,7 +121,7 @@ class ExportsTest < Minitest::Test
 
   # @behavior RD-025
   def test_a_node_lists_the_properties_its_class_exported
-    turret = Loader::Turret.new
+    turret = Turret.new
 
     names = turret.get_property_list.map { |property| property["name"] }
 
@@ -132,7 +132,7 @@ class ExportsTest < Minitest::Test
 
   # @behavior RD-026
   def test_godot_writes_an_exported_property_through_the_accessor
-    turret = Loader::Turret.new
+    turret = Turret.new
 
     turret.set(:range, 500.0)
 
@@ -174,7 +174,7 @@ class ExportsTest < Minitest::Test
 
   # @behavior RD-033
   def test_a_copy_of_a_node_carries_what_its_properties_hold
-    turret = Loader::Turret.new
+    turret = Turret.new
     turret.set(:range, 500.0)
 
     copy = turret.duplicate
@@ -197,7 +197,7 @@ class ExportsTest < Minitest::Test
   def test_a_name_a_ruby_superclass_declared_is_refused_in_gdscripts_words
     error = assert_raises(ArgumentError) { Loader::Shadowing }
 
-    assert_equal 'The member "mode" already exists in parent class Loader::Turret.', error.message
+    assert_equal 'The member "mode" already exists in parent class Turret.', error.message
   end
 
   # @behavior RD-037

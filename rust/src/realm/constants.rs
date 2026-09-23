@@ -8,7 +8,7 @@ use beni::{
 };
 
 use super::index::{self, Named, Namespace};
-use super::{Extends, bookkeeping, compile, executor};
+use super::{Extends, bookkeeping, compile, executor, key_of};
 
 pub(super) fn define(mrb: &Mrb) -> Result<(), Error> {
     let module = mrb.class_get(c"Module")?;
@@ -52,7 +52,7 @@ fn created(mrb: &Mrb, receiver: Value, name: Symbol) -> Value {
 /// Answers the superclass the file's class is held to once it has run.
 pub(super) fn ensure_opened(mrb: &Mrb, path: &str) -> Result<Option<Extends>, Error> {
     ensure_namespaces(mrb, path)?;
-    let own = index::key_of(path);
+    let own = key_of(mrb, path);
     let declared = bookkeeping(mrb).files.declared(path);
     for names in declared.writes {
         let key: Vec<String> = names.iter().map(|name| index::normalize(name)).collect();
@@ -85,11 +85,11 @@ pub(super) fn keep_extends(mrb: &Mrb, path: &str, extends: Option<Extends>) -> R
     let Some(extends) = extends else {
         return Ok(());
     };
-    let Some(class) = constant_at(mrb, &index::key_of(path)) else {
+    let Some(class) = constant_at(mrb, &key_of(mrb, path)) else {
         return Ok(());
     };
     let (expected, promised) = match &extends {
-        Extends::File(file) => (index::key_of(file), format!("the class {file} names")),
+        Extends::File(file) => (key_of(mrb, file), format!("the class {file} names")),
         Extends::Constant(names) => (
             names.iter().map(|name| index::normalize(name)).collect(),
             names.join("::"),
@@ -126,7 +126,7 @@ fn ensure_namespaces(mrb: &Mrb, path: &str) -> Result<(), Error> {
     if !bookkeeping(mrb).index.borrow().names(path) {
         return Ok(());
     }
-    let key = index::key_of(path);
+    let key = key_of(mrb, path);
     for depth in 1..key.len() {
         if constant_at(mrb, &key[..depth]).is_some() {
             continue;

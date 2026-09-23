@@ -7,7 +7,7 @@ use godot::builtin::{GString, StringName, VarArray, VarDictionary, Variant};
 use godot::meta::ToGodot;
 use ruby_prism::{CallNode, Integer, Node, NodeList};
 
-use crate::realm;
+use crate::realm::{self, Roots};
 use crate::snapshot::{Property, Signal};
 
 /// A file's header: the constants its `module` and `class` statements write,
@@ -49,12 +49,13 @@ impl Superclass {
 }
 
 impl Header {
-    /// Reads the header of the file at `path` from `source`. A file that does
-    /// not parse still has one: Prism reads on past a syntax error.
-    pub fn read(path: &str, source: &str) -> Self {
+    /// Reads the header of the file at `path`, named from `roots`, from
+    /// `source`. A file that does not parse still has one: Prism reads on
+    /// past a syntax error.
+    pub fn read(path: &str, source: &str, roots: &Roots) -> Self {
         let result = ruby_prism::parse(source.as_bytes());
         let mut reader = Reader {
-            key: realm::key_of(path),
+            key: roots.key_of(path),
             header: None,
             writes: Vec::new(),
         };
@@ -349,7 +350,7 @@ fn constant_path(node: &Node) -> Option<(Vec<String>, bool)> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Header, Signal};
+    use super::{Header, Roots, Signal};
 
     // The superclass's constant path, joined as it is written.
     fn superclass(header: &Header) -> Option<String> {
@@ -369,7 +370,7 @@ mod tests {
     fn a_class_written_inside_its_paths_namespaces_is_the_files_class() {
         let source = "module Enemies\n  class Boss < Godot::Node2D\n  end\nend\n";
 
-        let header = Header::read("res://enemies/boss.rb", source);
+        let header = Header::read("res://enemies/boss.rb", source, &Roots::default());
 
         assert_eq!(superclass(&header).as_deref(), Some("Godot::Node2D"));
     }
@@ -379,7 +380,7 @@ mod tests {
     fn a_class_written_with_its_whole_constant_path_is_the_files_class() {
         let source = "class Enemies::Boss < Godot::Node2D\nend\n";
 
-        let header = Header::read("res://enemies/boss.rb", source);
+        let header = Header::read("res://enemies/boss.rb", source, &Roots::default());
 
         assert_eq!(superclass(&header).as_deref(), Some("Godot::Node2D"));
     }
@@ -389,7 +390,7 @@ mod tests {
     fn a_class_matching_its_path_apart_from_underscores_and_case_is_the_files_class() {
         let source = "class HTTPClient < Godot::Node\nend\n";
 
-        let header = Header::read("res://http_client.rb", source);
+        let header = Header::read("res://http_client.rb", source, &Roots::default());
 
         assert_eq!(superclass(&header).as_deref(), Some("Godot::Node"));
     }
@@ -399,7 +400,7 @@ mod tests {
     fn a_method_of_a_class_nested_in_the_files_class_is_not_the_files() {
         let source = "class Player < Godot::Node\n  class Stats\n    def _ready\n    end\n  end\n\n  def _process(delta)\n  end\nend\n";
 
-        let header = Header::read("res://player.rb", source);
+        let header = Header::read("res://player.rb", source, &Roots::default());
 
         assert!(!header.has_method("_ready"));
         assert!(header.has_method("_process"));
@@ -410,7 +411,7 @@ mod tests {
     fn a_file_that_does_not_parse_still_has_a_header() {
         let source = "class Player < Godot::Node\n  def _ready\n  end\nend\nend\n";
 
-        let header = Header::read("res://player.rb", source);
+        let header = Header::read("res://player.rb", source, &Roots::default());
 
         assert_eq!(superclass(&header).as_deref(), Some("Godot::Node"));
         assert!(header.has_method("_ready"));
@@ -421,7 +422,7 @@ mod tests {
     fn a_module_file_has_no_superclass() {
         let source = "module Items\nend\n";
 
-        let header = Header::read("res://items.rb", source);
+        let header = Header::read("res://items.rb", source, &Roots::default());
 
         assert_eq!(superclass(&header), None);
     }
@@ -431,7 +432,7 @@ mod tests {
     fn a_superclass_that_is_not_a_constant_is_not_carried() {
         let source = "class Point < Struct.new(:x, :y)\nend\n";
 
-        let header = Header::read("res://point.rb", source);
+        let header = Header::read("res://point.rb", source, &Roots::default());
 
         assert_eq!(superclass(&header), None);
     }
@@ -441,7 +442,7 @@ mod tests {
     fn tool_called_in_the_class_body_makes_the_header_a_tools() {
         let source = "class Player < Godot::Node\n  tool\nend\n";
 
-        let header = Header::read("res://player.rb", source);
+        let header = Header::read("res://player.rb", source, &Roots::default());
 
         assert!(header.is_tool());
     }
@@ -451,7 +452,7 @@ mod tests {
     fn abstract_called_in_the_class_body_makes_the_header_an_abstract_classs() {
         let source = "class Enemy < Godot::Node2D\n  abstract\nend\n";
 
-        let header = Header::read("res://enemy.rb", source);
+        let header = Header::read("res://enemy.rb", source, &Roots::default());
 
         assert!(header.is_abstract());
     }
@@ -461,7 +462,7 @@ mod tests {
     fn a_call_inside_a_method_of_the_class_is_not_the_class_bodys() {
         let source = "class Player < Godot::Node\n  def setup\n    tool\n  end\nend\n";
 
-        let header = Header::read("res://player.rb", source);
+        let header = Header::read("res://player.rb", source, &Roots::default());
 
         assert!(!header.is_tool());
     }
@@ -471,7 +472,7 @@ mod tests {
     fn a_superclass_is_looked_up_from_the_namespaces_its_class_is_written_in() {
         let source = "module Enemies\n  class Boss < Enemy\n  end\nend\n";
 
-        let header = Header::read("res://enemies/boss.rb", source);
+        let header = Header::read("res://enemies/boss.rb", source, &Roots::default());
 
         assert_eq!(scope(&header), Some(vec!["Enemies".to_owned()]));
     }
@@ -481,7 +482,7 @@ mod tests {
     fn a_superclass_on_a_class_written_with_its_whole_path_is_looked_up_from_the_top_level() {
         let source = "class Enemies::Boss < Enemy\nend\n";
 
-        let header = Header::read("res://enemies/boss.rb", source);
+        let header = Header::read("res://enemies/boss.rb", source, &Roots::default());
 
         assert_eq!(scope(&header), Some(Vec::new()));
     }
@@ -491,7 +492,7 @@ mod tests {
     fn icon_called_in_the_class_body_with_a_string_carries_that_path() {
         let source = "class Enemy < Godot::Node2D\n  icon \"icons/enemy.svg\"\nend\n";
 
-        let header = Header::read("res://enemy.rb", source);
+        let header = Header::read("res://enemy.rb", source, &Roots::default());
 
         assert_eq!(header.icon(), Some("icons/enemy.svg"));
     }
@@ -501,7 +502,7 @@ mod tests {
     fn the_classs_name_is_the_last_name_its_class_statement_writes() {
         let source = "class Net::HTTPClient < Godot::Node\nend\n";
 
-        let header = Header::read("res://net/http_client.rb", source);
+        let header = Header::read("res://net/http_client.rb", source, &Roots::default());
 
         assert_eq!(header.name(), "HTTPClient");
     }
@@ -511,7 +512,7 @@ mod tests {
     fn every_constant_a_module_or_class_statement_writes_is_carried() {
         let source = "module Enemies\n  class Boss < Enemy\n    class Loot\n    end\n  end\n\n  class ::Lamp\n  end\nend\n";
 
-        let header = Header::read("res://enemies/boss.rb", source);
+        let header = Header::read("res://enemies/boss.rb", source, &Roots::default());
 
         assert_eq!(
             header.writes(),
@@ -530,7 +531,7 @@ mod tests {
         let source =
             "class Boss < Godot::Node\n  def spawn\n    class Minion\n    end\n  end\nend\n";
 
-        let header = Header::read("res://boss.rb", source);
+        let header = Header::read("res://boss.rb", source, &Roots::default());
 
         assert_eq!(header.writes(), [vec!["Boss"]]);
     }
@@ -540,7 +541,7 @@ mod tests {
     fn signal_called_in_the_class_body_carries_the_signal_it_declares() {
         let source = "class Bell < Godot::Node2D\n  signal :rung, :times\nend\n";
 
-        let header = Header::read("res://bell.rb", source);
+        let header = Header::read("res://bell.rb", source, &Roots::default());
 
         assert_eq!(
             header.signals(),
@@ -556,7 +557,7 @@ mod tests {
     fn a_signal_declared_with_a_name_that_is_not_written_out_is_not_carried() {
         let source = "class Bell < Godot::Node2D\n  name = :rung\n  signal name\nend\n";
 
-        let header = Header::read("res://bell.rb", source);
+        let header = Header::read("res://bell.rb", source, &Roots::default());
 
         assert!(header.signals().is_empty());
     }

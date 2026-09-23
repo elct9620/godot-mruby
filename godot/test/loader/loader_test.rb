@@ -40,7 +40,13 @@ class LoaderTest < Minitest::Test
 
   # @behavior RL-012
   def test_a_file_under_a_test_directory_loads_by_name
-    assert_equal 0, Test::Loader::Support::FakeClock.new.now
+    assert_equal 0, Loader::Support::FakeClock.new.now
+  end
+
+  # @behavior RL-031
+  def test_a_file_under_a_root_directory_names_its_constant_from_the_top_level
+    assert_kind_of Class, Turret
+    refute Object.const_defined?(:Src)
   end
 
   # @behavior RL-026

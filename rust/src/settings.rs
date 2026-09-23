@@ -1,6 +1,8 @@
 use godot::classes::ProjectSettings;
 use godot::prelude::*;
 
+// @setting mruby/loader/root_directories
+const ROOT_DIRECTORIES: &str = "mruby/loader/root_directories";
 // @setting mruby/test/directories
 const TEST_DIRECTORIES: &str = "mruby/test/directories";
 const DEFAULT_TEST_DIRECTORY: &str = "res://test";
@@ -12,6 +14,11 @@ const DEFAULT_TEST_PATTERN: &str = "*_test.rb";
 /// into project.godot, so every process defines them again when the
 /// extension starts, keeping whatever value the project set.
 pub fn register() {
+    define(
+        ROOT_DIRECTORIES,
+        &PackedStringArray::new().to_variant(),
+        VariantType::PACKED_STRING_ARRAY,
+    );
     let directories = PackedStringArray::from(&[GString::from(DEFAULT_TEST_DIRECTORY)]);
     define(
         TEST_DIRECTORIES,
@@ -35,10 +42,19 @@ fn define(name: &str, default: &Variant, kind: VariantType) {
     settings.add_property_info(&info.upcast_any_dictionary());
 }
 
+/// The root directories the project names besides `res://`.
+pub fn root_directories() -> Vec<String> {
+    directories(ROOT_DIRECTORIES)
+}
+
 /// The directories the test runner runs.
 pub fn test_directories() -> Vec<String> {
+    directories(TEST_DIRECTORIES)
+}
+
+fn directories(setting: &str) -> Vec<String> {
     ProjectSettings::singleton()
-        .get_setting(TEST_DIRECTORIES)
+        .get_setting(setting)
         .to::<PackedStringArray>()
         .as_slice()
         .iter()

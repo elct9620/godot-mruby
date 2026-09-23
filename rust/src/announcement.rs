@@ -91,7 +91,7 @@ impl<'a, F: Files> Project<'a, F> {
 
     // The header and ancestry of the file at `path`, when it is a node script.
     fn node_script(&self, path: &str) -> Option<(Header, Ancestry)> {
-        let header = Header::read(path, &self.files.source(path).ok()?);
+        let header = Header::read(path, &self.files.source(path).ok()?, &self.files.roots());
         let ancestry = ancestry::read(path, &header, self.files).ok()?;
         (self.is_node)(ancestry.engine_class()).then_some((header, ancestry))
     }
@@ -99,10 +99,10 @@ impl<'a, F: Files> Project<'a, F> {
     // The other game files whose node scripts share the name of the file at
     // `path`: only a file whose last segment spells the same name can.
     fn sharing_name(&self, path: &str) -> Vec<String> {
-        let name = realm::key_of(path).pop();
+        let name = file_name(path);
         self.paths
             .iter()
-            .filter(|other| other.as_str() != path && realm::key_of(other).pop() == name)
+            .filter(|other| other.as_str() != path && file_name(other) == name)
             .filter(|other| !self.in_test_directory(other) && self.node_script(other).is_some())
             .cloned()
             .collect()
@@ -111,6 +111,12 @@ impl<'a, F: Files> Project<'a, F> {
     fn in_test_directory(&self, path: &str) -> bool {
         settings::in_test_directory(path, self.test_directories)
     }
+}
+
+// The last segment of the file at `path`, as the class index matches it.
+fn file_name(path: &str) -> String {
+    let name = path.rsplit('/').next().unwrap_or(path);
+    realm::normalize(name.trim_end_matches(".rb"))
 }
 
 #[cfg(test)]

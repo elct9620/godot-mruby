@@ -18,7 +18,7 @@ mod registry;
 
 use executor::Declaration;
 use index::ClassIndex;
-pub use index::{file_named, key_of, normalize};
+pub use index::{Roots, file_named, normalize};
 use reentrant::ReentrantLock;
 pub use registry::Key;
 use registry::Registry;
@@ -55,6 +55,10 @@ pub struct Location {
 pub trait Files: Send {
     /// Every file the class index takes in, by path.
     fn paths(&self) -> Vec<String>;
+    /// The root directories the class index names those files from.
+    fn roots(&self) -> Roots {
+        Roots::default()
+    }
     /// The source of the file at `path`, or why there is none.
     fn source(&self, path: &str) -> Result<String, String>;
     /// What the file at `path` declares before it runs.
@@ -177,7 +181,7 @@ fn ran(mrb: &Mrb, path: &str, signals: Vec<Signal>, members: Vec<Member>) {
 // The names of the methods the class the file at `path` names defines
 // itself; none when the file named no class of its own.
 fn methods_of(mrb: &Mrb, path: &str) -> Vec<String> {
-    let Some(class) = constants::constant_at(mrb, &key_of(path)) else {
+    let Some(class) = constants::constant_at(mrb, &key_of(mrb, path)) else {
         return Vec::new();
     };
     let own = [false.into_value(mrb)];
@@ -194,6 +198,11 @@ fn methods_of(mrb: &Mrb, path: &str) -> Vec<String> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+// The constant path the file at `path` spells in `mrb`'s realm.
+fn key_of(mrb: &Mrb, path: &str) -> index::Key {
+    bookkeeping(mrb).index.borrow().key_of(path)
 }
 
 // The bookkeeping `mrb`'s realm put there as it opened.
@@ -410,10 +419,11 @@ impl Realm {
         let mut mrb = Mrb::open()
             .map_err(|error| RubyError::plain(format!("mruby did not open: {error}")))?;
         let paths = files.paths();
+        let index = RefCell::new(ClassIndex::new(files.roots()));
         let bookkeeping = Bookkeeping {
             files: Box::new(files),
             log: Box::new(log),
-            index: RefCell::default(),
+            index,
             runs: executor::Runs::default(),
             registry: Registry::new(&mrb),
             snapshot: RefCell::default(),
@@ -434,7 +444,8 @@ impl Realm {
         Ok(realm)
     }
 
-    // Adds the files at `paths` to the class index, each named from `res://`.
+    // Adds the files at `paths` to the class index, each named from its root
+    // directory.
     fn index_files(&self, paths: impl IntoIterator<Item = String>) {
         let _scope = self.mrb.arena_scope();
         let bookkeeping = bookkeeping(&self.mrb);
@@ -536,7 +547,7 @@ impl Realm {
         if registry.holds(&self.mrb, key).map_err(read)? {
             return Ok(Built::Held);
         }
-        let Some(class) = constants::constant_at(&self.mrb, &key_of(path)) else {
+        let Some(class) = constants::constant_at(&self.mrb, &key_of(&self.mrb, path)) else {
             if executor::running(&self.mrb, path) {
                 return Ok(Built::Waiting);
             }
@@ -772,6 +783,45 @@ mod tests {
         }
     }
 
+    const SWORD: &str = "res://game/items/sword.rb";
+    const SHIELD: &str = "res://mods/items/shield.rb";
+
+    // One namespace under two root directories, and a file at the top of
+    // `res://` asking for a constant from each.
+    struct Armory;
+
+    impl Files for Armory {
+        fn paths(&self) -> Vec<String> {
+            vec![
+                SWORD.to_owned(),
+                SHIELD.to_owned(),
+                "res://probe.rb".to_owned(),
+            ]
+        }
+
+        fn roots(&self) -> Roots {
+            Roots::new(["res://game".to_owned(), "res://mods/".to_owned()])
+        }
+
+        fn source(&self, path: &str) -> Result<String, String> {
+            Ok(match path {
+                SWORD => "module Items\n  class Sword\n  end\nend\n",
+                SHIELD => "module Items\n  class Shield\n  end\nend\n",
+                _ => concat!(
+                    "class Probe\n",
+                    "  def self.armed(_) = [Items::Sword, Items::Shield].map(&:to_s)",
+                    " == %w[Items::Sword Items::Shield] && !Object.const_defined?(:Game)\n",
+                    "end\n"
+                ),
+            }
+            .to_owned())
+        }
+
+        fn declared(&self, _path: &str) -> Declared {
+            Declared::default()
+        }
+    }
+
     // The frames an error carries, each as `file:line:method`.
     fn frames(error: Option<RubyError>) -> Vec<String> {
         error
@@ -863,6 +913,18 @@ mod tests {
         });
 
         assert_eq!(frames(ran.err()), ["res://raising.rb:2:"]);
+    }
+
+    // @behavior RL-032
+    #[test]
+    fn one_namespace_spans_the_directories_spelling_it_under_different_root_directories() {
+        let _turn = TURN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        close();
+        prepare(|| Realm::open(Armory, Silent, |_| Ok(())));
+
+        let armed = enter(|realm| realm.call::<_, bool>("Probe", c"armed", 0_i64));
+
+        assert_eq!(armed.map_err(|e| e.message), Ok(true));
     }
 
     // @behavior RO-002

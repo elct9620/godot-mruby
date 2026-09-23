@@ -72,6 +72,7 @@ impl fmt::Display for Broken {
 /// `files`, each superclass found as the realm's loader would find it.
 pub fn read(path: &str, header: &Header, files: &impl Files) -> Result<Ancestry, Broken> {
     let paths = files.paths();
+    let roots = files.roots();
     let mut passed = vec![path.to_owned()];
     let mut ancestors = Vec::new();
     let mut superclass = header.superclass().cloned();
@@ -85,8 +86,13 @@ pub fn read(path: &str, header: &Header, files: &impl Files) -> Result<Ancestry,
                 engine_class: engine_class.clone(),
             });
         }
-        let file = realm::file_named(paths.clone(), written.scope(), written.names())
-            .ok_or_else(|| Broken::Unnamed(written.names().join("::")))?;
+        let file = realm::file_named(
+            paths.clone(),
+            roots.clone(),
+            written.scope(),
+            written.names(),
+        )
+        .ok_or_else(|| Broken::Unnamed(written.names().join("::")))?;
         if passed.contains(&file) {
             return Err(Broken::Cycle(file));
         }
@@ -94,7 +100,7 @@ pub fn read(path: &str, header: &Header, files: &impl Files) -> Result<Ancestry,
             path: file.clone(),
             reason,
         })?;
-        let ancestor = Header::read(&file, &source);
+        let ancestor = Header::read(&file, &source, &roots);
         superclass = ancestor.superclass().cloned();
         passed.push(file.clone());
         ancestors.push((file, ancestor));
@@ -131,7 +137,7 @@ pub mod tests {
 
     fn ancestry(path: &str, sources: &[(&'static str, &'static str)]) -> Result<Ancestry, Broken> {
         let files = Sources(sources.iter().copied().collect());
-        let header = Header::read(path, &files.source(path).unwrap());
+        let header = Header::read(path, &files.source(path).unwrap(), &files.roots());
         read(path, &header, &files)
     }
 

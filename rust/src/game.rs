@@ -7,7 +7,7 @@ use godot::global::Error;
 use godot::obj::Singleton;
 
 use crate::header::Header;
-use crate::realm::{Declared, Extends, Files};
+use crate::realm::{Declared, Extends, Files, Roots};
 use crate::settings;
 use crate::{ancestry, bridge};
 
@@ -33,6 +33,16 @@ impl Files for GameFiles {
         paths
     }
 
+    // A test directory is a root directory whether the project lists it as
+    // one or not.
+    fn roots(&self) -> Roots {
+        Roots::new(
+            settings::root_directories()
+                .into_iter()
+                .chain(settings::test_directories()),
+        )
+    }
+
     // Through `ResourceLoader`, so an exported game follows its remaps.
     fn source(&self, path: &str) -> Result<String, String> {
         ResourceLoader::singleton()
@@ -52,7 +62,7 @@ impl Files for GameFiles {
         let Ok(source) = self.source(path) else {
             return Declared::default();
         };
-        let header = Header::read(path, &source);
+        let header = Header::read(path, &source, &self.roots());
         let extends = ancestry::read(path, &header, self)
             .ok()
             .filter(|ancestry| bridge::is_node_class(ancestry.engine_class()))
@@ -78,6 +88,10 @@ pub struct FilesOnDisk;
 impl Files for FilesOnDisk {
     fn paths(&self) -> Vec<String> {
         GameFiles.paths()
+    }
+
+    fn roots(&self) -> Roots {
+        GameFiles.roots()
     }
 
     fn source(&self, path: &str) -> Result<String, String> {

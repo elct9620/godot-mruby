@@ -44,16 +44,44 @@ Closes the game's realm unless the calling thread is inside it; the next entry o
 pub fn close() {}
 ```
 
-## `key_of`
+## `Roots`
 
-The constant path a file's path names, one segment per namespace as the class index matches it, so what reads a file outside the realm names it as the realm does.
+The root directories a realm names its files from: `res://`, and those inside it whose files are named from the top level too. What reads files outside the realm is given the same roots the realm is, so it names each file as the realm does.
 
 | Attribute | Value |
 | --- | --- |
 | internal | yes |
 
 ```rust
-pub fn key_of(path: &str) -> Vec<String> {}
+pub struct Roots;
+```
+
+## `Roots::new`
+
+The root directories a list names besides `res://`, each written with or without its trailing slash; `res://` itself and a directory outside it add none.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Roots {
+    pub fn new(directories: impl IntoIterator<Item = String>) -> Self {}
+}
+```
+
+## `Roots::key_of`
+
+The constant path a file's path names from the nearest root directory it sits under, one segment per namespace as the class index matches it.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Roots {
+    pub fn key_of(&self, path: &str) -> Vec<String> {}
+}
 ```
 
 ## `normalize`
@@ -70,14 +98,14 @@ pub fn normalize(segment: &str) -> String {}
 
 ## `file_named`
 
-The file a constant path written inside namespaces names, looked up among paths as the realm's loader looks it up: from the innermost namespace outward, with a name two files spell naming none. What reads files outside the realm finds the file the realm would run.
+The file a constant path written inside namespaces names, looked up among paths named from their root directories as the realm's loader looks it up: from the innermost namespace outward, with a name two files spell naming none. What reads files outside the realm finds the file the realm would run.
 
 | Attribute | Value |
 | --- | --- |
 | internal | yes |
 
 ```rust
-pub fn file_named(paths: Vec<String>, scope: &[String], names: &[String]) -> Option<String> {}
+pub fn file_named(paths: Vec<String>, roots: Roots, scope: &[String], names: &[String]) -> Option<String> {}
 ```
 
 ## `inside`
@@ -363,6 +391,20 @@ Every file the class index takes in, by path.
 ```rust
 pub trait Files {
     fn paths(&self) -> Vec<String>;
+}
+```
+
+## `Files::roots`
+
+The root directories the class index names the files from; only `res://` for files that give none.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub trait Files {
+    fn roots(&self) -> Roots;
 }
 ```
 

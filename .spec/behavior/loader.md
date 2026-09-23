@@ -4,6 +4,7 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 
 ## Includes
 
+- `rust/src/realm.rs`
 - `tasks/support/loader.rb`
 - `godot/test/loader/**/*.rb`
 
@@ -100,7 +101,7 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 | Step | Statement |
 | --- | --- |
 | Given | a file under a test directory that is not a test file |
-| When | a test uses the constant its path spells from `res://` |
+| When | a test uses the constant its path spells from the test directory |
 | Then | it gets what the file defined |
 
 ## `RL-013` A test class loaded by name during a run does not run
@@ -246,3 +247,19 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 | Given | a library file whose superclass, as Ruby looks it up, is not the class the loader's rule would find |
 | When | Ruby first uses the library file's constant |
 | Then | its class extends the class Ruby found |
+
+## `RL-031` A file under a root directory names its constant from the top level
+
+| Step | Statement |
+| --- | --- |
+| Given | a file under one of the project's root directories |
+| When | Ruby uses the constant its path spells from that root directory |
+| Then | it gets what the file defined, and the root directory is no namespace |
+
+## `RL-032` One namespace spans the directories that spell it under different root directories
+
+| Step | Statement |
+| --- | --- |
+| Given | two directories spelling the same namespace, each under another root directory |
+| When | Ruby uses a constant from each of them inside that namespace |
+| Then | both load, and the namespace is one module
