@@ -2,6 +2,7 @@ use godot::classes::{DirAccess, INode, Node, Os, ResourceLoader};
 use godot::prelude::*;
 
 use crate::error;
+use crate::game;
 use crate::log::GodotLog;
 use crate::minitest::{self, Minitest};
 use crate::realm::{self, RubyError};
@@ -21,8 +22,9 @@ pub struct RubyTestRunner {
 impl INode for RubyTestRunner {
     fn ready(&mut self) {
         let args = user_args();
-        let run_as_asked =
-            test_directories(&args).and_then(|directories| Ok((directories, test_options(&args)?)));
+        let run_as_asked = refuse_exported_game()
+            .and_then(|()| test_directories(&args))
+            .and_then(|directories| Ok((directories, test_options(&args)?)));
         let passed = match run_as_asked {
             Ok((directories, options)) => run(&directories, options),
             Err(refused) => {
@@ -70,6 +72,16 @@ fn logged(outcome: Result<bool, RubyError>) -> bool {
         failed.write(&GodotLog);
         false
     })
+}
+
+// An exported game ships no tests, and a runner it still has is refused
+// rather than run against whatever reached the game.
+fn refuse_exported_game() -> Result<(), String> {
+    if game::is_exported() {
+        Err("The test runner does not run in an exported game".to_owned())
+    } else {
+        Ok(())
+    }
 }
 
 // What follows `--` on Godot's command line.

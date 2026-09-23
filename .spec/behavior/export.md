@@ -47,3 +47,11 @@ How a game ships without its tests: each layer keeps test code out of an exporte
 | Given | a test directory `res://test` |
 | When | a file under `res://testing` is asked about |
 | Then | the file is not under a test directory |
+
+## `RX-006` The test runner refuses to run in an exported game
+
+| Step | Statement |
+| --- | --- |
+| Given | an exported game |
+| When | a test runner node enters its scene tree |
+| Then | the log carries an error saying the runner does not run in an exported game |

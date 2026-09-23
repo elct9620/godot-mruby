@@ -26,6 +26,8 @@ module Godot
     LEFT_OUT_PATHS = ["res://test/engine_classes/engine_classes_test.rb",
                       "res://addons/godot_mruby/runner.tscn"].freeze
     GAME_FILE = "res://verify/export/seeker.rb"
+    REFUSED_SCENE = "res://verify/export/refused.tscn"
+    REFUSED = "ERROR: The test runner does not run in an exported game"
 
     module_function
 
@@ -35,6 +37,7 @@ module Godot
         install_library(project, dir)
         verify_index_left_out!(dir, pack)
         verify_tests_left_out!(dir, pack)
+        verify_runner_refused!(dir, pack)
       end
     end
 
@@ -42,21 +45,30 @@ module Godot
     def verify_index_left_out!(dir, pack)
       source = File.join(dir, "leftover.rb")
       File.write(source, LEFTOVER)
-      output = run(dir, pack, LEFTOVER_SCENE, source, File.join(dir, "leftover.pck"))
-      return if output.lines.map(&:chomp).include?(LEFT_OUT)
+      output, status = run(dir, pack, LEFTOVER_SCENE, source, File.join(dir, "leftover.pck"))
+      return if status.success? && output.lines.map(&:chomp).include?(LEFT_OUT)
 
       raise "The exported game's Ruby reached a file under a test directory:\n#{output}"
     end
 
     # @behavior RX-002 RX-003
     def verify_tests_left_out!(dir, pack)
-      output = run(dir, pack, SHIPPED_SCENE, *LEFT_OUT_PATHS, GAME_FILE)
+      output, status = run(dir, pack, SHIPPED_SCENE, *LEFT_OUT_PATHS, GAME_FILE)
       shipped = output.lines.filter_map do |line|
         line.chomp.delete_prefix("shipped: ") if line.start_with?("shipped: ")
       end
-      return if shipped == [GAME_FILE]
+      return if status.success? && shipped == [GAME_FILE]
 
       raise "The exported game shipped #{shipped} where only #{GAME_FILE} belongs:\n#{output}"
+    end
+
+    # The runner quits the game with 1 as it refuses.
+    # @behavior RX-006
+    def verify_runner_refused!(dir, pack)
+      output, status = run(dir, pack, REFUSED_SCENE)
+      return if status.exitstatus == 1 && output.lines.map(&:chomp).include?(REFUSED)
+
+      raise "The exported game ran a test runner:\n#{output}"
     end
 
     # The export prints the editor's complaints about having no window, so it
@@ -78,11 +90,8 @@ module Godot
     end
 
     def run(dir, pack, scene, *)
-      output, status = Open3.capture2e(EXECUTABLE, "--headless", "--main-pack", pack, scene,
-                                       "--quit-after", FRAMES, "--", *, chdir: dir)
-      raise "The exported game did not run:\n#{output}" unless status.success?
-
-      output
+      Open3.capture2e(EXECUTABLE, "--headless", "--main-pack", pack, scene,
+                      "--quit-after", FRAMES, "--", *, chdir: dir)
     end
   end
 end

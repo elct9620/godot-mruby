@@ -94,11 +94,17 @@ impl Files for FilesOnDisk {
     }
 }
 
+/// Whether this is an exported game: Godot runs one on an export template's
+/// build, which carries the `template` feature.
+pub fn is_exported() -> bool {
+    Os::singleton().has_feature("template")
+}
+
 // The directories the class index leaves out: an exported game's test
 // directories. Tests run only on the editor's build, where every file is
 // indexed so a test reaches any file by name.
 fn left_out() -> Vec<String> {
-    if Os::singleton().has_feature("template") {
+    if is_exported() {
         settings::test_directories()
     } else {
         Vec::new()
