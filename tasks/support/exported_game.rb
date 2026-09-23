@@ -15,10 +15,10 @@ module Godot
   module ExportedGame
     PRESET = "Verify"
     LEFTOVER_SCENE = "res://verify/export/leftover.tscn"
-    # What the leftover scene loads under a test directory, as the constant
-    # its path names.
-    LEFTOVER = "module Test\n  class Leftover\n  end\nend\n"
-    LEFT_OUT = "left out: uninitialized constant Test"
+    # What the leftover scene loads under a test directory, which is a root
+    # directory, as the constant its path names from there.
+    LEFTOVER = "class Leftover\nend\n"
+    LEFT_OUT = "left out: uninitialized constant Leftover"
     # The run ends within its first frames; this only stops one that never
     # does from hanging the check.
     FRAMES = "60"

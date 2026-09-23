@@ -4,7 +4,7 @@ module Verify
   module Export
     class Seeker < Godot::Node
       def _ready
-        puts "reached #{::Test::Leftover}"
+        puts "reached #{::Leftover}"
       rescue NameError => e
         puts "left out: #{e.message}"
       end
