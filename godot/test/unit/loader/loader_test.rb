@@ -38,6 +38,16 @@ class LoaderTest < Minitest::Test
     assert_same Unit::Loader::Inventory, Unit::Loader::Items::Inventory
   end
 
+  # @behavior RL-011
+  def test_a_node_scripts_namespace_file_runs_before_it
+    greeter = Godot::Node.new
+    greeter.set_script(Godot::ResourceLoader.load("res://test/unit/loader/namespaced/greeter.rb"))
+
+    assert_equal "namespace from namespaced.rb", greeter.call(:greeting)
+  ensure
+    greeter&.free
+  end
+
   # @behavior RL-012
   def test_a_file_under_a_test_directory_loads_by_name
     assert_equal 0, Unit::Loader::Support::FakeClock.new.now

@@ -5,9 +5,8 @@ require_relative "ruby_tests"
 module Godot
   # Runs the integration-test project's checks of the loader that read
   # the log or a run's outcome: what the class index warns about, where
-  # an error in a file loaded by name is reported, that a test class loaded
-  # during a run does not run, and what a node script inside a namespace
-  # reaches. Part of Godot.verify!.
+  # an error in a file loaded by name is reported, and that a test class
+  # loaded during a run does not run. Part of Godot.verify!.
   module Loader
     # What every run has to warn about, since the class index takes in every
     # game file: the files spelling names it cannot hold, and game files
@@ -35,10 +34,6 @@ module Godot
     # and the summary that shows the loaded class's test did not run.
     LATE = "res://verify/loader/late"
     LATE_SUMMARY = /^1 runs, \d+ assertions, 0 failures, 0 errors, 0 skips$/
-    # A scene whose node script reopens the namespace its directory spells, and
-    # the line it prints from what the namespace's own file defined.
-    NAMESPACED_SCENE = "res://verify/loader/namespaced/namespaced.tscn"
-    NAMESPACED_LINE = "namespace from namespaced.rb"
 
     module_function
 
@@ -46,7 +41,6 @@ module Godot
       verify_warnings!(project)
       verify_raised!(project)
       verify_late!(project)
-      verify_namespaced!(project)
     end
 
     # Runs the project's Ruby tests, which have to pass and warn about every
@@ -79,17 +73,6 @@ module Godot
       return if status.success? && output.match?(LATE_SUMMARY)
 
       raise "A run of #{LATE} ran a test class loaded by name:\n#{output}"
-    end
-
-    # Runs the namespaced scene, whose script has to print what the
-    # namespace's file defined, so that file ran first.
-    # @behavior RL-011
-    def verify_namespaced!(project)
-      output, status = Godot.run_scene(project, NAMESPACED_SCENE, "--quit-after", "3")
-      printed = output.lines.map(&:chomp)
-      return if status.success? && output.lines.grep(FAILED).empty? && printed.include?(NAMESPACED_LINE)
-
-      raise "The namespaced scene's script did not reach its namespace's file:\n#{output}"
     end
   end
 end

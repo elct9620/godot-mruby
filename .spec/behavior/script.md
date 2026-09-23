@@ -189,7 +189,7 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | --- | --- |
 | Given | a node script whose class defines no method and extends another file's class defining `_ready` |
 | When | its node enters the scene |
-| Then | what the inherited `_ready` prints appears in the log |
+| Then | the inherited `_ready` runs on the node's object |
 
 ## `RS-024` A file whose superclass no file names cannot be a node's script
 

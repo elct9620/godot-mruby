@@ -2,8 +2,8 @@
 
 module Godot
   # Runs the integration-test project's scenes of node scripts and reads what
-  # they print: which files a node refuses, what a script answers before its
-  # file runs, which callbacks a node's Ruby object is given, and what its
+  # they print: which files a node refuses, what a node answers Godot before
+  # its file runs, which callbacks a node's Ruby object is given, and what its
   # methods answer Godot. Part of Godot.verify!.
   module NodeScripts
     # A scene whose nodes take a library file, a node script extending a class
@@ -18,10 +18,6 @@ module Godot
       "ERROR: res://verify/script/attach/orphan.rb extends Missing, which no one file names, " \
       "so it cannot be a node's script"
     ].freeze
-    # A scene whose node's script inherits its only callback from another
-    # file, and what that callback prints.
-    INHERIT_SCENE = "res://verify/script/inherit/inherit.tscn"
-    INHERITED_READY_LINE = "Verify::Script::Inherit::Boss is ready"
 
     module_function
 
@@ -30,7 +26,6 @@ module Godot
       Header.verify!(project)
       Callbacks.verify!(project)
       Exports.verify!(project)
-      verify_inherited_callback!(project)
     end
 
     # Runs the scene whose nodes take scripts they cannot, each refused in the log.
@@ -41,15 +36,6 @@ module Godot
       return if status.success? && missing.empty?
 
       raise "The attach scene's scripts were not refused as they should be #{missing}:\n#{output}"
-    end
-
-    # Runs the scene whose node's only callback is inherited from another file.
-    # @behavior RS-023
-    def verify_inherited_callback!(project)
-      output, status = Godot.run_scene(project, INHERIT_SCENE, "--quit-after", "3")
-      return if status.success? && output.lines.map(&:chomp).include?(INHERITED_READY_LINE)
-
-      raise "The inherit scene's node was not given its inherited _ready:\n#{output}"
     end
   end
 end

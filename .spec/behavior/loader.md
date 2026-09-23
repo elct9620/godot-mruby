@@ -93,7 +93,7 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 | Step | Statement |
 | --- | --- |
 | Given | a node script inside a namespace's directory that reopens the namespace, and the namespace's own file |
-| When | the scene runs |
+| When | a method of a node with that script is called |
 | Then | the script reaches what the namespace's own file defined |
 
 ## `RL-012` A file under a test directory loads by name
