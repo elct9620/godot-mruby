@@ -4,7 +4,7 @@ What a test written against the framework sees: its lifecycle, its assertions an
 
 ## Includes
 
-- `godot/test/unit/minitest/**/*.rb`
+- `godot/test/unit/minitest/**/*_test.rb`
 
 ## `RM-001` Each test runs on a fresh instance after `setup`
 

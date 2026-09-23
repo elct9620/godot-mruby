@@ -22,7 +22,7 @@ class EngineClassesTest < Minitest::Test
 
   # @behavior RG-004
   def test_an_engine_class_stays_after_a_file_that_first_used_it_raises
-    assert_raises(RuntimeError) { Loader::EngineRaising }
+    assert_raises(RuntimeError) { Unit::EngineClasses::EngineRaising }
     assert Godot.const_defined?(:Marker3D)
   end
 end

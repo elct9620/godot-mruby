@@ -1,7 +1,7 @@
 class SignalsTest < Minitest::Test
   # @behavior RD-001
   def test_a_declared_signal_is_one_the_node_has
-    bell = Loader::Bell.new
+    bell = Unit::Declarations::Bell.new
 
     assert bell.has_signal(:rung)
   ensure
@@ -10,7 +10,7 @@ class SignalsTest < Minitest::Test
 
   # @behavior RD-002
   def test_a_declared_signal_carries_the_parameters_it_was_declared_with
-    bell = Loader::Bell.new
+    bell = Unit::Declarations::Bell.new
 
     rung = bell.get_signal_list.find { |signal| signal["name"] == "rung" }
 
@@ -21,7 +21,7 @@ class SignalsTest < Minitest::Test
 
   # @behavior RD-003
   def test_a_declared_signal_reaches_what_connected_to_it
-    bell = Loader::Bell.new
+    bell = Unit::Declarations::Bell.new
     bell.connect(:rung, method(:hear))
 
     bell.ring(3)
@@ -33,12 +33,12 @@ class SignalsTest < Minitest::Test
 
   # @behavior RD-007
   def test_a_signal_declared_again_with_other_parameters_is_refused
-    assert_raises(ArgumentError) { Loader::Clashing }
+    assert_raises(ArgumentError) { Unit::Declarations::Clashing }
   end
 
   # @behavior RD-008
   def test_a_signal_declared_again_as_it_stands_is_no_new_signal
-    repeating = Loader::Repeating.new
+    repeating = Unit::Declarations::Repeating.new
 
     rung = repeating.get_signal_list.select { |signal| signal["name"] == "rung" }
 
@@ -49,7 +49,7 @@ class SignalsTest < Minitest::Test
 
   # @behavior RD-009
   def test_a_node_has_the_signal_the_class_its_class_extends_declared
-    chime = Loader::Chime.new
+    chime = Unit::Declarations::Chime.new
 
     assert chime.has_signal(:rung)
   ensure

@@ -72,7 +72,7 @@ class ValuesTest < Minitest::Test
   # @behavior RV-007
   def test_an_engine_object_crosses_as_the_same_object
     child = Godot::Node.new
-    beacon = Loader::Beacon.new(1)
+    beacon = Unit::Script::Beacon.new(1)
     @node.add_child(child)
     @node.add_child(beacon)
 

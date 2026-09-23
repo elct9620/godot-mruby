@@ -1,7 +1,7 @@
 class ReentryTest < Minitest::Test
   # @behavior RS-034
   def test_a_call_back_into_the_same_node_reaches_its_ruby_object
-    echo = Loader::Echo.new
+    echo = Unit::Script::Echo.new
 
     assert_equal :pinged, echo.call(:ping)
     assert_equal 7, echo.notified
@@ -11,7 +11,7 @@ class ReentryTest < Minitest::Test
 
   # @behavior RS-035
   def test_a_call_arriving_while_a_node_initializes_reaches_the_object_initializing
-    eager = Loader::Eager.new
+    eager = Unit::Script::Eager.new
 
     assert_equal 3, eager.notified
   ensure
@@ -20,8 +20,8 @@ class ReentryTest < Minitest::Test
 
   # @behavior RS-036
   def test_a_call_arriving_before_a_file_defines_its_class_does_nothing
-    Loader::Early
-    early = Loader::EARLY_NODE
+    Unit::Script::Early
+    early = Unit::Script::EARLY_NODE
 
     early.notification(2)
 
@@ -32,7 +32,7 @@ class ReentryTest < Minitest::Test
 
   # @behavior RS-037
   def test_a_nodes_script_taken_away_while_its_ruby_runs_lets_the_call_finish
-    detach = Loader::Detach.new
+    detach = Unit::Script::Detach.new
 
     answer = detach.call(:detach)
 

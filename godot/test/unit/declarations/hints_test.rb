@@ -73,7 +73,7 @@ class HintsTest < Minitest::Test
 
   # @behavior RD-047
   def test_a_hint_the_exported_type_cannot_take_is_refused
-    error = assert_raises(ArgumentError) { Loader::Mistyped }
+    error = assert_raises(ArgumentError) { Unit::Declarations::Mistyped }
 
     assert_equal %("range:" requires a variable of type "int" or "float", but type "String" was given instead.),
                  error.message
@@ -81,22 +81,22 @@ class HintsTest < Minitest::Test
 
   # @behavior RD-048
   def test_a_range_leaving_out_its_end_is_refused
-    assert_raises(ArgumentError) { Loader::Endless }
+    assert_raises(ArgumentError) { Unit::Declarations::Endless }
   end
 
   # @behavior RD-049
   def test_a_step_without_a_range_is_refused
-    assert_raises(ArgumentError) { Loader::Stepping }
+    assert_raises(ArgumentError) { Unit::Declarations::Stepping }
   end
 
   # @behavior RD-050
   def test_a_second_hint_on_one_property_is_refused
-    assert_raises(ArgumentError) { Loader::Doubling }
+    assert_raises(ArgumentError) { Unit::Declarations::Doubling }
   end
 
   # @behavior RD-051
   def test_a_nodes_properties_carry_the_hints_its_class_declared
-    gauge = Loader::Gauge.new
+    gauge = Unit::Declarations::Gauge.new
 
     angle = gauge.get_property_list.find { |property| property["name"] == "angle" }
 
@@ -110,8 +110,8 @@ class HintsTest < Minitest::Test
 
   # The property of that name among the ones the gauge's script exported.
   def exported(name)
-    Loader::Gauge
-    script = Godot::ResourceLoader.load("res://loader/gauge.rb")
+    Unit::Declarations::Gauge
+    script = Godot::ResourceLoader.load("res://test/unit/declarations/gauge.rb")
     script.get_script_property_list.find { |property| property["name"] == name }
   end
 end

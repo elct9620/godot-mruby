@@ -35,7 +35,7 @@ class GroupsTest < Minitest::Test
 
   # @behavior RD-062
   def test_a_nodes_properties_carry_the_headings_its_class_wrote
-    panel = Loader::Panel.new
+    panel = Unit::Declarations::Panel.new
 
     targeting = panel.get_property_list.find { |member| member["name"] == "Targeting" }
 
@@ -61,7 +61,7 @@ class GroupsTest < Minitest::Test
 
   # @behavior RD-065
   def test_a_nodes_properties_are_headed_by_one_category_for_its_class
-    cannon = Loader::Cannon.new
+    cannon = Unit::Declarations::Cannon.new
 
     headings = cannon.get_property_list.select { |member| member["name"] == "cannon.rb" }
 
@@ -76,14 +76,14 @@ class GroupsTest < Minitest::Test
   # What the cannon's script says it has, its class's and the class it
   # extends alike.
   def inherited
-    Loader::Cannon
-    Godot::ResourceLoader.load("res://loader/cannon.rb").get_script_property_list
+    Unit::Declarations::Cannon
+    Godot::ResourceLoader.load("res://test/unit/declarations/cannon.rb").get_script_property_list
   end
 
 
   # What the panel's script says it has, headings and properties alike.
   def listed
-    Loader::Panel
-    Godot::ResourceLoader.load("res://loader/panel.rb").get_script_property_list
+    Unit::Declarations::Panel
+    Godot::ResourceLoader.load("res://test/unit/declarations/panel.rb").get_script_property_list
   end
 end

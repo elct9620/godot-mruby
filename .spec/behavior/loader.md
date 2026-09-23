@@ -6,7 +6,7 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 
 - `rust/src/realm.rs`
 - `tasks/support/loader.rb`
-- `godot/test/unit/loader/**/*.rb`
+- `godot/test/unit/loader/**/*_test.rb`
 
 ## `RL-001` Two files naming one constant are warned about
 

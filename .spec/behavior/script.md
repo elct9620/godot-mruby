@@ -4,7 +4,7 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 
 ## Includes
 
-- `godot/test/unit/script/**/*.rb`
+- `godot/test/unit/script/**/*_test.rb`
 - `tasks/support/announcement.rb`
 - `tasks/support/callbacks.rb`
 - `tasks/support/godot.rb`

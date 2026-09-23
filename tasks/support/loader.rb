@@ -16,20 +16,20 @@ module Godot
       "WARNING: res://comparable.rb names Comparable, which the realm already has, so it never loads by name",
       "WARNING: res://godot.rb names Godot, which the realm already has, so it never loads by name",
       "WARNING: res://minitest.rb names Minitest, which the realm already has, so it never loads by name",
-      "WARNING: res://loader/naming/http_client.rb and res://loader/naming/httpclient.rb both name " \
-      "Loader::Naming::HttpClient, so neither loads by name",
-      "WARNING: res://loader/naming/crate.rb names Loader::Naming::Crate, which hides " \
-      "Loader::Naming::Items::Crate from Ruby inside Loader::Naming::Items once it has loaded"
+      "WARNING: res://test/unit/loader/naming/http_client.rb and res://test/unit/loader/naming/httpclient.rb " \
+      "both name Unit::Loader::Naming::HttpClient, so neither loads by name",
+      "WARNING: res://test/unit/loader/naming/crate.rb names Unit::Loader::Naming::Crate, which hides " \
+      "Unit::Loader::Naming::Items::Crate from Ruby inside Unit::Loader::Naming::Items once it has loaded"
     ].freeze
     # A test using a constant whose file raises, and what its run has to print
     # in order: the error placed at the line of the file that raised.
     RAISING = "res://verify/loader/failing/raising"
     RAISED = [
-      "RaisingFileTest#test_uses_a_file_that_raises [res://loader/raising.rb:12]:",
+      "RaisingFileTest#test_uses_a_file_that_raises [res://test/unit/loader/raising.rb:13]:",
       "RuntimeError: raising.rb fails after defining its constants",
       "ERROR: RaisingFileTest#test_uses_a_file_that_raises: " \
       "RuntimeError: raising.rb fails after defining its constants",
-      "(res://loader/raising.rb:12)"
+      "(res://test/unit/loader/raising.rb:13)"
     ].freeze
     # A test directory whose test loads a test class by name during the run,
     # and the summary that shows the loaded class's test did not run.

@@ -4,7 +4,7 @@ How a value crosses between Ruby and the engine, either way: data is copied and 
 
 ## Includes
 
-- `godot/test/unit/values/**/*.rb`
+- `godot/test/unit/values/**/*_test.rb`
 - `tasks/support/callbacks.rb`
 
 ## `RV-001` A scalar crosses as itself
