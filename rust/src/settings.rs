@@ -46,7 +46,43 @@ pub fn test_directories() -> Vec<String> {
         .collect()
 }
 
+/// Whether `path` lies under one of `test_directories`, each written with
+/// or without its trailing slash.
+pub fn in_test_directory(path: &str, test_directories: &[String]) -> bool {
+    test_directories.iter().any(|directory| {
+        path.strip_prefix(directory.trim_end_matches('/'))
+            .is_some_and(|rest| rest.starts_with('/'))
+    })
+}
+
 /// The glob a file name under a test directory matches to be a test file.
 pub fn test_pattern() -> GString {
     ProjectSettings::singleton().get_setting(TEST_PATTERN).to()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::in_test_directory;
+
+    // @behavior RX-004
+    #[test]
+    fn a_test_directory_written_with_its_trailing_slash_holds_its_files() {
+        let directories = ["res://test/".to_owned()];
+
+        assert!(in_test_directory(
+            "res://test/inventory_test.rb",
+            &directories
+        ));
+    }
+
+    // @behavior RX-005
+    #[test]
+    fn a_directory_whose_name_only_begins_like_a_test_directory_is_not_in_it() {
+        let directories = ["res://test".to_owned()];
+
+        assert!(!in_test_directory(
+            "res://testing/inventory.rb",
+            &directories
+        ));
+    }
 }

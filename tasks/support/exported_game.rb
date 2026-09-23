@@ -20,20 +20,43 @@ module Godot
     # The run ends within its first frames; this only stops one that never
     # does from hanging the check.
     FRAMES = "60"
+    SHIPPED_SCENE = "res://verify/export/shipped.tscn"
+    # Paths an export has to leave out, and a game file it has to ship, which
+    # tells a game missing everything from one missing only its tests.
+    LEFT_OUT_PATHS = ["res://test/engine_classes/engine_classes_test.rb",
+                      "res://addons/godot_mruby/runner.tscn"].freeze
+    GAME_FILE = "res://verify/export/seeker.rb"
 
     module_function
 
-    # @behavior RX-001
     def verify!(project)
       Dir.mktmpdir do |dir|
         pack = export_pack(project, dir)
-        source = File.join(dir, "leftover.rb")
-        File.write(source, LEFTOVER)
-        output = run(project, dir, pack, LEFTOVER_SCENE, source, File.join(dir, "leftover.pck"))
-        next if output.lines.map(&:chomp).include?(LEFT_OUT)
-
-        raise "The exported game's Ruby reached a file under a test directory:\n#{output}"
+        install_library(project, dir)
+        verify_index_left_out!(dir, pack)
+        verify_tests_left_out!(dir, pack)
       end
+    end
+
+    # @behavior RX-001
+    def verify_index_left_out!(dir, pack)
+      source = File.join(dir, "leftover.rb")
+      File.write(source, LEFTOVER)
+      output = run(dir, pack, LEFTOVER_SCENE, source, File.join(dir, "leftover.pck"))
+      return if output.lines.map(&:chomp).include?(LEFT_OUT)
+
+      raise "The exported game's Ruby reached a file under a test directory:\n#{output}"
+    end
+
+    # @behavior RX-002 RX-003
+    def verify_tests_left_out!(dir, pack)
+      output = run(dir, pack, SHIPPED_SCENE, *LEFT_OUT_PATHS, GAME_FILE)
+      shipped = output.lines.filter_map do |line|
+        line.chomp.delete_prefix("shipped: ") if line.start_with?("shipped: ")
+      end
+      return if shipped == [GAME_FILE]
+
+      raise "The exported game shipped #{shipped} where only #{GAME_FILE} belongs:\n#{output}"
     end
 
     # The export prints the editor's complaints about having no window, so it
@@ -48,10 +71,13 @@ module Godot
 
     # A pack carries no library, so the game runs from a directory that holds
     # the addon's at the path the .gdextension names.
-    def run(project, dir, pack, scene, *)
+    def install_library(project, dir)
       bin = File.join("addons", "godot_mruby", "bin")
       FileUtils.mkdir_p(File.join(dir, File.dirname(bin)))
       FileUtils.cp_r(File.join(project, bin), File.join(dir, bin))
+    end
+
+    def run(dir, pack, scene, *)
       output, status = Open3.capture2e(EXECUTABLE, "--headless", "--main-pack", pack, scene,
                                        "--quit-after", FRAMES, "--", *, chdir: dir)
       raise "The exported game did not run:\n#{output}" unless status.success?

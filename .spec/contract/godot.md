@@ -6,6 +6,22 @@ The classes the extension registers with Godot. The editor and GDScript know the
 
 - `rust/src/**/*.rs`
 
+## `RubyEditorPlugin`
+
+The editor plugin the extension adds to every editor: it hands the editor the export plugin as it opens.
+
+```rust
+struct RubyEditorPlugin;
+```
+
+## `RubyExportPlugin`
+
+The export plugin that keeps a project's tests out of the game it exports.
+
+```rust
+struct RubyExportPlugin;
+```
+
 ## `RubyLanguage`
 
 The Ruby script language, registered with the engine for `.rb` files.

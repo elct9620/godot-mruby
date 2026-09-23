@@ -5,6 +5,7 @@
 use crate::ancestry::{self, Ancestry};
 use crate::parser::Header;
 use crate::realm::{self, Files};
+use crate::settings;
 
 /// What the editor lists a node script by.
 #[derive(Debug, PartialEq, Eq)]
@@ -108,10 +109,7 @@ impl<'a, F: Files> Project<'a, F> {
     }
 
     fn in_test_directory(&self, path: &str) -> bool {
-        self.test_directories.iter().any(|directory| {
-            path.strip_prefix(directory.trim_end_matches('/'))
-                .is_some_and(|rest| rest.starts_with('/'))
-        })
+        settings::in_test_directory(path, self.test_directories)
     }
 }
 

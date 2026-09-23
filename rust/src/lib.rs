@@ -5,6 +5,7 @@ mod ancestry;
 mod announcement;
 mod bridge;
 mod compiler;
+mod export;
 mod game;
 mod instance;
 mod language;
