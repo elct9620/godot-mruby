@@ -193,6 +193,28 @@ class ExportsTest < Minitest::Test
           .map { |property| property["name"] }
   end
 
+  # @behavior RD-034
+  def test_a_property_only_the_nodes_own_class_has_stays_the_engines
+    sprite = covered_sprite
+
+    sprite.set(:centered, false)
+
+    refute sprite.is_centered
+  ensure
+    sprite&.free
+  end
+
+  # @behavior RD-035
+  def test_a_variable_named_as_a_property_of_the_nodes_own_class_is_untouched
+    sprite = covered_sprite
+
+    sprite.set(:centered, false)
+
+    assert_equal "mine", sprite.call(:covered)
+  ensure
+    sprite&.free
+  end
+
   # @behavior RD-036
   def test_a_name_a_ruby_superclass_declared_is_refused_in_gdscripts_words
     error = assert_raises(ArgumentError) { Unit::Declarations::Shadowing }
@@ -213,5 +235,16 @@ class ExportsTest < Minitest::Test
 
     assert_equal %(Cannot use "export" because the type of the initialized value can't be inferred.),
                  error.message
+  end
+
+  private
+
+  # A Sprite2D whose Ruby object, of a class extending Node2D, is built and
+  # has written its own @centered.
+  def covered_sprite
+    sprite = Godot::Sprite2D.new
+    sprite.set_script(Godot::ResourceLoader.load("res://test/unit/declarations/covering.rb"))
+    sprite.call(:covered)
+    sprite
   end
 end
