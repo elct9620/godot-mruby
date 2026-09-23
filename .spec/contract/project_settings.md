@@ -1,6 +1,6 @@
 # Project settings
 
-The settings the extension adds to a project, under `mruby/`. A project changes them in its Project Settings, so a renamed setting silently stops applying to every project that set it.
+The settings the extension adds to a project, under `mruby/`. A project changes them in its Project Settings, where each is shown without the Advanced Settings toggle, so a renamed setting silently stops applying to every project that set it.
 
 ## Includes
 

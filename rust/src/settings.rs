@@ -10,7 +10,8 @@ const DEFAULT_TEST_DIRECTORY: &str = "res://test";
 const TEST_PATTERN: &str = "mruby/test/pattern";
 const DEFAULT_TEST_PATTERN: &str = "*_test.rb";
 
-/// Adds the extension's settings with their defaults. A default is not saved
+/// Adds the extension's settings with their defaults, each shown without the
+/// Project Settings dialog's Advanced Settings toggle. A default is not saved
 /// into project.godot, so every process defines them again when the
 /// extension starts, keeping whatever value the project set.
 pub fn register() {
@@ -38,6 +39,7 @@ fn define(name: &str, default: &Variant, kind: VariantType) {
         settings.set_setting(name, default);
     }
     settings.set_initial_value(name, default);
+    settings.set_as_basic(name, true);
     let info = vdict! { "name" => name, "type" => kind.ord() };
     settings.add_property_info(&info.upcast_any_dictionary());
 }
