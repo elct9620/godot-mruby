@@ -4,7 +4,7 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 
 ## Includes
 
-- `godot/test/engine_classes/**/*.rb`
+- `godot/test/unit/engine_classes/**/*.rb`
 
 ## `RG-001` An engine class is a class under Godot
 

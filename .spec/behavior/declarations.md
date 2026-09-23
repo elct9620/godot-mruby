@@ -4,7 +4,7 @@ What a node script's class says about itself as its body runs, and how Godot is 
 
 ## Includes
 
-- `godot/test/declarations/**/*.rb`
+- `godot/test/unit/declarations/**/*.rb`
 - `tasks/support/exports.rb`
 
 ## `RD-001` A node has the signal its class declared

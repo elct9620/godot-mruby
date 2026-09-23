@@ -40,7 +40,7 @@ class LoaderTest < Minitest::Test
 
   # @behavior RL-012
   def test_a_file_under_a_test_directory_loads_by_name
-    assert_equal 0, Loader::Support::FakeClock.new.now
+    assert_equal 0, Unit::Loader::Support::FakeClock.new.now
   end
 
   # @behavior RL-031

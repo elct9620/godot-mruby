@@ -25,7 +25,7 @@ module Godot
     SHIPPED_SCENE = "res://verify/export/shipped.tscn"
     # Paths an export has to leave out, and a game file it has to ship, which
     # tells a game missing everything from one missing only its tests.
-    LEFT_OUT_PATHS = ["res://test/engine_classes/engine_classes_test.rb",
+    LEFT_OUT_PATHS = ["res://test/unit/engine_classes/engine_classes_test.rb",
                       "res://addons/godot_mruby/runner.tscn"].freeze
     GAME_FILE = "res://verify/export/seeker.rb"
     REFUSED_SCENE = "res://verify/export/refused.tscn"
