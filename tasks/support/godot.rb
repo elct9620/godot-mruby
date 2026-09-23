@@ -6,6 +6,7 @@ require_relative "announcement"
 require_relative "loader"
 require_relative "callbacks"
 require_relative "editor"
+require_relative "exported_game"
 require_relative "exports"
 require_relative "header"
 require_relative "node_scripts"
@@ -48,6 +49,8 @@ module Godot
     "[0] unlock (res://verify/report/raising.rb:10)",
     "[1] _ready (res://verify/report/raising.rb:6)"
   ].freeze
+  # The checks kept in modules of their own.
+  CHECKS = [NodeScripts, Editor, Announcement, RubyTests, Loader, TestSettings, ExportedGame].freeze
 
   module_function
 
@@ -70,13 +73,8 @@ module Godot
     verify_loaded!(project)
     verify_scripts_run!(project)
     verify_source_held!(project)
-    NodeScripts.verify!(project)
-    Editor.verify!(project)
-    Announcement.verify!(project)
     verify_reports!(project)
-    RubyTests.verify!(project)
-    Loader.verify!(project)
-    TestSettings.verify!(project)
+    CHECKS.each { |check| check.verify!(project) }
   end
 
   # The project keeps its extension list, so the editor loads the addon at
