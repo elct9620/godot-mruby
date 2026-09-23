@@ -20,8 +20,8 @@ use godot::sys;
 use crate::ancestry::Ancestry;
 use crate::bridge::{self, Owner, ToEngine, ToRuby};
 use crate::error;
+use crate::header::Header;
 use crate::log::GodotLog;
-use crate::parser::Header;
 use crate::realm::{self, Built, Key, RubyError};
 use crate::snapshot::{self, Group, Member, Property};
 

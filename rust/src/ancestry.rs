@@ -4,7 +4,7 @@
 
 use std::fmt;
 
-use crate::parser::Header;
+use crate::header::Header;
 use crate::realm::{self, Files};
 
 /// The files a class inherits from, nearest first, and the engine class the
@@ -106,7 +106,7 @@ pub mod tests {
     use std::collections::BTreeMap;
 
     use super::{Ancestry, Broken, read};
-    use crate::parser::Header;
+    use crate::header::Header;
     use crate::realm::{Declared, Files};
 
     /// Files kept in memory, by path.

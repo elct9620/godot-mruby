@@ -6,7 +6,7 @@ use godot::classes::{FileAccess, Os, ResourceLoader, Script};
 use godot::global::Error;
 use godot::obj::Singleton;
 
-use crate::parser::Header;
+use crate::header::Header;
 use crate::realm::{Declared, Extends, Files};
 use crate::settings;
 use crate::{ancestry, bridge};

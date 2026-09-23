@@ -4,7 +4,7 @@ How a file's header is read from its source without running it: the constants it
 
 ## Includes
 
-- `rust/src/parser.rs`
+- `rust/src/header.rs`
 
 ## `RH-001` A class written inside its path's namespaces is the file's class
 

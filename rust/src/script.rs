@@ -15,9 +15,9 @@ use godot::sys::{self, GodotFfi};
 
 use crate::ancestry::{self, Ancestry, Broken};
 use crate::game::GameFiles;
+use crate::header::Header;
 use crate::instance::RubyInstance;
 use crate::language;
-use crate::parser::Header;
 use crate::snapshot::{self, Group, Member, Property, Signal};
 use crate::{bridge, error};
 
