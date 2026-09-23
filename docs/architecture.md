@@ -83,6 +83,7 @@ Build output stays out of the repository: `vendor/` holds mruby's source and arc
 | `RubyScript` in `script.rs`, answered from `parser.rs` and `ancestry.rs` | `ScriptExtension` |
 | `RubyInstance` in `instance.rs` | A script instance |
 | `RubyTestRunner` in `runner.rs` | A `Node` in `runner.tscn` |
+| `RubyEditorPlugin`, `RubyExportPlugin` in `export.rs` | `EditorPlugin`, `EditorExportPlugin` |
 | `settings.rs` | `ProjectSettings` under `mruby/` |
 | `GameFiles`, `FilesOnDisk` in `game.rs` | `ResourceLoader` under `res://`, and the files on disk |
 | `GodotLog` in `log.rs` | Godot's log |
@@ -94,7 +95,7 @@ Each class Godot knows answers what Godot already asks of a script language; non
 
 `ResourceFormatLoaderRubyScript` reads a file's source and runs nothing. The script answers Godot from its header, which Prism reads from that source, and its ancestry; only a node script makes an instance (2.4), and the language announces it (2.5).
 
-The runner is an ordinary node the addon ships. `GameFiles`, `GodotLog` and the `Godot` gem are what the game's realm is given: the files under `res://`, Godot's log, and the engine (2.6). The names Godot knows are in `.spec/contract/godot.md`, and the settings in `.spec/contract/project_settings.md`.
+The runner is an ordinary node the addon ships, refused in an exported game, whose export leaves out the tests and the runner scene. `GameFiles`, `GodotLog` and the `Godot` gem are what the game's realm is given: the files under `res://`, Godot's log, and the engine (2.6). The names Godot knows are in `.spec/contract/godot.md`, and the settings in `.spec/contract/project_settings.md`.
 
 ### 2.2 Lifecycle
 
@@ -107,6 +108,9 @@ Scene stage begins
   │  language::register     RubyLanguage for .rb
   │  loader::register       .rb loads as RubyScript
   │  realm::prepare         GameFiles, GodotLog, the Godot gem
+  ▼
+Editor stage begins, in the editor
+  │  RubyEditorPlugin       added by gdext; adds RubyExportPlugin
   ▼
 the first entry
   │  the game's realm opens as prepared
@@ -122,7 +126,7 @@ Scene stage ends
 the library unloads
 ```
 
-Everything registers at the Scene stage, the stage a script language has to be registered by; gdext registers the classes themselves.
+Everything registers at the Scene stage, the stage a script language has to be registered by; gdext registers the classes themselves, and the editor plugin at the Editor stage, which only the editor reaches.
 
 Nothing opens the realm at startup: `lib.rs` only prepares how it opens. It opens at the first entry that needs Ruby, so a process that never runs a Ruby file never opens one.
 
@@ -137,7 +141,7 @@ lib.rs    registers Scripting and settings, prepares the realm
 ┌─ Scripting ───────────────────────────────┐   ┌─ Testing ────────────┐
 │  loader ──► script ◄──► language          │   │  runner ──► minitest │
 │               │            │              │   └──┬───────────────────┘
-│               ▼            ▼              │      │
+│               ▼            ▼              │      │  export ──► settings
 │            instance    announcement       │      │
 └──┬────────────────────────────────────────┘      │
    │                                               │
