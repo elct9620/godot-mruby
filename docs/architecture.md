@@ -188,7 +188,7 @@ lib.rs    registers Scripting and settings, prepares the realm
                    compiler
 ```
 
-Each layer uses only the layers below it. The realm uses no other module but `compiler`: what it needs from Godot, `game` and `log` implement, and it neither parses a file nor knows the engine. `language` checks source through `compiler` too, in a state no realm holds, so the editor never waits for the realm.
+Each layer uses only the layers below it. The realm uses no other module but `compiler`: what it needs from Godot, `game` and `log` implement, and it neither parses a file nor knows the engine. `language` checks typed source through `validation`, which compiles it by `compiler` in a state no realm holds and reads the other files as `announcement` does, so the editor never waits for the realm.
 
 `header` and `ancestry` read what a file declares without running it, naming files from the root directories `Files::roots` gives, by `realm::Roots`, `realm::normalize` and `realm::file_by_name`. Scripting answers Godot from them; `game` hands the realm, through `Files::declarations`, what each file opens and the superclass a node script's class is held to, asking `bridge` which engine classes are nodes. `language` and `script` refer to each other, as GDExtension script languages do; `minitest` uses the realm only for a failure's `Location`.
 

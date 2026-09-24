@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::ffi::{CString, c_void};
+use std::ffi::c_void;
 use std::sync::Mutex;
 
 use godot::classes::native::ScriptLanguageExtensionProfilingInfo;
@@ -8,11 +8,12 @@ use godot::global::Error;
 use godot::meta::conv::RawPtr;
 use godot::prelude::*;
 
-use crate::announcement::{Project, Unannounced};
-use crate::compiler::{self, CompileError, Warning};
+use crate::announcement::{self, Project, Unannounced};
+use crate::compiler::CompileError;
 use crate::game::FilesOnDisk;
 use crate::realm::Location;
 use crate::script::RubyScript;
+use crate::validation::{self, Warning};
 use crate::{bridge, settings, warn};
 
 /// The Ruby script language, registered with the engine for `.rb` files.
@@ -117,8 +118,9 @@ impl IScriptLanguageExtension for RubyLanguage {
     }
 
     // The editor asks as the source is typed. It is compiled and never run,
-    // and what the compiler says comes back as data: the language prints
-    // nothing while it answers.
+    // and what the compiler says, with what the other files make of the
+    // file's name, comes back as data: the language prints nothing while it
+    // answers.
     fn validate(
         &self,
         script: GString,
@@ -128,20 +130,26 @@ impl IScriptLanguageExtension for RubyLanguage {
         _validate_warnings: bool,
         _validate_safe_lines: bool,
     ) -> AnyDictionary {
-        let name = CString::new(path.to_string()).unwrap_or_default();
-        let diagnostics = compiler::diagnostics(&name, &script.to_string());
-        let errors: VarArray = diagnostics
+        let test_directories = settings::test_directories();
+        let checked = validation::validation(
+            &FilesOnDisk,
+            &test_directories,
+            &bridge::is_node_class,
+            &path.to_string(),
+            &script.to_string(),
+        );
+        let errors: VarArray = checked
             .error
             .iter()
             .map(|error| error_info(error, &path).to_variant())
             .collect();
-        let warnings: VarArray = diagnostics
+        let warnings: VarArray = checked
             .warnings
             .iter()
             .map(|warning| warning_info(warning).to_variant())
             .collect();
         vdict! {
-            "valid" => diagnostics.error.is_none(),
+            "valid" => checked.error.is_none(),
             "errors" => &errors,
             "warnings" => &warnings,
         }
@@ -397,13 +405,13 @@ fn error_info(error: &CompileError, path: &GString) -> VarDictionary {
     }
 }
 
-// A warning as the script editor takes it, listed under its code.
+// A warning as the script editor takes it, listed under its kind.
 fn warning_info(warning: &Warning) -> VarDictionary {
     vdict! {
         "start_line" => warning.line,
         "end_line" => warning.line,
-        "code" => 0,
-        "string_code" => "COMPILER",
+        "code" => warning.kind as i32,
+        "string_code" => warning.kind.code(),
         "message" => warning.message.as_str(),
     }
 }
@@ -428,11 +436,7 @@ fn warn_of_shared_name(path: String, name: String, others: Vec<String>) {
             line: 1,
             function: String::new(),
         };
-        warn!(
-            at: &at,
-            "{path} and {} define node scripts named {name}, so none is listed by that name",
-            others.join(" and ")
-        );
+        warn!(at: &at, "{}", announcement::shared_name_warning(&path, &name, &others));
     })
     .call_deferred(&[]);
 }

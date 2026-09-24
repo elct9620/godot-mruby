@@ -18,6 +18,7 @@ mod runner;
 mod script;
 mod settings;
 mod snapshot;
+mod validation;
 
 struct GodotMruby;
 

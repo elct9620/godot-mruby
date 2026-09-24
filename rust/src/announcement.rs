@@ -113,6 +113,15 @@ impl<'a, F: Files> Project<'a, F> {
     }
 }
 
+/// The warning that node scripts in `others` share `name` with the file at
+/// `path`.
+pub fn shared_name_warning(path: &str, name: &str, others: &[String]) -> String {
+    format!(
+        "{path} and {} define node scripts named {name}, so none is listed by that name",
+        others.join(" and ")
+    )
+}
+
 // The last segment of the file at `path`, as the class index matches it.
 fn file_name(path: &str) -> String {
     let name = path.rsplit('/').next().unwrap_or(path);

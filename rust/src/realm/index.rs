@@ -64,9 +64,9 @@ impl Roots {
         (root, segments)
     }
 
-    // The constant a path spells as Zeitwerk camelizes it: `http_client` is
-    // `HttpClient`.
-    fn name_of(&self, path: &str) -> String {
+    /// The constant a path spells as Zeitwerk camelizes it: `http_client` is
+    /// `HttpClient`.
+    pub fn name_of(&self, path: &str) -> String {
         self.segments(path)
             .1
             .iter()
