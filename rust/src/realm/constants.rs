@@ -53,7 +53,10 @@ fn created(mrb: &Mrb, receiver: Value, name: Symbol) -> Value {
 // the namespace's own one loads: `name`, just defined in `scope`, may be
 // either.
 fn load_hidden(mrb: &Mrb, scope: &[String], name: &str) {
-    let mut key: Vec<String> = scope.iter().map(|segment| index::normalize(segment)).collect();
+    let mut key: Vec<String> = scope
+        .iter()
+        .map(|segment| index::normalize(segment))
+        .collect();
     let index = bookkeeping(mrb).index.borrow();
     let below = index.below(&key, name);
     key.push(index::normalize(name));
