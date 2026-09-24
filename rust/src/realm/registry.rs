@@ -61,6 +61,11 @@ impl Registry {
         self.objects.get(mrb, key.to_value(mrb))
     }
 
+    /// Every object held.
+    pub fn objects(&self, mrb: &Mrb) -> Vec<Value> {
+        self.objects.values(mrb).entries(mrb).collect()
+    }
+
     /// Lets go of the object `key` holds, for the collector to free.
     pub fn release(&self, mrb: &Mrb, key: Key) {
         self.objects.delete(mrb, key.to_value(mrb)).ok();

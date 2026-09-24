@@ -68,6 +68,22 @@ class RerunTest < Minitest::Test
     end
   RUBY
 
+  ARMORED = <<~RUBY.freeze
+    module Unit
+      module Reload
+        class Armored < Godot::Node
+          export :armor, 5
+
+          def build; end
+
+          def wear
+            @armor = 9
+          end
+        end
+      end
+    end
+  RUBY
+
   # @behavior RF-002
   def test_a_reloaded_node_scripts_object_answers_a_method_only_its_changed_source_defines
     node = with_node(:counter)
@@ -127,6 +143,22 @@ class RerunTest < Minitest::Test
     with_node(:exporting).call(:speed?)
 
     reloading(:exporting, EXPORTING) { refute with_node(:exporting).call(:speed?) }
+  end
+
+  # @behavior RF-010
+  def test_a_property_the_changed_source_exports_anew_is_given_to_an_object_made_before
+    node = with_node(:armored)
+    node.call(:build)
+
+    reloading(:armored, ARMORED) { assert_equal 5, node.get(:armor) }
+  end
+
+  # @behavior RF-011
+  def test_an_object_keeps_the_value_it_holds_for_a_property_the_changed_source_exports_anew
+    node = with_node(:armored)
+    node.call(:wear)
+
+    reloading(:armored, ARMORED) { assert_equal 9, node.get(:armor) }
   end
 
   private

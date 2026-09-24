@@ -408,12 +408,19 @@ pub fn rerun(path: &str) {
     }
 }
 
+/// The messages the class of a file running again is sent, when it answers
+/// them: `withdraw` before, to take back what its last run declared, and
+/// `adopt` after, with each held object of the class, made before the run.
+pub struct Rerun {
+    pub withdraw: &'static CStr,
+    pub adopt: &'static CStr,
+}
+
 /// Runs again each file whose source changed, if the game's realm is open;
-/// one that has not run is left to run when it is needed. A file that ran
-/// cleanly is first sent `withdraw`, privately and when its class answers
-/// it, to take back what its last run declared, and what it raises is
-/// written to the realm's log. The extension calls it every frame.
-pub fn rerun_queued(withdraw: &CStr) {
+/// one that has not run is left to run when it is needed. The class of a
+/// file that ran cleanly is sent what `rerun` names, and what a file raises
+/// is written to the realm's log. The extension calls it every frame.
+pub fn rerun_queued(rerun: &Rerun) {
     let paths = std::mem::take(&mut *CHANGED.lock().unwrap());
     if paths.is_empty() {
         return;
@@ -421,7 +428,7 @@ pub fn rerun_queued(withdraw: &CStr) {
     let game = GAME.lock();
     if let Game::Open(realm) = &*game.borrow() {
         for path in paths {
-            if let Err(error) = realm.run_again(&path, withdraw) {
+            if let Err(error) = realm.run_again(&path, rerun) {
                 error.write(bookkeeping(&realm.mrb).log.as_ref());
             }
         }
@@ -531,14 +538,17 @@ impl Realm {
         })
     }
 
-    // Runs the file at `path` again, first sending its class `withdraw` when
-    // the file ran cleanly.
-    fn run_again(&self, path: &str, withdraw: &CStr) -> Result<(), RubyError> {
+    // Runs the file at `path` again, its class sent what `rerun` names
+    // around the run when the file ran cleanly before it.
+    fn run_again(&self, path: &str, rerun: &Rerun) -> Result<(), RubyError> {
         let _scope = self.mrb.arena_scope();
         let read = |error| RubyError::read(&self.mrb, Some(path), &error);
         self.started_as(Started::Run, || {
-            if executor::has_run(&self.mrb, path) {
-                self.withdraw(path, withdraw).map_err(read)?;
+            let ran = executor::has_run(&self.mrb, path);
+            if ran && let Some(class) = self.class_answering(path, rerun.withdraw).map_err(read)? {
+                class
+                    .funcall(&self.mrb, rerun.withdraw, &[])
+                    .map_err(read)?;
             }
             executor::run_again(
                 &self.mrb,
@@ -546,25 +556,37 @@ impl Realm {
                 || constants::ensure_opened(&self.mrb, path),
                 |extends| constants::keep_extends(&self.mrb, path, extends),
             )
-            .map_err(read)
+            .map_err(read)?;
+            if ran && let Some(class) = self.class_answering(path, rerun.adopt).map_err(read)? {
+                for object in bookkeeping(&self.mrb).registry.objects(&self.mrb) {
+                    if object
+                        .funcall(&self.mrb, c"is_a?", &[class])
+                        .map_err(read)?
+                        .is_true()
+                    {
+                        class
+                            .funcall(&self.mrb, rerun.adopt, &[object])
+                            .map_err(read)?;
+                    }
+                }
+            }
+            Ok(())
         })
     }
 
-    // Sends the class the file at `path` defined `withdraw`, if it answers it.
-    fn withdraw(&self, path: &str, withdraw: &CStr) -> Result<(), Error> {
+    // The class the file at `path` defined, if it answers `message`, even
+    // privately.
+    fn class_answering(&self, path: &str, message: &CStr) -> Result<Option<Value>, Error> {
         let Some(class) = constants::constant_at(&self.mrb, &key_of(&self.mrb, path)) else {
-            return Ok(());
+            return Ok(None);
         };
-        let name = Symbol::new(&self.mrb, withdraw)?;
+        let name = Symbol::new(&self.mrb, message)?.into_value(&self.mrb);
         let answers = class.funcall(
             &self.mrb,
             c"respond_to?",
-            &[name.into_value(&self.mrb), true.into_value(&self.mrb)],
+            &[name, true.into_value(&self.mrb)],
         )?;
-        if answers.is_true() {
-            class.funcall(&self.mrb, withdraw, &[])?;
-        }
-        Ok(())
+        Ok(answers.is_true().then_some(class))
     }
 
     /// Calls `method` on the constant `receiver` names with `args`, and

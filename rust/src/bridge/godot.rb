@@ -156,11 +156,13 @@ module Godot
       # two objects share one; the engine's own values never change, so they
       # are shared as they are.
       def __write_defaults__(object)
-        __defaults__.each do |name, value|
-          value = value.dup if value.is_a?(::Array) || value.is_a?(::Hash) || value.is_a?(::String)
-          object.instance_variable_set(:"@#{name}", value)
-        end
+        __defaults__.each { |name, value| object.instance_variable_set(:"@#{name}", __copy__(value)) }
         object
+      end
+
+      # `value`, copied when it can change in place.
+      def __copy__(value)
+        value.is_a?(::Array) || value.is_a?(::Hash) || value.is_a?(::String) ? value.dup : value
       end
 
       # The value each property an object of the class is given, what it
@@ -180,6 +182,16 @@ module Godot
       # exports what its source says now.
       def __withdraw__
         @__exports__ = nil
+      end
+
+      # Gives `object`, made before the class's file ran again, the value of
+      # each property the class now exports that it holds nothing for.
+      def __adopt__(object)
+        __exports__.each do |name, value|
+          next if object.instance_variable_defined?(:"@#{name}")
+
+          object.instance_variable_set(:"@#{name}", __copy__(value))
+        end
       end
 
       # The hint the keywords name and the string it is read with, as the

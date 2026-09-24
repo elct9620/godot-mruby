@@ -40,10 +40,14 @@ unsafe impl ExtensionLibrary for GodotMruby {
 
     // Lets go of the Ruby objects of nodes freed since the last frame, even
     // when no Ruby runs to take them, and runs again the files of scripts
-    // reloaded since, each class first taking back its exports.
+    // reloaded since: each class takes back its exports, then gives the
+    // objects it made before the ones it exports anew.
     fn on_main_loop_frame() {
         realm::release_queued();
-        realm::rerun_queued(c"__withdraw__");
+        realm::rerun_queued(&realm::Rerun {
+            withdraw: c"__withdraw__",
+            adopt: c"__adopt__",
+        });
     }
 
     fn on_stage_deinit(stage: InitStage) {

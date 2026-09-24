@@ -86,3 +86,21 @@ How a changed source takes effect while the game runs: what Godot reads of a scr
 | Given | the script's source Godot holds, changed to assign that constant again and then raise |
 | When | the script is reloaded and a frame passes |
 | Then | the class still holds the constant |
+
+## `RF-010` A property the changed source exports anew is given to an object made before
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose object was built |
+| Given | the script's source Godot holds, changed to export another property |
+| When | the script is reloaded and a frame passes |
+| Then | the node answers that property with the value it is exported with |
+
+## `RF-011` An object keeps the value it holds for a property the changed source exports anew
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose object has set an instance variable |
+| Given | the script's source Godot holds, changed to export a property of that name |
+| When | the script is reloaded and a frame passes |
+| Then | the node answers that property with the value its object set |

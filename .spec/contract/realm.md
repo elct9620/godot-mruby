@@ -228,16 +228,31 @@ Runs a file again at the game's realm's next frame, with the source it has then,
 pub fn rerun(path: &str) {}
 ```
 
-## `rerun_queued`
+## `Rerun`
 
-Runs again each file whose source changed, if the game's realm is open: a file that ran cleanly is first sent the message it is given, to take back what its last run declared, and keeps what it changes if it raises; one that raised runs again all or nothing. What a file raises is written to the realm's log; the extension calls it every frame.
+The messages the class of a file running again is sent, when it answers them: one before the run, to take back what its last run declared, and one after it, with each held object of the class, made before the run.
 
 | Attribute | Value |
 | --- | --- |
 | internal | yes |
 
 ```rust
-pub fn rerun_queued(withdraw: &CStr) {}
+pub struct Rerun {
+    pub withdraw: &'static CStr,
+    pub adopt: &'static CStr,
+}
+```
+
+## `rerun_queued`
+
+Runs again each file whose source changed, if the game's realm is open: the class of a file that ran cleanly is sent what the `Rerun` names, and the file keeps what it changes if it raises; one that raised runs again all or nothing. What a file raises is written to the realm's log; the extension calls it every frame.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub fn rerun_queued(rerun: &Rerun) {}
 ```
 
 ## `Realm`
