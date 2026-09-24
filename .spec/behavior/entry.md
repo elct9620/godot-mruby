@@ -4,6 +4,7 @@ How a thread goes into the game's realm: one thread at a time is inside, and a t
 
 ## Includes
 
+- `godot/test/unit/entry/**/*_test.rb`
 - `rust/src/realm.rs`
 
 ## `RE-001` A thread inside the realm enters it again
