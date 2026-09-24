@@ -96,9 +96,9 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 
 | Step | Statement |
 | --- | --- |
-| Given | a node script whose class defines `_process` printing its argument's class |
-| When | the scene runs a frame |
-| Then | the log carries `Float` as that class |
+| Given | a node in the tree whose script's class defines `_process` keeping its argument |
+| When | a process frame passes |
+| Then | the argument kept is a `Float` |
 
 ## `RS-013` A node's object is built once for its node
 

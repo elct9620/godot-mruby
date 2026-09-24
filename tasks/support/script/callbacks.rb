@@ -11,7 +11,6 @@ module Godot
       # answers Godot gets.
       SCENE = "res://integration/script/callbacks/callbacks.tscn"
       READY_LINE = "ready.rb is ready"
-      PROCESS_LINE = "process.rb was given a Float"
       BUILT_LINE = "built.rb built an object"
       FAILED_LINE = "SCRIPT ERROR: failing.rb cannot be built"
       FAILED_PROCESS_LINE = "failing.rb processed"
@@ -43,9 +42,9 @@ module Godot
         verify_refused_argument!(lines, output)
       end
 
-      # @behavior RS-011 RS-012 RS-017 RS-030
+      # @behavior RS-011 RS-017 RS-030
       def verify_callbacks_called!(lines, output)
-        missing = [READY_LINE, PROCESS_LINE, NOTIFIED_LINE, ITSELF_LINE].reject { |line| lines.include?(line) }
+        missing = [READY_LINE, NOTIFIED_LINE, ITSELF_LINE].reject { |line| lines.include?(line) }
         return if missing.empty?
 
         raise "The callbacks scene's callbacks were not called #{missing}:\n#{output}"
