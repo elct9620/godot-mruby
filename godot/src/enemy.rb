@@ -1,6 +1,6 @@
-# A raider walking toward its goal, destroyed once it has taken as many hits
+# An enemy walking toward its goal, destroyed once it has taken as many hits
 # as its health.
-class Raider < Godot::Node2D
+class Enemy < Godot::Node2D
   signal :arrived
 
   export :speed, 200.0

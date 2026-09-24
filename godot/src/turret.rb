@@ -1,4 +1,4 @@
-# A turret firing on the raider nearest to it among its siblings within its
+# A turret firing on the enemy nearest to it among its siblings within its
 # range, one shot each reload.
 class Turret < Godot::Node2D
   export :mode, :nearest
@@ -21,11 +21,11 @@ class Turret < Godot::Node2D
   private
 
   def nearest
-    in_range = get_parent.raiders.select { |raider| distance(raider) <= range }
-    in_range.inject { |near, raider| distance(raider) < distance(near) ? raider : near }
+    in_range = get_parent.enemies.select { |enemy| distance(enemy) <= range }
+    in_range.inject { |near, enemy| distance(enemy) < distance(near) ? enemy : near }
   end
 
-  def distance(raider)
-    position.distance_to(raider.position)
+  def distance(enemy)
+    position.distance_to(enemy.position)
   end
 end

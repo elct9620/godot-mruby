@@ -10,11 +10,11 @@ module Godot
     # of. Part of Script.verify!.
     module Announcement
       # The class list the editor writes as it scans the project, and the entry
-      # it lists boss.rb by: its base announced from enemy.rb, and its icon from
+      # it lists boss.rb by: its base announced from grunt.rb, and its icon from
       # beside the file.
       CLASS_LIST = File.join(".godot", "global_script_class_cache.cfg")
       BOSS_ENTRY = [
-        '"base": &"Enemy"', '"class": &"Boss"', '"icon": "res://integration/script/inherit/boss.svg"'
+        '"base": &"Grunt"', '"class": &"Boss"', '"icon": "res://integration/script/inherit/boss.svg"'
       ].freeze
       TWINS = "res://integration/script/announce"
       TWINS_WARNING = "WARNING: #{TWINS}/left/twin.rb and #{TWINS}/right/twin.rb " \

@@ -2,7 +2,7 @@
 module Integration
   module Script
     module Inherit
-      class Enemy < Godot::Node2D
+      class Grunt < Godot::Node2D
       end
     end
   end
