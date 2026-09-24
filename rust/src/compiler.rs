@@ -76,21 +76,34 @@ pub fn diagnostics(name: &CStr, source: &str) -> Diagnostics {
     };
     let error = match context.compile(source.as_bytes()) {
         Ok(_) => None,
-        // mruby records where its lexer stood after the offending token,
-        // which counted from 1 is that token's last character; an error at
-        // the end of the file, or one it recorded no position for, stands
-        // at 0, and Godot counts from 1.
-        Err(Error::Syntax(parsed)) => Some(CompileError {
-            line: u32::from(parsed.line()).max(1),
-            column: u32::try_from(parsed.column()).unwrap_or(0).max(1),
-            message: parsed.message().to_owned(),
-        }),
+        Err(Error::Syntax(parsed)) => {
+            let line = u32::from(parsed.line()).max(1);
+            Some(CompileError {
+                line,
+                column: column_in(source, line, parsed.column()),
+                message: parsed.message().to_owned(),
+            })
+        }
         Err(failed) => Some(error(failed.message(&mrb))),
     };
     Diagnostics {
         error,
         warnings: warnings_of(&context),
     }
+}
+
+// The column Godot counts, from 1 in characters, of what mruby records as
+// the bytes its lexer read on `line` up to and including the offending
+// token; an error at the end of the file, or one it recorded no position
+// for, stands at 0.
+fn column_in(source: &str, line: u32, recorded: i32) -> u32 {
+    let bytes = usize::try_from(recorded).unwrap_or(0);
+    let text = source.lines().nth(line as usize - 1).unwrap_or("");
+    let read = text
+        .char_indices()
+        .take_while(|(at, _)| *at < bytes)
+        .count();
+    u32::try_from(read).unwrap_or(u32::MAX).max(1)
 }
 
 fn warnings_of(context: &Ccontext) -> Vec<Warning> {
@@ -119,6 +132,15 @@ mod tests {
 
         let error = checked.error.map(|error| (error.line, error.column));
         assert_eq!(error, Some((2, 5)));
+    }
+
+    // @behavior RK-007
+    #[test]
+    fn a_syntax_errors_column_counts_characters() {
+        let checked = diagnostics_of("x = '中文' )\n");
+
+        let column = checked.error.map(|error| error.column);
+        assert_eq!(column, Some(10));
     }
 
     // @behavior RK-002

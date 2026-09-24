@@ -61,3 +61,11 @@ How the editor learns what is wrong with a Ruby file as it is typed: the source 
 | Given | a file saved as a library file and typed as a node script whose class shares another node script's name |
 | When | the typed source is checked |
 | Then | a warning names the other file |
+
+## `RK-007` A syntax error's column counts characters
+
+| Step | Statement |
+| --- | --- |
+| Given | source whose line does not parse after characters wider than a byte |
+| When | the source is checked |
+| Then | the error's column counts each of those characters once |
