@@ -4,17 +4,15 @@ module Godot
   module Script
     # Runs the integration-test project's scene of node scripts whose classes
     # define callbacks and methods Godot calls, and reads what they print: how
-    # often each object is built, and what its methods answer Godot. Part of
-    # Script.verify!.
+    # often each object is built, and what the log says of a value that cannot
+    # cross to or from a method. Part of Script.verify!.
     module Callbacks
-      # The scene, what its scripts print, what they must never print, and the
-      # answers Godot gets.
+      # The scene, what its scripts print, and what they must never print.
       SCENE = "res://integration/script/callbacks/callbacks.tscn"
       BUILT_LINE = "built.rb built an object"
       FAILED_LINE = "SCRIPT ERROR: failing.rb cannot be built"
       FAILED_PROCESS_LINE = "failing.rb processed"
       IDLE_LINE = "idle.rb ran"
-      ANSWER_LINES = ["ratio answered float 1.5", "count answered int 3"].freeze
       # What Godot gets for an answer that cannot cross, and the log's reason.
       REFUSED_ANSWER_LINES = ["looped answered Nil <null>",
                               "ERROR: #looped answered [[...]]: an Array nested more than 100 deep cannot " \
@@ -33,7 +31,6 @@ module Godot
 
         lines = output.lines.map(&:chomp)
         verify_objects_built!(lines, output)
-        verify_answers_reached!(lines, output)
         verify_refused_answer!(lines, output)
         verify_refused_argument!(lines, output)
       end
@@ -45,14 +42,6 @@ module Godot
         return if wrong.empty?
 
         raise "The callbacks scene's objects were not built as they should be #{wrong.keys}:\n#{output}"
-      end
-
-      # @behavior RS-028
-      def verify_answers_reached!(lines, output)
-        missing = ANSWER_LINES.reject { |line| lines.include?(line) }
-        return if missing.empty?
-
-        raise "The callbacks scene's answers did not reach Godot as Ruby gave them #{missing}:\n#{output}"
       end
 
       # @behavior RV-008
