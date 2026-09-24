@@ -3,19 +3,17 @@
 module Godot
   module Script
     # Runs the integration-test project's scene of node scripts whose classes
-    # define callbacks and methods Godot calls, and reads what they print: which
-    # callbacks a node's Ruby object is given, how often each object is built,
-    # and what its methods answer Godot. Part of Script.verify!.
+    # define callbacks and methods Godot calls, and reads what they print: how
+    # often each object is built, and what its methods answer Godot. Part of
+    # Script.verify!.
     module Callbacks
       # The scene, what its scripts print, what they must never print, and the
       # answers Godot gets.
       SCENE = "res://integration/script/callbacks/callbacks.tscn"
-      READY_LINE = "ready.rb is ready"
       BUILT_LINE = "built.rb built an object"
       FAILED_LINE = "SCRIPT ERROR: failing.rb cannot be built"
       FAILED_PROCESS_LINE = "failing.rb processed"
       IDLE_LINE = "idle.rb ran"
-      NOTIFIED_LINE = "notified.rb was notified it is ready"
       ANSWER_LINES = ["ratio answered float 1.5", "count answered int 3"].freeze
       # What Godot gets for an answer that cannot cross, and the log's reason.
       REFUSED_ANSWER_LINES = ["looped answered Nil <null>",
@@ -25,7 +23,6 @@ module Godot
       # method would print were it called.
       REFUSED_ARGUMENT_LINE = "ERROR: #take was not called: an Array nested more than 100 deep cannot reach Ruby"
       TAKEN_LINE = "take was called"
-      ITSELF_LINE = "itself.rb is inside the tree: true"
 
       module_function
 
@@ -35,19 +32,10 @@ module Godot
         raise "The callbacks scene did not run:\n#{output}" unless status.success?
 
         lines = output.lines.map(&:chomp)
-        verify_callbacks_called!(lines, output)
         verify_objects_built!(lines, output)
         verify_answers_reached!(lines, output)
         verify_refused_answer!(lines, output)
         verify_refused_argument!(lines, output)
-      end
-
-      # @behavior RS-011 RS-017 RS-030
-      def verify_callbacks_called!(lines, output)
-        missing = [READY_LINE, NOTIFIED_LINE, ITSELF_LINE].reject { |line| lines.include?(line) }
-        return if missing.empty?
-
-        raise "The callbacks scene's callbacks were not called #{missing}:\n#{output}"
       end
 
       # @behavior RS-013 RS-014 RS-015 RS-016

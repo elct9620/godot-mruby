@@ -4,6 +4,7 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 
 ## Includes
 
+- `godot/test/e2e/**/*_test.rb`
 - `godot/test/unit/script/**/*_test.rb`
 - `tasks/support/script/announcement.rb`
 - `tasks/support/script/callbacks.rb`
@@ -88,9 +89,9 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 
 | Step | Statement |
 | --- | --- |
-| Given | a node script whose class defines `_ready` |
+| Given | a node script whose class defines `_ready` adding children to its node |
 | When | its node enters the scene |
-| Then | what `_ready` prints appears in the log |
+| Then | the node has the children `_ready` added |
 
 ## `RS-012` `_process` is given the frame's delta as a Float
 
@@ -137,9 +138,9 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 
 | Step | Statement |
 | --- | --- |
-| Given | a node script whose class defines `_notification`, printing when it is given `NOTIFICATION_READY`'s number |
-| When | its node enters the scene |
-| Then | what `_notification` prints appears in the log |
+| Given | a node script whose class defines `_notification`, emitting a signal when it is given `NOTIFICATION_CHILD_ORDER_CHANGED`'s number with none of its node's children of one class left |
+| When | the scene runs until the last of those children is freed |
+| Then | the signal is emitted |
 
 ## `RS-018` A node script reports that its class is a tool before its file runs
 
@@ -243,9 +244,9 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 
 | Step | Statement |
 | --- | --- |
-| Given | a node whose script's callback calls one of the node's engine methods on itself |
-| When | the scene runs |
-| Then | the log carries what the engine answered for that node |
+| Given | a node whose script's `_physics_process` moves it by setting its own engine property |
+| When | physics frames pass |
+| Then | the node's position has changed |
 
 ## `RS-031` A node script's class makes a node carrying its script
 
