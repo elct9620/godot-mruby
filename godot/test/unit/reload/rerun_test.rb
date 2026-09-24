@@ -84,6 +84,20 @@ class RerunTest < Minitest::Test
     end
   RUBY
 
+  FASTER = <<~RUBY.freeze
+    module Unit
+      module Reload
+        class Exporting < Godot::Node
+          export :speed, 20
+
+          def speed?
+            instance_variable_defined?(:@speed)
+          end
+        end
+      end
+    end
+  RUBY
+
   # @behavior RF-002
   def test_a_reloaded_node_scripts_object_answers_a_method_only_its_changed_source_defines
     node = with_node(:counter)
@@ -159,6 +173,13 @@ class RerunTest < Minitest::Test
     node.call(:wear)
 
     reloading(:armored, ARMORED) { assert_equal 9, node.get(:armor) }
+  end
+
+  # @behavior RF-012
+  def test_a_reloaded_node_script_answers_the_default_its_changed_source_exports
+    with_node(:exporting).call(:speed?)
+
+    reloading(:exporting, FASTER) { assert_equal 20, script(:exporting).get_property_default_value(:speed) }
   end
 
   private

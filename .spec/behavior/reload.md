@@ -104,3 +104,12 @@ How a changed source takes effect while the game runs: what Godot reads of a scr
 | Given | the script's source Godot holds, changed to export a property of that name |
 | When | the script is reloaded and a frame passes |
 | Then | the node answers that property with the value its object set |
+
+## `RF-012` A reloaded node script answers the default its changed source exports
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose file has run, exporting a property |
+| Given | the script's source Godot holds, changed to export that property with another value |
+| When | the script is reloaded, a frame passes, and Godot asks the script for the property's default value |
+| Then | the script answers the value the changed source exports |
