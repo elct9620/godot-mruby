@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 use std::ffi::c_void;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use godot::classes::{
     ClassDb, Engine, IScriptExtension, Object, ResourceLoader, Script, ScriptExtension,
@@ -40,7 +40,52 @@ pub struct RubyScript {
     // since loading a script must not load the scripts it inherits from, and
     // again once any source changes.
     ancestry: Cache,
+    // The placeholders Godot made of the script in the editor and has not
+    // erased, told again what the class exports whenever that changes.
+    placeholders: Mutex<Vec<Placeholder>>,
+    // What they were last told, as `Exported::digest` has it: Godot asks for
+    // the exports again for every property of a scene it saves, and telling
+    // a placeholder makes the editor list its properties anew.
+    told: Mutex<Option<(u32, u32)>>,
 }
+
+/// What a placeholder is told of the class: what it exports, and the value
+/// each was declared with.
+struct Exported {
+    properties: Array<AnyDictionary>,
+    values: VarDictionary,
+}
+
+impl Exported {
+    // A digest of what it tells, which differs whenever that does.
+    fn digest(&self) -> (u32, u32) {
+        (
+            self.properties.to_variant().hash_u32(),
+            self.values.to_variant().hash_u32(),
+        )
+    }
+
+    // Tells `placeholder`, which Godot answers by asking the script about the
+    // class again.
+    fn tell(&self, placeholder: sys::GDExtensionScriptInstancePtr) {
+        // SAFETY: the placeholder is one the engine made for this script and
+        // has not erased, and both values outlive the call.
+        unsafe {
+            sys::interface_fn!(placeholder_script_instance_update)(
+                placeholder,
+                self.properties.sys(),
+                self.values.sys(),
+            );
+        }
+    }
+}
+
+/// A placeholder Godot made of a script, which only Godot frees.
+struct Placeholder(sys::GDExtensionScriptInstancePtr);
+
+// SAFETY: the pointer is only handed back to Godot, which keeps the
+// placeholder alive until it tells the script it erased it.
+unsafe impl Send for Placeholder {}
 
 impl RubyScript {
     /// The script of the file at `path`, holding `source`.
@@ -50,6 +95,8 @@ impl RubyScript {
             base,
             header: Arc::new(header),
             ancestry: Cache::default(),
+            placeholders: Mutex::default(),
+            told: Mutex::default(),
             source,
         })
     }
@@ -64,6 +111,12 @@ impl RubyScript {
         };
         script.set_source_code(&source);
         script.reload();
+    }
+
+    fn placeholders(&self) -> MutexGuard<'_, Vec<Placeholder>> {
+        self.placeholders
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
     }
 
     fn ancestry(&self) -> Result<Arc<Ancestry>, Broken> {
@@ -132,23 +185,17 @@ impl RubyScript {
             .collect()
     }
 
-    // Tells a placeholder what the class exports and the value each was
-    // declared with, which is all the editor has to show it while no object
-    // of the class exists.
-    fn fill(&self, placeholder: sys::GDExtensionScriptInstancePtr) {
-        let properties: Array<AnyDictionary> = self.members().iter().map(member_info).collect();
+    // What the class exports and the value each was declared with, which is
+    // all the editor has to show a placeholder while no object of the class
+    // exists.
+    fn exported(&self) -> Exported {
         let mut values = VarDictionary::new();
         for property in self.properties() {
             values.set(&StringName::from(&property.name), &property.default_value());
         }
-        // SAFETY: the placeholder is one the engine made for this script,
-        // and both values outlive the call.
-        unsafe {
-            sys::interface_fn!(placeholder_script_instance_update)(
-                placeholder,
-                properties.sys(),
-                values.sys(),
-            );
+        Exported {
+            properties: self.members().iter().map(member_info).collect(),
+            values,
         }
     }
 
@@ -248,9 +295,15 @@ impl IScriptExtension for RubyScript {
                 for_object.obj_sys(),
             )
         };
-        self.fill(placeholder);
+        self.exported().tell(placeholder);
+        self.placeholders().push(Placeholder(placeholder));
         // SAFETY: the pointer is the placeholder Godot just made.
         unsafe { RawPtr::new(placeholder.cast::<c_void>()) }
+    }
+
+    unsafe fn placeholder_erased_rawptr(&mut self, placeholder: RawPtr<*mut c_void>) {
+        let erased = placeholder.ptr().cast();
+        self.placeholders().retain(|kept| kept.0 != erased);
     }
 
     fn instance_has(&self, _object: Gd<Object>) -> bool {
@@ -274,9 +327,12 @@ impl IScriptExtension for RubyScript {
     }
 
     // The file runs again in the realm at the next frame, where the objects
-    // it made live on with their state, so there is no state to lose.
+    // it made live on with their state, so there is no state to lose; the
+    // editor's placeholders take what the source now exports, as a
+    // GDScript's do as it reloads.
     fn reload(&mut self, _keep_state: bool) -> Error {
         realm::rerun(&self.base().get_path().to_string());
+        self.update_exports();
         Error::OK
     }
 
@@ -339,7 +395,23 @@ impl IScriptExtension for RubyScript {
             .map_or_else(Variant::nil, |property| property.default_value())
     }
 
-    fn update_exports(&mut self) {}
+    // Godot asks the script about the class as each placeholder is told, so
+    // the script is let go of while they are.
+    fn update_exports(&mut self) {
+        let exported = self.exported();
+        let digest = Some(exported.digest());
+        let mut told = self.told.lock().unwrap_or_else(PoisonError::into_inner);
+        if *told == digest {
+            return;
+        }
+        *told = digest;
+        drop(told);
+        let placeholders: Vec<_> = self.placeholders().iter().map(|kept| kept.0).collect();
+        let _released = self.base_mut();
+        for placeholder in placeholders {
+            exported.tell(placeholder);
+        }
+    }
 
     fn get_script_method_list(&self) -> Array<AnyDictionary> {
         self.methods()

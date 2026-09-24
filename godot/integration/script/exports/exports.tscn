@@ -1,0 +1,10 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://integration/script/exports/refresh.gd" id="1"]
+[ext_resource type="Script" path="res://integration/script/exports/plated.rb" id="2"]
+
+[node name="Exports" type="Node"]
+script = ExtResource("1")
+
+[node name="Plated" type="Node2D" parent="."]
+script = ExtResource("2")

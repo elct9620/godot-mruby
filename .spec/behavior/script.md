@@ -385,3 +385,12 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a node whose class defines `_property_get_revert`, answering a value for a property's name |
 | When | Godot asks the node for the value that property reverts to |
 | Then | the node answers that value |
+
+## `RS-048` A node in the editor lists a property its script's changed source exports
+
+| Step | Statement |
+| --- | --- |
+| Given | a scene open in the editor whose node's script is a node script |
+| Given | the script's source Godot holds, changed to export another property |
+| When | the script is reloaded |
+| Then | the node lists that property |
