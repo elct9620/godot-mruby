@@ -68,7 +68,7 @@ fn type_name(kind: VariantType) -> String {
 pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     let class = godot.define_class(mrb, c"Value", mrb.object_class())?;
     class.set_instance_data_tt(mrb)?;
-    class.define_singleton_method(mrb, c"__value_type__", method!(value_type_named, 1))?;
+    class.define_singleton_method(mrb, c"__value_type__", method!(value_type, 1))?;
     class.define_singleton_method(mrb, c"__construct__", method!(construct, 1))?;
     class.define_singleton_method(mrb, c"__call_static__", method!(call_static, 2))?;
     class.define_singleton_method(mrb, c"__constant__", method!(constant, 1))?;
@@ -101,7 +101,7 @@ impl EngineValue {
 
 // Godot::Value.__value_type__(name): whether the engine has a value type of
 // that name for Ruby to hold.
-fn value_type_named(mrb: &Mrb, _class: Value, name: Symbol) -> bool {
+fn value_type(mrb: &Mrb, _class: Value, name: Symbol) -> bool {
     let name = name.name(mrb).unwrap_or_default();
     kind_by_name(&name).is_some()
 }

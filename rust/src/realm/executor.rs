@@ -106,7 +106,7 @@ pub(super) fn run_by_name<T>(
 }
 
 /// Whether the file at `path` is running now.
-pub(super) fn running(mrb: &Mrb, path: &str) -> bool {
+pub(super) fn is_running(mrb: &Mrb, path: &str) -> bool {
     matches!(runs(mrb).files.borrow().get(path), Some(Run::Running))
 }
 

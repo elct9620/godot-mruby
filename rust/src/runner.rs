@@ -68,10 +68,10 @@ impl RubyTestRunner {
     // waits as any frame begins; quits once it is over.
     fn run_frame(&mut self, frame: Frame) {
         let over = match (std::mem::take(&mut self.run), frame) {
-            (Run::Starting(options), Frame::Process) => logged(realm::enter(|realm| {
+            (Run::Starting(options), Frame::Process) => log_outcome(realm::enter(|realm| {
                 realm.call("Minitest", c"start", [options])
             })),
-            (Run::Running, frame) => logged(realm::enter(|realm| {
+            (Run::Running, frame) => log_outcome(realm::enter(|realm| {
                 realm.call("Minitest", c"resume", [frame])
             })),
             (run, _) => {
@@ -113,17 +113,17 @@ fn test_files(directories: &[String]) -> Result<Vec<String>, String> {
 // in the log before any test runs, where a reader of the run's output looks
 // for them.
 fn load(tests: &[String]) -> bool {
-    logged(realm::enter(|realm| {
+    log_outcome(realm::enter(|realm| {
         realm.install::<Minitest>()?;
         Ok(tests
             .iter()
-            .map(|path| logged(realm.run(path).map(|()| true)))
+            .map(|path| log_outcome(realm.run(path).map(|()| true)))
             .fold(true, |all, loaded| all & loaded))
     }))
 }
 
 // An outcome Ruby could not reach counts as a failed run, written to the log.
-fn logged<T: From<bool>>(outcome: Result<T, RubyError>) -> T {
+fn log_outcome<T: From<bool>>(outcome: Result<T, RubyError>) -> T {
     outcome.unwrap_or_else(|failed| {
         failed.write(&GodotLog);
         T::from(false)

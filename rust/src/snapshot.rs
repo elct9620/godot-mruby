@@ -221,7 +221,7 @@ impl Snapshot {
     ) -> Vec<Member> {
         let mut members: Vec<Member> = Vec::new();
         for (path, written) in files {
-            if in_editor() {
+            if is_editor_build() {
                 members.push(Member::Heading(category(path)));
             }
             for member in self.file_members(path, written) {
@@ -273,7 +273,7 @@ impl Snapshot {
 // Whether this is a build of the editor, which is what a category is for:
 // GDScript's are compiled out of a game's build, so a game's properties
 // carry none either. The build never changes, so the engine is asked once.
-fn in_editor() -> bool {
+fn is_editor_build() -> bool {
     static EDITOR: OnceLock<bool> = OnceLock::new();
     *EDITOR.get_or_init(|| Os::singleton().has_feature("editor"))
 }

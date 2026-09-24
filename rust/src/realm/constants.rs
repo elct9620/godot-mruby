@@ -63,7 +63,7 @@ fn load_hidden(mrb: &Mrb, scope: &[String], name: &str) {
     let inside = index.members(&key);
     drop(index);
     for inner in inside.into_iter().chain(below) {
-        if constant_at(mrb, &inner).is_none() && hidden(mrb, &inner) {
+        if constant_at(mrb, &inner).is_none() && is_hidden(mrb, &inner) {
             load_inner(mrb, &inner);
         }
     }
@@ -71,7 +71,7 @@ fn load_hidden(mrb: &Mrb, scope: &[String], name: &str) {
 
 // Whether the namespace `inner` sits in exists, and a namespace around it has
 // a constant of `inner`'s name.
-fn hidden(mrb: &Mrb, inner: &[String]) -> bool {
+fn is_hidden(mrb: &Mrb, inner: &[String]) -> bool {
     let Some((name, namespace)) = inner.split_last() else {
         return false;
     };

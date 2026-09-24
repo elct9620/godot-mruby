@@ -273,7 +273,7 @@ pub fn enter<T>(body: impl FnOnce(&Realm) -> Result<T, RubyError>) -> Result<T, 
     }
     if matches!(*game.borrow(), Game::Closed) {
         let opening = Opening::start(&game);
-        opening.opened(open_game()?);
+        opening.finish(open_game()?);
     }
     let game = game.borrow();
     let Game::Open(realm) = &*game else {
@@ -295,7 +295,7 @@ impl<'a> Opening<'a> {
         Self(game)
     }
 
-    fn opened(self, realm: Realm) {
+    fn finish(self, realm: Realm) {
         *self.0.borrow_mut() = Game::Open(realm);
     }
 }
@@ -551,7 +551,7 @@ impl Realm {
             return Ok(Built::Held);
         }
         let Some(class) = constants::constant_at(&self.mrb, &key_of(&self.mrb, path)) else {
-            if executor::running(&self.mrb, path) {
+            if executor::is_running(&self.mrb, path) {
                 return Ok(Built::Waiting);
             }
             return Err(RubyError::plain(format!(
