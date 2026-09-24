@@ -672,6 +672,30 @@ module Minitest
 end
 ```
 
+## `Minitest::Simulation`
+
+Frames a test drives itself rather than waits for, as GUT names them. Every test class includes it.
+
+```ruby
+module Minitest
+  module Simulation
+  end
+end
+```
+
+## `Minitest::Simulation#simulate`
+
+Calls `_process` and then `_physics_process` with `delta` on `node` and, once each, on every node under it, `times` times, without waiting for the engine's frames; a node without the method is passed over, and with `check_is_processing` so is one whose processing is off, as GUT's `simulate` does.
+
+```ruby
+module Minitest
+  module Simulation
+    def simulate(node, times, delta, check_is_processing = false)
+    end
+  end
+end
+```
+
 ## `Minitest::TestRoot`
 
 A test's way into the scene, as GUT names it: each test is given a test root, and what the test adds under it or gives to `autofree` is freed after its teardown, a node the test freed itself left alone. Every test class includes it.

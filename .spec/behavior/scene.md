@@ -134,6 +134,22 @@ How a test reaches the scene a game runs in: the runner resumes the run once per
 | When | the test's teardown begins |
 | Then | the node's signals have the connections they had before it was watched |
 
+## `RW-021` `simulate` processes a node and its children as many times as asked
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script's node outside the tree, with another under it |
+| When | the test simulates the first for 3 frames of 0.5 seconds |
+| Then | each node's `_process` and `_physics_process` were given 0.5 three times |
+
+## `RW-022` `simulate` checking processing leaves a node that is not processing
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script's node outside the tree, so not processing |
+| When | the test simulates it for a frame, checking processing |
+| Then | neither its `_process` nor its `_physics_process` was called |
+
 ## `RW-002` A node added with `add_child_autofree` goes under the test root
 
 | Step | Statement |
