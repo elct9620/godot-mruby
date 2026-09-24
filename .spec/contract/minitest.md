@@ -698,7 +698,7 @@ end
 
 ## `Minitest::TestRoot`
 
-A test's way into the scene, as GUT names it: each test is given a test root, and what the test adds under it or gives to `autofree` is freed after its teardown, a node the test freed itself left alone. Every test class includes it.
+A test's way into the scene, as GUT names it: each test is given a test root, and what the test adds under it or gives to `autofree` is freed after its teardown, a node the test freed itself left alone. A test that leaves orphan nodes, outside the tree and not freed, is named in a warning with how many, and passes or fails as it would have, as GUT reports orphans. Every test class includes it.
 
 ```ruby
 module Minitest

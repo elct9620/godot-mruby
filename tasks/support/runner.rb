@@ -30,6 +30,10 @@ module Godot
     SEEDS = %w[1 2 3 4 5].freeze
     SEED = /^Run options: --seed (\d+)$/
     RAN = /ran (\w+#test_\w+)/
+    # A test directory whose one test leaves an orphan node, and what the run
+    # has to warn of it.
+    ORPHAN = "#{RUNNER_TESTS}/orphan".freeze
+    ORPHAN_WARNING = "WARNING: OrphanTest#test_leaves_an_orphan leaves 1 orphan node"
 
     module_function
 
@@ -38,6 +42,7 @@ module Godot
       verify_passing!(project)
       verify_seed!(project)
       verify_shuffled!(project)
+      verify_orphan!(project)
     end
 
     # Runs the project's Ruby tests and requires a pass that ran at least one,
@@ -84,6 +89,16 @@ module Godot
       return if orders.any? { |order| order.any? && order != order.sort }
 
       raise "No seed of #{SEEDS.join(", ")} ran #{ORDER} out of name order: #{orders}"
+    end
+
+    # Runs the orphan directory, whose test has to be warned of and still
+    # pass.
+    # @behavior RT-035
+    def verify_orphan!(project)
+      output, status = run(project, "--dir", ORPHAN)
+      return if status.success? && output.include?(ORPHAN_WARNING)
+
+      raise "A run of #{ORPHAN} did not warn of its orphan and pass:\n#{output}"
     end
 
     def order_of(output)

@@ -207,3 +207,11 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 | Given | a `--seed` value that is not a whole number |
 | When | the runner scene runs headless with it |
 | Then | the run fails, saying `--seed` takes a whole number |
+
+## `RT-035` A test that leaves an orphan node is warned of and still passes
+
+| Step | Statement |
+| --- | --- |
+| Given | a test that makes a node outside the tree and does not free it |
+| When | the run is over |
+| Then | the log warns that the test leaves 1 orphan node, and the run passes |
