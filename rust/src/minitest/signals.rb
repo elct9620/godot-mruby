@@ -23,7 +23,7 @@ module Minitest
 
     def assert_signal_emitted(object, signal_name = nil, msg = nil)
       object, signal_name, msg = object.get_object, object.get_name, signal_name if object.is_a?(Godot::Signal)
-      failure = unemitted(object, signal_name.to_s)
+      failure = emission_failure(object, signal_name.to_s)
       assert failure.nil?, message(msg) { failure }
     end
 
@@ -35,7 +35,7 @@ module Minitest
     private
 
     # Why `name` does not count as emitted by `object`, or nil when it does.
-    def unemitted(object, name)
+    def emission_failure(object, name)
       counts = @emissions[object]
       if counts.nil?
         "Expected #{mu_pp object} to be watched with watch_signals"
