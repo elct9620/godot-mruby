@@ -75,6 +75,14 @@ What a realm has published of the classes its files define, for Godot to be answ
 
 - `Reflection` - reflection asks the live class, which is inside the realm; a snapshot is what the realm left outside for anyone to read.
 
+### Heading
+
+What the editor shows a class's exported properties under, declared in the order they are: a category, as `export_category` writes one and as a class is headed by the file it is written in, or a group or subgroup, as `export_group` and `export_subgroup` write one, taking the properties after it by their prefix. It names no member of the class, and a file writes one as often as its body declares it.
+
+#### Rejected
+
+- `Section` - Godot's inspector draws a group or subgroup as a section and a category as something else, so the word leaves categories out.
+
 ### Ancestry
 
 The files a class inherits from through the superclasses their headers write, nearest first, and the engine class the last of them extends. Each superclass is found as the loader would find it, so the ancestry is known without running a file.
