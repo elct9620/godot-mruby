@@ -303,7 +303,7 @@ impl IScriptExtension for RubyScript {
     }
 
     fn get_language(&self) -> Option<Gd<ScriptLanguage>> {
-        language::registered().map(Gd::upcast)
+        language::registered_language().map(Gd::upcast)
     }
 
     fn has_script_signal(&self, signal: StringName) -> bool {

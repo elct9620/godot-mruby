@@ -56,7 +56,7 @@ pub fn unregister() {
 }
 
 /// The registered language, which every script reports as its own.
-pub fn registered() -> Option<Gd<RubyLanguage>> {
+pub fn registered_language() -> Option<Gd<RubyLanguage>> {
     REGISTERED.lock().unwrap().map(Gd::from_instance_id)
 }
 
