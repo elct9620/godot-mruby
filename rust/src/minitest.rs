@@ -101,3 +101,22 @@ impl IntoValue for Options {
         hash.as_value()
     }
 }
+
+/// The kind of frame beginning as the test runner resumes the run, which a
+/// wait counts.
+pub enum Frame {
+    Process,
+    Physics,
+}
+
+impl IntoValue for Frame {
+    // As the symbol `Minitest.resume` takes.
+    fn into_value(self, mrb: &Mrb) -> Value {
+        let name: &[u8] = match self {
+            Frame::Process => b"process",
+            Frame::Physics => b"physics",
+        };
+        let name = mrb.intern(name).expect("a short name interns");
+        Symbol::from(name).as_value()
+    }
+}

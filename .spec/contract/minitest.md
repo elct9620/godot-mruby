@@ -583,7 +583,7 @@ end
 
 ## `Minitest.resume`
 
-Carries the run `Minitest.start` began on from where a test waits, answering as `Minitest.start` does. The test runner calls it as each process frame begins until the run is over.
+Carries the run `Minitest.start` began on from where a test waits, answering as `Minitest.start` does. The test runner calls it as each process frame and each physics frame begins until the run is over, `frame` naming which, `:process` or `:physics`, so a wait counts the frames it waits for.
 
 | Attribute | Value |
 | --- | --- |
@@ -591,14 +591,14 @@ Carries the run `Minitest.start` began on from where a test waits, answering as 
 
 ```ruby
 module Minitest
-  def self.resume
+  def self.resume(frame)
   end
 end
 ```
 
 ## `Minitest::Waits`
 
-What a test waits for, as GUT names it, each written as a call in the test's own code. A wait pauses the run until the runner resumes it, which it cannot do from inside a block a C method calls, such as `Array#sort`'s; there it raises `FiberError`. Every test class includes it.
+What a test waits for, as GUT names it, each written as a call in the test's own code. A wait pauses the run until the runner resumes it, which it cannot do from inside a block a C method calls, such as `Array#sort`'s; there it raises `FiberError`. Each test begins where a process frame begins, whatever frame the test before it waited into. Every test class includes it.
 
 ```ruby
 module Minitest
@@ -615,6 +615,19 @@ Returns once `frames` process frames have begun, before any node's `_process` in
 module Minitest
   module Waits
     def wait_process_frames(frames)
+    end
+  end
+end
+```
+
+## `Minitest::Waits#wait_physics_frames`
+
+Returns once `frames` physics frames have begun, before any node's `_physics_process` in the last of them.
+
+```ruby
+module Minitest
+  module Waits
+    def wait_physics_frames(frames)
     end
   end
 end

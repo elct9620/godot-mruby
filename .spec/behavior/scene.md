@@ -14,6 +14,22 @@ How a test reaches the scene a game runs in: the runner resumes the run once per
 | When | the test waits for 3 process frames |
 | Then | the count has grown by 3 |
 
+## `RW-006` A test waiting for physics frames continues inside the last of them
+
+| Step | Statement |
+| --- | --- |
+| Given | a test that reads the engine's physics frame count |
+| When | the test waits for 3 physics frames |
+| Then | the count has grown by 3 and the engine is in a physics frame |
+
+## `RW-007` A test begins where a process frame begins after one that waited into a physics frame
+
+| Step | Statement |
+| --- | --- |
+| Given | a test that has waited for a physics frame |
+| When | the next test begins |
+| Then | it begins where a process frame begins, outside any physics frame |
+
 ## `RW-002` A node added with `add_child_autofree` goes under the test root
 
 | Step | Statement |

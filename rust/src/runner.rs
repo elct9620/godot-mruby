@@ -4,25 +4,35 @@ use godot::prelude::*;
 use crate::error;
 use crate::game;
 use crate::log::GodotLog;
-use crate::minitest::{self, Minitest};
+use crate::minitest::{self, Frame, Minitest};
 use crate::realm::{self, RubyError};
 use crate::settings;
 
 /// The node the addon's runner scene holds. Once in the tree it installs the
 /// test framework into the game's realm and runs every test file of the test
 /// directories it is given there. The tests run from the next process frame
-/// on, the run resumed as each frame begins while a test waits, so every test
-/// starts and continues where a frame begins. It quits with 0 when every test
-/// passed and 1 otherwise.
+/// on, the run resumed as each process or physics frame begins while a test
+/// waits, so every test starts and continues where a frame begins. It quits
+/// with 0 when every test passed and 1 otherwise.
 #[derive(GodotClass)]
 #[class(base = Node, init)]
 pub struct RubyTestRunner {
     base: Base<Node>,
-    // What the run starts with, until it starts.
-    options: Option<minitest::Options>,
+    run: Run,
     // Whether every test file ran without an error, which a passing run
     // still needs.
     loaded: bool,
+}
+
+// Where the run stands, which decides what a beginning frame does to it.
+#[derive(Default)]
+enum Run {
+    // Not begun, or over: no frame moves it.
+    #[default]
+    Stopped,
+    // What the run starts with, as the next process frame begins.
+    Starting(minitest::Options),
+    Running,
 }
 
 #[godot_api]
@@ -36,11 +46,14 @@ impl INode for RubyTestRunner {
         match run_as_asked {
             Ok((tests, options)) => {
                 self.loaded = load(&tests);
-                self.options = Some(options);
+                self.run = Run::Starting(options);
                 let tree = self.base().get_tree();
                 tree.signals()
                     .process_frame()
-                    .connect_other(&*self, Self::run_frame);
+                    .connect_other(&*self, |runner| runner.run_frame(Frame::Process));
+                tree.signals()
+                    .physics_frame()
+                    .connect_other(&*self, |runner| runner.run_frame(Frame::Physics));
             }
             Err(refused) => {
                 error!("{refused}");
@@ -51,15 +64,24 @@ impl INode for RubyTestRunner {
 }
 
 impl RubyTestRunner {
-    // Starts the run, or resumes it where a test waits; quits once it is over.
-    fn run_frame(&mut self) {
-        let options = self.options.take();
-        let over = logged(realm::enter(|realm| match options {
-            Some(options) => realm.call("Minitest", c"start", [options]),
-            None => realm.call("Minitest", c"resume", std::iter::empty::<bool>()),
-        }));
-        if let Some(passed) = over {
-            self.quit(passed && self.loaded);
+    // Starts the run as a process frame begins, or resumes it where a test
+    // waits as any frame begins; quits once it is over.
+    fn run_frame(&mut self, frame: Frame) {
+        let over = match (std::mem::take(&mut self.run), frame) {
+            (Run::Starting(options), Frame::Process) => logged(realm::enter(|realm| {
+                realm.call("Minitest", c"start", [options])
+            })),
+            (Run::Running, frame) => logged(realm::enter(|realm| {
+                realm.call("Minitest", c"resume", [frame])
+            })),
+            (run, _) => {
+                self.run = run;
+                return;
+            }
+        };
+        match over {
+            Some(passed) => self.quit(passed && self.loaded),
+            None => self.run = Run::Running,
         }
     }
 
