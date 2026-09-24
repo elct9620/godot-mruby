@@ -38,6 +38,38 @@ How a test reaches the scene a game runs in: the runner resumes the run once per
 | When | the test waits for 0.1 seconds |
 | Then | the physics frames begun since, at the physics delta each, add up to 0.1 seconds within one frame's delta |
 
+## `RW-009` `wait_until` answers true once its block answers true
+
+| Step | Statement |
+| --- | --- |
+| Given | a block that answers `true` the third time it is called |
+| When | the test waits until it with a `max_time` of 1 second |
+| Then | the wait answers `true` after the third call |
+
+## `RW-010` `wait_until` answers false once `max_time` passes with no answer of true
+
+| Step | Statement |
+| --- | --- |
+| Given | a block that always answers a truthy value other than `true` |
+| When | the test waits until it with a `max_time` of 0.1 seconds |
+| Then | the wait answers `false` once 0.1 seconds of physics time have passed |
+
+## `RW-011` `wait_until` given a time between calls calls its block no more often
+
+| Step | Statement |
+| --- | --- |
+| Given | a block that always answers `false` |
+| When | the test waits until it with a `max_time` of 0.1 seconds and 0.05 seconds between calls |
+| Then | the block has been called at most twice |
+
+## `RW-012` `wait_until` without a block raises ArgumentError
+
+| Step | Statement |
+| --- | --- |
+| Given | a test |
+| When | the test calls `wait_until` with no block |
+| Then | it raises `ArgumentError` |
+
 ## `RW-002` A node added with `add_child_autofree` goes under the test root
 
 | Step | Statement |

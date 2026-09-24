@@ -38,4 +38,39 @@ class FramesTest < Minitest::Test
 
     assert_in_delta 0.1, (Godot::Engine.get_physics_frames - before) * delta, delta
   end
+
+  # @behavior RW-009
+  def test_wait_until_answers_true_once_its_block_answers_true
+    calls = 0
+
+    answer = wait_until(1) { (calls += 1) == 3 }
+
+    assert_equal true, answer
+    assert_equal 3, calls
+  end
+
+  # @behavior RW-010
+  def test_wait_until_answers_false_once_max_time_passes_with_no_answer_of_true
+    delta = test_root.get_physics_process_delta_time
+    before = Godot::Engine.get_physics_frames
+
+    answer = wait_until(0.1) { 1 }
+
+    assert_equal false, answer
+    assert_in_delta 0.1, (Godot::Engine.get_physics_frames - before) * delta, delta
+  end
+
+  # @behavior RW-011
+  def test_wait_until_given_a_time_between_calls_calls_its_block_no_more_often
+    calls = 0
+
+    wait_until(0.1, 0.05) { (calls += 1) && false }
+
+    assert_operator calls, :<=, 2
+  end
+
+  # @behavior RW-012
+  def test_wait_until_without_a_block_raises_argument_error
+    assert_raises(ArgumentError) { wait_until(0.1) }
+  end
 end

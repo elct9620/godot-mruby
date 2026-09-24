@@ -37,9 +37,20 @@ module Minitest
 
     def wait_seconds(time)
       waited = 0.0
-      while waited < time
-        next_frame(:physics)
-        waited += physics_delta
+      waited += next_physics_delta while waited < time
+    end
+
+    def wait_until(max_time, time_between = 0.0)
+      raise ArgumentError, "wait_until needs a block to wait on" unless block_given?
+
+      waited = since_called = 0.0
+      loop do
+        delta = next_physics_delta
+        return false if (waited += delta) >= max_time
+        next if (since_called += delta) < time_between
+
+        since_called = 0.0
+        return true if yield == true
       end
     end
 
@@ -51,9 +62,11 @@ module Minitest
       next_frame(:process) unless Minitest.frame == :process
     end
 
-    # What each physics frame gives _physics_process: the engine's time scale
-    # over its physics ticks per second.
-    def physics_delta
+    # Hands frames back until a physics frame begins, answering the delta it
+    # gives _physics_process: the engine's time scale over its physics ticks
+    # per second.
+    def next_physics_delta
+      next_frame(:physics)
       Godot::Engine.get_main_loop.root.get_physics_process_delta_time
     end
 

@@ -646,6 +646,19 @@ module Minitest
 end
 ```
 
+## `Minitest::Waits#wait_until`
+
+Calls the block as each physics frame begins, or once each `time_between` seconds when given, until it answers `true` or `max_time` seconds have passed, counted as `wait_seconds` counts them. Answers whether the block answered `true` in time; any other answer, truthy or not, keeps it waiting, as GUT's does. Without a block it raises `ArgumentError`, as there is nothing to wait on.
+
+```ruby
+module Minitest
+  module Waits
+    def wait_until(max_time, time_between = 0.0)
+    end
+  end
+end
+```
+
 ## `Minitest::TestRoot`
 
 A test's way into the scene, as GUT names it: each test is given a test root, and what the test adds under it or gives to `autofree` is freed after its teardown, a node the test freed itself left alone. Every test class includes it.
