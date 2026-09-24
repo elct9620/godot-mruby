@@ -171,7 +171,7 @@ impl RubyInstance {
 
     // What Godot wrote to the property `name` before the node had a Ruby
     // object, if it wrote one.
-    fn staged(&self, name: &str) -> Option<Variant> {
+    fn staged_value(&self, name: &str) -> Option<Variant> {
         self.staged
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -565,7 +565,7 @@ unsafe extern "C" fn get(
         }
         if instance.unbuilt() && !realm::inside() {
             let staged = instance
-                .staged(&name)
+                .staged_value(&name)
                 .or_else(|| instance.default_value(&name));
             let Some(answered) = staged else {
                 return sys::GDExtensionBool::from(false);

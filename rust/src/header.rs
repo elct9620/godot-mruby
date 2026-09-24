@@ -156,12 +156,12 @@ impl Header {
                 }
             }
             (b"signal", [name, parameters @ ..]) => {
-                if let Some(signal) = declared(name, parameters) {
+                if let Some(signal) = signal(name, parameters) {
                     self.signals.push(signal);
                 }
             }
             (b"export", [name, default, ..]) => {
-                if let Some(property) = exported(name, default) {
+                if let Some(property) = property(name, default) {
                     self.exports.push(property);
                 }
             }
@@ -205,7 +205,7 @@ impl Reader {
                 name: names.last().cloned().unwrap_or_default(),
                 superclass: class
                     .and_then(|class| class.superclass())
-                    .and_then(|superclass| written(&superclass, scope)),
+                    .and_then(|superclass| superclass_of(&superclass, scope)),
                 ..Header::default()
             };
             if let Some(statements) = &statements {
@@ -231,7 +231,7 @@ impl Reader {
 // emitted by and a name for each value it carries. A name written as
 // anything but a symbol or a string is the file's to work out as it runs, so
 // the header carries none of that declaration.
-fn declared(name: &Node, parameters: &[Node]) -> Option<Signal> {
+fn signal(name: &Node, parameters: &[Node]) -> Option<Signal> {
     Some(Signal {
         name: name_of(name)?,
         parameters: parameters.iter().map(name_of).collect::<Option<_>>()?,
@@ -242,7 +242,7 @@ fn declared(name: &Node, parameters: &[Node]) -> Option<Signal> {
 // reads it by and the value it is declared with, which gives it its type. A
 // value written as anything but a literal is the file's to work out as it
 // runs, so the header carries none of that declaration.
-fn exported(name: &Node, default: &Node) -> Option<Property> {
+fn property(name: &Node, default: &Node) -> Option<Property> {
     Some(Property::new(name_of(name)?, &literal(default)?))
 }
 
@@ -313,7 +313,7 @@ fn text(bytes: &[u8]) -> String {
 
 // A superclass the class statement inside `scope` writes, when it is a
 // constant path.
-fn written(superclass: &Node, scope: &[String]) -> Option<Superclass> {
+fn superclass_of(superclass: &Node, scope: &[String]) -> Option<Superclass> {
     let (names, from_top) = constant_path(superclass)?;
     Some(Superclass {
         scope: if from_top { Vec::new() } else { scope.to_vec() },

@@ -81,7 +81,7 @@ impl Roots {
 pub type Key = Vec<String>;
 
 /// What a constant path names in the index.
-pub enum Named {
+pub enum Entry {
     /// The file defining it.
     File(String),
     /// A directory with no file of its own name, which is an empty module.
@@ -163,24 +163,24 @@ impl ClassIndex {
 
     /// What `key` names, if anything: a file is what a namespace's own file
     /// is too, so it answers before the directory.
-    pub fn named(&self, key: &[String]) -> Option<Named> {
+    pub fn entry(&self, key: &[String]) -> Option<Entry> {
         match self.files.get(key) {
-            Some(path) => Some(Named::File(path.clone())),
-            None => self.namespaces.get(key).cloned().map(Named::Namespace),
+            Some(path) => Some(Entry::File(path.clone())),
+            None => self.namespaces.get(key).cloned().map(Entry::Namespace),
         }
     }
 
     /// What `name` names from inside the namespaces `scope` spells, looked for
     /// from the innermost namespace outward, as Rails' classic autoloader does,
     /// and how many of those namespaces it was found inside.
-    pub fn lookup(&self, scope: &[String], name: &str) -> Option<(usize, Named)> {
+    pub fn lookup(&self, scope: &[String], name: &str) -> Option<(usize, Entry)> {
         (0..=scope.len()).rev().find_map(|depth| {
             let mut key: Key = scope[..depth]
                 .iter()
                 .map(|segment| normalize(segment))
                 .collect();
             key.push(normalize(name));
-            self.named(&key).map(|named| (depth, named))
+            self.entry(&key).map(|entry| (depth, entry))
         })
     }
 
@@ -263,8 +263,8 @@ pub fn file_named(
         named = Some(found);
     }
     match named? {
-        Named::File(path) => Some(path),
-        Named::Namespace(_) => None,
+        Entry::File(path) => Some(path),
+        Entry::Namespace(_) => None,
     }
 }
 

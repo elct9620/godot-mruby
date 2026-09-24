@@ -422,7 +422,7 @@ pub trait Files {
 }
 ```
 
-## `Files::declared`
+## `Files::declarations`
 
 What the file at a path declares before it runs, which the realm keeps as it runs the file.
 
@@ -432,11 +432,11 @@ What the file at a path declares before it runs, which the realm keeps as it run
 
 ```rust
 pub trait Files {
-    fn declared(&self, path: &str) -> Declared;
+    fn declarations(&self, path: &str) -> Declarations;
 }
 ```
 
-## `Declared`
+## `Declarations`
 
 What a file declares before it runs: the constants its statements write, each as the names written from the top level, which the realm loads before the statements open them, and the superclass its class extends when something relies on it, which the realm holds the class to once the file has run.
 
@@ -445,7 +445,7 @@ What a file declares before it runs: the constants its statements write, each as
 | internal | yes |
 
 ```rust
-pub struct Declared;
+pub struct Declarations;
 ```
 
 ## `Extends`

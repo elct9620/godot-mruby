@@ -62,12 +62,12 @@ pub trait Files: Send {
     /// The source of the file at `path`, or why there is none.
     fn source(&self, path: &str) -> Result<String, String>;
     /// What the file at `path` declares before it runs.
-    fn declared(&self, path: &str) -> Declared;
+    fn declarations(&self, path: &str) -> Declarations;
 }
 
 /// What a file declares before it runs.
 #[derive(Debug, Default)]
-pub struct Declared {
+pub struct Declarations {
     /// The constants its statements write, each as its names from the top
     /// level; the realm loads them before the statements open them.
     pub writes: Vec<Vec<String>>,
@@ -371,9 +371,9 @@ pub fn held(mrb: &Mrb, key: Key) -> Option<Value> {
 /// constant `names` spells from Object.
 pub fn file_defining(mrb: &Mrb, names: &[String]) -> Option<String> {
     let key: Vec<String> = names.iter().map(|name| normalize(name)).collect();
-    match bookkeeping(mrb).index.borrow().named(&key)? {
-        index::Named::File(path) => Some(path),
-        index::Named::Namespace(_) => None,
+    match bookkeeping(mrb).index.borrow().entry(&key)? {
+        index::Entry::File(path) => Some(path),
+        index::Entry::Namespace(_) => None,
     }
 }
 
@@ -702,7 +702,7 @@ fn raised_frames(mrb: &Mrb, error: &Error) -> Vec<Location> {
     let mut frames: Vec<Location> = error
         .backtrace(mrb)
         .iter()
-        .filter_map(|frame| located(frame))
+        .filter_map(|frame| location_of(frame))
         .collect();
     let under_call = mrb
         .user_data::<Bookkeeping>()
@@ -716,7 +716,7 @@ fn raised_frames(mrb: &Mrb, error: &Error) -> Vec<Location> {
 // The place a backtrace frame names, as mruby writes one: `file:line`, then
 // `:in method` when it is in one. A frame without a line, `(unknown):0`,
 // places nothing.
-fn located(frame: &str) -> Option<Location> {
+fn location_of(frame: &str) -> Option<Location> {
     let (place, function) = frame.rsplit_once(":in ").unwrap_or((frame, ""));
     let (file, line) = place.rsplit_once(':')?;
     let line = line.parse().ok().filter(|&line| line > 0)?;
@@ -762,8 +762,8 @@ mod tests {
             .to_owned())
         }
 
-        fn declared(&self, _path: &str) -> Declared {
-            Declared::default()
+        fn declarations(&self, _path: &str) -> Declarations {
+            Declarations::default()
         }
     }
 
@@ -781,8 +781,8 @@ mod tests {
             Ok("ready = true\nraise \"raised at the top\"\n".to_owned())
         }
 
-        fn declared(&self, _path: &str) -> Declared {
-            Declared::default()
+        fn declarations(&self, _path: &str) -> Declarations {
+            Declarations::default()
         }
     }
 
@@ -820,8 +820,8 @@ mod tests {
             .to_owned())
         }
 
-        fn declared(&self, _path: &str) -> Declared {
-            Declared::default()
+        fn declarations(&self, _path: &str) -> Declarations {
+            Declarations::default()
         }
     }
 

@@ -374,7 +374,7 @@ fn is_of_class(mrb: &Mrb, object: &Gd<Object>, class: &str) -> bool {
 fn class_of(object: &Gd<Object>) -> String {
     written_in(object)
         .next()
-        .and_then(|path| announced_at(&path))
+        .and_then(|path| editor_name_at(&path))
         .unwrap_or_else(|| object.get_class().to_string())
 }
 
@@ -427,20 +427,20 @@ fn class_named(mrb: &Mrb, class: &str) -> Result<(PropertyHint, String), String>
         }
         return Err("Export type can only be built-in, a resource, a node, or an enum.".to_owned());
     }
-    announced(mrb, class)
+    editor_name(mrb, class)
         .map(|name| (PropertyHint::NODE_TYPE, name))
         .ok_or_else(|| unnamed(class))
 }
 
 // The name the editor lists the Ruby class `class` under, if a node script
 // of the project defines it and nothing else is announced by that name.
-fn announced(mrb: &Mrb, class: &str) -> Option<String> {
+fn editor_name(mrb: &Mrb, class: &str) -> Option<String> {
     let names: Vec<String> = class.split("::").map(str::to_owned).collect();
-    announced_at(&realm::file_defining(mrb, &names)?)
+    editor_name_at(&realm::file_defining(mrb, &names)?)
 }
 
 // The name the editor lists the file at `path` under, if it is announced.
-fn announced_at(path: &str) -> Option<String> {
+fn editor_name_at(path: &str) -> Option<String> {
     let test_directories = settings::test_directories();
     let project = Project::new(&FilesOnDisk, &test_directories, &super::is_node_class);
     project
@@ -481,14 +481,14 @@ fn hint_named(name: &str, kind: VariantType) -> Result<PropertyHint, String> {
     }
     Err(format!(
         "\"{name}:\" requires a variable of type {}, but type \"{}\" was given instead.",
-        listed(takes),
+        kind_list(takes),
         type_name(kind)
     ))
 }
 
 // The types a hint takes, as GDScript lists them in the same refusal: the
 // last is reached through "or", and three or more are separated by commas.
-fn listed(kinds: &[VariantType]) -> String {
+fn kind_list(kinds: &[VariantType]) -> String {
     let names: Vec<String> = kinds
         .iter()
         .map(|kind| format!("\"{}\"", type_name(*kind)))

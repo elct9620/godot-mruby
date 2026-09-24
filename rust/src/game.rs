@@ -7,7 +7,7 @@ use godot::global::Error;
 use godot::obj::Singleton;
 
 use crate::header::Header;
-use crate::realm::{Declared, Extends, Files, Roots};
+use crate::realm::{Declarations, Extends, Files, Roots};
 use crate::settings;
 use crate::{ancestry, bridge};
 
@@ -58,9 +58,9 @@ impl Files for GameFiles {
     // fails where the realm reads its source to run it. Only a node script's
     // class is held to its superclass: Godot is told its ancestry before it
     // runs, and a library file's is Ruby's to look up.
-    fn declared(&self, path: &str) -> Declared {
+    fn declarations(&self, path: &str) -> Declarations {
         let Ok(source) = self.source(path) else {
-            return Declared::default();
+            return Declarations::default();
         };
         let header = Header::read(path, &source, &self.roots());
         let extends = ancestry::read(path, &header, self)
@@ -72,7 +72,7 @@ impl Files for GameFiles {
                     Extends::Constant(vec!["Godot".to_owned(), ancestry.engine_class().to_owned()])
                 }
             });
-        Declared {
+        Declarations {
             writes: header.writes().to_vec(),
             extends,
         }
@@ -103,8 +103,8 @@ impl Files for FilesOnDisk {
     }
 
     // A scan runs no file.
-    fn declared(&self, _path: &str) -> Declared {
-        Declared::default()
+    fn declarations(&self, _path: &str) -> Declarations {
+        Declarations::default()
     }
 }
 

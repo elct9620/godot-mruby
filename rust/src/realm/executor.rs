@@ -39,7 +39,7 @@ impl Declaration {
     }
 
     // What the declaration says the name is, as a refusal spells it out.
-    fn written(&self) -> String {
+    fn label(&self) -> String {
         match self {
             Self::Signal(signal) => format!("a signal of ({})", signal.parameters.join(", ")),
             Self::Property(property) => format!("a property of {}", property.default_value()),
@@ -173,8 +173,8 @@ pub(super) fn declare(mrb: &Mrb, class: RClass, declared: Declaration) -> Result
     let refusal = format!(
         "{} is already declared as {}, so it cannot be declared as {}",
         declared.name(),
-        standing.written(),
-        declared.written()
+        standing.label(),
+        declared.label()
     );
     drop(frames);
     Err(raising(mrb, c"ArgumentError", &refusal))

@@ -188,8 +188,8 @@ impl Snapshot {
         files: impl IntoIterator<Item = (&'a str, &'a [Property])>,
     ) -> Vec<Property> {
         let mut properties: Vec<Property> = Vec::new();
-        for (path, exported) in files {
-            for property in self.exported(path, exported) {
+        for (path, written) in files {
+            for property in self.file_properties(path, written) {
                 if !properties.iter().any(|kept| kept.name == property.name) {
                     properties.push(property.clone());
                 }
@@ -200,11 +200,11 @@ impl Snapshot {
 
     // The properties the class of the file at `path` has: the ones it
     // exported as it ran, or the ones its header writes while it has not run.
-    fn exported<'a>(&'a self, path: &str, exported: &'a [Property]) -> Vec<&'a Property> {
+    fn file_properties<'a>(&'a self, path: &str, written: &'a [Property]) -> Vec<&'a Property> {
         if self.has_run(path) {
             self.properties(path).collect()
         } else {
-            exported.iter().collect()
+            written.iter().collect()
         }
     }
 
@@ -220,11 +220,11 @@ impl Snapshot {
         files: impl IntoIterator<Item = (&'a str, &'a [Property])>,
     ) -> Vec<Member> {
         let mut members: Vec<Member> = Vec::new();
-        for (path, exported) in files {
+        for (path, written) in files {
             if in_editor() {
                 members.push(Member::Heading(category(path)));
             }
-            for member in self.declared(path, exported) {
+            for member in self.file_members(path, written) {
                 let listed = member.property().is_some_and(|property| {
                     members
                         .iter()
@@ -242,11 +242,11 @@ impl Snapshot {
     // What the class of the file at `path` declared for the editor: what it
     // declared as it ran, or the properties its header writes while it has
     // not run, which carry no heading of their own.
-    fn declared(&self, path: &str, exported: &[Property]) -> Vec<Member> {
+    fn file_members(&self, path: &str, written: &[Property]) -> Vec<Member> {
         if self.has_run(path) {
             self.members(path).to_vec()
         } else {
-            exported.iter().cloned().map(Member::Property).collect()
+            written.iter().cloned().map(Member::Property).collect()
         }
     }
 

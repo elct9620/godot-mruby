@@ -7,7 +7,7 @@ use beni::{
     Error, FromValue, IntoValue, Module, Mrb, RClass, RModule, ReprValue, Symbol, Value, method,
 };
 
-use super::index::{self, Named, Namespace};
+use super::index::{self, Entry, Namespace};
 use super::{Extends, RubyError, bookkeeping, compile, executor, key_of};
 
 pub(super) fn define(mrb: &Mrb) -> Result<(), Error> {
@@ -85,13 +85,13 @@ fn hidden(mrb: &Mrb, inner: &[String]) -> bool {
 // Loads the constant `inner` spells for no caller: a file that raises is
 // reported at its own line, and the outer constant being defined goes on.
 fn load_inner(mrb: &Mrb, inner: &[String]) {
-    let named = bookkeeping(mrb).index.borrow().named(inner);
-    let (path, loaded) = match named {
-        Some(Named::File(path)) if executor::cycle(mrb, &path).is_none() => {
+    let entry = bookkeeping(mrb).index.borrow().entry(inner);
+    let (path, loaded) = match entry {
+        Some(Entry::File(path)) if executor::cycle(mrb, &path).is_none() => {
             let loaded = run_by_name(mrb, &path);
             (Some(path), loaded)
         }
-        Some(Named::Namespace(namespace)) => {
+        Some(Entry::Namespace(namespace)) => {
             let Some(scope) = constant_at(mrb, &inner[..inner.len() - 1]) else {
                 return;
             };
@@ -113,8 +113,8 @@ fn load_inner(mrb: &Mrb, inner: &[String]) {
 pub(super) fn ensure_opened(mrb: &Mrb, path: &str) -> Result<Option<Extends>, Error> {
     ensure_namespaces(mrb, path)?;
     let own = key_of(mrb, path);
-    let declared = bookkeeping(mrb).files.declared(path);
-    for names in declared.writes {
+    let declarations = bookkeeping(mrb).files.declarations(path);
+    for names in declarations.writes {
         let key: Vec<String> = names.iter().map(|name| index::normalize(name)).collect();
         // Its own class and the namespaces around it are the file's to define,
         // and nothing inside its class exists before the class does.
@@ -124,18 +124,18 @@ pub(super) fn ensure_opened(mrb: &Mrb, path: &str) -> Result<Option<Extends>, Er
         let Some((name, outer)) = names.split_last() else {
             continue;
         };
-        let named = bookkeeping(mrb).index.borrow().named(&key);
-        match named {
-            Some(Named::File(file)) => {
+        let entry = bookkeeping(mrb).index.borrow().entry(&key);
+        match entry {
+            Some(Entry::File(file)) => {
                 constant_from(mrb, &file, outer, name)?;
             }
-            Some(Named::Namespace(namespace)) => {
+            Some(Entry::Namespace(namespace)) => {
                 namespace_module(mrb, outer, name, &namespace)?;
             }
             None => {}
         }
     }
-    Ok(declared.extends)
+    Ok(declarations.extends)
 }
 
 /// Holds the class the file at `path` defined to the superclass it declared,
@@ -191,10 +191,10 @@ fn ensure_namespaces(mrb: &Mrb, path: &str) -> Result<(), Error> {
         if constant_at(mrb, &key[..depth]).is_some() {
             continue;
         }
-        let named = bookkeeping(mrb).index.borrow().named(&key[..depth]);
-        match named {
-            Some(Named::File(file)) => run_by_name(mrb, &file)?,
-            Some(Named::Namespace(namespace)) => {
+        let entry = bookkeeping(mrb).index.borrow().entry(&key[..depth]);
+        match entry {
+            Some(Entry::File(file)) => run_by_name(mrb, &file)?,
+            Some(Entry::Namespace(namespace)) => {
                 // A namespace file that ran without defining its module
                 // leaves the files inside to open it themselves.
                 let Some(scope) = constant_at(mrb, &key[..depth - 1]) else {
@@ -237,12 +237,12 @@ fn constant_matching(mrb: &Mrb, scope: Value, segment: &str) -> Option<Value> {
 // innermost scope alone, so the index looks outward from it.
 fn resolve(mrb: &Mrb, receiver: Value, name: &str) -> Result<Option<Value>, Error> {
     let scope = path_of(mrb, receiver).unwrap_or_default();
-    let named = bookkeeping(mrb).index.borrow().lookup(&scope, name);
-    match named {
-        Some((depth, Named::File(path))) => {
+    let entry = bookkeeping(mrb).index.borrow().lookup(&scope, name);
+    match entry {
+        Some((depth, Entry::File(path))) => {
             constant_from(mrb, &path, &scope[..depth], name).map(Some)
         }
-        Some((depth, Named::Namespace(namespace))) => {
+        Some((depth, Entry::Namespace(namespace))) => {
             namespace_module(mrb, &scope[..depth], name, &namespace).map(Some)
         }
         None => Ok(None),
@@ -268,7 +268,7 @@ fn constant_from(mrb: &Mrb, path: &str, outer: &[String], name: &str) -> Result<
     if let Some(chain) = executor::cycle(mrb, path) {
         let message = format!(
             "{} is needed while its own file is still running: {}",
-            qualified(outer, name),
+            qualified_name(outer, name),
             chain.join(" -> ")
         );
         return Err(name_error(mrb, &message, name));
@@ -279,7 +279,10 @@ fn constant_from(mrb: &Mrb, path: &str, outer: &[String], name: &str) -> Result<
     if scope.const_defined_at(mrb, symbol) {
         scope.const_get(mrb, symbol)
     } else {
-        let message = format!("{path} ran without defining {}", qualified(outer, name));
+        let message = format!(
+            "{path} ran without defining {}",
+            qualified_name(outer, name)
+        );
         Err(name_error(mrb, &message, name))
     }
 }
@@ -304,8 +307,8 @@ fn namespace_module(
         let message = format!(
             "{} is the namespace {}, not {}",
             namespace.directory,
-            qualified(outer, &namespace.name),
-            qualified(outer, name)
+            qualified_name(outer, &namespace.name),
+            qualified_name(outer, name)
         );
         return Err(name_error(mrb, &message, name));
     }
@@ -356,7 +359,7 @@ fn placed(mrb: &Mrb, path: &str, error: Error) -> Error {
     }
 }
 
-fn qualified(outer: &[String], name: &str) -> String {
+fn qualified_name(outer: &[String], name: &str) -> String {
     outer
         .iter()
         .map(String::as_str)

@@ -161,7 +161,7 @@ pub mod tests {
 
     use super::{Ancestry, Broken, read};
     use crate::header::Header;
-    use crate::realm::{Declared, Files};
+    use crate::realm::{Declarations, Files};
 
     /// Files kept in memory, by path.
     pub struct Sources(pub BTreeMap<&'static str, &'static str>);
@@ -178,8 +178,8 @@ pub mod tests {
                 .ok_or_else(|| "no such file".to_owned())
         }
 
-        fn declared(&self, _path: &str) -> Declared {
-            Declared::default()
+        fn declarations(&self, _path: &str) -> Declarations {
+            Declarations::default()
         }
     }
 
