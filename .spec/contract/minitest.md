@@ -633,6 +633,19 @@ module Minitest
 end
 ```
 
+## `Minitest::Waits#wait_seconds`
+
+Returns once the physics frames begun since the call add up to `time` seconds of the delta `_physics_process` is given, counted as GUT counts it.
+
+```ruby
+module Minitest
+  module Waits
+    def wait_seconds(time)
+    end
+  end
+end
+```
+
 ## `Minitest::TestRoot`
 
 A test's way into the scene, as GUT names it: each test is given a test root, and what the test adds under it or gives to `autofree` is freed after its teardown, a node the test freed itself left alone. Every test class includes it.

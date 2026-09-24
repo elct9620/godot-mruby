@@ -28,4 +28,14 @@ class FramesTest < Minitest::Test
 
     refute Godot::Engine.is_in_physics_frame
   end
+
+  # @behavior RW-008
+  def test_a_test_waiting_for_seconds_continues_once_that_much_physics_time_has_passed
+    delta = test_root.get_physics_process_delta_time
+    before = Godot::Engine.get_physics_frames
+
+    wait_seconds 0.1
+
+    assert_in_delta 0.1, (Godot::Engine.get_physics_frames - before) * delta, delta
+  end
 end

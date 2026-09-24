@@ -30,6 +30,14 @@ How a test reaches the scene a game runs in: the runner resumes the run once per
 | When | the next test begins |
 | Then | it begins where a process frame begins, outside any physics frame |
 
+## `RW-008` A test waiting for seconds continues once that much physics time has passed
+
+| Step | Statement |
+| --- | --- |
+| Given | a test that reads the engine's physics frame count |
+| When | the test waits for 0.1 seconds |
+| Then | the physics frames begun since, at the physics delta each, add up to 0.1 seconds within one frame's delta |
+
 ## `RW-002` A node added with `add_child_autofree` goes under the test root
 
 | Step | Statement |

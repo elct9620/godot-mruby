@@ -35,12 +35,26 @@ module Minitest
       frames.times { next_frame(:physics) }
     end
 
+    def wait_seconds(time)
+      waited = 0.0
+      while waited < time
+        next_frame(:physics)
+        waited += physics_delta
+      end
+    end
+
     private
 
     # A test that waited into a physics frame leaves the next one there, so
     # each test begins where a process frame begins, as the first one does.
     def begin_at_process_frame
       next_frame(:process) unless Minitest.frame == :process
+    end
+
+    # What each physics frame gives _physics_process: the engine's time scale
+    # over its physics ticks per second.
+    def physics_delta
+      Godot::Engine.get_main_loop.root.get_physics_process_delta_time
     end
 
     # Hands frames back until one of the kind `frame` names begins.
