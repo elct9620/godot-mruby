@@ -43,20 +43,20 @@ pub struct RubyScript {
     // The placeholders Godot made of the script in the editor and has not
     // erased, told again what the class exports whenever that changes.
     placeholders: Mutex<Vec<Placeholder>>,
-    // What they were last told, as `Exported::digest` has it: Godot asks for
+    // What they were last told, as `Exports::digest` has it: Godot asks for
     // the exports again for every property of a scene it saves, and telling
     // a placeholder makes the editor list its properties anew.
-    told: Mutex<Option<(u32, u32)>>,
+    told_digest: Mutex<Option<(u32, u32)>>,
 }
 
 /// What a placeholder is told of the class: what it exports, and the value
 /// each was declared with.
-struct Exported {
+struct Exports {
     properties: Array<AnyDictionary>,
     values: VarDictionary,
 }
 
-impl Exported {
+impl Exports {
     // A digest of what it tells, which differs whenever that does.
     fn digest(&self) -> (u32, u32) {
         (
@@ -96,7 +96,7 @@ impl RubyScript {
             header: Arc::new(header),
             ancestry: Cache::default(),
             placeholders: Mutex::default(),
-            told: Mutex::default(),
+            told_digest: Mutex::default(),
             source,
         })
     }
@@ -188,12 +188,12 @@ impl RubyScript {
     // What the class exports and the value each was declared with, which is
     // all the editor has to show a placeholder while no object of the class
     // exists.
-    fn exported(&self) -> Exported {
+    fn exports(&self) -> Exports {
         let mut values = VarDictionary::new();
         for property in self.properties() {
             values.set(&StringName::from(&property.name), &property.default_value());
         }
-        Exported {
+        Exports {
             properties: self.members().iter().map(member_info).collect(),
             values,
         }
@@ -295,7 +295,7 @@ impl IScriptExtension for RubyScript {
                 for_object.obj_sys(),
             )
         };
-        self.exported().tell(placeholder);
+        self.exports().tell(placeholder);
         self.placeholders().push(Placeholder(placeholder));
         // SAFETY: the pointer is the placeholder Godot just made.
         unsafe { RawPtr::new(placeholder.cast::<c_void>()) }
@@ -398,14 +398,17 @@ impl IScriptExtension for RubyScript {
     // Godot asks the script about the class as each placeholder is told, so
     // the script is let go of while they are.
     fn update_exports(&mut self) {
-        let exported = self.exported();
+        let exported = self.exports();
         let digest = Some(exported.digest());
-        let mut told = self.told.lock().unwrap_or_else(PoisonError::into_inner);
-        if *told == digest {
+        let mut told_digest = self
+            .told_digest
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        if *told_digest == digest {
             return;
         }
-        *told = digest;
-        drop(told);
+        *told_digest = digest;
+        drop(told_digest);
         let placeholders: Vec<_> = self.placeholders().iter().map(|kept| kept.0).collect();
         let _released = self.base_mut();
         for placeholder in placeholders {
