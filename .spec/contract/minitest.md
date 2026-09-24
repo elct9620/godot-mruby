@@ -722,6 +722,43 @@ module Minitest
 end
 ```
 
+## `Minitest::SignalWatcher`
+
+The signals a test watches, as GUT names them. What it connects is disconnected before the test's teardown, unless the object was freed with its connections. Every test class includes it.
+
+```ruby
+module Minitest
+  module SignalWatcher
+  end
+end
+```
+
+## `Minitest::SignalWatcher#watch_signals`
+
+Connects to every signal `object` has and counts each emission until the test's teardown, answering `object`.
+
+```ruby
+module Minitest
+  module SignalWatcher
+    def watch_signals(object)
+    end
+  end
+end
+```
+
+## `Minitest::SignalWatcher#assert_signal_emitted`
+
+Fails unless the watched `object` emitted the signal named `signal_name`, and when `object` is not watched or has no such signal. As in GUT, a `Godot::Signal` stands for the object and the name, and the argument after it is then the message.
+
+```ruby
+module Minitest
+  module SignalWatcher
+    def assert_signal_emitted(object, signal_name = nil, msg = nil)
+    end
+  end
+end
+```
+
 ## `Minitest::LogReporter`
 
 The reporter the extension's plugin adds to every run, writing what it reports to the log. The extension implements the method that writes to the log on this class, so the class is where the Ruby and the Rust sides meet.

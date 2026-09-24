@@ -59,8 +59,7 @@ module Minitest
       connection = connect_block(signal) { emitted = true }
       wait_until(max_time) { emitted }
     ensure
-      # A signal whose object was freed meanwhile went with its connections.
-      signal.disconnect(connection) if connection && signal.get_object
+      disconnect_block(signal, connection)
     end
 
     private
@@ -72,6 +71,12 @@ module Minitest
       held = connected_callables(signal)
       signal.connect(block)
       connected_callables(signal).find { |callable| !held.include?(callable) }
+    end
+
+    # Undoes connect_block, unless the signal's object was freed meanwhile
+    # and took its connections with it.
+    def disconnect_block(signal, connection)
+      signal.disconnect(connection) if connection && signal.get_object
     end
 
     def connected_callables(signal)

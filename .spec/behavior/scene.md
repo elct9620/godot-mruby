@@ -94,6 +94,46 @@ How a test reaches the scene a game runs in: the runner resumes the run once per
 | When | a wait for the signal has returned |
 | Then | the signal has the same connections |
 
+## `RW-016` A signal a watched object emitted passes `assert_signal_emitted`
+
+| Step | Statement |
+| --- | --- |
+| Given | a test that watches a node's signals |
+| When | the node emits `property_list_changed` |
+| Then | `assert_signal_emitted` passes, given the node and the name or the signal |
+
+## `RW-017` A signal a watched object did not emit fails `assert_signal_emitted`
+
+| Step | Statement |
+| --- | --- |
+| Given | a test that watches a node's signals |
+| When | the test asserts `property_list_changed` was emitted, which the node never emitted |
+| Then | the assertion fails |
+
+## `RW-018` An object nobody watched fails `assert_signal_emitted`
+
+| Step | Statement |
+| --- | --- |
+| Given | a node that emitted `property_list_changed` without being watched |
+| When | the test asserts the signal was emitted |
+| Then | the assertion fails |
+
+## `RW-019` A signal a watched object does not have fails `assert_signal_emitted`
+
+| Step | Statement |
+| --- | --- |
+| Given | a test that watches a node's signals |
+| When | the test asserts a signal the node does not have was emitted |
+| Then | the assertion fails |
+
+## `RW-020` A watched object has the connections it had once the test's teardown begins
+
+| Step | Statement |
+| --- | --- |
+| Given | a test that watches a node's signals |
+| When | the test's teardown begins |
+| Then | the node's signals have the connections they had before it was watched |
+
 ## `RW-002` A node added with `add_child_autofree` goes under the test root
 
 | Step | Statement |
