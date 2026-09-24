@@ -4,10 +4,8 @@ class InheritedTest < Minitest::Test
     boss = Godot::Node2D.new
     boss.set_script(Godot::ResourceLoader.load("res://test/unit/script/inherited/boss.rb"))
 
-    Godot::Engine.get_main_loop.current_scene.add_child(boss)
+    add_child_autofree(boss)
 
     assert_equal "Unit::Script::Inherited::Boss", boss.call(:readied)
-  ensure
-    boss&.free
   end
 end

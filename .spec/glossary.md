@@ -39,6 +39,10 @@ A directory the test runner runs tests from: one of a project's `mruby/test/dire
 
 A file under a test directory whose name matches the project's `mruby/test/pattern`. Only the test runner runs one.
 
+### Test root
+
+The node a test reaches the scene through: the test runner gives each test one of its own in the tree and frees it, with everything under it, once the test's teardown has run. A test class is not a node, so what a test adds to the scene goes under its test root.
+
 ### Class index
 
 A realm's map from constant paths to the files named after them, built from the files the realm is given by Zeitwerk's rules: every directory below a root directory is a namespace, and a file names the constant its path spells from the nearest root directory it sits under, matched without underscores or case. One namespace may span directories under different root directories. The game's realm is given every file under `res://`, and an exported game leaves the test directories out.

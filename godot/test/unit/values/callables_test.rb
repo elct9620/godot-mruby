@@ -7,11 +7,7 @@ class CallablesTest < Minitest::Test
   end
 
   def setup
-    @node = Godot::Node.new
-  end
-
-  def teardown
-    @node.free
+    @node = autofree(Godot::Node.new)
   end
 
   # @behavior RV-017

@@ -10,7 +10,7 @@ use crate::{compiler, error, log};
 
 // Each file's path names its frames in backtraces: the framework tells its
 // own frames by their directory, and the extension's by the one above it.
-const FILES: [(&CStr, &str); 4] = [
+const FILES: [(&CStr, &str); 5] = [
     (
         c"godot_mruby/minitest/minitest.rb",
         include_str!("minitest/minitest.rb"),
@@ -22,6 +22,10 @@ const FILES: [(&CStr, &str); 4] = [
     (
         c"godot_mruby/minitest/frames.rb",
         include_str!("minitest/frames.rb"),
+    ),
+    (
+        c"godot_mruby/minitest/test_root.rb",
+        include_str!("minitest/test_root.rb"),
     ),
     (
         c"godot_mruby/minitest/godot_plugin.rb",

@@ -620,6 +620,56 @@ module Minitest
 end
 ```
 
+## `Minitest::TestRoot`
+
+A test's way into the scene, as GUT names it: each test is given a test root, and what the test adds under it or gives to `autofree` is freed after its teardown, a node the test freed itself left alone. Every test class includes it.
+
+```ruby
+module Minitest
+  module TestRoot
+  end
+end
+```
+
+## `Minitest::TestRoot#test_root`
+
+The test's test root, a node in the tree. It is private, as a public method whose name starts with `test_` is a test.
+
+```ruby
+module Minitest
+  module TestRoot
+    def test_root
+    end
+  end
+end
+```
+
+## `Minitest::TestRoot#add_child_autofree`
+
+Adds `node` under the test root and frees it after the test's teardown, answering `node`.
+
+```ruby
+module Minitest
+  module TestRoot
+    def add_child_autofree(node)
+    end
+  end
+end
+```
+
+## `Minitest::TestRoot#autofree`
+
+Frees `object` after the test's teardown, answering `object`.
+
+```ruby
+module Minitest
+  module TestRoot
+    def autofree(object)
+    end
+  end
+end
+```
+
 ## `Minitest::LogReporter`
 
 The reporter the extension's plugin adds to every run, writing what it reports to the log. The extension implements the method that writes to the log on this class, so the class is where the Ruby and the Rust sides meet.
