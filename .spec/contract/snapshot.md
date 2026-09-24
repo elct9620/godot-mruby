@@ -21,19 +21,61 @@ pub struct Signal {
 }
 ```
 
-## `Group`
+## `Heading`
 
-A heading the editor shows the properties under, as `export_group` and its kin write one, or as a class is headed by the file it is written in: the name it is headed with, what the heading is read with — the prefix a group takes its properties by, or the path a class's category is at — and which kind of heading it is.
+A heading the editor shows the properties under: a category, as `export_category` writes one or as a class is headed by the file at `path`, or a group or subgroup, as `export_group` and `export_subgroup` write one, taking the properties whose names begin with `prefix`.
 
 | Attribute | Value |
 | --- | --- |
 | internal | yes |
 
 ```rust
-pub struct Group {
-    pub name: String,
-    pub hint_string: String,
-    pub usage: PropertyUsageFlags,
+pub enum Heading {
+    Category { name: String, path: String },
+    Group { name: String, prefix: String },
+    Subgroup { name: String, prefix: String },
+}
+```
+
+## `Heading::name`
+
+The name the heading is shown with.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Heading {
+    pub fn name(&self) -> &str {}
+}
+```
+
+## `Heading::hint_string`
+
+What Godot reads the heading with: a category's path, or the prefix a group or subgroup takes its properties by.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Heading {
+    pub fn hint_string(&self) -> &str {}
+}
+```
+
+## `Heading::usage`
+
+The usage that tells Godot which kind of heading it is.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Heading {
+    pub fn usage(&self) -> PropertyUsageFlags {}
 }
 ```
 
@@ -48,7 +90,7 @@ What a class body declared for the editor to show, in the order it was declared:
 ```rust
 pub enum Member {
     Property(Property),
-    Group(Group),
+    Heading(Heading),
 }
 ```
 

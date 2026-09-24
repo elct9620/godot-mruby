@@ -7,7 +7,7 @@ use beni::{
 };
 
 use crate::compiler;
-use crate::snapshot::{self, Class, Group, Member, Property, Signal, Snapshot};
+use crate::snapshot::{self, Class, Heading, Member, Property, Signal, Snapshot};
 
 mod constants;
 mod executor;
@@ -335,11 +335,11 @@ pub fn declare_export(mrb: &Mrb, class: RClass, property: Property) -> Result<()
     executor::declare(mrb, class, Declaration::Property(property))
 }
 
-/// Takes `group` as written by the file running now in the realm `mrb`
+/// Takes `heading` as written by the file running now in the realm `mrb`
 /// belongs to: a heading names no member, so nothing is refused for having
 /// been written before.
-pub fn declare_group(mrb: &Mrb, group: Group) {
-    executor::heading(mrb, group);
+pub fn declare_heading(mrb: &Mrb, heading: Heading) {
+    executor::declare_heading(mrb, heading);
 }
 
 /// Whether this thread is inside the game's realm. Something outside asks

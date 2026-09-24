@@ -75,16 +75,44 @@ impl Property {
     }
 }
 
-/// A heading the editor shows the properties under, as `export_group` and
-/// its kin write one, or as a class is headed by the file it is written in:
-/// the name it is headed with, what the heading is read with — the prefix a
-/// group takes its properties by, or the path a class's category is at —
-/// and which kind of heading it is.
+/// A heading the editor shows the properties under: a category, as
+/// `export_category` writes one or as a class is headed by the file at
+/// `path`, or a group or subgroup, as `export_group` and `export_subgroup`
+/// write one, taking the properties whose names begin with `prefix`.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Group {
-    pub name: String,
-    pub hint_string: String,
-    pub usage: PropertyUsageFlags,
+pub enum Heading {
+    Category { name: String, path: String },
+    Group { name: String, prefix: String },
+    Subgroup { name: String, prefix: String },
+}
+
+impl Heading {
+    /// The name the heading is shown with.
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Category { name, .. }
+            | Self::Group { name, .. }
+            | Self::Subgroup { name, .. } => name,
+        }
+    }
+
+    /// What Godot reads the heading with: a category's path, or the prefix a
+    /// group or subgroup takes its properties by.
+    pub fn hint_string(&self) -> &str {
+        match self {
+            Self::Category { path, .. } => path,
+            Self::Group { prefix, .. } | Self::Subgroup { prefix, .. } => prefix,
+        }
+    }
+
+    /// The usage that tells Godot which kind of heading it is.
+    pub fn usage(&self) -> PropertyUsageFlags {
+        match self {
+            Self::Category { .. } => PropertyUsageFlags::CATEGORY,
+            Self::Group { .. } => PropertyUsageFlags::GROUP,
+            Self::Subgroup { .. } => PropertyUsageFlags::SUBGROUP,
+        }
+    }
 }
 
 /// What a class body declared for the editor to show, in the order it was
@@ -92,7 +120,7 @@ pub struct Group {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Member {
     Property(Property),
-    Group(Group),
+    Heading(Heading),
 }
 
 impl Member {
@@ -100,7 +128,7 @@ impl Member {
     pub fn property(&self) -> Option<&Property> {
         match self {
             Self::Property(property) => Some(property),
-            Self::Group(_) => None,
+            Self::Heading(_) => None,
         }
     }
 }
@@ -194,7 +222,7 @@ impl Snapshot {
         let mut members: Vec<Member> = Vec::new();
         for (path, exported) in files {
             if in_editor() {
-                members.push(Member::Group(category(path)));
+                members.push(Member::Heading(category(path)));
             }
             for member in self.declared(path, exported) {
                 let listed = member.property().is_some_and(|property| {
@@ -253,11 +281,10 @@ fn in_editor() -> bool {
 // The category the editor heads a class's own members with, as it heads a
 // GDScript's with the script it is written in: the file's name, read with
 // the path it is at.
-fn category(path: &str) -> Group {
-    Group {
+fn category(path: &str) -> Heading {
+    Heading::Category {
         name: path.rsplit('/').next().unwrap_or(path).to_owned(),
-        hint_string: path.to_owned(),
-        usage: PropertyUsageFlags::CATEGORY,
+        path: path.to_owned(),
     }
 }
 

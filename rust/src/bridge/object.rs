@@ -13,14 +13,14 @@ use godot::global::type_string;
 use godot::meta::ToGodot;
 use godot::meta::error::CallError;
 use godot::obj::{EngineEnum, Gd, InstanceId, Singleton};
-use godot::register::info::{PropertyHint, PropertyUsageFlags};
+use godot::register::info::PropertyHint;
 
 use super::value::{self, ToRuby};
 use crate::announcement::Project;
 use crate::game::FilesOnDisk;
 use crate::realm::{self, Key};
 use crate::settings;
-use crate::snapshot::{Group, Property, Signal};
+use crate::snapshot::{Heading, Property, Signal};
 
 /// The engine object a Ruby object of an engine class stands for. Holding
 /// it keeps a reference-counted object alive until Ruby lets go of it.
@@ -58,7 +58,7 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     object.define_singleton_method(mrb, c"__engine_constant__", method!(engine_constant, 1))?;
     object.define_singleton_method(mrb, c"__declare_signal__", method!(declare_signal, 2))?;
     object.define_singleton_method(mrb, c"__declare_export__", method!(declare_export, 4))?;
-    object.define_singleton_method(mrb, c"__declare_group__", method!(declare_group, 3))?;
+    object.define_singleton_method(mrb, c"__declare_heading__", method!(declare_heading, 3))?;
     object.define_private_method(mrb, c"__resolve__", method!(resolve, 1))?;
     object.define_private_method(mrb, c"__call__", method!(call, 2))?;
     object.define_private_method(mrb, c"__instance_id__", method!(instance_id, 0))?;
@@ -309,23 +309,20 @@ fn declare_export(
     Ok(Value::nil())
 }
 
-// Godot::Object.__declare_group__(name, prefix, kind): takes the heading the
-// class writes as its body runs, which the properties written after it are
-// shown under, for the realm to publish once the file has run.
-fn declare_group(mrb: &Mrb, _class: RClass, name: String, prefix: String, kind: String) -> Value {
-    let usage = match kind.as_str() {
-        "category" => PropertyUsageFlags::CATEGORY,
-        "subgroup" => PropertyUsageFlags::SUBGROUP,
-        _ => PropertyUsageFlags::GROUP,
-    };
-    realm::declare_group(
-        mrb,
-        Group {
+// Godot::Object.__declare_heading__(name, prefix, kind): takes the heading
+// the class writes as its body runs, which the properties written after it
+// are shown under, for the realm to publish once the file has run.
+fn declare_heading(mrb: &Mrb, _class: RClass, name: String, prefix: String, kind: String) -> Value {
+    let heading = match kind.as_str() {
+        // A category the body writes is headed by no file.
+        "category" => Heading::Category {
             name,
-            hint_string: prefix,
-            usage,
+            path: String::new(),
         },
-    );
+        "subgroup" => Heading::Subgroup { name, prefix },
+        _ => Heading::Group { name, prefix },
+    };
+    realm::declare_heading(mrb, heading);
     Value::nil()
 }
 

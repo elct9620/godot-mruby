@@ -23,7 +23,7 @@ use crate::error;
 use crate::header::Header;
 use crate::log::GodotLog;
 use crate::realm::{self, Built, Key, RubyError};
-use crate::snapshot::{self, Group, Member, Property};
+use crate::snapshot::{self, Heading, Member, Property};
 
 /// A node's instance of a `RubyScript`. It holds no Ruby value: the node's
 /// Ruby object is built in the game's realm the first time Godot calls a
@@ -388,20 +388,20 @@ fn read(key: Key, name: &str, exported: bool) -> Option<Variant> {
 fn member_info(member: &Member) -> sys::GDExtensionPropertyInfo {
     match member {
         Member::Property(property) => property_info(property),
-        Member::Group(group) => group_info(group),
+        Member::Heading(heading) => heading_info(heading),
     }
 }
 
 // A heading as Godot reads it from an instance: the name it is headed with,
 // the prefix it takes properties by, and the usage saying which kind it is.
-fn group_info(group: &Group) -> sys::GDExtensionPropertyInfo {
+fn heading_info(heading: &Heading) -> sys::GDExtensionPropertyInfo {
     sys::GDExtensionPropertyInfo {
         type_: VariantType::NIL.ord() as sys::GDExtensionVariantType,
-        name: owned(StringName::from(&group.name)),
+        name: owned(StringName::from(heading.name())),
         class_name: owned(StringName::default()),
         hint: PropertyHint::NONE.ord() as u32,
-        hint_string: owned(GString::from(&group.hint_string)),
-        usage: group.usage.ord() as u32,
+        hint_string: owned(GString::from(heading.hint_string())),
+        usage: heading.usage().ord() as u32,
     }
 }
 

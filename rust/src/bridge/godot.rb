@@ -85,15 +85,15 @@ module Godot
       # subgroup take only the properties whose names begin with `prefix`,
       # and a category heads everything the class writes after it.
       def export_group(name, prefix = "")
-        __declare_group__(name.to_s, prefix.to_s, "group")
+        __declare_heading__(name.to_s, prefix.to_s, "group")
       end
 
       def export_subgroup(name, prefix = "")
-        __declare_group__(name.to_s, prefix.to_s, "subgroup")
+        __declare_heading__(name.to_s, prefix.to_s, "subgroup")
       end
 
       def export_category(name)
-        __declare_group__(name.to_s, "", "category")
+        __declare_heading__(name.to_s, "", "category")
       end
 
       # An engine class makes the engine's object; a node script's class
@@ -141,7 +141,7 @@ module Godot
       end
 
       private :__make__, :__make_node__, :__allocate__, :__singleton__, :__static_method__, :__call_static__,
-              :__engine_constant__, :__declare_signal__, :__declare_export__, :__declare_group__
+              :__engine_constant__, :__declare_signal__, :__declare_export__, :__declare_heading__
 
       private
 

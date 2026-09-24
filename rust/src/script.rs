@@ -19,7 +19,7 @@ use crate::header::Header;
 use crate::instance::RubyInstance;
 use crate::language;
 use crate::realm::Files;
-use crate::snapshot::{self, Group, Member, Property, Signal};
+use crate::snapshot::{self, Heading, Member, Property, Signal};
 use crate::{bridge, error};
 
 /// The script a `.rb` file loads as, the way a `.gd` file loads as a `GDScript`.
@@ -379,17 +379,17 @@ fn signal_info(signal: &Signal) -> AnyDictionary {
 fn member_info(member: &Member) -> AnyDictionary {
     match member {
         Member::Property(property) => property_info(property),
-        Member::Group(group) => group_info(group),
+        Member::Heading(heading) => heading_info(heading),
     }
 }
 
 // A heading as Godot reads it: the name it is headed with, the prefix it
 // takes properties by, and the usage saying which kind of heading it is.
-fn group_info(group: &Group) -> AnyDictionary {
-    let mut info = named(group.name.as_str());
+fn heading_info(heading: &Heading) -> AnyDictionary {
+    let mut info = named(heading.name());
     info.set("type", VariantType::NIL.ord());
-    info.set("hint_string", group.hint_string.as_str());
-    info.set("usage", group.usage);
+    info.set("hint_string", heading.hint_string());
+    info.set("usage", heading.usage());
     info.upcast_any_dictionary()
 }
 

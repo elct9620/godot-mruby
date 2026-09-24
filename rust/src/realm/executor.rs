@@ -8,7 +8,7 @@ use std::ffi::{CStr, CString};
 use std::sync::Arc;
 
 use super::{bookkeeping, compile, file_defining, ran};
-use crate::snapshot::{Group, Member, Property, Signal};
+use crate::snapshot::{Heading, Member, Property, Signal};
 use beni::{Error, FromValue, Module, Mrb, RClass, ReprValue, Value};
 
 /// How far a file has run in a realm.
@@ -26,7 +26,7 @@ enum Run {
 pub(super) enum Declaration {
     Signal(Signal),
     Property(Property),
-    Group(Group),
+    Heading(Heading),
 }
 
 impl Declaration {
@@ -34,7 +34,7 @@ impl Declaration {
         match self {
             Self::Signal(signal) => &signal.name,
             Self::Property(property) => &property.name,
-            Self::Group(group) => &group.name,
+            Self::Heading(heading) => heading.name(),
         }
     }
 
@@ -43,7 +43,7 @@ impl Declaration {
         match self {
             Self::Signal(signal) => format!("a signal of ({})", signal.parameters.join(", ")),
             Self::Property(property) => format!("a property of {}", property.default_value()),
-            Self::Group(group) => format!("a heading named {}", group.name),
+            Self::Heading(heading) => format!("a heading named {}", heading.name()),
         }
     }
 }
@@ -53,7 +53,7 @@ impl PartialEq for Declaration {
         match (self, other) {
             (Self::Signal(one), Self::Signal(other)) => one == other,
             (Self::Property(one), Self::Property(other)) => one == other,
-            (Self::Group(one), Self::Group(other)) => one == other,
+            (Self::Heading(one), Self::Heading(other)) => one == other,
             _ => false,
         }
     }
@@ -204,12 +204,12 @@ fn ancestor_declaring(mrb: &Mrb, class: RClass, name: &str) -> Option<String> {
     }
 }
 
-/// Records the heading `group` written by the file running now, which names
+/// Records `heading`, written by the file running now, which names
 /// no member of the class, so it is written as often as the class writes
 /// one. A heading written while no file runs belongs to no class.
-pub(super) fn heading(mrb: &Mrb, group: Group) {
+pub(super) fn declare_heading(mrb: &Mrb, heading: Heading) {
     if let Some(frame) = runs(mrb).frames.borrow_mut().last_mut() {
-        frame.declared.push(Declaration::Group(group));
+        frame.declared.push(Declaration::Heading(heading));
     }
 }
 
@@ -265,7 +265,7 @@ fn split(declared: Vec<Declaration>) -> (Vec<Signal>, Vec<Member>) {
         match one {
             Declaration::Signal(signal) => signals.push(signal),
             Declaration::Property(property) => members.push(Member::Property(property)),
-            Declaration::Group(group) => members.push(Member::Group(group)),
+            Declaration::Heading(heading) => members.push(Member::Heading(heading)),
         }
     }
     (signals, members)
