@@ -73,4 +73,34 @@ class FramesTest < Minitest::Test
   def test_wait_until_without_a_block_raises_argument_error
     assert_raises(ArgumentError) { wait_until(0.1) }
   end
+
+  # @behavior RW-013
+  def test_wait_for_signal_answers_true_once_the_signal_is_emitted
+    delta = test_root.get_physics_process_delta_time
+    before = Godot::Engine.get_physics_frames
+    timer = Godot::Engine.get_main_loop.create_timer(0.05)
+
+    answer = wait_for_signal(Godot::Signal.new(timer, :timeout), 1)
+
+    assert_equal true, answer
+    assert_operator (Godot::Engine.get_physics_frames - before) * delta, :<, 1
+  end
+
+  # @behavior RW-014
+  def test_wait_for_signal_answers_false_once_max_time_passes_without_the_signal
+    node = autofree(Godot::Node.new)
+
+    assert_equal false, wait_for_signal(Godot::Signal.new(node, :renamed), 0.05)
+  end
+
+  # @behavior RW-015
+  def test_wait_for_signal_leaves_the_signal_with_the_connections_it_had
+    node = autofree(Godot::Node.new)
+    renamed = Godot::Signal.new(node, :renamed)
+    connections = renamed.get_connections
+
+    wait_for_signal(renamed, 0.05)
+
+    assert_equal connections, renamed.get_connections
+  end
 end

@@ -54,7 +54,29 @@ module Minitest
       end
     end
 
+    def wait_for_signal(signal, max_time)
+      emitted = false
+      connection = connect_block(signal) { emitted = true }
+      wait_until(max_time) { emitted }
+    ensure
+      # A signal whose object was freed meanwhile went with its connections.
+      signal.disconnect(connection) if connection && signal.get_object
+    end
+
     private
+
+    # Connects the block to `signal`, answering the engine's Callable for the
+    # connection: a Proc becomes a new Callable each time it reaches the
+    # engine, so only the one the engine holds disconnects it.
+    def connect_block(signal, &block)
+      held = connected_callables(signal)
+      signal.connect(block)
+      connected_callables(signal).find { |callable| !held.include?(callable) }
+    end
+
+    def connected_callables(signal)
+      signal.get_connections.map { |connection| connection["callable"] }
+    end
 
     # A test that waited into a physics frame leaves the next one there, so
     # each test begins where a process frame begins, as the first one does.

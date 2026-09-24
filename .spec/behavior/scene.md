@@ -70,6 +70,30 @@ How a test reaches the scene a game runs in: the runner resumes the run once per
 | When | the test calls `wait_until` with no block |
 | Then | it raises `ArgumentError` |
 
+## `RW-013` `wait_for_signal` answers true once the signal is emitted
+
+| Step | Statement |
+| --- | --- |
+| Given | a timer that times out after 0.05 seconds |
+| When | the test waits for its `timeout` signal with a `max_time` of 1 second |
+| Then | the wait answers `true` before 1 second of physics time has passed |
+
+## `RW-014` `wait_for_signal` answers false once `max_time` passes without the signal
+
+| Step | Statement |
+| --- | --- |
+| Given | a node that is never renamed |
+| When | the test waits for its `renamed` signal with a `max_time` of 0.05 seconds |
+| Then | the wait answers `false` |
+
+## `RW-015` `wait_for_signal` leaves the signal with the connections it had
+
+| Step | Statement |
+| --- | --- |
+| Given | a signal and the connections it has |
+| When | a wait for the signal has returned |
+| Then | the signal has the same connections |
+
 ## `RW-002` A node added with `add_child_autofree` goes under the test root
 
 | Step | Statement |

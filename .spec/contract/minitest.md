@@ -659,6 +659,19 @@ module Minitest
 end
 ```
 
+## `Minitest::Waits#wait_for_signal`
+
+Waits until `signal` is emitted or `max_time` seconds have passed, as `wait_until` waits, and answers whether it was emitted in time. What it connected to the signal is disconnected before it returns, unless the signal's object was freed meanwhile and took its connections with it.
+
+```ruby
+module Minitest
+  module Waits
+    def wait_for_signal(signal, max_time)
+    end
+  end
+end
+```
+
 ## `Minitest::TestRoot`
 
 A test's way into the scene, as GUT names it: each test is given a test root, and what the test adds under it or gives to `autofree` is freed after its teardown, a node the test freed itself left alone. Every test class includes it.
