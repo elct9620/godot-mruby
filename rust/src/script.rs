@@ -13,7 +13,7 @@ use godot::prelude::*;
 use godot::register::info::PropertyUsageFlags;
 use godot::sys::{self, GodotFfi};
 
-use crate::ancestry::{self, Ancestry, Broken};
+use crate::ancestry::{self, Ancestry, Broken, Lineage};
 use crate::game::GameFiles;
 use crate::header::Header;
 use crate::instance::RubyInstance;
@@ -60,24 +60,10 @@ impl RubyScript {
         })
     }
 
-    // The files the class takes its shape from, each with the header read
-    // from its source: its own, then the ones it inherits from, nearest
-    // first, since a declaration is inherited.
-    fn declaring(&self) -> Vec<(String, &Header)> {
-        let mut files = vec![(self.base().get_path().to_string(), self.header.as_ref())];
-        if let Ok(ancestry) = self.ancestry() {
-            files.extend(
-                ancestry
-                    .files()
-                    .iter()
-                    .map(|(path, header)| (path.clone(), header)),
-            );
-        }
-        files
-    }
-
-    fn declaring_files(&self) -> Vec<String> {
-        self.declaring().into_iter().map(|(path, _)| path).collect()
+    fn lineage(&self) -> Lineage<'_> {
+        let path = self.base().get_path().to_string();
+        let ancestry = self.ancestry().as_ref().ok().map(Arc::as_ref);
+        Lineage::new(path, &self.header, ancestry)
     }
 
     // The signals the class has, its ancestors' included, nearest first:
@@ -86,9 +72,9 @@ impl RubyScript {
     fn signals(&self) -> Vec<Signal> {
         let snapshot = snapshot::latest();
         let mut signals: Vec<Signal> = Vec::new();
-        for (path, header) in self.declaring() {
-            let declared = if snapshot.has_run(&path) {
-                snapshot.signals(&path)
+        for (path, header) in self.lineage().files() {
+            let declared = if snapshot.has_run(path) {
+                snapshot.signals(path)
             } else {
                 header.signals()
             };
@@ -105,22 +91,14 @@ impl RubyScript {
     // first: what each file declared as it ran, or what its header writes
     // while it has not run.
     fn properties(&self) -> Vec<Property> {
-        let files = self.declaring();
-        let exported = files
-            .iter()
-            .map(|(path, header)| (path.as_str(), header.exports()));
-        snapshot::latest().properties_of(exported)
+        self.lineage().properties(&snapshot::latest())
     }
 
     // What the class declared for the editor, its ancestors' included and
     // in the order each class wrote it; a file that has not run has the
     // properties its header writes and no heading.
     fn members(&self) -> Vec<Member> {
-        let files = self.declaring();
-        let exported = files
-            .iter()
-            .map(|(path, header)| (path.as_str(), header.exports()));
-        snapshot::latest().members_of(exported)
+        self.lineage().members(&snapshot::latest())
     }
 
     // The property of that name the class exported, if it exported one.
@@ -298,17 +276,8 @@ impl IScriptExtension for RubyScript {
     }
 
     fn has_method(&self, method: StringName) -> bool {
-        let method = method.to_string();
-        let snapshot = snapshot::latest();
-        self.header.has_method(&method)
-            || self
-                .ancestry()
-                .as_ref()
-                .is_ok_and(|ancestry| ancestry.has_method(&method))
-            || self
-                .declaring_files()
-                .iter()
-                .any(|path| snapshot.has_method(path, &method))
+        self.lineage()
+            .has_method(&snapshot::latest(), &method.to_string())
     }
 
     fn has_static_method(&self, _method: StringName) -> bool {

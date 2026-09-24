@@ -6,6 +6,7 @@ use std::fmt;
 
 use crate::header::Header;
 use crate::realm::{self, Files};
+use crate::snapshot::{Member, Property, Snapshot};
 
 /// The files a class inherits from, nearest first, and the engine class the
 /// farthest of them extends.
@@ -25,15 +26,62 @@ impl Ancestry {
     pub fn engine_class(&self) -> &str {
         &self.engine_class
     }
+}
 
-    /// The paths of the files the class inherits from, nearest first.
-    pub fn paths(&self) -> impl Iterator<Item = &str> {
-        self.files.iter().map(|(path, _)| path.as_str())
+/// The files a class takes its shape from, each with its header: its own,
+/// then the ones it inherits from, nearest first, since a declaration is
+/// inherited. A file whose ancestry broke takes its shape from itself alone.
+pub struct Lineage<'a> {
+    path: String,
+    header: &'a Header,
+    inherited: &'a [(String, Header)],
+}
+
+impl<'a> Lineage<'a> {
+    /// The lineage of the class of the file at `path`, read as `header`,
+    /// whose ancestry is `ancestry` when it has one.
+    pub fn new(path: String, header: &'a Header, ancestry: Option<&'a Ancestry>) -> Self {
+        Self {
+            path,
+            header,
+            inherited: ancestry.map_or(&[], |ancestry| ancestry.files.as_slice()),
+        }
     }
 
-    /// Whether a file the class inherits from defines the method `name`.
-    pub fn has_method(&self, name: &str) -> bool {
-        self.files.iter().any(|(_, header)| header.has_method(name))
+    /// Each file by path, with its header.
+    pub fn files(&self) -> impl Iterator<Item = (&str, &'a Header)> {
+        std::iter::once((self.path.as_str(), self.header)).chain(
+            self.inherited
+                .iter()
+                .map(|(path, header)| (path.as_str(), header)),
+        )
+    }
+
+    /// The properties the class exported, its ancestors' included, nearest
+    /// first: what each file declared as it ran, or what its header writes
+    /// while it has not run.
+    pub fn properties(&self, snapshot: &Snapshot) -> Vec<Property> {
+        snapshot.properties_of(self.exports())
+    }
+
+    /// What the class declared for the editor, its ancestors' included and in
+    /// the order each class wrote it; a file that has not run has the
+    /// properties its header writes and no heading.
+    pub fn members(&self, snapshot: &Snapshot) -> Vec<Member> {
+        snapshot.members_of(self.exports())
+    }
+
+    // Each file by path, with what its header exports, which answers for the
+    // file while it has not run.
+    fn exports(&self) -> impl Iterator<Item = (&str, &'a [Property])> {
+        self.files().map(|(path, header)| (path, header.exports()))
+    }
+
+    /// Whether a file of the lineage defines the method `name`, as its source
+    /// writes it or as its class defined it while it ran.
+    pub fn has_method(&self, snapshot: &Snapshot, name: &str) -> bool {
+        self.files()
+            .any(|(path, header)| header.has_method(name) || snapshot.has_method(path, name))
     }
 }
 

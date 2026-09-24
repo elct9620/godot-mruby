@@ -17,7 +17,7 @@ use godot::prelude::*;
 use godot::register::info::{PropertyHint, PropertyUsageFlags};
 use godot::sys;
 
-use crate::ancestry::Ancestry;
+use crate::ancestry::{Ancestry, Lineage};
 use crate::bridge::{self, Owner, ToEngine, ToRuby};
 use crate::error;
 use crate::header::Header;
@@ -131,28 +131,26 @@ impl RubyInstance {
     // Whether the node's class defines `method` or inherits it from a file,
     // whether its source writes it or its class defined it as it ran.
     fn has(&self, method: &str) -> bool {
-        let snapshot = snapshot::latest();
-        self.header.has_method(method)
-            || self.ancestry.has_method(method)
-            || snapshot.has_method(&self.path, method)
-            || self
-                .ancestry
-                .paths()
-                .any(|path| snapshot.has_method(path, method))
+        self.lineage().has_method(&snapshot::latest(), method)
+    }
+
+    fn lineage(&self) -> Lineage<'_> {
+        Lineage::new(self.path.clone(), &self.header, Some(&self.ancestry))
     }
 
     // What the node's class declared for the editor, its ancestors' included
     // and in the order each class wrote it; a file that has not run has the
     // properties its header writes and no heading.
     fn members(&self) -> Vec<Member> {
-        snapshot::latest().members_of(exports_of(&self.path, &self.header, &self.ancestry))
+        self.lineage().members(&snapshot::latest())
     }
 
     // The methods the node's class has, its ancestors' included: the ones
     // their sources define and the ones their classes defined as they ran.
     fn methods(&self) -> BTreeSet<String> {
         let snapshot = snapshot::latest();
-        declaring(&self.path, &self.header, &self.ancestry)
+        self.lineage()
+            .files()
             .flat_map(|(path, header)| {
                 header
                     .methods()
@@ -165,7 +163,8 @@ impl RubyInstance {
     // The property of that name the node's class exported, from the nearest
     // class exporting one.
     fn property(&self, name: &str) -> Option<Property> {
-        properties_of(&self.path, &self.header, &self.ancestry)
+        self.lineage()
+            .properties(&snapshot::latest())
             .into_iter()
             .find(|property| property.name == name)
     }
@@ -309,7 +308,8 @@ impl Caller {
         if staged.is_empty() {
             return;
         }
-        let properties = properties_of(&self.path, &self.header, &self.ancestry);
+        let lineage = Lineage::new(self.path.clone(), &self.header, Some(&self.ancestry));
+        let properties = lineage.properties(&snapshot::latest());
         for (name, value) in staged {
             let exported = properties.iter().any(|property| property.name == name);
             write(key, &name, exported, &value);
@@ -338,38 +338,6 @@ impl Caller {
                 Variant::nil()
             })
     }
-}
-
-// The properties the class of the file at `path` exported, its ancestors'
-// included, nearest first.
-fn properties_of(path: &str, header: &Header, ancestry: &Ancestry) -> Vec<Property> {
-    snapshot::latest().properties_of(exports_of(path, header, ancestry))
-}
-
-// The files the class of the file at `path` takes its shape from, each with
-// the header read from its source: its own, then the ones it inherits from,
-// nearest first.
-fn declaring<'a>(
-    path: &'a str,
-    header: &'a Header,
-    ancestry: &'a Ancestry,
-) -> impl Iterator<Item = (&'a str, &'a Header)> {
-    std::iter::once((path, header)).chain(
-        ancestry
-            .files()
-            .iter()
-            .map(|(path, header)| (path.as_str(), header)),
-    )
-}
-
-// Each of those files with what its header exports, which answers for it
-// while it has not run.
-fn exports_of<'a>(
-    path: &'a str,
-    header: &'a Header,
-    ancestry: &'a Ancestry,
-) -> impl Iterator<Item = (&'a str, &'a [Property])> {
-    declaring(path, header, ancestry).map(|(path, header)| (path, header.exports()))
 }
 
 // Writes `value` to the property `name` of the object `key` holds: through
