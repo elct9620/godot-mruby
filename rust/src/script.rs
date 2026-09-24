@@ -14,7 +14,7 @@ use godot::register::info::PropertyUsageFlags;
 use godot::sys::{self, GodotFfi};
 
 use crate::ancestry::{self, Ancestry, Broken, Cache, Lineage};
-use crate::game::GameFiles;
+use crate::game::{FilesOnDisk, GameFiles};
 use crate::header::Header;
 use crate::instance::RubyInstance;
 use crate::language;
@@ -52,6 +52,18 @@ impl RubyScript {
             ancestry: Cache::default(),
             source,
         })
+    }
+
+    /// Takes the source its file holds now and reloads, as a GDScript reads
+    /// its file again when the running game is told it changed. A file that
+    /// cannot be read leaves the script as it was.
+    pub fn reload_from_disk(mut script: Gd<Self>) {
+        let path = script.get_path().to_string();
+        let Ok(source) = FilesOnDisk.source(&path) else {
+            return;
+        };
+        script.set_source_code(&source);
+        script.reload();
     }
 
     fn ancestry(&self) -> Result<Arc<Ancestry>, Broken> {

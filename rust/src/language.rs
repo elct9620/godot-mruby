@@ -3,15 +3,17 @@ use std::ffi::c_void;
 use std::sync::{Mutex, PoisonError};
 
 use godot::classes::native::ScriptLanguageExtensionProfilingInfo;
-use godot::classes::{Engine, IScriptLanguageExtension, Object, Script, ScriptLanguageExtension};
+use godot::classes::{
+    Engine, IScriptLanguageExtension, Object, ResourceLoader, Script, ScriptLanguageExtension,
+};
 use godot::global::Error;
 use godot::meta::conv::RawPtr;
 use godot::prelude::*;
 
 use crate::announcement::{self, Clashes, Project, Unannounced};
 use crate::compiler::CompileError;
-use crate::game::FilesOnDisk;
-use crate::realm::Location;
+use crate::game::{FilesOnDisk, GameFiles};
+use crate::realm::{Files, Location};
 use crate::script::RubyScript;
 use crate::validation::{self, Warning};
 use crate::{bridge, settings, warn};
@@ -318,9 +320,31 @@ impl IScriptLanguageExtension for RubyLanguage {
         })
     }
 
-    fn reload_all_scripts(&mut self) {}
+    // What the debugger asks of a running game when the editor cannot say
+    // which scripts changed: every Ruby script Godot holds reads its file
+    // again, as a GDScript does.
+    fn reload_all_scripts(&mut self) {
+        let loader = ResourceLoader::singleton();
+        for path in GameFiles.paths() {
+            if let Some(script) = loader
+                .get_cached_ref(&path)
+                .and_then(|resource| resource.try_cast::<RubyScript>().ok())
+            {
+                RubyScript::reload_from_disk(script);
+            }
+        }
+    }
 
-    fn reload_scripts(&mut self, _scripts: VarArray, _soft_reload: bool) {}
+    // What the debugger asks of a running game when the editor saves
+    // scripts: each Ruby one reads its file again, as a GDScript does. The
+    // objects a file made keep their state however soft the reload.
+    fn reload_scripts(&mut self, scripts: VarArray, _soft_reload: bool) {
+        for script in scripts.iter_shared() {
+            if let Ok(script) = script.try_to::<Gd<RubyScript>>() {
+                RubyScript::reload_from_disk(script);
+            }
+        }
+    }
 
     fn reload_tool_script(&mut self, _script: Option<Gd<Script>>, _soft_reload: bool) {}
 
