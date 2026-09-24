@@ -49,6 +49,7 @@ sumi fmt                                 # write .spec/ in sumi's form (--check 
 - `godot/.godot/extension_list.cfg` is committed so Godot loads the addon at startup; an editor that first discovers it and quits at once crashes (godotengine/godot#111048).
 - Library file names are shared by `godot_mruby.gdextension` and `tasks/support/extension.rb`; change both together.
 - A scenario is claimed where its outcome is observed: a Ruby test under `godot/test/unit/<spec>/` or, playing the game, `godot/test/e2e/`; or, when only a log or a run's outcome shows it, a check in `tasks/support/<spec>` reading `godot/integration/<spec>/`; or, when only the extension's own code reaches it, a Rust test beside that code; a fixture claims nothing.
+- Name Rust and Ruby code as `docs/architecture.md` 1.5 lays out; a name joins the rule its module follows.
 - Put task logic in `tasks/support/` (the only Ruby RuboCop checks) and keep `.rake` files as thin glue.
 - beni skips `beni:build` while an archive exists, so a config change needs `beni:clean` first.
 - Hooks format on edit and gate lint/tests at stop; formatting is settled before commit, not at stop.

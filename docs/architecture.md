@@ -84,6 +84,20 @@ godot/
 
 The extension is tested through itself, and `godot/` is sorted by who judges an outcome, then by the `.spec/behavior` file it claims. The extension's own runner judges `test/unit/<spec>/`, whose files loaded by name sit beside their tests, and `test/e2e/`, which plays the game in `src/` and claims what its node scripts do. `godot:verify` judges `integration/<spec>/`, for what no Ruby test can observe: a log line, a run's exit, the editor, an exported game. Its checks are named after the same spec, and GDScript stays only where a check must ask from outside the realm. What only the extension's own code reaches, such as a header, an ancestry or a realm entry, is judged by `cargo test` beside that code in `rust/src/`.
 
+### 1.5 Naming
+
+| What it is | Its name | As in |
+| --- | --- | --- |
+| A module or a type | a noun | `Snapshot` |
+| A kind of a type | an adjective and a noun, or a noun | `Heading::Category` |
+| What answers a thing and changes nothing | the thing's noun | `signals`, `superclass_of` |
+| What finds a thing by a key | the noun, `_by_` and the key | `file_by_name` |
+| A question | `is_` or `has_`; in Ruby, `?` | `is_hidden`, `has_run` |
+| A new value or a conversion | `new`, `try_new`, `with_`, `from_`, `into_` | `with_hint` |
+| What acts | a verb first, a state after it if any | `publish`, `release_queued` |
+
+A word ending in `-ing` is a name only where the dictionary lists it as a noun, as `heading` is. A name another side fixes is kept as it is: Godot's virtuals, Ruby's hooks such as `const_added`, Minitest's `passed?`. A Rust function standing behind a Ruby method `__name__` is named `name`.
+
 ## 2. Extension
 
 ### 2.1 Components
