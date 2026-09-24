@@ -10,6 +10,9 @@ module Godot
     RUNNER_FRAMES = "600"
     TESTS = "res://test"
     PASSED = /^(\d+) runs, \d+ assertions, 0 failures, 0 errors, \d+ skips$/
+    # What Godot warns at exit, in 4.6's wording and 4.7's alike, of an object
+    # nothing freed, such as a node a test made and never freed.
+    LEAKED = "leaked at exit"
     RUNNER_TESTS = "res://integration/runner"
     # Runs that have to pass, each with the runner's options and the summary it
     # has to end on: a directory whose one test passes and the other skips,
@@ -38,13 +41,13 @@ module Godot
     end
 
     # Runs the project's Ruby tests and requires a pass that ran at least one,
-    # since a run that finds nothing passes too.
+    # since a run that finds nothing passes too, and that leaked nothing.
     # @behavior RT-001
     def verify_pass!(project)
       output, status = run(project, "--dir", TESTS)
-      return if status.success? && output[PASSED, 1].to_i.positive?
+      return if status.success? && output[PASSED, 1].to_i.positive? && !output.include?(LEAKED)
 
-      raise "The Ruby tests under #{TESTS} did not pass:\n#{output}"
+      raise "The Ruby tests under #{TESTS} did not pass, or leaked what they made:\n#{output}"
     end
 
     # Makes each run that has to pass and requires the summary it has to end
