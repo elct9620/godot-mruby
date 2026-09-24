@@ -234,7 +234,7 @@ the editor's class list, saved for exported games
 
 A node script is listed like a GDScript's `class_name`. The list is flat, as it is for C#, so a name drops its namespaces, and node scripts sharing one are none of them listed; the scan order never picks one.
 
-Godot asks every language for its stack as it prints, so the language never prints while it answers: it reads the files from disk, as GDScript does, since a load that fails prints, and writes the warning by a deferred call. The rules are in `.spec/behavior/announcement.md`, and what the editor shows in `.spec/behavior/script.md`.
+Godot asks every language for its stack as it prints, so the language never prints while it answers: it reads the files from disk, as GDScript does, since a load that fails prints, and writes the warning by a deferred call, once while the clash lasts, since the editor scans again and again. The rules are in `.spec/behavior/announcement.md`, and what the editor shows in `.spec/behavior/script.md`.
 
 ### 2.6 Bridge
 

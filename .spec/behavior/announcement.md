@@ -85,3 +85,11 @@ How a node script is announced to the editor, which lists it as a class like a G
 | Given | a node script whose class body calls `icon` with a path |
 | When | it is announced |
 | Then | the announcement carries that path |
+
+## `RN-011` A name clash that came back is warned of again
+
+| Step | Statement |
+| --- | --- |
+| Given | node scripts whose shared name was warned of, and one of them since announced |
+| When | the same files share the name again |
+| Then | the clash is warned of again |

@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::ffi::c_void;
-use std::sync::Mutex;
+use std::sync::{Mutex, PoisonError};
 
 use godot::classes::native::ScriptLanguageExtensionProfilingInfo;
 use godot::classes::{Engine, IScriptLanguageExtension, Object, Script, ScriptLanguageExtension};
@@ -8,7 +8,7 @@ use godot::global::Error;
 use godot::meta::conv::RawPtr;
 use godot::prelude::*;
 
-use crate::announcement::{self, Project, Unannounced};
+use crate::announcement::{self, Clashes, Project, Unannounced};
 use crate::compiler::CompileError;
 use crate::game::FilesOnDisk;
 use crate::realm::Location;
@@ -28,6 +28,7 @@ pub struct RubyLanguage {
 }
 
 static REGISTERED: Mutex<Option<InstanceId>> = Mutex::new(None);
+static CLASHES: Mutex<Clashes> = Mutex::new(Clashes::new());
 
 thread_local! {
     // What the language answers as this thread's stack. It holds no Godot
@@ -372,7 +373,13 @@ impl IScriptLanguageExtension for RubyLanguage {
     fn get_global_class_name(&self, path: GString) -> AnyDictionary {
         let test_directories = settings::test_directories();
         let project = Project::new(&FilesOnDisk, &test_directories, &bridge::is_node_class);
-        match project.announce(&path.to_string()) {
+        let file = path.to_string();
+        let announced = project.announce(&file);
+        let mut clashes = CLASHES.lock().unwrap_or_else(PoisonError::into_inner);
+        if !matches!(announced, Err(Unannounced::SharedName { .. })) {
+            clashes.forget(&file);
+        }
+        match announced {
             Ok(announcement) => vdict! {
                 "name" => announcement.name,
                 "base_type" => announcement.base,
@@ -385,8 +392,12 @@ impl IScriptLanguageExtension for RubyLanguage {
                 "is_tool" => announcement.is_tool,
             }
             .upcast_any_dictionary(),
-            Err(Unannounced::SharedName { name, others }) => {
-                warn_of_shared_name(path.to_string(), name, others);
+            Err(Unannounced::SharedName { name, mut others }) => {
+                others.push(file);
+                others.sort();
+                if clashes.note(&name, &others) {
+                    warn_of_shared_name(name, others);
+                }
                 empty_dictionary()
             }
             Err(_) => empty_dictionary(),
@@ -427,16 +438,19 @@ fn icon_path(script: &GString, icon: &str) -> GString {
     }
 }
 
-// Written once the language is no longer in a call: Godot asks the language
-// for its stack as it prints a warning, which cannot happen while it answers.
-fn warn_of_shared_name(path: String, name: String, others: Vec<String>) {
+// Warns that the node scripts in `files`, in order, share `name`, at the
+// first of them. Written once the language is no longer in a call: Godot asks
+// the language for its stack as it prints a warning, which cannot happen
+// while it answers.
+fn warn_of_shared_name(name: String, files: Vec<String>) {
     Callable::from_sync_fn("warn_of_shared_name", move |_| {
         let at = Location {
-            file: path.clone(),
+            file: files[0].clone(),
             line: 1,
             function: String::new(),
         };
-        warn!(at: &at, "{}", announcement::shared_name_warning(&path, &name, &others));
+        let warning = announcement::shared_name_warning(&files[0], &name, &files[1..]);
+        warn!(at: &at, "{warning}");
     })
     .call_deferred(&[]);
 }

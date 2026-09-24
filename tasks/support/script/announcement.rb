@@ -81,11 +81,14 @@ module Godot
         raise "Node scripts other than the twins share a name #{shared}:\n#{output}"
       end
 
+      # The editor scans more than once and asks of both twins each time, so
+      # the warning is counted rather than looked for.
       # @behavior RS-026
       def verify_twins_warned!(output)
-        return if output.include?(TWINS_WARNING)
+        warned = output.lines.count { |line| line.include?(TWINS_WARNING) }
+        return if warned == 1
 
-        raise "The editor did not warn that the twins share a name:\n#{output}"
+        raise "The editor warned #{warned} times, not once, that the twins share a name:\n#{output}"
       end
     end
   end

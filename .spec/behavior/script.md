@@ -208,13 +208,13 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | When | the editor scans the project |
 | Then | the project's class list carries the class with the other class as base and the icon's path from the project root |
 
-## `RS-026` The editor warns of node scripts sharing a name
+## `RS-026` The editor warns once of node scripts sharing a name
 
 | Step | Statement |
 | --- | --- |
 | Given | two node scripts in different directories whose classes share a name |
-| When | the editor scans the project |
-| Then | the log carries a warning naming both files |
+| When | the editor scans the project, as often as it does |
+| Then | the log carries one warning naming both files |
 
 ## `RS-027` `p` answers what it is given
 

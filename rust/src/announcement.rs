@@ -2,6 +2,8 @@
 //! it lists a GDScript's `class_name`: read from headers and ancestries, so
 //! the editor scans a project without running any of it.
 
+use std::collections::BTreeSet;
+
 use crate::ancestry::{self, Ancestry};
 use crate::header::Header;
 use crate::realm::{self, Files};
@@ -113,6 +115,30 @@ impl<'a, F: Files> Project<'a, F> {
     }
 }
 
+/// The names node scripts share, each with the files sharing it, already
+/// warned of: the editor scans the project again and again and asks of every
+/// file, and each clash is warned of once while it lasts.
+pub struct Clashes(BTreeSet<(String, Vec<String>)>);
+
+impl Clashes {
+    pub const fn new() -> Self {
+        Self(BTreeSet::new())
+    }
+
+    /// Notes that the node scripts in `files` share `name`, answering whether
+    /// that is news.
+    pub fn note(&mut self, name: &str, files: &[String]) -> bool {
+        self.0.insert((name.to_owned(), files.to_vec()))
+    }
+
+    /// Forgets the clashes the file at `path` was in, once it is announced or
+    /// no node script: a clash coming back is news again.
+    pub fn forget(&mut self, path: &str) {
+        self.0
+            .retain(|(_, files)| !files.iter().any(|file| file == path));
+    }
+}
+
 /// The warning that node scripts in `others` share `name` with the file at
 /// `path`.
 pub fn shared_name_warning(path: &str, name: &str, others: &[String]) -> String {
@@ -130,7 +156,7 @@ fn file_name(path: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Announcement, Project, Unannounced};
+    use super::{Announcement, Clashes, Project, Unannounced};
     use crate::ancestry::tests::Sources;
 
     fn announce(
@@ -273,5 +299,18 @@ mod tests {
         let announcement = announce("res://enemy.rb", &sources).unwrap();
 
         assert_eq!(announcement.icon.as_deref(), Some("enemy.svg"));
+    }
+
+    // @behavior RN-011
+    #[test]
+    fn a_name_clash_that_came_back_is_warned_of_again() {
+        let files = ["res://a/twin.rb".to_owned(), "res://b/twin.rb".to_owned()];
+        let mut clashes = Clashes::new();
+        clashes.note("Twin", &files);
+        clashes.forget("res://a/twin.rb");
+
+        let is_news = clashes.note("Twin", &files);
+
+        assert!(is_news);
     }
 }
