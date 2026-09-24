@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::ffi::c_void;
+use std::ffi::{CString, c_void};
 use std::sync::Mutex;
 
 use godot::classes::native::ScriptLanguageExtensionProfilingInfo;
@@ -9,6 +9,7 @@ use godot::meta::conv::RawPtr;
 use godot::prelude::*;
 
 use crate::announcement::{Project, Unannounced};
+use crate::compiler::{self, CompileError, Warning};
 use crate::game::FilesOnDisk;
 use crate::realm::Location;
 use crate::script::RubyScript;
@@ -115,17 +116,36 @@ impl IScriptLanguageExtension for RubyLanguage {
         false
     }
 
-    // Sources are not checked, so each is reported valid.
+    // The editor asks as the source is typed. It is compiled and never run,
+    // and what the compiler says comes back as data: the language prints
+    // nothing while it answers.
     fn validate(
         &self,
-        _script: GString,
-        _path: GString,
+        script: GString,
+        path: GString,
         _validate_functions: bool,
         _validate_errors: bool,
         _validate_warnings: bool,
         _validate_safe_lines: bool,
     ) -> AnyDictionary {
-        vdict! { "valid" => true }.upcast_any_dictionary()
+        let name = CString::new(path.to_string()).unwrap_or_default();
+        let diagnostics = compiler::diagnostics(&name, &script.to_string());
+        let errors: VarArray = diagnostics
+            .error
+            .iter()
+            .map(|error| error_info(error, &path).to_variant())
+            .collect();
+        let warnings: VarArray = diagnostics
+            .warnings
+            .iter()
+            .map(|warning| warning_info(warning).to_variant())
+            .collect();
+        vdict! {
+            "valid" => diagnostics.error.is_none(),
+            "errors" => &errors,
+            "warnings" => &warnings,
+        }
+        .upcast_any_dictionary()
     }
 
     fn validate_path(&self, _path: GString) -> GString {
@@ -363,6 +383,28 @@ impl IScriptLanguageExtension for RubyLanguage {
             }
             Err(_) => empty_dictionary(),
         }
+    }
+}
+
+// An error as the script editor takes it: at the script's own path, or it is
+// shown as another file's.
+fn error_info(error: &CompileError, path: &GString) -> VarDictionary {
+    vdict! {
+        "path" => path,
+        "line" => error.line,
+        "column" => error.column,
+        "message" => error.message.as_str(),
+    }
+}
+
+// A warning as the script editor takes it, listed under its code.
+fn warning_info(warning: &Warning) -> VarDictionary {
+    vdict! {
+        "start_line" => warning.line,
+        "end_line" => warning.line,
+        "code" => 0,
+        "string_code" => "COMPILER",
+        "message" => warning.message.as_str(),
     }
 }
 
