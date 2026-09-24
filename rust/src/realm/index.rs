@@ -246,7 +246,7 @@ impl ClassIndex {
 /// names among `paths` named from `roots`, found as a realm's loader finds
 /// it: each name from the innermost namespace outward, and a name two files
 /// spell naming none.
-pub fn file_named(
+pub fn file_by_name(
     paths: Vec<String>,
     roots: Roots,
     scope: &[String],

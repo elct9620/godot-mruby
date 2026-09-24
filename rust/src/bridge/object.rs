@@ -92,7 +92,7 @@ fn make_node(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
         .as_ref()
         .and_then(|path| {
             let names: Vec<String> = path.split("::").map(str::to_owned).collect();
-            realm::file_defining(mrb, &names)
+            realm::file_by_constant(mrb, &names)
         })
         .and_then(|file| ResourceLoader::singleton().load(&file))
         .and_then(|resource| resource.try_cast::<Script>().ok())
@@ -331,7 +331,7 @@ fn declare_heading(mrb: &Mrb, _class: RClass, name: String, prefix: String, kind
 // value it is declared with is the class's own to hold, so a value of
 // another type is refused as GDScript refuses a mismatched one.
 fn typed(mrb: &Mrb, name: String, default: &Variant, class: &str) -> Result<Property, String> {
-    let (hint, class_name) = class_named(mrb, class)?;
+    let (hint, class_name) = hint_by_class(mrb, class)?;
     if let Some(given) = mismatched(mrb, default, class) {
         return Err(format!(
             "Cannot assign a value of type {given} to variable \"{name}\" with specified type {class_name}."
@@ -363,7 +363,7 @@ fn is_of_class(mrb: &Mrb, object: &Gd<Object>, class: &str) -> bool {
         return ClassDb::singleton().is_parent_class(&object_class, engine_class);
     }
     let names: Vec<String> = class.split("::").map(str::to_owned).collect();
-    let Some(file) = realm::file_defining(mrb, &names) else {
+    let Some(file) = realm::file_by_constant(mrb, &names) else {
         return false;
     };
     written_in(object).any(|path| path == file)
@@ -404,7 +404,7 @@ fn inferred(
                 .to_owned(),
         );
     }
-    let hint = hint_named(hint, default.get_type())?;
+    let hint = hint_by_name(hint, default.get_type())?;
     Ok(Property::new(name, default).hinted(hint, hint_string))
 }
 
@@ -413,7 +413,7 @@ fn inferred(
 // files and a node among the scene's, while a class of neither kind is no
 // type an export can take. A Ruby class is named by the announcement the
 // editor lists it under, so one no announcement names is out of reach.
-fn class_named(mrb: &Mrb, class: &str) -> Result<(PropertyHint, String), String> {
+fn hint_by_class(mrb: &Mrb, class: &str) -> Result<(PropertyHint, String), String> {
     if let Some(engine_class) = class.strip_prefix("Godot::") {
         let class_db = ClassDb::singleton();
         if !class_db.class_exists(engine_class) {
@@ -436,7 +436,7 @@ fn class_named(mrb: &Mrb, class: &str) -> Result<(PropertyHint, String), String>
 // of the project defines it and nothing else is announced by that name.
 fn editor_name(mrb: &Mrb, class: &str) -> Option<String> {
     let names: Vec<String> = class.split("::").map(str::to_owned).collect();
-    editor_name_at(&realm::file_defining(mrb, &names)?)
+    editor_name_at(&realm::file_by_constant(mrb, &names)?)
 }
 
 // The name the editor lists the file at `path` under, if it is announced.
@@ -458,7 +458,7 @@ fn unnamed(class: &str) -> String {
 // read with it. Each one takes the types the `@export_*` annotation it
 // answers to takes, and a type none of them takes is refused in GDScript's
 // words. Ruby names the hint, so a name none of them spells is no hint.
-fn hint_named(name: &str, kind: VariantType) -> Result<PropertyHint, String> {
+fn hint_by_name(name: &str, kind: VariantType) -> Result<PropertyHint, String> {
     let (hint, takes): (PropertyHint, &[VariantType]) = match name {
         "range" => (PropertyHint::RANGE, &[VariantType::INT, VariantType::FLOAT]),
         "enum" => (
@@ -645,11 +645,11 @@ fn conversion(reason: &str) -> Option<(&str, String, String)> {
         .strip_prefix("parameter #")?
         .split_once(" -- cannot convert from ")?;
     let (from, to) = types.split_once(" to ")?;
-    Some((argument, type_named(from)?, type_named(to)?))
+    Some((argument, type_name_by_debug(from)?, type_name_by_debug(to)?))
 }
 
 // The name GDScript gives the variant type gdext debug-prints as `debug`.
-fn type_named(debug: &str) -> Option<String> {
+fn type_name_by_debug(debug: &str) -> Option<String> {
     (0..VariantType::MAX.ord)
         .map(<VariantType as EngineEnum>::from_ord)
         .find(|kind| format!("{kind:?}") == debug)

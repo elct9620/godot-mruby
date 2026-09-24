@@ -103,10 +103,10 @@ impl EngineValue {
 // that name for Ruby to hold.
 fn value_type_named(mrb: &Mrb, _class: Value, name: Symbol) -> bool {
     let name = name.name(mrb).unwrap_or_default();
-    kind_named(&name).is_some()
+    kind_by_name(&name).is_some()
 }
 
-fn kind_named(name: &str) -> Option<VariantType> {
+fn kind_by_name(name: &str) -> Option<VariantType> {
     value_types().find(|kind| type_name(*kind) == name)
 }
 
@@ -114,7 +114,7 @@ fn kind_named(name: &str) -> Option<VariantType> {
 fn kind_of(mrb: &Mrb, class: RClass) -> Result<VariantType, Error> {
     let path = class.path(mrb).unwrap_or_default();
     let name = path.strip_prefix("Godot::").unwrap_or(&path);
-    kind_named(name).ok_or_else(|| {
+    kind_by_name(name).ok_or_else(|| {
         let message = format!("{path} is no value type of the engine");
         match mrb.exc_get(c"TypeError") {
             Ok(type_error) => Error::new(mrb, type_error, &message),

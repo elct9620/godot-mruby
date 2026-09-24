@@ -96,7 +96,7 @@ A constant's name as the class index matches it against a path's segment: withou
 pub fn normalize(segment: &str) -> String {}
 ```
 
-## `file_named`
+## `file_by_name`
 
 The file a constant path written inside namespaces names, looked up among paths named from their root directories as the realm's loader looks it up: from the innermost namespace outward, with a name two files spell naming none. What reads files outside the realm finds the file the realm would run.
 
@@ -105,7 +105,7 @@ The file a constant path written inside namespaces names, looked up among paths 
 | internal | yes |
 
 ```rust
-pub fn file_named(paths: Vec<String>, roots: Roots, scope: &[String], names: &[String]) -> Option<String> {}
+pub fn file_by_name(paths: Vec<String>, roots: Roots, scope: &[String], names: &[String]) -> Option<String> {}
 ```
 
 ## `inside`
@@ -156,7 +156,7 @@ The Ruby object a key holds in the realm an extension's method runs in, if it ho
 pub fn held(mrb: &Mrb, key: Key) -> Option<Value> {}
 ```
 
-## `file_defining`
+## `file_by_constant`
 
 The file the class index of the realm an extension's method runs in names for a constant path, written from `Object`.
 
@@ -165,7 +165,7 @@ The file the class index of the realm an extension's method runs in names for a 
 | internal | yes |
 
 ```rust
-pub fn file_defining(mrb: &Mrb, names: &[String]) -> Option<String> {}
+pub fn file_by_constant(mrb: &Mrb, names: &[String]) -> Option<String> {}
 ```
 
 ## `declare_signal`

@@ -18,7 +18,7 @@ mod registry;
 
 use executor::Declaration;
 use index::ClassIndex;
-pub use index::{Roots, file_named, normalize};
+pub use index::{Roots, file_by_name, normalize};
 use reentrant::ReentrantLock;
 pub use registry::Key;
 use registry::Registry;
@@ -369,7 +369,7 @@ pub fn held(mrb: &Mrb, key: Key) -> Option<Value> {
 
 /// The file the class index of the realm `mrb` belongs to names for the
 /// constant `names` spells from Object.
-pub fn file_defining(mrb: &Mrb, names: &[String]) -> Option<String> {
+pub fn file_by_constant(mrb: &Mrb, names: &[String]) -> Option<String> {
     let key: Vec<String> = names.iter().map(|name| normalize(name)).collect();
     match bookkeeping(mrb).index.borrow().entry(&key)? {
         index::Entry::File(path) => Some(path),

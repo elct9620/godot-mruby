@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
 
-use super::{bookkeeping, compile, file_defining, ran};
+use super::{bookkeeping, compile, file_by_constant, ran};
 use crate::snapshot::{Heading, Member, Property, Signal};
 use beni::{Error, FromValue, Module, Mrb, RClass, ReprValue, Value};
 
@@ -145,7 +145,7 @@ pub(super) fn record(mrb: &Mrb, scope: Vec<String>, name: String) {
 /// ancestor declared is the ancestor's, refused in GDScript's own words so
 /// that the same mistake reads the same in both languages.
 pub(super) fn declare(mrb: &Mrb, class: RClass, declared: Declaration) -> Result<(), Error> {
-    if let Some(ancestor) = ancestor_declaring(mrb, class, declared.name()) {
+    if let Some(ancestor) = ancestor_by_member(mrb, class, declared.name()) {
         return Err(raising(
             mrb,
             c"ArgumentError",
@@ -184,7 +184,7 @@ pub(super) fn declare(mrb: &Mrb, class: RClass, declared: Declaration) -> Result
 // superclass names a file, and what that file declared is published once it
 // has run; the engine's own members are asked of the engine instead, so the
 // walk stops at the engine class.
-fn ancestor_declaring(mrb: &Mrb, class: RClass, name: &str) -> Option<String> {
+fn ancestor_by_member(mrb: &Mrb, class: RClass, name: &str) -> Option<String> {
     let snapshot = Arc::clone(&bookkeeping(mrb).snapshot.borrow());
     let mut current = class.as_value();
     loop {
@@ -194,7 +194,7 @@ fn ancestor_declaring(mrb: &Mrb, class: RClass, name: &str) -> Option<String> {
             return None;
         }
         let names: Vec<String> = path.split("::").map(str::to_owned).collect();
-        let declared = file_defining(mrb, &names).is_some_and(|file| {
+        let declared = file_by_constant(mrb, &names).is_some_and(|file| {
             snapshot.signals(&file).iter().any(|it| it.name == name)
                 || snapshot.properties(&file).any(|it| it.name == name)
         });

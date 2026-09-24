@@ -212,7 +212,7 @@ fn ensure_namespaces(mrb: &Mrb, path: &str) -> Result<(), Error> {
 /// class index matches it.
 pub(super) fn constant_at(mrb: &Mrb, key: &[String]) -> Option<Value> {
     key.iter().try_fold(object(mrb), |scope, segment| {
-        constant_matching(mrb, scope, segment)
+        constant_by_segment(mrb, scope, segment)
     })
 }
 
@@ -222,7 +222,7 @@ fn object(mrb: &Mrb) -> Value {
 
 // The constant `scope` holds whose name the class index matches to
 // `segment`.
-fn constant_matching(mrb: &Mrb, scope: Value, segment: &str) -> Option<Value> {
+fn constant_by_segment(mrb: &Mrb, scope: Value, segment: &str) -> Option<Value> {
     let constants = scope
         .funcall(mrb, c"constants", &[])
         .and_then(|constants| constants.ensure_array(mrb))

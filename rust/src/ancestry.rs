@@ -134,7 +134,7 @@ pub fn read(path: &str, header: &Header, files: &impl Files) -> Result<Ancestry,
                 engine_class: engine_class.clone(),
             });
         }
-        let file = realm::file_named(
+        let file = realm::file_by_name(
             paths.clone(),
             roots.clone(),
             written.scope(),
