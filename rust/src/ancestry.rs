@@ -3,6 +3,8 @@
 //! through other files is known as a node script before it runs.
 
 use std::fmt;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use crate::header::Header;
 use crate::realm::{self, Files};
@@ -28,30 +30,75 @@ impl Ancestry {
     }
 }
 
+// How many times a source has changed. An ancestry is read from the sources
+// of the files a class inherits from, so any change may change it.
+static CHANGES: AtomicU64 = AtomicU64::new(0);
+
+/// Lets go of every ancestry kept so far, since a source changed.
+pub fn expire() {
+    CHANGES.fetch_add(1, Ordering::AcqRel);
+}
+
+/// An ancestry kept from the first question that needs it until a source
+/// changes.
+#[derive(Default)]
+pub struct Cache(Mutex<Option<Kept>>);
+
+// An ancestry as read, and how many changes there had been when it was read.
+type Kept = (u64, Result<Arc<Ancestry>, Broken>);
+
+impl Cache {
+    /// The ancestry kept, or what `read` answers when none is kept since the
+    /// last change. It reads outside the lock, so a source changing while it
+    /// reads leaves what it read to be read again.
+    pub fn ancestry(
+        &self,
+        read: impl FnOnce() -> Result<Ancestry, Broken>,
+    ) -> Result<Arc<Ancestry>, Broken> {
+        let changes = CHANGES.load(Ordering::Acquire);
+        if let Some((kept_at, ancestry)) = &*self.kept()
+            && *kept_at == changes
+        {
+            return ancestry.clone();
+        }
+        let ancestry = read().map(Arc::new);
+        *self.kept() = Some((changes, ancestry.clone()));
+        ancestry
+    }
+
+    fn kept(&self) -> MutexGuard<'_, Option<Kept>> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+}
+
 /// The files a class takes its shape from, each with its header: its own,
 /// then the ones it inherits from, nearest first, since a declaration is
 /// inherited. A file whose ancestry broke takes its shape from itself alone.
 pub struct Lineage<'a> {
     path: String,
     header: &'a Header,
-    inherited: &'a [(String, Header)],
+    ancestry: Option<Arc<Ancestry>>,
 }
 
 impl<'a> Lineage<'a> {
     /// The lineage of the class of the file at `path`, read as `header`,
     /// whose ancestry is `ancestry` when it has one.
-    pub fn new(path: String, header: &'a Header, ancestry: Option<&'a Ancestry>) -> Self {
+    pub fn new(path: String, header: &'a Header, ancestry: Option<Arc<Ancestry>>) -> Self {
         Self {
             path,
             header,
-            inherited: ancestry.map_or(&[], |ancestry| ancestry.files.as_slice()),
+            ancestry,
         }
     }
 
     /// Each file by path, with its header.
-    pub fn files(&self) -> impl Iterator<Item = (&str, &'a Header)> {
+    pub fn files(&self) -> impl Iterator<Item = (&str, &Header)> {
+        let inherited = self
+            .ancestry
+            .as_ref()
+            .map_or(&[][..], |ancestry| ancestry.files.as_slice());
         std::iter::once((self.path.as_str(), self.header)).chain(
-            self.inherited
+            inherited
                 .iter()
                 .map(|(path, header)| (path.as_str(), header)),
         )
@@ -73,7 +120,7 @@ impl<'a> Lineage<'a> {
 
     // Each file by path, with what its header exports, which answers for the
     // file while it has not run.
-    fn exports(&self) -> impl Iterator<Item = (&str, &'a [Property])> {
+    fn exports(&self) -> impl Iterator<Item = (&str, &[Property])> {
         self.files().map(|(path, header)| (path, header.exports()))
     }
 

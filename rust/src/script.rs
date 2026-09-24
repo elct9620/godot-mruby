@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 use std::ffi::c_void;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use godot::classes::{
     ClassDb, Engine, IScriptExtension, Object, ResourceLoader, Script, ScriptExtension,
@@ -13,7 +13,7 @@ use godot::prelude::*;
 use godot::register::info::PropertyUsageFlags;
 use godot::sys::{self, GodotFfi};
 
-use crate::ancestry::{self, Ancestry, Broken, Lineage};
+use crate::ancestry::{self, Ancestry, Broken, Cache, Lineage};
 use crate::game::GameFiles;
 use crate::header::Header;
 use crate::instance::RubyInstance;
@@ -37,8 +37,9 @@ pub struct RubyScript {
     // had as the instance was made.
     header: Arc<Header>,
     // Read from other files' sources at the first question that needs it,
-    // since loading a script must not load the scripts it inherits from.
-    ancestry: OnceLock<Result<Arc<Ancestry>, Broken>>,
+    // since loading a script must not load the scripts it inherits from, and
+    // again once any source changes.
+    ancestry: Cache,
 }
 
 impl RubyScript {
@@ -48,22 +49,21 @@ impl RubyScript {
         Gd::from_init_fn(|base| Self {
             base,
             header: Arc::new(header),
-            ancestry: OnceLock::new(),
+            ancestry: Cache::default(),
             source,
         })
     }
 
-    fn ancestry(&self) -> &Result<Arc<Ancestry>, Broken> {
-        self.ancestry.get_or_init(|| {
+    fn ancestry(&self) -> Result<Arc<Ancestry>, Broken> {
+        self.ancestry.ancestry(|| {
             let path = self.base().get_path().to_string();
-            ancestry::read(&path, &self.header, &GameFiles).map(Arc::new)
+            ancestry::read(&path, &self.header, &GameFiles)
         })
     }
 
     fn lineage(&self) -> Lineage<'_> {
         let path = self.base().get_path().to_string();
-        let ancestry = self.ancestry().as_ref().ok().map(Arc::as_ref);
-        Lineage::new(path, &self.header, ancestry)
+        Lineage::new(path, &self.header, self.ancestry().ok())
     }
 
     // The signals the class has, its ancestors' included, nearest first:
@@ -143,7 +143,7 @@ impl RubyScript {
     // The engine node class the file's class extends when it is a node
     // script, or why it is none.
     fn node_class(&self) -> Result<StringName, Broken> {
-        let ancestry = self.ancestry().as_ref().map_err(Clone::clone)?;
+        let ancestry = self.ancestry()?;
         let engine_class = ancestry.engine_class();
         bridge::is_node_class(engine_class)
             .then(|| StringName::from(engine_class))
@@ -165,7 +165,8 @@ impl IScriptExtension for RubyScript {
     }
 
     fn get_base_script(&self) -> Option<Gd<Script>> {
-        let (path, _) = self.ancestry().as_ref().ok()?.files().first()?;
+        let ancestry = self.ancestry().ok()?;
+        let (path, _) = ancestry.files().first()?;
         ResourceLoader::singleton()
             .load_ex(path)
             .type_hint("Script")
@@ -209,10 +210,7 @@ impl IScriptExtension for RubyScript {
         let instance = RubyInstance::new(
             self.to_gd().upcast(),
             Arc::clone(&self.header),
-            self.ancestry()
-                .as_ref()
-                .map(Arc::clone)
-                .expect("a node script has an ancestry"),
+            self.ancestry().expect("a node script has an ancestry"),
             language,
             &for_object,
         );
@@ -259,8 +257,8 @@ impl IScriptExtension for RubyScript {
         let path = self.base().get_path().to_string();
         let header = Header::read(&path, &code.to_string(), &GameFiles.roots());
         self.header = Arc::new(header);
-        self.ancestry = OnceLock::new();
         self.source = code;
+        ancestry::expire();
     }
 
     fn reload(&mut self, _keep_state: bool) -> Error {

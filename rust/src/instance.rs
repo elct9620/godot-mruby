@@ -135,7 +135,11 @@ impl RubyInstance {
     }
 
     fn lineage(&self) -> Lineage<'_> {
-        Lineage::new(self.path.clone(), &self.header, Some(&self.ancestry))
+        Lineage::new(
+            self.path.clone(),
+            &self.header,
+            Some(Arc::clone(&self.ancestry)),
+        )
     }
 
     // What the node's class declared for the editor, its ancestors' included
@@ -308,7 +312,11 @@ impl Caller {
         if staged.is_empty() {
             return;
         }
-        let lineage = Lineage::new(self.path.clone(), &self.header, Some(&self.ancestry));
+        let lineage = Lineage::new(
+            self.path.clone(),
+            &self.header,
+            Some(Arc::clone(&self.ancestry)),
+        );
         let properties = lineage.properties(&snapshot::latest());
         for (name, value) in staged {
             let exported = properties.iter().any(|property| property.name == name);
