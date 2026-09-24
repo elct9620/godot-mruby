@@ -241,6 +241,9 @@ static GAME: ReentrantLock<RefCell<Game>> = ReentrantLock::new(RefCell::new(Game
 const DEEPEST_ENTRY: usize = 24;
 // Keys let go of on any thread, waiting for the game's realm to take them.
 static RELEASED: Mutex<Vec<Key>> = Mutex::new(Vec::new());
+// Paths of files whose source changed, waiting for the game's realm's next
+// frame to run them again.
+static CHANGED: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 // The way the game's realm opens, which an opener that panicked leaves as it
 // was, so the lock is taken whether or not that poisoned it.
@@ -395,6 +398,36 @@ pub fn release_queued() {
     }
 }
 
+/// Runs the file at `path` again at the game's realm's next frame, with the
+/// source it has then, if it has run; it never waits for the realm, so Godot
+/// reloads a script on any thread, Ruby's included.
+pub fn rerun(path: &str) {
+    let mut changed = CHANGED.lock().unwrap();
+    if !changed.iter().any(|queued| queued == path) {
+        changed.push(path.to_owned());
+    }
+}
+
+/// Runs again each file whose source changed, if the game's realm is open;
+/// one that has not run is left to run when it is needed. A file that ran
+/// cleanly is first sent `withdraw`, privately and when its class answers
+/// it, to take back what its last run declared, and what it raises is
+/// written to the realm's log. The extension calls it every frame.
+pub fn rerun_queued(withdraw: &CStr) {
+    let paths = std::mem::take(&mut *CHANGED.lock().unwrap());
+    if paths.is_empty() {
+        return;
+    }
+    let game = GAME.lock();
+    if let Game::Open(realm) = &*game.borrow() {
+        for path in paths {
+            if let Err(error) = realm.run_again(&path, withdraw) {
+                error.write(bookkeeping(&realm.mrb).log.as_ref());
+            }
+        }
+    }
+}
+
 /// Closes the game's realm, unless this thread is inside it; a key released
 /// for it holds nothing in the next.
 pub fn close() {
@@ -404,6 +437,7 @@ pub fn close() {
     }
     *game.borrow_mut() = Game::Closed;
     RELEASED.lock().unwrap().clear();
+    CHANGED.lock().unwrap().clear();
     snapshot::publish(Arc::default());
 }
 
@@ -495,6 +529,42 @@ impl Realm {
             )
             .map_err(|error| RubyError::read(&self.mrb, Some(path), &error))
         })
+    }
+
+    // Runs the file at `path` again, first sending its class `withdraw` when
+    // the file ran cleanly.
+    fn run_again(&self, path: &str, withdraw: &CStr) -> Result<(), RubyError> {
+        let _scope = self.mrb.arena_scope();
+        let read = |error| RubyError::read(&self.mrb, Some(path), &error);
+        self.started_as(Started::Run, || {
+            if executor::has_run(&self.mrb, path) {
+                self.withdraw(path, withdraw).map_err(read)?;
+            }
+            executor::run_again(
+                &self.mrb,
+                path,
+                || constants::ensure_opened(&self.mrb, path),
+                |extends| constants::keep_extends(&self.mrb, path, extends),
+            )
+            .map_err(read)
+        })
+    }
+
+    // Sends the class the file at `path` defined `withdraw`, if it answers it.
+    fn withdraw(&self, path: &str, withdraw: &CStr) -> Result<(), Error> {
+        let Some(class) = constants::constant_at(&self.mrb, &key_of(&self.mrb, path)) else {
+            return Ok(());
+        };
+        let name = Symbol::new(&self.mrb, withdraw)?;
+        let answers = class.funcall(
+            &self.mrb,
+            c"respond_to?",
+            &[name.into_value(&self.mrb), true.into_value(&self.mrb)],
+        )?;
+        if answers.is_true() {
+            class.funcall(&self.mrb, withdraw, &[])?;
+        }
+        Ok(())
     }
 
     /// Calls `method` on the constant `receiver` names with `args`, and

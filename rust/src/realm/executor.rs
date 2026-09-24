@@ -1,6 +1,7 @@
 //! Running a file in a realm: once, and all or nothing. What a file creates
 //! stays when it finishes and goes when it raises; what a file it loads by
-//! name creates is that file's own.
+//! name creates is that file's own. A file run again keeps whatever it
+//! changes, as Ruby's `load` does, since the objects it made live on.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -86,7 +87,29 @@ pub(super) fn run<T>(
     if runs(mrb).files.borrow().contains_key(path) {
         return Ok(());
     }
-    execute(mrb, path, prepare, settle)
+    execute(mrb, path, prepare, settle, Run::Failed)
+}
+
+/// Runs the file at `path` again, with the source it has now, if it ran
+/// cleanly; one that raised runs again as it did the first time, all or
+/// nothing, and one that never ran is left to run when it is needed.
+pub(super) fn run_again<T>(
+    mrb: &Mrb,
+    path: &str,
+    prepare: impl FnOnce() -> Result<T, Error>,
+    settle: impl FnOnce(T) -> Result<(), Error>,
+) -> Result<(), Error> {
+    let run = runs(mrb).files.borrow().get(path).copied();
+    match run {
+        Some(Run::Done) => execute(mrb, path, prepare, settle, Run::Done),
+        Some(Run::Failed) => execute(mrb, path, prepare, settle, Run::Failed),
+        Some(Run::Running) | None => Ok(()),
+    }
+}
+
+/// Whether the file at `path` has run cleanly.
+pub(super) fn has_run(mrb: &Mrb, path: &str) -> bool {
+    matches!(runs(mrb).files.borrow().get(path), Some(Run::Done))
 }
 
 /// Runs the file at `path` for a name it defines, unless it has run cleanly
@@ -102,7 +125,7 @@ pub(super) fn run_by_name<T>(
         Some(Run::Done | Run::Running) => return Ok(()),
         Some(Run::Failed) | None => {}
     }
-    execute(mrb, path, prepare, settle)
+    execute(mrb, path, prepare, settle, Run::Failed)
 }
 
 /// Whether the file at `path` is running now.
@@ -217,11 +240,14 @@ fn runs(mrb: &Mrb) -> &Runs {
     &bookkeeping(mrb).runs
 }
 
+// Runs the file at `path`, and leaves it as `raised` says when it raises:
+// failed, with what it created taken away, or done, keeping all of it.
 fn execute<T>(
     mrb: &Mrb,
     path: &str,
     prepare: impl FnOnce() -> Result<T, Error>,
     settle: impl FnOnce(T) -> Result<(), Error>,
+    raised: Run,
 ) -> Result<(), Error> {
     let runs = runs(mrb);
     runs.files
@@ -248,8 +274,10 @@ fn execute<T>(
             Run::Done
         }
         (Err(_), frame) => {
-            frame.iter().for_each(|frame| take_away(mrb, frame));
-            Run::Failed
+            if matches!(raised, Run::Failed) {
+                frame.iter().for_each(|frame| take_away(mrb, frame));
+            }
+            raised
         }
     };
     runs.files.borrow_mut().insert(path.to_owned(), run);

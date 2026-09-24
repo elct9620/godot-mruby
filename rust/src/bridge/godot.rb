@@ -176,6 +176,12 @@ module Godot
         @__exports__ ||= {}
       end
 
+      # Takes back what the class exported, before its file runs again and
+      # exports what its source says now.
+      def __withdraw__
+        @__exports__ = nil
+      end
+
       # The hint the keywords name and the string it is read with, as the
       # engine takes them. A property carries one hint, as a GDScript
       # variable carries one `@export_*` annotation, and `step:` belongs to

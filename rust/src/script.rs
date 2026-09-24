@@ -18,7 +18,7 @@ use crate::game::GameFiles;
 use crate::header::Header;
 use crate::instance::RubyInstance;
 use crate::language;
-use crate::realm::Files;
+use crate::realm::{self, Files};
 use crate::snapshot::{self, Heading, Member, Property, Signal};
 use crate::{bridge, error};
 
@@ -261,7 +261,10 @@ impl IScriptExtension for RubyScript {
         ancestry::expire();
     }
 
+    // The file runs again in the realm at the next frame, where the objects
+    // it made live on with their state, so there is no state to lose.
     fn reload(&mut self, _keep_state: bool) -> Error {
+        realm::rerun(&self.base().get_path().to_string());
         Error::OK
     }
 

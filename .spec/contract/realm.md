@@ -216,6 +216,30 @@ Enters the game's realm, if a key is waiting to be released, and lets go of what
 pub fn release_queued() {}
 ```
 
+## `rerun`
+
+Runs a file again at the game's realm's next frame, with the source it has then, if it has run; it never waits for the realm, so Godot reloads a script on any thread.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub fn rerun(path: &str) {}
+```
+
+## `rerun_queued`
+
+Runs again each file whose source changed, if the game's realm is open: a file that ran cleanly is first sent the message it is given, to take back what its last run declared, and keeps what it changes if it raises; one that raised runs again all or nothing. What a file raises is written to the realm's log; the extension calls it every frame.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub fn rerun_queued(withdraw: &CStr) {}
+```
+
 ## `Realm`
 
 Where the game's Ruby runs, handed only to the body of an entry.
