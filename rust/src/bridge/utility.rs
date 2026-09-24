@@ -120,17 +120,17 @@ static UTILITIES: &[(&str, usize, Utility)] = &[
 fn float(args: &[Variant], index: usize) -> Result<f64, String> {
     args[index]
         .try_to_relaxed::<f64>()
-        .map_err(|_| unconverted(&args[index], index, VariantType::FLOAT))
+        .map_err(|_| conversion_failure(&args[index], index, VariantType::FLOAT))
 }
 
 // The argument at `index` as an integer, converted as the engine converts one.
 fn int(args: &[Variant], index: usize) -> Result<i64, String> {
     args[index]
         .try_to_relaxed::<i64>()
-        .map_err(|_| unconverted(&args[index], index, VariantType::INT))
+        .map_err(|_| conversion_failure(&args[index], index, VariantType::INT))
 }
 
-fn unconverted(arg: &Variant, index: usize, to: VariantType) -> String {
+fn conversion_failure(arg: &Variant, index: usize, to: VariantType) -> String {
     let name = |kind: VariantType| global::type_string(i64::from(kind.ord)).to_string();
     format!(
         "Cannot convert argument {} from {} to {}.",

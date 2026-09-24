@@ -146,7 +146,7 @@ pub(super) fn record(mrb: &Mrb, scope: Vec<String>, name: String) {
 /// that the same mistake reads the same in both languages.
 pub(super) fn declare(mrb: &Mrb, class: RClass, declared: Declaration) -> Result<(), Error> {
     if let Some(ancestor) = ancestor_by_member(mrb, class, declared.name()) {
-        return Err(raising(
+        return Err(ruby_error(
             mrb,
             c"ArgumentError",
             &format!(
@@ -177,7 +177,7 @@ pub(super) fn declare(mrb: &Mrb, class: RClass, declared: Declaration) -> Result
         declared.label()
     );
     drop(frames);
-    Err(raising(mrb, c"ArgumentError", &refusal))
+    Err(ruby_error(mrb, c"ArgumentError", &refusal))
 }
 
 // The ancestor of `class` that declared `name`, if one did. Each Ruby
@@ -234,7 +234,7 @@ fn execute<T>(
     });
     let outcome = prepare().and_then(|prepared| {
         let source = source_of(mrb, path)?;
-        let name = CString::new(path).map_err(|error| refused(mrb, &error.to_string()))?;
+        let name = CString::new(path).map_err(|error| runtime_error(mrb, &error.to_string()))?;
         compile(mrb, &name, &source)?;
         settle(prepared)
     });
@@ -276,7 +276,7 @@ fn source_of(mrb: &Mrb, path: &str) -> Result<String, Error> {
     bookkeeping(mrb)
         .files
         .source(path)
-        .map_err(|why| refused(mrb, &why))
+        .map_err(|why| runtime_error(mrb, &why))
 }
 
 // Removes what `frame` created, the last first, so a constant inside a class
@@ -304,11 +304,11 @@ fn defined_scope(mrb: &Mrb, scope: &[String]) -> Option<Value> {
         })
 }
 
-fn refused(mrb: &Mrb, message: &str) -> Error {
-    raising(mrb, c"RuntimeError", message)
+fn runtime_error(mrb: &Mrb, message: &str) -> Error {
+    ruby_error(mrb, c"RuntimeError", message)
 }
 
-fn raising(mrb: &Mrb, class: &CStr, message: &str) -> Error {
+fn ruby_error(mrb: &Mrb, class: &CStr, message: &str) -> Error {
     match mrb.exc_get(class) {
         Ok(class) => Error::new(mrb, class, message),
         Err(error) => error,

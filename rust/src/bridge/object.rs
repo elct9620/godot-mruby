@@ -77,7 +77,7 @@ fn make(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
     let class_db = ClassDb::singleton();
     if !class_db.can_instantiate(name) {
         let message = format!("the engine makes no objects of {path}");
-        return Err(not_implemented(mrb, &message));
+        return Err(not_implemented_error(mrb, &message));
     }
     let object = class_db.instantiate(name).to::<Gd<Object>>();
     Ok(mrb.wrap_as(EngineObject(object), class).as_value())
@@ -106,7 +106,7 @@ fn make_node(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
             "no node script defines {}, so it makes no node",
             class_name()
         );
-        return Err(not_implemented(mrb, &message));
+        return Err(not_implemented_error(mrb, &message));
     };
     let mut node = ClassDb::singleton()
         .instantiate(&script.get_instance_base_type())
@@ -115,7 +115,7 @@ fn make_node(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
     if node.get_script().is_none() {
         node.free();
         let message = format!("{}'s script refused its node here", class_name());
-        return Err(not_implemented(mrb, &message));
+        return Err(not_implemented_error(mrb, &message));
     }
     let object = mrb.wrap_as(EngineObject(node.clone()), class).as_value();
     realm::hold(mrb, node_key(node.instance_id()), object)?;
@@ -194,7 +194,7 @@ fn call(mrb: &Mrb, held: &EngineObject, name: Symbol, args: Array) -> Result<Val
     let args = variants(mrb, args)?;
     let answer = object
         .try_call(name.as_str(), &args)
-        .map_err(|error| refused(mrb, &error, &object.get_class().to_string(), &name))?;
+        .map_err(|error| call_refusal(mrb, &error, &object.get_class().to_string(), &name))?;
     ruby_answer(mrb, &answer)
 }
 
@@ -229,7 +229,7 @@ fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: Array) -> Result<Va
     let args = variants(mrb, args)?;
     let answer = ClassDb::singleton()
         .try_class_call_static(&class, name.as_str(), &args)
-        .map_err(|error| refused(mrb, &error, &class, &name))?;
+        .map_err(|error| call_refusal(mrb, &error, &class, &name))?;
     ruby_answer(mrb, &answer)
 }
 
@@ -337,7 +337,7 @@ fn property_of_class(
     class: &str,
 ) -> Result<Property, String> {
     let (hint, class_name) = hint_by_class(mrb, class)?;
-    if let Some(given) = mismatched(mrb, default, class) {
+    if let Some(given) = mismatch(mrb, default, class) {
         return Err(format!(
             "Cannot assign a value of type {given} to variable \"{name}\" with specified type {class_name}."
         ));
@@ -348,7 +348,7 @@ fn property_of_class(
 // What the value an export was declared with is, unless the class it names
 // takes it: nothing at all, which is what Godot fills in, or an object of
 // that class, a class descending from it included.
-fn mismatched(mrb: &Mrb, default: &Variant, class: &str) -> Option<String> {
+fn mismatch(mrb: &Mrb, default: &Variant, class: &str) -> Option<String> {
     let kind = default.get_type();
     if kind == VariantType::NIL {
         return None;
@@ -422,7 +422,7 @@ fn hint_by_class(mrb: &Mrb, class: &str) -> Result<(PropertyHint, String), Strin
     if let Some(engine_class) = class.strip_prefix("Godot::") {
         let class_db = ClassDb::singleton();
         if !class_db.class_exists(engine_class) {
-            return Err(unnamed(class));
+            return Err(unknown_type(class));
         }
         if class_db.is_parent_class(engine_class, "Resource") {
             return Ok((PropertyHint::RESOURCE_TYPE, engine_class.to_owned()));
@@ -434,7 +434,7 @@ fn hint_by_class(mrb: &Mrb, class: &str) -> Result<(PropertyHint, String), Strin
     }
     editor_name(mrb, class)
         .map(|name| (PropertyHint::NODE_TYPE, name))
-        .ok_or_else(|| unnamed(class))
+        .ok_or_else(|| unknown_type(class))
 }
 
 // The name the editor lists the Ruby class `class` under, if a node script
@@ -455,7 +455,7 @@ fn editor_name_at(path: &str) -> Option<String> {
 }
 
 // GDScript's words for a type nothing in the project is known by.
-fn unnamed(class: &str) -> String {
+fn unknown_type(class: &str) -> String {
     format!("The class \"{class}\" was not found in the global scope.")
 }
 
@@ -596,7 +596,7 @@ impl EngineObject {
 // The Godot::CallError a call the engine refused raises, worded as GDScript
 // words the same failure of an untyped call. gdext hands the engine's
 // reason only as text, so the argument and types are read back from it.
-fn refused(mrb: &Mrb, error: &CallError, base: &str, method: &str) -> Error {
+fn call_refusal(mrb: &Mrb, error: &CallError, base: &str, method: &str) -> Error {
     let reason = error.message(false);
     let reason = reason.rsplit("Reason: ").next().unwrap_or_default();
     let message = if let Some(expected) = expected_count(reason) {
@@ -668,7 +668,7 @@ fn argument_error(mrb: &Mrb, message: &str) -> Error {
     }
 }
 
-fn not_implemented(mrb: &Mrb, message: &str) -> Error {
+fn not_implemented_error(mrb: &Mrb, message: &str) -> Error {
     match mrb.exc_get(c"NotImplementedError") {
         Ok(class) => Error::new(mrb, class, message),
         Err(error) => error,

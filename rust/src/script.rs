@@ -195,13 +195,13 @@ impl IScriptExtension for RubyScript {
             Ok(engine_class) => engine_class,
             Err(broken) => {
                 error!("{path} {broken}, so it cannot be a node's script");
-                return refused();
+                return no_instance();
             }
         };
         let object_class = StringName::from(&for_object.get_class());
         if !ClassDb::singleton().is_parent_class(&object_class, &engine_class) {
             error!("{path} extends {engine_class}, so it cannot be the script of a {object_class}");
-            return refused();
+            return no_instance();
         }
         let language = self
             .get_language()
@@ -227,7 +227,7 @@ impl IScriptExtension for RubyScript {
         for_object: Gd<Object>,
     ) -> RawPtr<*mut c_void> {
         let Some(language) = self.get_language() else {
-            return refused();
+            return no_instance();
         };
         // SAFETY: the interface is initialized while the extension runs, and
         // Godot frees the placeholder with the object it was made for.
@@ -427,7 +427,7 @@ fn name_info(name: &str) -> VarDictionary {
 }
 
 // No instance: the object is left without a script instance.
-fn refused() -> RawPtr<*mut c_void> {
+fn no_instance() -> RawPtr<*mut c_void> {
     // SAFETY: a null pointer is how a script tells Godot it made no instance.
     unsafe { RawPtr::new(std::ptr::null_mut()) }
 }
