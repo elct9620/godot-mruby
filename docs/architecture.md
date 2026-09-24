@@ -56,7 +56,7 @@ mruby carries only the gems `build_config/mruby.rb` lists, and none that reaches
 ├─ build_config/           mruby's build: gems, cross build
 ├─ godot/                  the project the extension is tested in
 │  ├─ addons/godot_mruby/  the shipped addon
-│  ├─ src/, test/unit/     the game's code, and its tests (see 1.4)
+│  ├─ src/, test/          the game's code, and its tests (see 1.4)
 │  └─ integration/         scenes and runs godot:verify reads
 ├─ .spec/                  glossary, contract, behavior
 ├─ Rakefile, tasks/        task entry points
@@ -77,11 +77,12 @@ Build output stays out of the repository: `vendor/` holds mruby's source and arc
 godot/
 ├─ src/                  the game's code, named from the top level
 ├─ test/unit/<spec>/     Minitest judges, in the game's realm
+├─ test/e2e/             Minitest judges, playing src/ to its end
 └─ integration/<spec>/   godot:verify judges, from a log or a run's outcome
                          └─ read by tasks/support/<spec>.rb or <spec>/
 ```
 
-The extension is tested through itself, and `godot/` is sorted by who judges an outcome, then by the `.spec/behavior` file it claims. The extension's own runner judges `test/unit/<spec>/`, whose files loaded by name sit beside their tests. `godot:verify` judges `integration/<spec>/`, for what no Ruby test can observe: a log line, a run's exit, the editor, an exported game. Its checks are named after the same spec, and GDScript stays only where a check must ask from outside the realm.
+The extension is tested through itself, and `godot/` is sorted by who judges an outcome, then by the `.spec/behavior` file it claims. The extension's own runner judges `test/unit/<spec>/`, whose files loaded by name sit beside their tests, and `test/e2e/`, which plays the game in `src/` and claims what its node scripts do. `godot:verify` judges `integration/<spec>/`, for what no Ruby test can observe: a log line, a run's exit, the editor, an exported game. Its checks are named after the same spec, and GDScript stays only where a check must ask from outside the realm.
 
 ## 2. Extension
 

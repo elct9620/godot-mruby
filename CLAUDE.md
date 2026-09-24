@@ -15,6 +15,7 @@ The full source layout, and how the parts fit together, is in `docs/architecture
 | `godot/project.godot` | Lists the test directories the runner and `godot:verify` use, and the root directories named from the top level |
 | `godot/src/` | The game's code, a root directory, so its files are named from the top level |
 | `godot/test/unit/` | Ruby unit tests, one directory per `.spec/behavior` file they claim, with the files they load by name beside them |
+| `godot/test/e2e/` | Ruby tests playing the game in `godot/src/` to its end |
 | `godot/integration/` | What only a log or a run's outcome shows, one directory per `.spec/behavior` file, read by `tasks/support/` |
 | `build_config/mruby.rb` | mruby build config (host + x86_64 cross build) |
 | `.github/workflows/pipeline.yml` | Reusable check → build → package → integration → publish; `ci.yml` calls it |
