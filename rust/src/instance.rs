@@ -477,16 +477,16 @@ unsafe fn drop_raw<T, P>(string: *mut P) {
 }
 
 // What Godot calls on a Ruby instance. A callback not given leaves Godot's
-// default: no fallback, nothing to revert, and the property state Godot
-// gathers from the property list and `get`.
+// default: no fallback, and the property state Godot gathers from the
+// property list and `get`.
 static INFO: sys::GDExtensionScriptInstanceInfo3 = sys::GDExtensionScriptInstanceInfo3 {
     set_func: Some(set),
     get_func: Some(get),
     get_property_list_func: Some(get_property_list),
     free_property_list_func: Some(free_property_list),
     get_class_category_func: Some(get_class_category),
-    property_can_revert_func: None,
-    property_get_revert_func: None,
+    property_can_revert_func: Some(property_can_revert),
+    property_get_revert_func: Some(property_get_revert),
     get_owner_func: None,
     get_property_state_func: None,
     get_method_list_func: Some(get_method_list),
@@ -690,6 +690,59 @@ unsafe extern "C" fn has_method(
     // SAFETY: the instance lives for this call, which runs no Ruby.
     let has = unsafe { instance(data).has(&name(method)) };
     sys::GDExtensionBool::from(has)
+}
+
+// Whether the property can be reverted, as the class's own
+// `_property_can_revert` answers with true, as a GDScript's does; the
+// default an exported property reverts to is the script's to answer.
+unsafe extern "C" fn property_can_revert(
+    data: sys::GDExtensionScriptInstanceDataPtr,
+    property: sys::GDExtensionConstStringNamePtr,
+) -> sys::GDExtensionBool {
+    // SAFETY: the property name lives for the call, and the instance until
+    // Ruby runs.
+    let answer = unsafe { revert_answer(data, property, "_property_can_revert") };
+    sys::GDExtensionBool::from(answer.try_to::<bool>().unwrap_or(false))
+}
+
+// The value the property reverts to, as the class's own
+// `_property_get_revert` answers with anything but nil, as a GDScript's does.
+unsafe extern "C" fn property_get_revert(
+    data: sys::GDExtensionScriptInstanceDataPtr,
+    property: sys::GDExtensionConstStringNamePtr,
+    reverted: sys::GDExtensionVariantPtr,
+) -> sys::GDExtensionBool {
+    // SAFETY: the property name lives for the call, and the instance until
+    // Ruby runs.
+    let answer = unsafe { revert_answer(data, property, "_property_get_revert") };
+    if answer.is_nil() {
+        return sys::GDExtensionBool::from(false);
+    }
+    // SAFETY: Godot hands an initialized variant of its own to fill.
+    unsafe { *reverted.cast::<Variant>() = answer };
+    sys::GDExtensionBool::from(true)
+}
+
+// What the class's `method` answers for the property, or nil when the class
+// does not define it.
+//
+// SAFETY: `property` lives for the call, and the instance until Ruby runs.
+unsafe fn revert_answer(
+    data: sys::GDExtensionScriptInstanceDataPtr,
+    property: sys::GDExtensionConstStringNamePtr,
+    method: &str,
+) -> Variant {
+    // SAFETY: as the caller promises.
+    let property = StringName::from(&unsafe { name(property) });
+    let caller = {
+        // SAFETY: as the caller promises.
+        let instance = unsafe { instance(data) };
+        if !instance.has(method) {
+            return Variant::nil();
+        }
+        instance.caller()
+    };
+    caller.send(method, &[&property.to_variant()])
 }
 
 unsafe extern "C" fn call(

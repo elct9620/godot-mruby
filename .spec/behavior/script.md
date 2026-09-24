@@ -369,3 +369,19 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a scene whose node's script is a node script declaring a signal |
 | When | the editor opens that scene |
 | Then | the node's connection to that signal is made |
+
+## `RS-046` `_property_can_revert` tells Godot a property can be reverted
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose class defines `_property_can_revert`, answering true for a property's name |
+| When | Godot asks the node whether that property can be reverted |
+| Then | the node answers true |
+
+## `RS-047` `_property_get_revert` gives Godot the value a property reverts to
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose class defines `_property_get_revert`, answering a value for a property's name |
+| When | Godot asks the node for the value that property reverts to |
+| Then | the node answers that value |
