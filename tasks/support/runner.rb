@@ -5,9 +5,9 @@ module Godot
   # scene and reads what the runs report. Part of Godot.verify!.
   module Runner
     RUNNER_SCENE = "res://addons/godot_mruby/runner.tscn"
-    # The runner answers within the frame it starts in; this only stops a
-    # runner that never quits from hanging the check.
-    RUNNER_FRAMES = "60"
+    # A run lasts as many frames as its tests wait; this only stops a runner
+    # that never quits from hanging the check.
+    RUNNER_FRAMES = "600"
     TESTS = "res://test"
     PASSED = /^(\d+) runs, \d+ assertions, 0 failures, 0 errors, \d+ skips$/
     RUNNER_TESTS = "res://integration/runner"
@@ -27,49 +27,12 @@ module Godot
     SEEDS = %w[1 2 3 4 5].freeze
     SEED = /^Run options: --seed (\d+)$/
     RAN = /ran (\w+#test_\w+)/
-    # Runs that have to fail, each as the runner's options and what the run
-    # has to print on the way, in the order it prints it: one per way a run
-    # fails, all under godot/integration/runner/failing/ except the filter that
-    # names no test, the directories that are not the project's test
-    # directories, and a seed that is not a number. An error's calls end at the
-    # test method, so its frame is the last before the report's blank line.
-    FAILING = {
-      %W[--dir #{RUNNER_TESTS}/failing/assertion] => [
-        "teardown ran after a failure",
-        "FailedAssertionTest#test_one_equals_two [#{RUNNER_TESTS}/failing/assertion/failed_assertion_test.rb:9]:",
-        "ERROR: FailedAssertionTest#test_one_equals_two: Expected: 1",
-        "(#{RUNNER_TESTS}/failing/assertion/failed_assertion_test.rb:9)"
-      ],
-      %W[--dir #{RUNNER_TESTS}/failing/error] => [
-        "RaisedErrorTest#test_raises_an_argument_error [#{RUNNER_TESTS}/failing/error/raised_error_test.rb:10]:",
-        "ArgumentError: not an assertion",
-        "    #{RUNNER_TESTS}/failing/error/raised_error_test.rb:10:in refuse_the_item",
-        "    #{RUNNER_TESTS}/failing/error/raised_error_test.rb:6:in test_raises_an_argument_error\n\n",
-        "ERROR: RaisedErrorTest#test_raises_an_argument_error: ArgumentError: not an assertion",
-        "(#{RUNNER_TESTS}/failing/error/raised_error_test.rb:10)"
-      ],
-      %W[--dir #{RUNNER_TESTS}/failing/syntax] => [
-        "(#{RUNNER_TESTS}/failing/syntax/broken_syntax_test.rb:4)",
-        "0 runs, 0 assertions"
-      ],
-      %W[--dir #{RUNNER_TESTS}/failing/missing] => [
-        "The test directory #{RUNNER_TESTS}/failing/missing does not exist"
-      ],
-      %w[--dir res://test --include test_nothing] => ["ERROR: Nothing ran for filter: test_nothing"],
-      %w[--dir res://src] => ["ERROR: res://src is not one of the project's test directories"],
-      %w[--dir res://] => ["ERROR: res:// cannot be a test directory"],
-      %w[--dir res://test --seed x] => ["ERROR: --seed takes a whole number, not x"]
-    }.freeze
-    # Where the test framework's files are compiled; a failing run reports the
-    # tests' own frames and never these.
-    FRAMEWORK_FRAME = "godot_mruby/"
 
     module_function
 
     def verify!(project)
       verify_pass!(project)
       verify_passing!(project)
-      verify_fail!(project)
       verify_seed!(project)
       verify_shuffled!(project)
     end
@@ -93,20 +56,6 @@ module Godot
         next if status.success? && output.match?(summary)
 
         raise "The Ruby tests with #{options.join(" ")} did not end as they should:\n#{output}"
-      end
-    end
-
-    # Makes each run that has to fail and requires it to fail with what it has
-    # to print, in order, and without the framework's own frames.
-    # @behavior RT-002 RT-003 RT-004 RT-005 RT-006 RT-007 RT-008 RT-020 RT-021 RT-022 RT-023 RT-026 RT-029 RT-030 RT-034
-    def verify_fail!(project)
-      FAILING.each do |options, expected|
-        output, status = run(project, *options)
-        missing = missing_in_order(output, expected)
-        missing << "no #{FRAMEWORK_FRAME} frame" if output.include?(FRAMEWORK_FRAME)
-        next if status.exitstatus == 1 && missing.empty?
-
-        raise "The Ruby tests with #{options.join(" ")} did not fail as they should #{missing}:\n#{output}"
       end
     end
 

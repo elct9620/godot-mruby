@@ -5,6 +5,7 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 ## Includes
 
 - `tasks/support/runner.rb`
+- `tasks/support/runner/failing.rb`
 - `tasks/support/runner/settings.rb`
 
 ## `RT-001` A test method of a test class runs
@@ -78,6 +79,14 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 | Given | a test directory whose tests pass, and a test method that calls `skip` |
 | When | the runner scene runs headless on that directory |
 | Then | the run passes |
+
+## `RT-010` A failed assertion after a wait fails the run
+
+| Step | Statement |
+| --- | --- |
+| Given | a test method that waits for a process frame, then fails an assertion |
+| When | the runner scene runs headless on its directory |
+| Then | the run fails |
 
 ## `RT-020` An exception in a test is reported with the calls that led to it
 

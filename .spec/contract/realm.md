@@ -272,7 +272,7 @@ impl Realm {
 
 ## `Realm::call`
 
-Calls a method on the constant a name spells, and answers what it returned as the Rust type asked for, converted as mruby converts a method's argument.
+Calls a method on the constant a name spells with as many arguments as it is given, none included, and answers what it returned as the Rust type asked for, converted as mruby converts a method's argument.
 
 | Attribute | Value |
 | --- | --- |
@@ -280,7 +280,7 @@ Calls a method on the constant a name spells, and answers what it returned as th
 
 ```rust
 impl Realm {
-    pub fn call<A: IntoValue, R: TryConvert>(&self, receiver: &str, method: &CStr, arg: A) -> Result<R, RubyError> {}
+    pub fn call<A: IntoValue, R: TryConvert>(&self, receiver: &str, method: &CStr, args: impl IntoIterator<Item = A>) -> Result<R, RubyError> {}
 }
 ```
 

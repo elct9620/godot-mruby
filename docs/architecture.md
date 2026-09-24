@@ -255,7 +255,7 @@ A Ruby class takes its shape as its body runs, so what a class has cannot be rea
 
 ```
 RubyInstance ─────┐   on a call of a method its class defines
-RubyTestRunner ───┤   when it is ready
+RubyTestRunner ───┤   when it is ready, and as each frame begins until its run is over
                   ▼
 realm::enter(body)
   │  waits while another thread is inside; a thread inside goes on
@@ -264,7 +264,7 @@ realm::enter(body)
 body(&Realm)
   │  run(path)                    a file, once
   │  install::<G: Gem>()          an extension
-  │  call(receiver, method, arg)  a constant's method
+  │  call(receiver, method, args) a constant's method
   │  build(path, key, make, args) an object of a file's class, held by key
   │  send(key, method, args)      a held object's method
   ▼

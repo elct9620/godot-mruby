@@ -497,23 +497,26 @@ impl Realm {
         })
     }
 
-    /// Calls `method` on the constant `receiver` names with `arg`, and answers
-    /// what it returned as `R`, converted as mruby converts an argument.
+    /// Calls `method` on the constant `receiver` names with `args`, and
+    /// answers what it returned as `R`, converted as mruby converts an
+    /// argument.
     pub fn call<A: IntoValue, R: TryConvert>(
         &self,
         receiver: &str,
         method: &CStr,
-        arg: A,
+        args: impl IntoIterator<Item = A>,
     ) -> Result<R, RubyError> {
         let _scope = self.mrb.arena_scope();
+        let args: Vec<Value> = args
+            .into_iter()
+            .map(|arg| arg.into_value(&self.mrb))
+            .collect();
         let answer = self.started_as(Started::Call, || {
             self.mrb
                 .object_class()
                 .as_value()
                 .const_get(&self.mrb, receiver)
-                .and_then(|receiver| {
-                    receiver.funcall(&self.mrb, method, &[arg.into_value(&self.mrb)])
-                })
+                .and_then(|receiver| receiver.funcall(&self.mrb, method, &args))
                 .map_err(|error| RubyError::read(&self.mrb, None, &error))
         })?;
         self.taken(answer, || {
@@ -908,7 +911,7 @@ mod tests {
         prepare(|| Realm::open(Raising, Silent, |_| Ok(())));
 
         let ran = enter(|realm| {
-            realm.call::<_, bool>("Integer", c"===", 4_i64)?;
+            realm.call::<_, bool>("Integer", c"===", [4_i64])?;
             realm.run(RAISING)
         });
 
@@ -922,7 +925,7 @@ mod tests {
         close();
         prepare(|| Realm::open(Armory, Silent, |_| Ok(())));
 
-        let armed = enter(|realm| realm.call::<_, bool>("Probe", c"armed", 0_i64));
+        let armed = enter(|realm| realm.call::<_, bool>("Probe", c"armed", [0_i64]));
 
         assert_eq!(armed.map_err(|e| e.message), Ok(true));
     }

@@ -9,13 +9,20 @@ use crate::realm::{self, RubyError};
 use crate::settings;
 
 /// The node the addon's runner scene holds. Once in the tree it installs the
-/// test framework into the game's realm, runs every test file of the test
-/// directories it is given there, then quits with 0 when every test passed
-/// and 1 otherwise.
+/// test framework into the game's realm and runs every test file of the test
+/// directories it is given there. The tests run from the next process frame
+/// on, the run resumed as each frame begins while a test waits, so every test
+/// starts and continues where a frame begins. It quits with 0 when every test
+/// passed and 1 otherwise.
 #[derive(GodotClass)]
 #[class(base = Node, init)]
 pub struct RubyTestRunner {
     base: Base<Node>,
+    // What the run starts with, until it starts.
+    options: Option<minitest::Options>,
+    // Whether every test file ran without an error, which a passing run
+    // still needs.
+    loaded: bool,
 }
 
 #[godot_api]
@@ -24,14 +31,39 @@ impl INode for RubyTestRunner {
         let args = user_args();
         let run_as_asked = refuse_exported_game()
             .and_then(|()| test_directories(&args))
-            .and_then(|directories| Ok((directories, test_options(&args)?)));
-        let passed = match run_as_asked {
-            Ok((directories, options)) => run(&directories, options),
+            .and_then(|directories| test_files(&directories))
+            .and_then(|tests| Ok((tests, test_options(&args)?)));
+        match run_as_asked {
+            Ok((tests, options)) => {
+                self.loaded = load(&tests);
+                self.options = Some(options);
+                let tree = self.base().get_tree();
+                tree.signals()
+                    .process_frame()
+                    .connect_other(&*self, Self::run_frame);
+            }
             Err(refused) => {
                 error!("{refused}");
-                false
+                self.quit(false);
             }
-        };
+        }
+    }
+}
+
+impl RubyTestRunner {
+    // Starts the run, or resumes it where a test waits; quits once it is over.
+    fn run_frame(&mut self) {
+        let options = self.options.take();
+        let over = logged(realm::enter(|realm| match options {
+            Some(options) => realm.call("Minitest", c"start", [options]),
+            None => realm.call("Minitest", c"resume", std::iter::empty::<bool>()),
+        }));
+        if let Some(passed) = over {
+            self.quit(passed && self.loaded);
+        }
+    }
+
+    fn quit(&self, passed: bool) {
         self.base()
             .get_tree()
             .quit_ex()
@@ -40,37 +72,39 @@ impl INode for RubyTestRunner {
     }
 }
 
-fn run(directories: &[String], options: minitest::Options) -> bool {
+// The test files under `directories`, in name order.
+fn test_files(directories: &[String]) -> Result<Vec<String>, String> {
     let pattern = settings::test_pattern();
     let mut tests = Vec::new();
     for directory in directories {
         if !DirAccess::dir_exists_absolute(directory) {
-            error!("The test directory {directory} does not exist");
-            return false;
+            return Err(format!("The test directory {directory} does not exist"));
         }
         collect_tests(directory, &pattern, &mut tests);
     }
     tests.sort();
-    // Every test file runs, so each one's problems are in the log before any
-    // test runs, where a reader of the run's output looks for them.
-    let loaded = logged(realm::enter(|realm| {
+    Ok(tests)
+}
+
+// Installs the test framework and runs every test file, answering whether
+// each one ran without an error. Every file runs, so each one's problems are
+// in the log before any test runs, where a reader of the run's output looks
+// for them.
+fn load(tests: &[String]) -> bool {
+    logged(realm::enter(|realm| {
         realm.install::<Minitest>()?;
         Ok(tests
             .iter()
             .map(|path| logged(realm.run(path).map(|()| true)))
             .fold(true, |all, loaded| all & loaded))
-    }));
-    let passed = logged(realm::enter(|realm| {
-        realm.call("Minitest", c"run", options)
-    }));
-    loaded && passed
+    }))
 }
 
-// An outcome Ruby could not reach counts as a failure, written to the log.
-fn logged(outcome: Result<bool, RubyError>) -> bool {
+// An outcome Ruby could not reach counts as a failed run, written to the log.
+fn logged<T: From<bool>>(outcome: Result<T, RubyError>) -> T {
     outcome.unwrap_or_else(|failed| {
         failed.write(&GodotLog);
-        false
+        T::from(false)
     })
 }
 

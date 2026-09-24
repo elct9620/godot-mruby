@@ -553,7 +553,7 @@ end
 
 ## `Minitest.run`
 
-Runs every test class defined so far under the runner's `:seed`, `:include` and `:exclude` options, and answers whether the run passed, as minitest does. What the run found reaches its reporters, which plugins add to as the run starts. The test runner calls it once the test files have run.
+Runs every test class defined so far under the runner's `:seed`, `:include` and `:exclude` options, and answers whether the run passed, as minitest does. What the run found reaches its reporters, which plugins add to as the run starts. `Minitest.start` runs it once the test files have run.
 
 | Attribute | Value |
 | --- | --- |
@@ -562,6 +562,60 @@ Runs every test class defined so far under the runner's `:seed`, `:include` and 
 ```ruby
 module Minitest
   def self.run(options = {})
+  end
+end
+```
+
+## `Minitest.start`
+
+Starts `Minitest.run` with the runner's options in a Fiber of its own, so a test that waits pauses the whole run. It answers `nil` while a test waits, and whether the run passed once it is over. The test runner calls it as the first process frame after the test files ran begins.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```ruby
+module Minitest
+  def self.start(options)
+  end
+end
+```
+
+## `Minitest.resume`
+
+Carries the run `Minitest.start` began on from where a test waits, answering as `Minitest.start` does. The test runner calls it as each process frame begins until the run is over.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```ruby
+module Minitest
+  def self.resume
+  end
+end
+```
+
+## `Minitest::Waits`
+
+What a test waits for, as GUT names it, each written as a call in the test's own code. A wait pauses the run until the runner resumes it, which it cannot do from inside a block a C method calls, such as `Array#sort`'s; there it raises `FiberError`. Every test class includes it.
+
+```ruby
+module Minitest
+  module Waits
+  end
+end
+```
+
+## `Minitest::Waits#wait_process_frames`
+
+Returns once `frames` process frames have begun, before any node's `_process` in the last of them.
+
+```ruby
+module Minitest
+  module Waits
+    def wait_process_frames(frames)
+    end
   end
 end
 ```
