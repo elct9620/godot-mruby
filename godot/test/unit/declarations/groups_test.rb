@@ -35,13 +35,11 @@ class GroupsTest < Minitest::Test
 
   # @behavior RD-062
   def test_a_nodes_properties_carry_the_headings_its_class_wrote
-    panel = Unit::Declarations::Panel.new
+    panel = autofree(Unit::Declarations::Panel.new)
 
     targeting = panel.get_property_list.find { |member| member["name"] == "Targeting" }
 
     assert_equal GROUP, targeting["usage"]
-  ensure
-    panel&.free
   end
 
   # @behavior RD-063
@@ -61,14 +59,12 @@ class GroupsTest < Minitest::Test
 
   # @behavior RD-065
   def test_a_nodes_properties_are_headed_by_one_category_for_its_class
-    cannon = Unit::Declarations::Cannon.new
+    cannon = autofree(Unit::Declarations::Cannon.new)
 
     headings = cannon.get_property_list.select { |member| member["name"] == "cannon.rb" }
 
     assert_equal 1, headings.size
     assert_equal CATEGORY, headings.first["usage"]
-  ensure
-    cannon&.free
   end
 
   private

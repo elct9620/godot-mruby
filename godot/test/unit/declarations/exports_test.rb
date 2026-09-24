@@ -5,36 +5,30 @@ class ExportsTest < Minitest::Test
 
   # @behavior RD-011
   def test_an_exported_property_is_one_the_script_has
-    turret = Turret.new
+    turret = autofree(Turret.new)
     script = Godot::ResourceLoader.load("res://src/turret.rb")
 
     names = script.get_script_property_list.map { |property| property["name"] }
 
     assert_includes names, "range"
-  ensure
-    turret&.free
   end
 
   # @behavior RD-012
   def test_an_export_takes_its_type_from_the_value_it_was_declared_with
-    turret = Turret.new
+    turret = autofree(Turret.new)
     script = Godot::ResourceLoader.load("res://src/turret.rb")
 
     assert_equal 300.0, script.get_property_default_value(:range)
-  ensure
-    turret&.free
   end
 
   # @behavior RD-013
   def test_a_scripts_properties_include_the_ones_the_class_it_extends_exported
-    cannon = Unit::Declarations::Cannon.new
+    cannon = autofree(Unit::Declarations::Cannon.new)
     script = Godot::ResourceLoader.load("res://test/unit/declarations/cannon.rb")
 
     names = exported_names(script)
 
     assert_equal %w[barrel mode range], names
-  ensure
-    cannon&.free
   end
 
   # @behavior RD-014
@@ -59,14 +53,12 @@ class ExportsTest < Minitest::Test
 
   # @behavior RD-018
   def test_an_export_declared_again_as_it_stands_is_no_new_property
-    restating = Unit::Declarations::Restating.new
+    restating = autofree(Unit::Declarations::Restating.new)
     script = Godot::ResourceLoader.load("res://test/unit/declarations/restating.rb")
 
     mode = script.get_script_property_list.select { |property| property["name"] == "mode" }
 
     assert_equal 1, mode.size
-  ensure
-    restating&.free
   end
 
   # @behavior RD-019
@@ -81,108 +73,86 @@ class ExportsTest < Minitest::Test
 
   # @behavior RD-021
   def test_a_node_answers_an_exported_property_by_the_accessor_its_class_gets
-    turret = Turret.new
+    turret = autofree(Turret.new)
 
     assert_equal :nearest, turret.mode
-  ensure
-    turret&.free
   end
 
   # @behavior RD-022
   def test_a_classs_own_accessor_stands_in_place_of_the_one_an_export_would_define
-    reading = Unit::Declarations::Reading.new
+    reading = autofree(Unit::Declarations::Reading.new)
 
     assert_equal 600.0, reading.range
-  ensure
-    reading&.free
   end
 
   # @behavior RD-023
   def test_an_exported_value_is_written_before_the_object_is_initialized
-    priming = Unit::Declarations::Priming.new
+    priming = autofree(Unit::Declarations::Priming.new)
 
     assert_equal 300.0, priming.primed
-  ensure
-    priming&.free
   end
 
   # @behavior RD-024
   def test_each_node_has_its_own_copy_of_a_container_it_was_exported
-    one = Unit::Declarations::Stacking.new
-    other = Unit::Declarations::Stacking.new
+    one = autofree(Unit::Declarations::Stacking.new)
+    other = autofree(Unit::Declarations::Stacking.new)
 
     one.rounds << 3
 
     assert_equal [1, 2], other.rounds
-  ensure
-    one&.free
-    other&.free
   end
 
   # @behavior RD-025
   def test_a_node_lists_the_properties_its_class_exported
-    turret = Turret.new
+    turret = autofree(Turret.new)
 
     names = turret.get_property_list.map { |property| property["name"] }
 
     assert_includes names, "range"
-  ensure
-    turret&.free
   end
 
   # @behavior RD-026
   def test_godot_writes_an_exported_property_through_the_accessor
-    turret = Turret.new
+    turret = autofree(Turret.new)
 
     turret.set(:range, 500.0)
 
     assert_equal 500.0, turret.range
-  ensure
-    turret&.free
   end
 
   # @behavior RD-027
   def test_a_property_the_engine_class_has_stays_the_engines
-    masking = Unit::Declarations::Masking.new
+    masking = autofree(Unit::Declarations::Masking.new)
 
     masking.set(:position, Godot::Vector2.new(1, 2))
 
     assert_equal Godot::Vector2.new(1, 2), masking.position
-  ensure
-    masking&.free
   end
 
   # @behavior RD-028
   def test_godot_reads_an_instance_variable_the_class_did_not_export
-    holding = Unit::Declarations::Holding.new
+    holding = autofree(Unit::Declarations::Holding.new)
 
     assert_equal 7, holding.get(:kept)
-  ensure
-    holding&.free
   end
 
   # @behavior RD-029
   def test_godot_writes_an_instance_variable_the_class_did_not_export
-    holding = Unit::Declarations::Holding.new
+    holding = autofree(Unit::Declarations::Holding.new)
 
     holding.set(:kept, 9)
 
     assert_equal 9, holding.kept
-  ensure
-    holding&.free
   end
 
   # @behavior RD-033
   def test_a_copy_of_a_node_carries_what_its_properties_hold
-    turret = Turret.new
+    turret = autofree(Turret.new)
     turret.set(:range, 500.0)
 
-    copy = turret.duplicate
+    copy = autofree(turret.duplicate)
 
     assert_equal 500.0, copy.get(:range)
-  ensure
-    turret&.free
-    copy&.free
   end
 
   # The names of the properties a script has, without the headings they are
@@ -195,24 +165,20 @@ class ExportsTest < Minitest::Test
 
   # @behavior RD-034
   def test_a_property_only_the_nodes_own_class_has_stays_the_engines
-    sprite = covered_sprite
+    sprite = autofree(covered_sprite)
 
     sprite.set(:centered, false)
 
     refute sprite.is_centered
-  ensure
-    sprite&.free
   end
 
   # @behavior RD-035
   def test_a_variable_named_as_a_property_of_the_nodes_own_class_is_untouched
-    sprite = covered_sprite
+    sprite = autofree(covered_sprite)
 
     sprite.set(:centered, false)
 
     assert_equal "mine", sprite.call(:covered)
-  ensure
-    sprite&.free
   end
 
   # @behavior RD-036

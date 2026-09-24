@@ -1,7 +1,7 @@
 class NodeClassesTest < Minitest::Test
   # @behavior RS-031
   def test_a_node_scripts_class_makes_a_node_carrying_its_script
-    beacon = Unit::Script::Beacon.new(3)
+    beacon = autofree(Unit::Script::Beacon.new(3))
 
     assert_instance_of Unit::Script::Beacon, beacon
     assert_equal 3, beacon.brightness
@@ -9,8 +9,6 @@ class NodeClassesTest < Minitest::Test
     assert_in_delta 1.5, beacon.get_rotation
     beacon.notification(9001)
     assert_equal 9001, beacon.notified
-  ensure
-    beacon&.free
   end
 
   # @behavior RS-032

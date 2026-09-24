@@ -30,11 +30,9 @@ class UtilitiesTest < Minitest::Test
 
   # @behavior RC-007
   def test_godot_is_same_compares_as_the_engine_does
-    node = Godot::Node.new
+    node = autofree(Godot::Node.new)
 
     assert Godot.is_same(node, node)
     assert Godot.is_same(Godot::Vector2.new(1, 2), Godot::Vector2.new(1, 2))
-  ensure
-    node&.free
   end
 end

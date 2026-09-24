@@ -96,14 +96,12 @@ class HintsTest < Minitest::Test
 
   # @behavior RD-051
   def test_a_nodes_properties_carry_the_hints_its_class_declared
-    gauge = Unit::Declarations::Gauge.new
+    gauge = autofree(Unit::Declarations::Gauge.new)
 
     angle = gauge.get_property_list.find { |property| property["name"] == "angle" }
 
     assert_equal RANGE, angle["hint"]
     assert_equal "0,360", angle["hint_string"]
-  ensure
-    gauge&.free
   end
 
   private

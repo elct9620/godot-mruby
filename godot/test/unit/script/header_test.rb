@@ -45,12 +45,10 @@ class HeaderTest < Minitest::Test
 
   # @behavior RS-039
   def test_a_scenes_connection_to_a_declared_signal_is_made_before_its_file_runs
-    listener = Godot::ResourceLoader.load("#{DIRECTORY}/siren.tscn").instantiate
+    listener = autofree(Godot::ResourceLoader.load("#{DIRECTORY}/siren.tscn").instantiate)
 
     assert listener.get_node("Siren").has_connections(:wailed)
     refute ran?(:Siren)
-  ensure
-    listener&.free
   end
 
   # @behavior RS-041
@@ -77,15 +75,11 @@ class HeaderTest < Minitest::Test
     Godot::ResourceLoader.load("#{DIRECTORY}/#{name}.rb")
   end
 
-  # A node with the script of that name, which loses its script before it is
-  # freed, so nothing asks the script anything after the test.
+  # A node with the script of that name.
   def with_node(name)
-    node = Godot::Node2D.new
+    node = autofree(Godot::Node2D.new)
     node.set_script(script(name))
     yield node
-  ensure
-    node.set_script(nil)
-    node.free
   end
 
   # Whether the file defining the class of that name has run.

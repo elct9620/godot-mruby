@@ -1,12 +1,10 @@
 class EngineObjectsTest < Minitest::Test
   # @behavior RG-008
   def test_an_engine_class_makes_the_engines_object
-    node = Godot::Node.new
+    node = autofree(Godot::Node.new)
 
     assert_instance_of Godot::Node, node
     assert_equal 0, node.get_child_count
-  ensure
-    node&.free
   end
 
   # @behavior RG-009
@@ -16,22 +14,18 @@ class EngineObjectsTest < Minitest::Test
 
   # @behavior RG-010
   def test_ruby_calls_an_engine_objects_method_by_its_name
-    node = Godot::Node.new
+    node = autofree(Godot::Node.new)
 
     node.set_process_priority(3)
 
     assert_equal 3, node.get_process_priority
-  ensure
-    node&.free
   end
 
   # @behavior RG-011
   def test_a_name_the_engine_object_has_no_method_for_raises_no_method_error
-    node = Godot::Node.new
+    node = autofree(Godot::Node.new)
 
     assert_raises(NoMethodError) { node.no_such_engine_method }
-  ensure
-    node&.free
   end
 
   # @behavior RG-012
@@ -55,13 +49,11 @@ class EngineObjectsTest < Minitest::Test
 
   # @behavior RG-014
   def test_ruby_reads_and_writes_an_engine_property_by_its_name
-    node = Godot::Node.new
+    node = autofree(Godot::Node.new)
 
     node.process_priority = 5
 
     assert_equal 5, node.process_priority
-  ensure
-    node&.free
   end
 
   # @behavior RG-015
@@ -83,7 +75,7 @@ class EngineObjectsTest < Minitest::Test
 
   # @behavior RG-018
   def test_a_call_the_engine_refuses_raises_call_error_as_gdscript_reports_it
-    node = Godot::Node.new
+    node = autofree(Godot::Node.new)
 
     too_few = assert_raises(Godot::CallError) { node.set_process_priority }
     wrong_type = assert_raises(Godot::CallError) { node.set_process_priority(nil) }
@@ -92,8 +84,6 @@ class EngineObjectsTest < Minitest::Test
                  too_few.message
     assert_equal "Invalid type in function 'set_process_priority' in base 'Node'. " \
                  "Cannot convert argument 1 from Nil to int.", wrong_type.message
-  ensure
-    node&.free
   end
 
   # @behavior RG-019

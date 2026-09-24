@@ -1,13 +1,11 @@
 class ValueTypesTest < Minitest::Test
   # @behavior RV-010
   def test_an_engine_value_type_crosses_as_a_value_of_its_class_under_godot
-    node = Godot::Node2D.new
+    node = autofree(Godot::Node2D.new)
     node.position = Godot::Vector2.new(1, 2)
 
     assert_instance_of Godot::Vector2, node.position
     assert_equal Godot::Vector2.new(1, 2), node.position
-  ensure
-    node&.free
   end
 
   # @behavior RV-011

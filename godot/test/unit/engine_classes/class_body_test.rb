@@ -19,10 +19,8 @@ class ClassBodyTest < Minitest::Test
 
   # @behavior RG-007
   def test_a_class_extending_an_abstract_class_is_not_abstract_itself
-    rabbit = Unit::EngineClasses::Rabbit.new
+    rabbit = autofree(Unit::EngineClasses::Rabbit.new)
 
     assert_instance_of Unit::EngineClasses::Rabbit, rabbit
-  ensure
-    rabbit&.free
   end
 end

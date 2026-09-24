@@ -13,11 +13,9 @@ class HeldTest < Minitest::Test
   def test_a_script_runs_the_source_godot_holds_for_it
     script = Godot::ResourceLoader.load("res://test/unit/script/held.rb")
     script.source_code = GIVEN
-    node = Godot::Node.new
+    node = autofree(Godot::Node.new)
     node.set_script(script)
 
     assert_equal "the source Godot holds", node.call(:source)
-  ensure
-    node&.free
   end
 end
