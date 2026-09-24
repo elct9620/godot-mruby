@@ -155,7 +155,7 @@ impl Property {
 }
 ```
 
-## `Property::hinted`
+## `Property::with_hint`
 
 The property as the editor is to show it, `hint_string` being what the hint is read with.
 
@@ -165,11 +165,11 @@ The property as the editor is to show it, `hint_string` being what the hint is r
 
 ```rust
 impl Property {
-    pub fn hinted(self, hint: PropertyHint, hint_string: String) -> Property {}
+    pub fn with_hint(self, hint: PropertyHint, hint_string: String) -> Property {}
 }
 ```
 
-## `Property::of_class`
+## `Property::with_class`
 
 The property as an object of the class `class` names, which Godot fills in: its type is the object's rather than the declared value's, as a class names a type no value has to carry.
 
@@ -179,7 +179,7 @@ The property as an object of the class `class` names, which Godot fills in: its 
 
 ```rust
 impl Property {
-    pub fn of_class(self, hint: PropertyHint, class: String) -> Property {}
+    pub fn with_class(self, hint: PropertyHint, class: String) -> Property {}
 }
 ```
 

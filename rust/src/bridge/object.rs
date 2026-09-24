@@ -195,7 +195,7 @@ fn call(mrb: &Mrb, held: &EngineObject, name: Symbol, args: Array) -> Result<Val
     let answer = object
         .try_call(name.as_str(), &args)
         .map_err(|error| refused(mrb, &error, &object.get_class().to_string(), &name))?;
-    answered(mrb, &answer)
+    ruby_answer(mrb, &answer)
 }
 
 // Godot::Object#__instance_id__: the engine object's instance id, which
@@ -230,13 +230,13 @@ fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: Array) -> Result<Va
     let answer = ClassDb::singleton()
         .try_class_call_static(&class, name.as_str(), &args)
         .map_err(|error| refused(mrb, &error, &class, &name))?;
-    answered(mrb, &answer)
+    ruby_answer(mrb, &answer)
 }
 
 // What the engine answered, as Ruby is given it, or the Godot::CallError an
 // answer that cannot reach Ruby raises.
-fn answered(mrb: &Mrb, answer: &Variant) -> Result<Value, Error> {
-    ToRuby::checked(answer)
+fn ruby_answer(mrb: &Mrb, answer: &Variant) -> Result<Value, Error> {
+    ToRuby::try_new(answer)
         .map(|answer| answer.into_value(mrb))
         .map_err(|reason| call_error(mrb, &reason))
 }
@@ -301,8 +301,8 @@ fn declare_export(
         return Err(argument_error(mrb, &message));
     }
     let property = match hint.as_str() {
-        "type" => typed(mrb, name, &default, &hint_string),
-        _ => inferred(name, &default, &hint, hint_string),
+        "type" => property_of_class(mrb, name, &default, &hint_string),
+        _ => property_of_value(name, &default, &hint, hint_string),
     }
     .map_err(|reason| argument_error(mrb, &reason))?;
     realm::declare_export(mrb, class, property)?;
@@ -330,14 +330,19 @@ fn declare_heading(mrb: &Mrb, _class: RClass, name: String, prefix: String, kind
 // it names, which Godot fills in from the scene or the project's files. The
 // value it is declared with is the class's own to hold, so a value of
 // another type is refused as GDScript refuses a mismatched one.
-fn typed(mrb: &Mrb, name: String, default: &Variant, class: &str) -> Result<Property, String> {
+fn property_of_class(
+    mrb: &Mrb,
+    name: String,
+    default: &Variant,
+    class: &str,
+) -> Result<Property, String> {
     let (hint, class_name) = hint_by_class(mrb, class)?;
     if let Some(given) = mismatched(mrb, default, class) {
         return Err(format!(
             "Cannot assign a value of type {given} to variable \"{name}\" with specified type {class_name}."
         ));
     }
-    Ok(Property::new(name, default).of_class(hint, class_name))
+    Ok(Property::new(name, default).with_class(hint, class_name))
 }
 
 // What the value an export was declared with is, unless the class it names
@@ -392,7 +397,7 @@ fn written_in(object: &Gd<Object>) -> impl Iterator<Item = String> {
 // The property an export naming no type declares: its type is the declared
 // value's, so a value naming none is refused, and the keyword naming a hint
 // tells the editor how to show it.
-fn inferred(
+fn property_of_value(
     name: String,
     default: &Variant,
     hint: &str,
@@ -405,7 +410,7 @@ fn inferred(
         );
     }
     let hint = hint_by_name(hint, default.get_type())?;
-    Ok(Property::new(name, default).hinted(hint, hint_string))
+    Ok(Property::new(name, default).with_hint(hint, hint_string))
 }
 
 // The hint an exported object takes from the class it names, and the name

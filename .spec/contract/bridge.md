@@ -94,7 +94,7 @@ An engine value as Ruby is given it, made only once the value is known to reach 
 pub struct ToRuby;
 ```
 
-## `ToRuby::checked`
+## `ToRuby::try_new`
 
 An engine value for Ruby, or why it cannot reach Ruby.
 
@@ -104,7 +104,7 @@ An engine value for Ruby, or why it cannot reach Ruby.
 
 ```rust
 impl ToRuby {
-    pub fn checked(variant: &Variant) -> Result<Self, String> {}
+    pub fn try_new(variant: &Variant) -> Result<Self, String> {}
 }
 ```
 

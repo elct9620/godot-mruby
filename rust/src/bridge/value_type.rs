@@ -355,7 +355,7 @@ fn to_s(mrb: &Mrb, held: &EngineValue) -> Value {
 // What the engine answered for a value, as Ruby is given it; a value type's
 // answers hold no container Ruby could not take.
 fn to_ruby(mrb: &Mrb, answer: &Variant) -> Value {
-    ToRuby::checked(answer).map_or_else(|_| Value::nil(), |answer| answer.into_value(mrb))
+    ToRuby::try_new(answer).map_or_else(|_| Value::nil(), |answer| answer.into_value(mrb))
 }
 
 fn variants(mrb: &Mrb, args: Array) -> Result<Vec<Variant>, Error> {

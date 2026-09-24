@@ -323,7 +323,7 @@ impl Caller {
         let Some(key) = self.object() else {
             return Variant::nil();
         };
-        let checked = args.iter().map(|arg| ToRuby::checked(arg));
+        let checked = args.iter().map(|arg| ToRuby::try_new(arg));
         let args = match checked.collect::<Result<Vec<_>, _>>() {
             Ok(args) => args,
             Err(reason) => {
@@ -345,7 +345,7 @@ impl Caller {
 // instance variable the object wrote itself. Whether it was written is what
 // Godot takes for an answer, so a refusal leaves the name to the engine.
 fn write(key: Key, name: &str, exported: bool, value: &Variant) -> bool {
-    let Ok(value) = ToRuby::checked(value) else {
+    let Ok(value) = ToRuby::try_new(value) else {
         return false;
     };
     let written = if exported {
@@ -353,7 +353,7 @@ fn write(key: Key, name: &str, exported: bool, value: &Variant) -> bool {
         realm::enter(|realm| realm.send::<_, ToEngine>(key, &setter, [value])).map(|_| true)
     } else {
         let variable = StringName::from(name).to_variant();
-        let Ok(variable) = ToRuby::checked(&variable) else {
+        let Ok(variable) = ToRuby::try_new(&variable) else {
             return false;
         };
         realm::enter(|realm| realm.send::<_, bool>(key, "__write_variable__", [variable, value]))
@@ -373,7 +373,7 @@ fn read(key: Key, name: &str, exported: bool) -> Option<Variant> {
             .map(|ToEngine(answer)| Some(answer))
     } else {
         let variable = StringName::from(name).to_variant();
-        let variable = ToRuby::checked(&variable).ok()?;
+        let variable = ToRuby::try_new(&variable).ok()?;
         realm::enter(|realm| realm.send::<_, ToEngine>(key, "__read_variable__", [variable]))
             .map(|ToEngine(answer)| (!answer.is_nil()).then(|| answer.to::<VarArray>().at(0)))
     };
@@ -397,10 +397,10 @@ fn member_info(member: &Member) -> sys::GDExtensionPropertyInfo {
 fn heading_info(heading: &Heading) -> sys::GDExtensionPropertyInfo {
     sys::GDExtensionPropertyInfo {
         type_: VariantType::NIL.ord() as sys::GDExtensionVariantType,
-        name: owned(StringName::from(heading.name())),
-        class_name: owned(StringName::default()),
+        name: into_raw(StringName::from(heading.name())),
+        class_name: into_raw(StringName::default()),
         hint: PropertyHint::NONE.ord() as u32,
-        hint_string: owned(GString::from(heading.hint_string())),
+        hint_string: into_raw(GString::from(heading.hint_string())),
         usage: heading.usage().ord() as u32,
     }
 }
@@ -412,10 +412,10 @@ fn property_info(property: &Property) -> sys::GDExtensionPropertyInfo {
     let usage = PropertyUsageFlags::DEFAULT.ord() | PropertyUsageFlags::SCRIPT_VARIABLE.ord();
     sys::GDExtensionPropertyInfo {
         type_: property.kind.ord() as sys::GDExtensionVariantType,
-        name: owned(StringName::from(&property.name)),
-        class_name: owned(StringName::default()),
+        name: into_raw(StringName::from(&property.name)),
+        class_name: into_raw(StringName::default()),
         hint: property.hint.ord() as u32,
-        hint_string: owned(GString::from(&property.hint_string)),
+        hint_string: into_raw(GString::from(&property.hint_string)),
         usage: usage as u32,
     }
 }
@@ -425,7 +425,7 @@ fn property_info(property: &Property) -> sys::GDExtensionPropertyInfo {
 // method's is.
 fn method_info(name: &str) -> sys::GDExtensionMethodInfo {
     sys::GDExtensionMethodInfo {
-        name: owned(StringName::from(name)),
+        name: into_raw(StringName::from(name)),
         return_value: answer_info(),
         flags: sys::GDEXTENSION_METHOD_FLAG_NORMAL as u32,
         id: 0,
@@ -441,10 +441,10 @@ fn method_info(name: &str) -> sys::GDExtensionMethodInfo {
 fn answer_info() -> sys::GDExtensionPropertyInfo {
     sys::GDExtensionPropertyInfo {
         type_: VariantType::NIL.ord() as sys::GDExtensionVariantType,
-        name: owned(StringName::default()),
-        class_name: owned(StringName::default()),
+        name: into_raw(StringName::default()),
+        class_name: into_raw(StringName::default()),
         hint: PropertyHint::NONE.ord() as u32,
-        hint_string: owned(GString::default()),
+        hint_string: into_raw(GString::default()),
         usage: PropertyUsageFlags::NIL_IS_VARIANT.ord() as u32,
     }
 }
@@ -459,12 +459,12 @@ fn the_engines_own(instance: &RubyInstance, name: &str) -> bool {
 
 // A string the array holds for Godot to read until it hands the array back,
 // as the pointer the engine's property info keeps it under.
-fn owned<T, P>(string: T) -> *mut P {
+fn into_raw<T, P>(string: T) -> *mut P {
     Box::into_raw(Box::new(string)).cast::<P>()
 }
 
-// SAFETY: `string` is what `owned` made for this array, taken back once.
-unsafe fn taken<T, P>(string: *mut P) {
+// SAFETY: `string` is what `into_raw` made for this array, taken back once.
+unsafe fn drop_raw<T, P>(string: *mut P) {
     drop(unsafe { Box::from_raw(string.cast::<T>()) });
 }
 
@@ -629,9 +629,9 @@ unsafe extern "C" fn free_property_list(
     for info in &infos {
         // SAFETY: each string is what `property_info` made for this array.
         unsafe {
-            taken::<StringName, _>(info.name);
-            taken::<StringName, _>(info.class_name);
-            taken::<GString, _>(info.hint_string);
+            drop_raw::<StringName, _>(info.name);
+            drop_raw::<StringName, _>(info.class_name);
+            drop_raw::<GString, _>(info.hint_string);
         }
     }
 }
@@ -667,10 +667,10 @@ unsafe extern "C" fn free_method_list(
     for info in &infos {
         // SAFETY: each string is what `method_info` made for this array.
         unsafe {
-            taken::<StringName, _>(info.name);
-            taken::<StringName, _>(info.return_value.name);
-            taken::<StringName, _>(info.return_value.class_name);
-            taken::<GString, _>(info.return_value.hint_string);
+            drop_raw::<StringName, _>(info.name);
+            drop_raw::<StringName, _>(info.return_value.name);
+            drop_raw::<StringName, _>(info.return_value.class_name);
+            drop_raw::<GString, _>(info.return_value.hint_string);
         }
     }
 }

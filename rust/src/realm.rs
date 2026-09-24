@@ -519,7 +519,7 @@ impl Realm {
                 .and_then(|receiver| receiver.funcall(&self.mrb, method, &args))
                 .map_err(|error| RubyError::read(&self.mrb, None, &error))
         })?;
-        self.taken(answer, || {
+        self.converted_answer(answer, || {
             format!("{receiver}.{}", method.to_string_lossy())
         })
     }
@@ -591,7 +591,7 @@ impl Realm {
                 .and_then(|object| object.funcall(&self.mrb, method, &args))
                 .map_err(|error| RubyError::read(&self.mrb, None, &error))
         })?;
-        self.taken(answer, || format!("#{method}"))
+        self.converted_answer(answer, || format!("#{method}"))
     }
 
     // Runs `ruby`, which Rust starts; it is the outermost Ruby when none runs.
@@ -601,7 +601,7 @@ impl Realm {
     }
 
     // `answer` as the Rust value its caller takes, or why it is not one.
-    fn taken<R: TryConvert>(
+    fn converted_answer<R: TryConvert>(
         &self,
         answer: Value,
         called: impl FnOnce() -> String,

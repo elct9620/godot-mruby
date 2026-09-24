@@ -273,7 +273,7 @@ fn constant_from(mrb: &Mrb, path: &str, outer: &[String], name: &str) -> Result<
         );
         return Err(name_error(mrb, &message, name));
     }
-    run_by_name(mrb, path).map_err(|error| placed(mrb, path, error))?;
+    run_by_name(mrb, path).map_err(|error| with_file(mrb, path, error))?;
     let scope = named_scope(mrb, outer)?;
     let symbol = mrb.intern(name.as_bytes())?;
     if scope.const_defined_at(mrb, symbol) {
@@ -348,7 +348,7 @@ fn name_error(mrb: &Mrb, message: &str, name: &str) -> Error {
 
 // A file that does not parse, raised where it was used by name, names the
 // file as well as the line.
-fn placed(mrb: &Mrb, path: &str, error: Error) -> Error {
+fn with_file(mrb: &Mrb, path: &str, error: Error) -> Error {
     let Error::Syntax(parse) = &error else {
         return error;
     };

@@ -49,7 +49,7 @@ impl Property {
 
     /// The property as the editor is to show it, `hint_string` being what
     /// the hint is read with.
-    pub fn hinted(self, hint: PropertyHint, hint_string: String) -> Self {
+    pub fn with_hint(self, hint: PropertyHint, hint_string: String) -> Self {
         Self {
             hint,
             hint_string,
@@ -60,7 +60,7 @@ impl Property {
     /// The property as an object of the class `class` names, which Godot
     /// fills in: its type is the object's rather than the declared value's,
     /// as a class names a type no value has to carry.
-    pub fn of_class(self, hint: PropertyHint, class: String) -> Self {
+    pub fn with_class(self, hint: PropertyHint, class: String) -> Self {
         Self {
             kind: VariantType::OBJECT,
             hint,

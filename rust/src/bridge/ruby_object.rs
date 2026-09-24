@@ -31,7 +31,7 @@ pub fn callable(key: Key, name: String) -> Callable {
 }
 
 fn call(kept: &Kept, args: &[&Variant]) -> Variant {
-    let checked = args.iter().map(|arg| ToRuby::checked(arg));
+    let checked = args.iter().map(|arg| ToRuby::try_new(arg));
     let args = match checked.collect::<Result<Vec<_>, _>>() {
         Ok(args) => args,
         Err(reason) => {
@@ -67,7 +67,7 @@ impl IRefCounted for RubyObject {
 
 impl RubyObject {
     /// A new `RubyObject` for the object of class `class` that `key` holds.
-    pub fn holding(key: Key, class: &str) -> Gd<Self> {
+    pub fn new(key: Key, class: &str) -> Gd<Self> {
         Gd::from_init_fn(|base| Self {
             kept: Kept(key),
             class: GString::from(class),

@@ -30,7 +30,7 @@ pub struct ToRuby<'a>(&'a Variant);
 
 impl<'a> ToRuby<'a> {
     /// `variant` for Ruby, or why it cannot reach Ruby.
-    pub fn checked(variant: &'a Variant) -> Result<Self, String> {
+    pub fn try_new(variant: &'a Variant) -> Result<Self, String> {
         match unreachable_from_engine(variant) {
             Some(reason) => Err(reason),
             None => Ok(Self(variant)),
@@ -95,16 +95,16 @@ fn to_ruby(mrb: &Mrb, variant: &Variant) -> Value {
                 Err(object) => object::ruby_object(mrb, object),
             }),
         kind if value_type::is_value_type(kind) => value_type::ruby_value(mrb, variant),
-        VariantType::PACKED_BYTE_ARRAY => packed::<u8>(mrb, variant),
-        VariantType::PACKED_INT32_ARRAY => packed::<i32>(mrb, variant),
-        VariantType::PACKED_INT64_ARRAY => packed::<i64>(mrb, variant),
-        VariantType::PACKED_FLOAT32_ARRAY => packed::<f32>(mrb, variant),
-        VariantType::PACKED_FLOAT64_ARRAY => packed::<f64>(mrb, variant),
-        VariantType::PACKED_STRING_ARRAY => packed::<GString>(mrb, variant),
-        VariantType::PACKED_VECTOR2_ARRAY => packed::<Vector2>(mrb, variant),
-        VariantType::PACKED_VECTOR3_ARRAY => packed::<Vector3>(mrb, variant),
-        VariantType::PACKED_COLOR_ARRAY => packed::<Color>(mrb, variant),
-        VariantType::PACKED_VECTOR4_ARRAY => packed::<Vector4>(mrb, variant),
+        VariantType::PACKED_BYTE_ARRAY => from_packed::<u8>(mrb, variant),
+        VariantType::PACKED_INT32_ARRAY => from_packed::<i32>(mrb, variant),
+        VariantType::PACKED_INT64_ARRAY => from_packed::<i64>(mrb, variant),
+        VariantType::PACKED_FLOAT32_ARRAY => from_packed::<f32>(mrb, variant),
+        VariantType::PACKED_FLOAT64_ARRAY => from_packed::<f64>(mrb, variant),
+        VariantType::PACKED_STRING_ARRAY => from_packed::<GString>(mrb, variant),
+        VariantType::PACKED_VECTOR2_ARRAY => from_packed::<Vector2>(mrb, variant),
+        VariantType::PACKED_VECTOR3_ARRAY => from_packed::<Vector3>(mrb, variant),
+        VariantType::PACKED_COLOR_ARRAY => from_packed::<Color>(mrb, variant),
+        VariantType::PACKED_VECTOR4_ARRAY => from_packed::<Vector4>(mrb, variant),
         _ => Value::nil(),
     }
 }
@@ -119,7 +119,7 @@ fn array(mrb: &Mrb, elements: impl Iterator<Item = Variant>) -> Value {
     mrb.ary_new_from_values(&values).as_value()
 }
 
-fn packed<T: PackedElement>(mrb: &Mrb, variant: &Variant) -> Value {
+fn from_packed<T: PackedElement>(mrb: &Mrb, variant: &Variant) -> Value {
     let packed = variant.to::<PackedArray<T>>();
     array(mrb, packed.as_slice().iter().map(ToGodot::to_variant))
 }
@@ -202,5 +202,5 @@ pub fn to_engine(mrb: &Mrb, value: Value, level: usize) -> Result<Variant, Strin
     if Proc::from_value(value).is_some() || class == "Method" {
         return Ok(ruby_object::callable(key, class).to_variant());
     }
-    Ok(RubyObject::holding(key, &class).to_variant())
+    Ok(RubyObject::new(key, &class).to_variant())
 }

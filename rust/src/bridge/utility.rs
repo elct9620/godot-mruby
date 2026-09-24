@@ -178,7 +178,7 @@ pub fn call(mrb: &Mrb, _godot: Value, name: Symbol, args: Array) -> Result<Value
             &format!("Invalid type in utility function '{name}'. {reason}"),
         )
     })?;
-    ToRuby::checked(&answer)
+    ToRuby::try_new(&answer)
         .map(|answer| answer.into_value(mrb))
         .map_err(|reason| call_error(mrb, &reason))
 }
