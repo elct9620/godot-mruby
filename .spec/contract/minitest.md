@@ -609,7 +609,7 @@ end
 
 ## `Minitest::Waits#wait_process_frames`
 
-Returns once `frames` process frames have begun, before any node's `_process` in the last of them.
+Returns once `frames` process frames have begun; given no frames or fewer it reports an error and waits for one, as GUT's does. It returns before any node's `_process` in the last of them.
 
 ```ruby
 module Minitest
@@ -622,7 +622,7 @@ end
 
 ## `Minitest::Waits#wait_physics_frames`
 
-Returns once `frames` physics frames have begun, before any node's `_physics_process` in the last of them.
+Returns once `frames` physics frames have begun; given no frames or fewer it reports an error and waits for one, as GUT's does. It returns before any node's `_physics_process` in the last of them.
 
 ```ruby
 module Minitest

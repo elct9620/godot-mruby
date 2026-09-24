@@ -28,11 +28,11 @@ module Minitest
     end
 
     def wait_process_frames(frames)
-      frames.times { next_frame(:process) }
+      at_least_one("wait_process_frames", frames).times { next_frame(:process) }
     end
 
     def wait_physics_frames(frames)
-      frames.times { next_frame(:physics) }
+      at_least_one("wait_physics_frames", frames).times { next_frame(:physics) }
     end
 
     def wait_seconds(time)
@@ -95,6 +95,15 @@ module Minitest
     def next_physics_delta
       next_frame(:physics)
       Godot::Engine.get_main_loop.root.get_physics_process_delta_time
+    end
+
+    # A wait for no frames or fewer is reported and waits for one, as GUT's
+    # does.
+    def at_least_one(wait, frames)
+      return frames if frames > 0
+
+      Godot.push_error("#{wait}: frames must be > 0, you passed #{frames}. 1 frames waited.")
+      1
     end
 
     # Hands frames back until one of the kind `frame` names begins.

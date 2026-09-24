@@ -103,4 +103,15 @@ class FramesTest < Minitest::Test
 
     assert_equal connections, renamed.get_connections
   end
+
+  # @behavior RW-023
+  def test_a_wait_for_no_frames_waits_for_one
+    process = Godot::Engine.get_process_frames
+    wait_process_frames 0
+    assert_equal process + 1, Godot::Engine.get_process_frames
+
+    physics = Godot::Engine.get_physics_frames
+    wait_physics_frames 0
+    assert_equal physics + 1, Godot::Engine.get_physics_frames
+  end
 end

@@ -150,6 +150,14 @@ How a test reaches the scene a game runs in: the runner resumes the run once per
 | When | the test simulates it for a frame, checking processing |
 | Then | neither its `_process` nor its `_physics_process` was called |
 
+## `RW-023` A wait for no frames waits for one
+
+| Step | Statement |
+| --- | --- |
+| Given | a test that reads the engine's process and physics frame counts |
+| When | the test waits for 0 process frames, then for 0 physics frames |
+| Then | each count has grown by 1 |
+
 ## `RW-002` A node added with `add_child_autofree` goes under the test root
 
 | Step | Statement |
