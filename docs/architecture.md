@@ -82,7 +82,7 @@ godot/
                          └─ read by tasks/support/<spec>.rb or <spec>/
 ```
 
-The extension is tested through itself, and `godot/` is sorted by who judges an outcome, then by the `.spec/behavior` file it claims. The extension's own runner judges `test/unit/<spec>/`, whose files loaded by name sit beside their tests, and `test/e2e/`, which plays the game in `src/` and claims what its node scripts do. `godot:verify` judges `integration/<spec>/`, for what no Ruby test can observe: a log line, a run's exit, the editor, an exported game. Its checks are named after the same spec, and GDScript stays only where a check must ask from outside the realm.
+The extension is tested through itself, and `godot/` is sorted by who judges an outcome, then by the `.spec/behavior` file it claims. The extension's own runner judges `test/unit/<spec>/`, whose files loaded by name sit beside their tests, and `test/e2e/`, which plays the game in `src/` and claims what its node scripts do. `godot:verify` judges `integration/<spec>/`, for what no Ruby test can observe: a log line, a run's exit, the editor, an exported game. Its checks are named after the same spec, and GDScript stays only where a check must ask from outside the realm. What only the extension's own code reaches, such as a header, an ancestry or a realm entry, is judged by `cargo test` beside that code in `rust/src/`.
 
 ## 2. Extension
 
