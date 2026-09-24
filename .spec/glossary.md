@@ -53,11 +53,11 @@ A directory whose files are named from the top level, as Zeitwerk's root directo
 
 ### Loader
 
-What stands in for `require` in a realm: the first time Ruby uses a constant the class index names, the loader runs the file that names it, so the file loads by name. Godot loading a file reads its source and runs nothing.
+What stands in for `require` in a realm: the first time Ruby uses a constant the class index names, the loader runs the file that names it, so the file loads by name. A namespace's own constant loads as soon as the namespace and an outer constant of its name both exist, so the outer one never hides it. Godot loading a file reads its source and runs nothing.
 
 #### Rejected
 
-- `autoload` - Godot's autoloads are singleton nodes, and Ruby's `Module#autoload` is seen by constant lookup; the loader answers only `const_missing`, which mruby calls once lookup has failed.
+- `autoload` - Godot's autoloads are singleton nodes, and Ruby's `Module#autoload` is seen by constant lookup, which mruby's is not; the loader answers `const_missing`, which mruby calls once lookup has failed, and `const_added`.
 
 ### Log
 

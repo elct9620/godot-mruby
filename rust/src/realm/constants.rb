@@ -10,8 +10,9 @@ Module.prepend(Module.new do
     found ? found.first : super
   end
 
-  # A file that raises takes away what it created, so the realm has to know.
-  # Private, as Ruby's own hook is.
+  # A file that raises takes away what it created, so the realm has to know,
+  # and a namespace's own constant the new one would hide loads now. Private,
+  # as Ruby's own hook is.
   def const_added(name)
     __created__(name)
     super

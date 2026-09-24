@@ -686,7 +686,7 @@ impl RubyError {
 
     /// Writes the error to `log`, at its Ruby line when it has one.
     #[track_caller]
-    pub fn write(&self, log: &impl Log) {
+    pub fn write(&self, log: &(impl Log + ?Sized)) {
         if self.backtrace.is_empty() {
             log.record(self.level, self.at.as_ref(), &self.message);
         } else {

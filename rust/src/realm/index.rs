@@ -74,14 +74,6 @@ impl Roots {
             .collect::<Vec<_>>()
             .join("::")
     }
-
-    fn namespace_of(&self, path: &str) -> String {
-        let name = self.name_of(path);
-        name.rsplit_once("::")
-            .map_or(String::from("Object"), |(namespace, _)| {
-                namespace.to_owned()
-            })
-    }
 }
 
 /// A constant path as the index matches it: one segment per namespace, each
@@ -126,7 +118,6 @@ impl ClassIndex {
         defined: impl Fn(&[String]) -> bool,
         log: &dyn Log,
     ) {
-        let mut added = BTreeSet::new();
         for path in paths {
             let key = self.key_of(&path);
             self.add_namespaces(&path);
@@ -150,10 +141,8 @@ impl ClassIndex {
                 self.refused.insert(key);
                 continue;
             }
-            self.files.insert(key.clone(), path);
-            added.insert(key);
+            self.files.insert(key, path);
         }
-        self.warn_of_shadows(&added, log);
     }
 
     /// The constant paths the index names a file for.
@@ -195,11 +184,33 @@ impl ClassIndex {
         })
     }
 
+    /// What the index names directly inside the namespace `key` spells: its
+    /// files, and its directories' modules.
+    pub fn members(&self, key: &[String]) -> Vec<Key> {
+        self.keys()
+            .filter(|named| named.len() == key.len() + 1 && named.starts_with(key))
+            .collect()
+    }
+
+    /// What the index names `name` inside the namespaces below the one
+    /// `scope` spells.
+    pub fn below(&self, scope: &[String], name: &str) -> Vec<Key> {
+        let name = normalize(name);
+        self.keys()
+            .filter(|named| named.len() > scope.len() + 1 && named.starts_with(scope))
+            .filter(|named| named.last() == Some(&name))
+            .collect()
+    }
+
     /// Whether the file at `path` is one the index names.
     pub fn names(&self, path: &str) -> bool {
         self.files
             .get(&self.key_of(path))
             .is_some_and(|named| named == path)
+    }
+
+    fn keys(&self) -> impl Iterator<Item = Key> + '_ {
+        self.files.keys().chain(self.namespaces.keys()).cloned()
     }
 
     // Every directory a file sits in below its root directory is a
@@ -229,46 +240,6 @@ impl ClassIndex {
             ),
         );
     }
-
-    // Ruby finds an outer constant before asking for an inner one of the same
-    // name, so once the outer file has loaded the inner one never does. Only
-    // files sharing a last segment can hide one another, and a pair already
-    // warned about has no file among `added`.
-    fn warn_of_shadows(&self, added: &BTreeSet<Key>, log: &dyn Log) {
-        let mut by_name: BTreeMap<&str, Vec<(&Key, &String)>> = BTreeMap::new();
-        for (key, path) in &self.files {
-            if let Some(name) = key.last() {
-                by_name.entry(name).or_default().push((key, path));
-            }
-        }
-        for files in by_name.values() {
-            for &(inner, inner_path) in files {
-                for &(outer, outer_path) in files {
-                    let new = added.contains(inner) || added.contains(outer);
-                    if new && hides(outer, inner) {
-                        log.record(
-                            Level::Warn,
-                            Some(&at(inner_path)),
-                            &format!(
-                                "{outer_path} names {}, which hides {} from Ruby inside {} once it has loaded",
-                            self.roots.name_of(outer_path),
-                            self.roots.name_of(inner_path),
-                            self.roots.namespace_of(inner_path)
-                            ),
-                        );
-                    }
-                }
-            }
-        }
-    }
-}
-
-// Whether `outer` shares `inner`'s last segment from a namespace `inner`'s
-// namespace sits inside.
-fn hides(outer: &Key, inner: &Key) -> bool {
-    outer.len() < inner.len()
-        && outer.last() == inner.last()
-        && inner.starts_with(&outer[..outer.len() - 1])
 }
 
 /// The file a constant path written inside the namespaces `scope` spells

@@ -19,10 +19,13 @@ module Godot
       "WARNING: res://integration/loader/taken/minitest.rb names Minitest, " \
       "which the realm already has, so it never loads by name",
       "WARNING: res://test/unit/loader/naming/http_client.rb and res://test/unit/loader/naming/httpclient.rb " \
-      "both name Unit::Loader::Naming::HttpClient, so neither loads by name",
-      "WARNING: res://test/unit/loader/naming/crate.rb names Unit::Loader::Naming::Crate, which hides " \
-      "Unit::Loader::Naming::Items::Crate from Ruby inside Unit::Loader::Naming::Items once it has loaded"
+      "both name Unit::Loader::Naming::HttpClient, so neither loads by name"
     ].freeze
+    # What every run has to report of the namespace's own file that raises as
+    # a constant of its name outside the namespace loads: the error placed at
+    # the line of the file that raised.
+    HIDDEN_RAISED = ["SCRIPT ERROR: bay/latch.rb fails as a latch outside Bay loads",
+                     "(res://test/unit/loader/bay/latch.rb:8)"].freeze
     # A test using a constant whose file raises, and what its run has to print
     # in order: the error placed at the line of the file that raised.
     RAISING = "res://integration/loader/failing/raising"
@@ -41,20 +44,33 @@ module Godot
     module_function
 
     def verify!(project)
-      verify_warnings!(project)
+      output, status = Runner.run(project, "--dir", Runner::TESTS)
+      raise "A run of #{Runner::TESTS} did not pass:\n#{output}" unless status.success?
+
+      verify_warnings!(output)
+      verify_hidden_raised!(output)
       verify_raised!(project)
       verify_late!(project)
     end
 
-    # Runs the project's Ruby tests, which have to pass and warn about every
-    # name the class index refused or found hidden.
-    # @behavior RL-001 RL-002 RL-003 RL-024 RL-025
-    def verify_warnings!(project)
-      output, status = Runner.run(project, "--dir", Runner::TESTS)
+    # The project's Ruby tests have to warn about every name the class index
+    # refused.
+    # @behavior RL-001 RL-003 RL-024 RL-025
+    def verify_warnings!(output)
       missing = WARNINGS.reject { |warning| output.include?(warning) }
-      return if status.success? && missing.empty?
+      return if missing.empty?
 
       raise "A run of #{Runner::TESTS} did not warn as it should #{missing}:\n#{output}"
+    end
+
+    # The project's Ruby tests have to report the namespace's own file that
+    # raised as the constant outside it loaded, at the file's line.
+    # @behavior RL-035
+    def verify_hidden_raised!(output)
+      missing = Runner.missing_in_order(output, HIDDEN_RAISED)
+      return if missing.empty?
+
+      raise "A run of #{Runner::TESTS} did not report the hidden file that raised #{missing}:\n#{output}"
     end
 
     # Runs the test whose constant's file raises, which has to fail with the

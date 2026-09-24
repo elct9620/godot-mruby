@@ -1,14 +1,14 @@
 //! Ruby's side of loading by name. A module prepended to `Module` asks the
-//! class index from `const_missing` and tells the realm from `const_added`
-//! what a running file creates; every other miss and addition is left to
-//! Ruby through `super`.
+//! class index from `const_missing`, and from `const_added` tells the realm
+//! what a running file creates and loads the constants the new one would
+//! hide; every other miss and addition is left to Ruby through `super`.
 
 use beni::{
     Error, FromValue, IntoValue, Module, Mrb, RClass, RModule, ReprValue, Symbol, Value, method,
 };
 
 use super::index::{self, Named, Namespace};
-use super::{Extends, bookkeeping, compile, executor, key_of};
+use super::{Extends, RubyError, bookkeeping, compile, executor, key_of};
 
 pub(super) fn define(mrb: &Mrb) -> Result<(), Error> {
     let module = mrb.class_get(c"Module")?;
@@ -36,12 +36,69 @@ fn load_by_name(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error
 // Module#__created__(name): the receiver has just been given the constant.
 // A directory's module the realm defines is no file's to take away.
 fn created(mrb: &Mrb, receiver: Value, name: Symbol) -> Value {
-    if !bookkeeping(mrb).defining_namespace.get()
-        && let (Some(scope), Some(name)) = (path_of(mrb, receiver), name.name(mrb))
-    {
-        executor::record(mrb, scope, name);
+    let (Some(scope), Some(name)) = (path_of(mrb, receiver), name.name(mrb)) else {
+        return Value::nil();
+    };
+    if !bookkeeping(mrb).defining_namespace.get() {
+        executor::record(mrb, scope.clone(), name.clone());
     }
+    load_hidden(mrb, &scope, &name);
     Value::nil()
+}
+
+// Ruby looks through the namespaces around it before asking const_missing,
+// so an outer constant would hide a namespace's own one of its name for
+// good, where CRuby's lookup finds the namespace's first. Once both the
+// namespace and an outer constant of the name exist, whichever came first,
+// the namespace's own one loads: `name`, just defined in `scope`, may be
+// either.
+fn load_hidden(mrb: &Mrb, scope: &[String], name: &str) {
+    let mut key: Vec<String> = scope.iter().map(|segment| index::normalize(segment)).collect();
+    let index = bookkeeping(mrb).index.borrow();
+    let below = index.below(&key, name);
+    key.push(index::normalize(name));
+    let inside = index.members(&key);
+    drop(index);
+    for inner in inside.into_iter().chain(below) {
+        if constant_at(mrb, &inner).is_none() && hidden(mrb, &inner) {
+            load_inner(mrb, &inner);
+        }
+    }
+}
+
+// Whether the namespace `inner` sits in exists, and a namespace around it has
+// a constant of `inner`'s name.
+fn hidden(mrb: &Mrb, inner: &[String]) -> bool {
+    let Some((name, namespace)) = inner.split_last() else {
+        return false;
+    };
+    constant_at(mrb, namespace).is_some()
+        && (0..namespace.len()).any(|depth| {
+            let outer: Vec<String> = namespace[..depth].iter().chain([name]).cloned().collect();
+            constant_at(mrb, &outer).is_some()
+        })
+}
+
+// Loads the constant `inner` spells for no caller: a file that raises is
+// reported at its own line, and the outer constant being defined goes on.
+fn load_inner(mrb: &Mrb, inner: &[String]) {
+    let named = bookkeeping(mrb).index.borrow().named(inner);
+    let (path, loaded) = match named {
+        Some(Named::File(path)) if executor::cycle(mrb, &path).is_none() => {
+            let loaded = run_by_name(mrb, &path);
+            (Some(path), loaded)
+        }
+        Some(Named::Namespace(namespace)) => {
+            let Some(scope) = constant_at(mrb, &inner[..inner.len() - 1]) else {
+                return;
+            };
+            (None, define_module(mrb, scope, &namespace.name).map(|_| ()))
+        }
+        _ => return,
+    };
+    if let Err(error) = loaded {
+        RubyError::read(mrb, path.as_deref(), &error).write(bookkeeping(mrb).log.as_ref());
+    }
 }
 
 /// Makes sure what the file at `path` opens exists before it runs, as CRuby

@@ -16,13 +16,14 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 | When | a realm's class index takes them in |
 | Then | the log carries a warning that neither of them loads by name |
 
-## `RL-002` One name at two namespace levels is warned about
+## `RL-002` A namespace's own constant is found inside it though an outer one of its name loaded first
 
 | Step | Statement |
 | --- | --- |
-| Given | a file whose name another file inside a namespace below it shares |
-| When | a realm's class index takes them in |
-| Then | the log carries a warning that the outer one hides the inner one once it has loaded |
+| Given | a file inside a namespace, whose name a file outside the namespace shares |
+| Given | the outer file has loaded |
+| When | code inside the namespace uses the name once the namespace exists |
+| Then | it gets the namespace's own constant |
 
 ## `RL-003` A file naming a constant the realm already has is warned about
 
@@ -263,3 +264,28 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 | Given | two directories spelling the same namespace, each under another root directory |
 | When | Ruby uses a constant from each of them inside that namespace |
 | Then | both load, and the namespace is one module
+
+## `RL-033` A namespace's own constant is found inside it though an outer one of its name loads later
+
+| Step | Statement |
+| --- | --- |
+| Given | a file inside a namespace, whose name a file outside the namespace shares |
+| Given | the namespace exists |
+| When | the outer file loads, then code inside the namespace uses the name |
+| Then | it gets the namespace's own constant |
+
+## `RL-034` An outer constant loads though the namespace's own file of its name raises
+
+| Step | Statement |
+| --- | --- |
+| Given | an existing namespace whose file raises, whose name a file outside the namespace shares |
+| When | the outer file loads |
+| Then | the outer constant is defined, and the namespace has none of that name |
+
+## `RL-035` A namespace's own file that raises as an outer constant loads is reported at its file
+
+| Step | Statement |
+| --- | --- |
+| Given | an existing namespace whose file raises, whose name a file outside the namespace shares |
+| When | the outer file loads |
+| Then | the log carries the namespace's file's exception at its line |
