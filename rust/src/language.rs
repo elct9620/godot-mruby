@@ -11,9 +11,9 @@ use godot::global::Error;
 use godot::meta::conv::RawPtr;
 use godot::prelude::*;
 
-use crate::announcement::{self, Clashes, Omission, Project};
+use crate::announcement::{self, Clashes, Omission};
 use crate::compiler::CompileError;
-use crate::game::{FilesOnDisk, GameFiles};
+use crate::game::{self, FilesOnDisk, GameFiles};
 use crate::realm::{Files, Location};
 use crate::script::RubyScript;
 use crate::template;
@@ -422,13 +422,7 @@ impl IScriptLanguageExtension for RubyLanguage {
     // The editor asks this of every script file as it scans the project, and
     // lists the file as a class by the name answered.
     fn get_global_class_name(&self, path: GString) -> AnyDictionary {
-        let test_directories = settings::test_directories();
-        let project = Project::new(
-            &FilesOnDisk,
-            &test_directories,
-            settings::template_directory(),
-            &bridge::is_node_class,
-        );
+        let project = game::project_on_disk();
         let file = path.to_string();
         let announced = project.announcement(&file);
         let mut clashes = CLASHES.lock().unwrap_or_else(PoisonError::into_inner);

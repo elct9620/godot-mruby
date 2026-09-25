@@ -16,11 +16,9 @@ use godot::obj::{EngineEnum, Gd, InstanceId, Singleton};
 use godot::register::info::PropertyHint;
 
 use super::value::{self, ToRuby};
-use crate::announcement::Project;
-use crate::game::FilesOnDisk;
+use crate::game;
 use crate::hint::Hint;
 use crate::realm::{self, Key};
-use crate::settings;
 use crate::snapshot::{Heading, Property, Signal};
 
 /// The engine object a Ruby object of an engine class stands for. Holding
@@ -463,13 +461,7 @@ fn editor_name(mrb: &Mrb, class: &str) -> Option<String> {
 
 // The name the editor lists the file at `path` under, if it is announced.
 fn editor_name_at(path: &str) -> Option<String> {
-    let test_directories = settings::test_directories();
-    let project = Project::new(
-        &FilesOnDisk,
-        &test_directories,
-        settings::template_directory(),
-        &super::is_node_class,
-    );
+    let project = game::project_on_disk();
     project
         .announcement(path)
         .ok()

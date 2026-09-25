@@ -44,7 +44,7 @@ pub enum Omission {
 pub struct Project<'a, F: Files> {
     files: &'a F,
     paths: Vec<String>,
-    test_directories: &'a [String],
+    test_directories: Vec<String>,
     template_directory: String,
     is_node: &'a dyn Fn(&str) -> bool,
 }
@@ -52,7 +52,7 @@ pub struct Project<'a, F: Files> {
 impl<'a, F: Files> Project<'a, F> {
     pub fn new(
         files: &'a F,
-        test_directories: &'a [String],
+        test_directories: Vec<String>,
         template_directory: String,
         is_node: &'a dyn Fn(&str) -> bool,
     ) -> Self {
@@ -70,7 +70,7 @@ impl<'a, F: Files> Project<'a, F> {
         if self.is_in_test_directory(path) {
             return Err(Omission::InTestDirectory);
         }
-        if settings::is_in_directory(path, std::slice::from_ref(&self.template_directory)) {
+        if self.is_in_template_directory(path) {
             return Err(Omission::InTemplateDirectory);
         }
         let (header, ancestry) = self.node_script(path).ok_or(Omission::NotNodeScript)?;
@@ -120,7 +120,11 @@ impl<'a, F: Files> Project<'a, F> {
     }
 
     fn is_in_test_directory(&self, path: &str) -> bool {
-        settings::is_in_directory(path, self.test_directories)
+        settings::is_in_directory(path, &self.test_directories)
+    }
+
+    fn is_in_template_directory(&self, path: &str) -> bool {
+        settings::is_in_directory(path, std::slice::from_ref(&self.template_directory))
     }
 }
 
@@ -173,10 +177,10 @@ mod tests {
         sources: &[(&'static str, &'static str)],
     ) -> Result<Announcement, Omission> {
         let files = Sources(sources.iter().copied().collect());
-        let test_directories = ["res://test".to_owned()];
+        let test_directories = vec!["res://test".to_owned()];
         let is_node = |class: &str| class != "Resource";
         let template_directory = "res://script_templates".to_owned();
-        Project::new(&files, &test_directories, template_directory, &is_node).announcement(path)
+        Project::new(&files, test_directories, template_directory, &is_node).announcement(path)
     }
 
     const ENEMY: (&str, &str) = ("res://enemy.rb", "class Enemy < Godot::Node2D\nend\n");

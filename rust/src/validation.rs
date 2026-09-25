@@ -70,7 +70,7 @@ pub fn validation<F: Files + Sync>(
     let shared_constant = shared_constant_warning(&typed, path);
     let shared_name = match Project::new(
         &typed,
-        test_directories,
+        test_directories.to_vec(),
         template_directory.to_owned(),
         is_node,
     )

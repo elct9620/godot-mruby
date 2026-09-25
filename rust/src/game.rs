@@ -6,6 +6,7 @@ use godot::classes::{Engine, FileAccess, Os, ResourceLoader, Script};
 use godot::global::Error;
 use godot::obj::Singleton;
 
+use crate::announcement::Project;
 use crate::header::Header;
 use crate::realm::{Declarations, Extends, Files, Roots};
 use crate::settings;
@@ -112,6 +113,16 @@ impl Files for RealmFiles {
 /// `test_directories`, which the editor never runs.
 pub fn is_left_out_in_editor(path: &str, test_directories: &[String]) -> bool {
     Engine::singleton().is_editor_hint() && settings::is_in_directory(path, test_directories)
+}
+
+/// The project as the editor scans it, whose files are read from disk.
+pub fn project_on_disk() -> Project<'static, FilesOnDisk> {
+    Project::new(
+        &FilesOnDisk,
+        settings::test_directories(),
+        settings::template_directory(),
+        &bridge::is_node_class,
+    )
 }
 
 /// The game's files as they are on disk, for answering what the editor asks
