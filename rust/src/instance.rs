@@ -159,7 +159,7 @@ impl RubyInstance {
                 header
                     .methods()
                     .map(str::to_owned)
-                    .chain(snapshot.methods(path).iter().cloned())
+                    .chain(snapshot.methods_by_path(path).iter().cloned())
             })
             .collect()
     }
@@ -175,7 +175,7 @@ impl RubyInstance {
 
     // What Godot wrote to the property `name` before the node had a Ruby
     // object, if it wrote one.
-    fn stash_value(&self, name: &str) -> Option<Variant> {
+    fn stash_value_by_name(&self, name: &str) -> Option<Variant> {
         self.stash
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -184,7 +184,7 @@ impl RubyInstance {
 
     // The value the class exported the property with, which answers Godot
     // while the node has no object of its own to answer from.
-    fn default_value(&self, name: &str) -> Option<Variant> {
+    fn default_value_by_name(&self, name: &str) -> Option<Variant> {
         self.property(name).map(|property| property.default_value())
     }
 
@@ -573,8 +573,8 @@ unsafe extern "C" fn get(
         }
         if instance.is_unbuilt() && !realm::is_inside() {
             let staged = instance
-                .stash_value(&name)
-                .or_else(|| instance.default_value(&name));
+                .stash_value_by_name(&name)
+                .or_else(|| instance.default_value_by_name(&name));
             let Some(answered) = staged else {
                 return sys::GDExtensionBool::from(false);
             };

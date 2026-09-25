@@ -83,7 +83,7 @@ impl Header {
     pub fn from_source(path: &str, source: &str, roots: &Roots) -> Self {
         let result = ruby_prism::parse(source.as_bytes());
         let mut reader = Reader {
-            key: roots.key_of(path),
+            key: roots.key_by_path(path),
             header: None,
             writes: Vec::new(),
         };
@@ -224,7 +224,7 @@ impl Header {
                 }
             }
             (b"export_category", [name]) => {
-                if let Some(name) = name_of(name) {
+                if let Some(name) = read_name(name) {
                     self.exports
                         .push(Export::Member(Member::Heading(Heading::Category {
                             name,
@@ -272,7 +272,7 @@ impl Reader {
                 name: names.last().cloned().unwrap_or_default(),
                 superclass: class
                     .and_then(|class| class.superclass())
-                    .and_then(|superclass| superclass_of(&superclass, scope)),
+                    .and_then(|superclass| read_superclass(&superclass, scope)),
                 ..Header::default()
             };
             if let Some(statements) = &statements {
@@ -300,8 +300,8 @@ impl Reader {
 // the header carries none of that declaration.
 fn signal(name: &Node, parameters: &[Node]) -> Option<Signal> {
     Some(Signal {
-        name: name_of(name)?,
-        parameters: parameters.iter().map(name_of).collect::<Option<_>>()?,
+        name: read_name(name)?,
+        parameters: parameters.iter().map(read_name).collect::<Option<_>>()?,
     })
 }
 
@@ -311,7 +311,7 @@ fn signal(name: &Node, parameters: &[Node]) -> Option<Signal> {
 // anything but a literal is the file's to work out as it runs, and a name
 // written so is none the header knows.
 fn export(name: &Node, default: &Node, keywords: &[Node]) -> Option<Export> {
-    let name = name_of(name)?;
+    let name = read_name(name)?;
     let Some(value) = literal(default) else {
         return Some(Export::Name { name, bare: None });
     };
@@ -389,10 +389,10 @@ fn bounds(range: &Node, step: Option<Variant>) -> Option<Variant> {
 // The group or subgroup an `export_group` or `export_subgroup` call writes,
 // with the prefix its properties are taken by when one is written.
 fn group(call: &[u8], name: &Node, prefix: &[Node]) -> Option<Heading> {
-    let name = name_of(name)?;
+    let name = read_name(name)?;
     let prefix = match prefix {
         [] => String::new(),
-        [prefix] => name_of(prefix)?,
+        [prefix] => read_name(prefix)?,
         _ => return None,
     };
     Some(match call {
@@ -455,7 +455,7 @@ fn whole(number: &Integer) -> Option<i64> {
 }
 
 // A name as a call writes it, which is a symbol or a string.
-fn name_of(node: &Node) -> Option<String> {
+fn read_name(node: &Node) -> Option<String> {
     if let Some(symbol) = node.as_symbol_node() {
         return Some(text(symbol.unescaped()));
     }
@@ -468,7 +468,7 @@ fn text(bytes: &[u8]) -> String {
 
 // A superclass the class statement inside `scope` writes, when it is a
 // constant path.
-fn superclass_of(superclass: &Node, scope: &[String]) -> Option<Superclass> {
+fn read_superclass(superclass: &Node, scope: &[String]) -> Option<Superclass> {
     let (names, from_top) = constant_path(superclass)?;
     Some(Superclass {
         scope: if from_top { Vec::new() } else { scope.to_vec() },

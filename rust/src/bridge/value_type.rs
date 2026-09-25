@@ -111,7 +111,7 @@ fn kind_by_name(name: &str) -> Option<VariantType> {
 }
 
 // The value type a class under Godot stands for.
-fn kind_of(mrb: &Mrb, class: RClass) -> Result<VariantType, Error> {
+fn kind_by_class(mrb: &Mrb, class: RClass) -> Result<VariantType, Error> {
     let path = class.path(mrb).unwrap_or_default();
     let name = path.strip_prefix("Godot::").unwrap_or(&path);
     kind_by_name(name).ok_or_else(|| {
@@ -126,7 +126,7 @@ fn kind_of(mrb: &Mrb, class: RClass) -> Result<VariantType, Error> {
 // Godot::Value.__construct__(args): the value the engine's constructor of
 // the receiver's type that takes `args` builds.
 fn construct(mrb: &Mrb, class: RClass, args: Array) -> Result<Value, Error> {
-    let kind = kind_of(mrb, class)?;
+    let kind = kind_by_class(mrb, class)?;
     let args = variants(mrb, args)?;
     let pointers: Vec<_> = args.iter().map(Variant::var_sys).collect();
     let kind_sys = kind.ord as sys::GDExtensionVariantType;
@@ -210,7 +210,7 @@ fn call(mrb: &Mrb, held: &EngineValue, name: Symbol, args: Array) -> Result<Valu
 // receiver's type called with `args`, in a one-element array, or nil when
 // the type has no such method.
 fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: Array) -> Result<Value, Error> {
-    let kind = kind_of(mrb, class)?;
+    let kind = kind_by_class(mrb, class)?;
     let method = name.name(mrb).unwrap_or_default();
     let args = variants(mrb, args)?;
     let pointers: Vec<_> = args.iter().map(Variant::var_sys).collect();
@@ -283,7 +283,7 @@ fn wrap_answer(
 // Godot::Value.__constant__(name): the receiver's type's constant of that
 // name, or nil when it has none.
 fn constant(mrb: &Mrb, class: RClass, name: Symbol) -> Result<Value, Error> {
-    let kind = kind_of(mrb, class)?;
+    let kind = kind_by_class(mrb, class)?;
     let name = StringName::from(name.name(mrb).unwrap_or_default().as_str());
     // SAFETY: the interface is initialized while the extension runs, and the
     // engine writes Nil for a name the type has no constant of.

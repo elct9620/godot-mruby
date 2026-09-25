@@ -369,7 +369,7 @@ fn mismatch(mrb: &Mrb, default: &Variant, class: &str) -> Option<String> {
     let Ok(object) = default.try_to::<Gd<Object>>() else {
         return Some(super::type_name(kind));
     };
-    (!is_of_class(mrb, &object, class)).then(|| class_of(&object))
+    (!is_of_class(mrb, &object, class)).then(|| resolve_class_name(&object))
 }
 
 // Whether `object` is of the class `class` names: the engine's class
@@ -389,10 +389,10 @@ fn is_of_class(mrb: &Mrb, object: &Gd<Object>, class: &str) -> bool {
 
 // The name `object`'s own class is known by: the one its node script is
 // announced under, or the engine class it is of.
-fn class_of(object: &Gd<Object>) -> String {
+fn resolve_class_name(object: &Gd<Object>) -> String {
     script_files(object)
         .next()
-        .and_then(|path| editor_name_at(&path))
+        .and_then(|path| editor_name_by_path(&path))
         .unwrap_or_else(|| object.get_class().to_string())
 }
 
@@ -456,11 +456,11 @@ fn hint_by_class(mrb: &Mrb, class: &str) -> Result<(PropertyHint, String), Strin
 // of the project defines it and nothing else is announced by that name.
 fn editor_name(mrb: &Mrb, class: &str) -> Option<String> {
     let names: Vec<String> = class.split("::").map(str::to_owned).collect();
-    editor_name_at(&realm::file_by_constant(mrb, &names)?)
+    editor_name_by_path(&realm::file_by_constant(mrb, &names)?)
 }
 
 // The name the editor lists the file at `path` under, if it is announced.
-fn editor_name_at(path: &str) -> Option<String> {
+fn editor_name_by_path(path: &str) -> Option<String> {
     let project = game::project_on_disk();
     project
         .announcement(path)
@@ -561,7 +561,7 @@ impl EngineObject {
 fn call_refusal(mrb: &Mrb, error: &CallError, base: &str, method: &str) -> Error {
     let reason = error.message(false);
     let reason = reason.rsplit("Reason: ").next().unwrap_or_default();
-    let message = if let Some(expected) = parameter_count(reason) {
+    let message = if let Some(expected) = parse_parameter_count(reason) {
         format!(
             "Invalid call to function '{method}' in base '{base}'. Expected {expected} argument(s)."
         )
@@ -598,7 +598,7 @@ pub(super) fn type_message(
 }
 
 // "function has N parameters, but received M arguments": N.
-fn parameter_count(reason: &str) -> Option<&str> {
+fn parse_parameter_count(reason: &str) -> Option<&str> {
     reason
         .strip_prefix("function has ")?
         .split_once(" parameter")

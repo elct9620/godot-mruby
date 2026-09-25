@@ -114,14 +114,14 @@ impl<'a> Lineage<'a> {
     /// first: what each file declared as it ran, or what its header writes
     /// while it has not run.
     pub fn properties(&self, snapshot: &Snapshot) -> Vec<Property> {
-        snapshot.properties_of(self.sources())
+        snapshot.collect_properties(self.sources())
     }
 
     /// What the class declared for the editor, its ancestors' included and in
     /// the order each class wrote it; a file that has not run has the
     /// properties its header writes and no heading.
     pub fn members(&self, snapshot: &Snapshot) -> Vec<Member> {
-        snapshot.members_of(self.sources())
+        snapshot.collect_members(self.sources())
     }
 
     // Each file by path, with what its source writes.
@@ -178,7 +178,7 @@ impl fmt::Display for Break {
 
 /// The ancestry of the file at `path`, whose header is `header`, among
 /// `files`, each superclass found as the realm's loader would find it.
-pub fn ancestry_of(path: &str, header: &Header, files: &impl Files) -> Result<Ancestry, Break> {
+pub fn trace_ancestry(path: &str, header: &Header, files: &impl Files) -> Result<Ancestry, Break> {
     let paths = files.paths();
     let roots = files.roots();
     let mut passed = vec![path.to_owned()];
@@ -220,7 +220,7 @@ pub mod tests {
     use std::collections::BTreeMap;
     use std::sync::Arc;
 
-    use super::{Ancestry, Break, Lineage, ancestry_of};
+    use super::{Ancestry, Break, Lineage, trace_ancestry};
     use crate::header::Header;
     use crate::realm::{Declarations, Files};
 
@@ -247,7 +247,7 @@ pub mod tests {
     fn ancestry(path: &str, sources: &[(&'static str, &'static str)]) -> Result<Ancestry, Break> {
         let files = Sources(sources.iter().copied().collect());
         let header = Header::from_source(path, &files.source(path).unwrap(), &files.roots());
-        ancestry_of(path, &header, &files)
+        trace_ancestry(path, &header, &files)
     }
 
     fn nearest(ancestry: &Ancestry) -> &str {
@@ -379,7 +379,7 @@ pub mod tests {
         ];
         let files = Sources(sources.iter().copied().collect());
         let header = Header::from_source("res://boss.rb", sources[0].1, &files.roots());
-        let ancestry = ancestry_of("res://boss.rb", &header, &files)
+        let ancestry = trace_ancestry("res://boss.rb", &header, &files)
             .map(Arc::new)
             .ok();
 

@@ -200,7 +200,7 @@ impl Snapshot {
 
     /// The signals the class of the file at `path` declared, in the order it
     /// declared them; none for a file that has not run.
-    pub fn signals(&self, path: &str) -> &[Signal] {
+    pub fn signals_by_path(&self, path: &str) -> &[Signal] {
         self.classes
             .get(path)
             .map_or(&[], |class| class.signals.as_slice())
@@ -208,7 +208,7 @@ impl Snapshot {
 
     /// What the class of the file at `path` declared for the editor, in the
     /// order it declared it; none for a file that has not run.
-    pub fn members(&self, path: &str) -> &[Member] {
+    pub fn members_by_path(&self, path: &str) -> &[Member] {
         self.classes
             .get(path)
             .map_or(&[], |class| class.members.as_slice())
@@ -216,15 +216,17 @@ impl Snapshot {
 
     /// The properties the class of the file at `path` exported, in the order
     /// it declared them; none for a file that has not run.
-    pub fn properties(&self, path: &str) -> impl Iterator<Item = &Property> {
-        self.members(path).iter().filter_map(Member::property)
+    pub fn properties_by_path(&self, path: &str) -> impl Iterator<Item = &Property> {
+        self.members_by_path(path)
+            .iter()
+            .filter_map(Member::property)
     }
 
     /// The properties the classes of the files at `files` exported, the
     /// first file's first and one to a name, as a class has what it
     /// exported and what it inherits. Each file comes with what its source
-    /// writes, as `members_of` takes it.
-    pub fn properties_of<'a>(
+    /// writes, as `collect_members` takes it.
+    pub fn collect_properties<'a>(
         &self,
         files: impl IntoIterator<Item = (&'a str, Source<'a>)>,
     ) -> Vec<Property> {
@@ -251,7 +253,7 @@ impl Snapshot {
     /// one it ran; a source changed since answers in the order it writes,
     /// taking what the run declared for an export it does not write out, and
     /// keeping what the run declared through a name no `export` call spelled.
-    pub fn members_of<'a>(
+    pub fn collect_members<'a>(
         &self,
         files: impl IntoIterator<Item = (&'a str, Source<'a>)>,
     ) -> Vec<Member> {
@@ -276,7 +278,7 @@ impl Snapshot {
     }
 
     // What the class of the file at `path` declared for the editor, as
-    // `members_of` answers each file.
+    // `collect_members` answers each file.
     fn file_members(&self, path: &str, source: Source) -> Vec<Member> {
         let Some(class) = self.classes.get(path) else {
             return source.exports.iter().filter_map(Export::member).collect();
@@ -308,7 +310,7 @@ impl Snapshot {
 
     /// The methods the class of the file at `path` defines; none for a file
     /// that has not run.
-    pub fn methods(&self, path: &str) -> &[String] {
+    pub fn methods_by_path(&self, path: &str) -> &[String] {
         self.classes
             .get(path)
             .map_or(&[], |class| class.methods.as_slice())
@@ -316,7 +318,9 @@ impl Snapshot {
 
     /// Whether the class of the file at `path` defines a method of that name.
     pub fn has_method(&self, path: &str, name: &str) -> bool {
-        self.methods(path).iter().any(|method| method == name)
+        self.methods_by_path(path)
+            .iter()
+            .any(|method| method == name)
     }
 
     /// Takes what the class of the file at `path` has, now that the file has
@@ -394,7 +398,7 @@ mod tests {
     fn a_file_that_has_not_run_has_no_signals() {
         let snapshot = Snapshot::default();
 
-        assert!(snapshot.signals("res://bell.rb").is_empty());
+        assert!(snapshot.signals_by_path("res://bell.rb").is_empty());
     }
 
     #[test]
@@ -420,14 +424,14 @@ mod tests {
 
         snapshot.record_class("res://bell.rb", bell());
 
-        assert_eq!(snapshot.signals("res://bell.rb"), [rung()]);
+        assert_eq!(snapshot.signals_by_path("res://bell.rb"), [rung()]);
     }
 
     #[test]
     fn a_file_that_has_not_run_has_no_properties() {
         let snapshot = Snapshot::default();
 
-        assert_eq!(snapshot.properties("res://bell.rb").count(), 0);
+        assert_eq!(snapshot.properties_by_path("res://bell.rb").count(), 0);
     }
 
     #[test]
@@ -437,7 +441,9 @@ mod tests {
         snapshot.record_class("res://bell.rb", bell());
 
         assert_eq!(
-            snapshot.properties("res://bell.rb").collect::<Vec<_>>(),
+            snapshot
+                .properties_by_path("res://bell.rb")
+                .collect::<Vec<_>>(),
             [&tone()]
         );
     }
@@ -458,8 +464,8 @@ mod tests {
         snapshot.record_class("res://bell.rb", bell());
         snapshot.record_class("res://bell.rb", Class::default());
 
-        assert!(snapshot.signals("res://bell.rb").is_empty());
-        assert_eq!(snapshot.properties("res://bell.rb").count(), 0);
+        assert!(snapshot.signals_by_path("res://bell.rb").is_empty());
+        assert_eq!(snapshot.properties_by_path("res://bell.rb").count(), 0);
         assert!(!snapshot.has_method("res://bell.rb", "ring"));
     }
 }

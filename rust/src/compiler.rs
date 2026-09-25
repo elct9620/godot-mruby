@@ -46,7 +46,7 @@ pub fn run(
         ));
     };
     let outcome = context.load_nstring(source.as_bytes());
-    warnings_of(&context).into_iter().for_each(&mut warned);
+    collect_warnings(&context).into_iter().for_each(&mut warned);
     outcome.map(|_| ())
 }
 
@@ -80,7 +80,7 @@ pub fn diagnostics(name: &CStr, source: &str) -> Diagnostics {
             let line = u32::from(parsed.line()).max(1);
             Some(CompileError {
                 line,
-                column: column_in(source, line, parsed.column()),
+                column: count_column(source, line, parsed.column()),
                 message: parsed.message().to_owned(),
             })
         }
@@ -88,7 +88,7 @@ pub fn diagnostics(name: &CStr, source: &str) -> Diagnostics {
     };
     Diagnostics {
         error,
-        warnings: warnings_of(&context),
+        warnings: collect_warnings(&context),
     }
 }
 
@@ -96,7 +96,7 @@ pub fn diagnostics(name: &CStr, source: &str) -> Diagnostics {
 // the bytes its lexer read on `line` up to and including the offending
 // token; an error at the end of the file, or one it recorded no position
 // for, stands at 0.
-fn column_in(source: &str, line: u32, recorded: i32) -> u32 {
+fn count_column(source: &str, line: u32, recorded: i32) -> u32 {
     let bytes = usize::try_from(recorded).unwrap_or(0);
     let text = source.lines().nth(line as usize - 1).unwrap_or("");
     let read = text
@@ -106,7 +106,7 @@ fn column_in(source: &str, line: u32, recorded: i32) -> u32 {
     u32::try_from(read).unwrap_or(u32::MAX).max(1)
 }
 
-fn warnings_of(context: &Ccontext) -> Vec<Warning> {
+fn collect_warnings(context: &Ccontext) -> Vec<Warning> {
     context
         .warnings()
         .into_iter()
@@ -121,14 +121,14 @@ fn warnings_of(context: &Ccontext) -> Vec<Warning> {
 mod tests {
     use super::*;
 
-    fn diagnostics_of(source: &str) -> Diagnostics {
+    fn diagnose(source: &str) -> Diagnostics {
         diagnostics(c"res://checked.rb", source)
     }
 
     // @behavior RK-001
     #[test]
     fn a_syntax_error_comes_back_at_its_line_and_column() {
-        let checked = diagnostics_of("x = 1\nx = )\n");
+        let checked = diagnose("x = 1\nx = )\n");
 
         let error = checked.error.map(|error| (error.line, error.column));
         assert_eq!(error, Some((2, 5)));
@@ -137,7 +137,7 @@ mod tests {
     // @behavior RK-007
     #[test]
     fn a_syntax_errors_column_counts_characters() {
-        let checked = diagnostics_of("x = '中文' )\n");
+        let checked = diagnose("x = '中文' )\n");
 
         let column = checked.error.map(|error| error.column);
         assert_eq!(column, Some(10));
@@ -146,7 +146,7 @@ mod tests {
     // @behavior RK-002
     #[test]
     fn a_compiler_warning_comes_back_at_its_line() {
-        let checked = diagnostics_of("begin\n  :body\nelse\n  :useless\nend\n");
+        let checked = diagnose("begin\n  :body\nelse\n  :useless\nend\n");
 
         let lines: Vec<u32> = checked
             .warnings
@@ -159,7 +159,7 @@ mod tests {
     // @behavior RK-003
     #[test]
     fn checked_source_never_runs() {
-        let checked = diagnostics_of("raise 'ran'\n");
+        let checked = diagnose("raise 'ran'\n");
 
         assert!(checked.error.is_none());
     }

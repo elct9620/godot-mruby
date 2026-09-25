@@ -91,13 +91,14 @@ The extension is tested through itself, and `godot/` is sorted by who judges an 
 | A module or a type | a noun | `Snapshot` |
 | A kind of a type | an adjective and a noun, or a noun | `Heading::Category` |
 | A state a value is in | the state's adjective, a participle included | `Run::Running`, `Game::Closed` |
-| What answers a thing and changes nothing | the thing's noun | `signals`, `superclass_of` |
+| What answers a thing it holds, taking nothing | the thing's noun, as `player.name` | `name`, `digest` |
 | What finds a thing by a key | the noun, `_by_` and the key | `file_by_name` |
 | A question | `is_` or `has_`; in Ruby, `?` | `is_hidden`, `has_run` |
 | A new value or a conversion | `new`, `try_new`, `with_`, `from_`, `into_`; `to_` for one that borrows | `with_hint`, `to_engine` |
+| What works a thing out from what it is given | a verb, and the thing | `collect_members`, `read_name` |
 | What acts | a verb first, a state after it if any | `publish`, `release_queued` |
 
-Outside a state, a word ending in `-ing` or `-ed` is a name only where the dictionary lists it as a noun, as `heading` is, or after a verb, as in `release_queued`. A name another side fixes is kept as it is: Godot's virtuals, Ruby's hooks such as `const_added`, Minitest's `passed?`. A Rust function standing behind a Ruby method `__name__` is named `name`.
+A preposition names nothing, so no name ends in `_of`. Outside a state, a word ending in `-ing` or `-ed` is a name only where the dictionary lists it as a noun, as `heading` is, or after a verb, as in `release_queued`. A name another side fixes is kept as it is: Godot's virtuals, Ruby's hooks such as `const_added`, Minitest's `passed?`. A Rust function standing behind a Ruby method `__name__` is named `name`.
 
 ## 2. Extension
 

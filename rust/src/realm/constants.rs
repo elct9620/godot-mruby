@@ -8,7 +8,7 @@ use beni::{
 };
 
 use super::index::{self, Entry, Namespace};
-use super::{Extends, RubyError, bookkeeping, compile, executor, key_of};
+use super::{Extends, RubyError, bookkeeping, compile, executor, key_by_path};
 
 pub(super) fn define(mrb: &Mrb) -> Result<(), Error> {
     let module = mrb.class_get(c"Module")?;
@@ -36,7 +36,7 @@ fn load_by_name(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error
 // Module#__record_constant__(name): the receiver has just been given the constant.
 // A directory's module the realm defines is no file's to take away.
 fn record_constant(mrb: &Mrb, receiver: Value, name: Symbol) -> Value {
-    let (Some(scope), Some(name)) = (path_of(mrb, receiver), name.name(mrb)) else {
+    let (Some(scope), Some(name)) = (split_path(mrb, receiver), name.name(mrb)) else {
         return Value::nil();
     };
     if !bookkeeping(mrb).is_defining_namespace.get() {
@@ -63,7 +63,7 @@ fn load_hidden(mrb: &Mrb, scope: &[String], name: &str) {
     let inside = index.members(&key);
     drop(index);
     for inner in inside.into_iter().chain(below) {
-        if constant_at(mrb, &inner).is_none() && is_hidden(mrb, &inner) {
+        if constant_by_key(mrb, &inner).is_none() && is_hidden(mrb, &inner) {
             load_inner(mrb, &inner);
         }
     }
@@ -75,10 +75,10 @@ fn is_hidden(mrb: &Mrb, inner: &[String]) -> bool {
     let Some((name, namespace)) = inner.split_last() else {
         return false;
     };
-    constant_at(mrb, namespace).is_some()
+    constant_by_key(mrb, namespace).is_some()
         && (0..namespace.len()).any(|depth| {
             let outer: Vec<String> = namespace[..depth].iter().chain([name]).cloned().collect();
-            constant_at(mrb, &outer).is_some()
+            constant_by_key(mrb, &outer).is_some()
         })
 }
 
@@ -92,7 +92,7 @@ fn load_inner(mrb: &Mrb, inner: &[String]) {
             (Some(path), loaded)
         }
         Some(Entry::Namespace(namespace)) => {
-            let Some(scope) = constant_at(mrb, &inner[..inner.len() - 1]) else {
+            let Some(scope) = constant_by_key(mrb, &inner[..inner.len() - 1]) else {
                 return;
             };
             (None, define_module(mrb, scope, &namespace.name).map(|_| ()))
@@ -112,13 +112,13 @@ fn load_inner(mrb: &Mrb, inner: &[String]) {
 /// Answers the superclass the file's class is held to once it has run.
 pub(super) fn ensure_opened(mrb: &Mrb, path: &str) -> Result<Option<Extends>, Error> {
     ensure_namespaces(mrb, path)?;
-    let own = key_of(mrb, path);
+    let own = key_by_path(mrb, path);
     let declarations = bookkeeping(mrb).files.declarations(path);
     for names in declarations.writes {
         let key: Vec<String> = names.iter().map(|name| index::normalize(name)).collect();
         // Its own class and the namespaces around it are the file's to define,
         // and nothing inside its class exists before the class does.
-        if own.starts_with(&key) || key.starts_with(&own) || constant_at(mrb, &key).is_some() {
+        if own.starts_with(&key) || key.starts_with(&own) || constant_by_key(mrb, &key).is_some() {
             continue;
         }
         let Some((name, outer)) = names.split_last() else {
@@ -127,7 +127,7 @@ pub(super) fn ensure_opened(mrb: &Mrb, path: &str) -> Result<Option<Extends>, Er
         let entry = bookkeeping(mrb).index.borrow().entry(&key);
         match entry {
             Some(Entry::File(file)) => {
-                constant_from(mrb, &file, outer, name)?;
+                load_constant(mrb, &file, outer, name)?;
             }
             Some(Entry::Namespace(namespace)) => {
                 namespace_module(mrb, outer, name, &namespace)?;
@@ -145,11 +145,11 @@ pub(super) fn keep_extends(mrb: &Mrb, path: &str, extends: Option<Extends>) -> R
     let Some(extends) = extends else {
         return Ok(());
     };
-    let Some(class) = constant_at(mrb, &key_of(mrb, path)) else {
+    let Some(class) = constant_by_key(mrb, &key_by_path(mrb, path)) else {
         return Ok(());
     };
     let (expected, promised) = match &extends {
-        Extends::File(file) => (key_of(mrb, file), format!("the class {file} names")),
+        Extends::File(file) => (key_by_path(mrb, file), format!("the class {file} names")),
         Extends::Constant(names) => (
             names.iter().map(|name| index::normalize(name)).collect(),
             names.join("::"),
@@ -159,14 +159,14 @@ pub(super) fn keep_extends(mrb: &Mrb, path: &str, extends: Option<Extends>) -> R
         .is_some()
         .then(|| class.funcall(mrb, c"superclass", &[]).ok())
         .flatten()
-        .and_then(|superclass| path_of(mrb, superclass));
+        .and_then(|superclass| split_path(mrb, superclass));
     let extended: Option<Vec<String>> = superclass
         .as_ref()
         .map(|names| names.iter().map(|name| index::normalize(name)).collect());
     if extended.as_ref() == Some(&expected) {
         return Ok(());
     }
-    let own = path_of(mrb, class).unwrap_or_default().join("::");
+    let own = split_path(mrb, class).unwrap_or_default().join("::");
     let found = match superclass {
         None => "no class".to_owned(),
         Some(names) if names.is_empty() => "Object".to_owned(),
@@ -186,9 +186,9 @@ fn ensure_namespaces(mrb: &Mrb, path: &str) -> Result<(), Error> {
     if !bookkeeping(mrb).index.borrow().is_named(path) {
         return Ok(());
     }
-    let key = key_of(mrb, path);
+    let key = key_by_path(mrb, path);
     for depth in 1..key.len() {
-        if constant_at(mrb, &key[..depth]).is_some() {
+        if constant_by_key(mrb, &key[..depth]).is_some() {
             continue;
         }
         let entry = bookkeeping(mrb).index.borrow().entry(&key[..depth]);
@@ -197,7 +197,7 @@ fn ensure_namespaces(mrb: &Mrb, path: &str) -> Result<(), Error> {
             Some(Entry::Namespace(namespace)) => {
                 // A namespace file that ran without defining its module
                 // leaves the files inside to open it themselves.
-                let Some(scope) = constant_at(mrb, &key[..depth - 1]) else {
+                let Some(scope) = constant_by_key(mrb, &key[..depth - 1]) else {
                     return Ok(());
                 };
                 define_module(mrb, scope, &namespace.name)?;
@@ -210,7 +210,7 @@ fn ensure_namespaces(mrb: &Mrb, path: &str) -> Result<(), Error> {
 
 /// The constant `key` spells, if it is already here, matched the way the
 /// class index matches it.
-pub(super) fn constant_at(mrb: &Mrb, key: &[String]) -> Option<Value> {
+pub(super) fn constant_by_key(mrb: &Mrb, key: &[String]) -> Option<Value> {
     key.iter().try_fold(object(mrb), |scope, segment| {
         constant_by_segment(mrb, scope, segment)
     })
@@ -236,11 +236,11 @@ fn constant_by_segment(mrb: &Mrb, scope: Value, segment: &str) -> Option<Value> 
 // What `name` names from inside `receiver`: mruby hands const_missing the
 // innermost scope alone, so the index looks outward from it.
 fn resolve(mrb: &Mrb, receiver: Value, name: &str) -> Result<Option<Value>, Error> {
-    let scope = path_of(mrb, receiver).unwrap_or_default();
+    let scope = split_path(mrb, receiver).unwrap_or_default();
     let entry = bookkeeping(mrb).index.borrow().entry_by_name(&scope, name);
     match entry {
         Some((depth, Entry::File(path))) => {
-            constant_from(mrb, &path, &scope[..depth], name).map(Some)
+            load_constant(mrb, &path, &scope[..depth], name).map(Some)
         }
         Some((depth, Entry::Namespace(namespace))) => {
             namespace_module(mrb, &scope[..depth], name, &namespace).map(Some)
@@ -252,7 +252,7 @@ fn resolve(mrb: &Mrb, receiver: Value, name: &str) -> Result<Option<Value>, Erro
 // The names of the namespaces `receiver` sits in, outermost first, then its
 // own; none for Object, and nothing for a module without a name, since no
 // name leads back to it.
-fn path_of(mrb: &Mrb, receiver: Value) -> Option<Vec<String>> {
+fn split_path(mrb: &Mrb, receiver: Value) -> Option<Vec<String>> {
     let path = RClass::from_value(receiver)
         .and_then(|class| class.path(mrb))
         .or_else(|| RModule::from_value(receiver).and_then(|module| module.path(mrb)))?;
@@ -264,11 +264,11 @@ fn path_of(mrb: &Mrb, receiver: Value) -> Option<Vec<String>> {
 
 // Runs the file at `path`, which has to have defined `name` in the namespace
 // `outer` spells.
-fn constant_from(mrb: &Mrb, path: &str, outer: &[String], name: &str) -> Result<Value, Error> {
+fn load_constant(mrb: &Mrb, path: &str, outer: &[String], name: &str) -> Result<Value, Error> {
     if let Some(chain) = executor::cycle(mrb, path) {
         let message = format!(
             "{} is needed while its own file is still running: {}",
-            full_name(outer, name),
+            join_name(outer, name),
             chain.join(" -> ")
         );
         return Err(name_error(mrb, &message, name));
@@ -279,7 +279,7 @@ fn constant_from(mrb: &Mrb, path: &str, outer: &[String], name: &str) -> Result<
     if scope.const_defined_at(mrb, symbol) {
         scope.const_get(mrb, symbol)
     } else {
-        let message = format!("{path} ran without defining {}", full_name(outer, name));
+        let message = format!("{path} ran without defining {}", join_name(outer, name));
         Err(name_error(mrb, &message, name))
     }
 }
@@ -304,8 +304,8 @@ fn namespace_module(
         let message = format!(
             "{} is the namespace {}, not {}",
             namespace.directory,
-            full_name(outer, &namespace.name),
-            full_name(outer, name)
+            join_name(outer, &namespace.name),
+            join_name(outer, name)
         );
         return Err(name_error(mrb, &message, name));
     }
@@ -356,7 +356,7 @@ fn with_file(mrb: &Mrb, path: &str, error: Error) -> Error {
     }
 }
 
-fn full_name(outer: &[String], name: &str) -> String {
+fn join_name(outer: &[String], name: &str) -> String {
     outer
         .iter()
         .map(String::as_str)

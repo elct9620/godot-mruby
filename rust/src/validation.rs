@@ -93,11 +93,11 @@ pub fn validation<F: Files + Sync>(
 // as the class index warns of them when the realm takes the files in.
 fn shared_constant_warning(files: &impl Files, path: &str) -> Option<Warning> {
     let roots = files.roots();
-    let key = roots.key_of(path);
+    let key = roots.key_by_path(path);
     let others: Vec<String> = files
         .paths()
         .into_iter()
-        .filter(|other| other != path && roots.key_of(other) == key)
+        .filter(|other| other != path && roots.key_by_path(other) == key)
         .collect();
     let (all, none) = if others.len() == 1 {
         ("both", "neither")
@@ -110,7 +110,7 @@ fn shared_constant_warning(files: &impl Files, path: &str) -> Option<Warning> {
         message: format!(
             "{path} and {} {all} name {}, so {none} loads by name",
             others.join(" and "),
-            roots.name_of(path)
+            roots.name_by_path(path)
         ),
     })
 }
@@ -154,7 +154,7 @@ mod tests {
     use super::*;
     use crate::ancestry::tests::Sources;
 
-    fn validation_of(
+    fn validate_source(
         path: &str,
         source: &str,
         sources: &[(&'static str, &'static str)],
@@ -172,7 +172,7 @@ mod tests {
         )
     }
 
-    fn warnings_of(validation: &Validation, kind: Kind) -> Vec<(u32, &str)> {
+    fn warnings_by_kind(validation: &Validation, kind: Kind) -> Vec<(u32, &str)> {
         validation
             .warnings
             .iter()
@@ -188,10 +188,10 @@ mod tests {
     fn a_file_naming_what_another_file_names_is_warned_of() {
         let sources = [("res://potion.rb", POTION), ("res://po_tion.rb", POTION)];
 
-        let checked = validation_of("res://potion.rb", POTION, &sources);
+        let checked = validate_source("res://potion.rb", POTION, &sources);
 
         assert_eq!(
-            warnings_of(&checked, Kind::SharedConstant),
+            warnings_by_kind(&checked, Kind::SharedConstant),
             vec![(
                 1,
                 "res://potion.rb and res://po_tion.rb both name Potion, so neither loads by name"
@@ -210,10 +210,10 @@ mod tests {
             ("res://bosses/enemy.rb", NESTED_ENEMY),
         ];
 
-        let checked = validation_of("res://enemy.rb", ENEMY, &sources);
+        let checked = validate_source("res://enemy.rb", ENEMY, &sources);
 
         assert_eq!(
-            warnings_of(&checked, Kind::SharedName),
+            warnings_by_kind(&checked, Kind::SharedName),
             vec![(
                 1,
                 "res://enemy.rb and res://bosses/enemy.rb define node scripts named Enemy, so none is listed by that name"
@@ -229,8 +229,8 @@ mod tests {
             ("res://bosses/enemy.rb", NESTED_ENEMY),
         ];
 
-        let checked = validation_of("res://enemy.rb", ENEMY, &sources);
+        let checked = validate_source("res://enemy.rb", ENEMY, &sources);
 
-        assert_eq!(warnings_of(&checked, Kind::SharedName).len(), 1);
+        assert_eq!(warnings_by_kind(&checked, Kind::SharedName).len(), 1);
     }
 }

@@ -41,7 +41,7 @@ module Godot
       # @behavior RT-036
       def verify_listed!(project)
         RUNS.each do |directory, expected|
-          tests = results_of(project, "--dir", directory)["tests"]
+          tests = read_results(project, "--dir", directory)["tests"]
           listed = tests.map { |test| test.values_at("class", "name", "result") }
           raise "The results of #{directory} list #{listed}, not #{expected}" unless listed.sort == expected.sort
 
@@ -58,7 +58,7 @@ module Godot
       # the compiler's message at its line.
       # @behavior RT-037
       def verify_load_failure!(project)
-        errors = results_of(project, "--dir", UNPARSED)["errors"]
+        errors = read_results(project, "--dir", UNPARSED)["errors"]
         return if errors.any? { |error| error.values_at("file", "line") == UNPARSED_AT && error["message"] =~ /syntax/ }
 
         raise "The results of a test file that does not parse carry #{errors}"
@@ -87,7 +87,7 @@ module Godot
       end
 
       # What a run with these options wrote to --results.
-      def results_of(project, *options)
+      def read_results(project, *options)
         Dir.mktmpdir do |dir|
           path = File.join(dir, "results.json")
           output, = Runner.run(project, *options, "--results", path)

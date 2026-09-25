@@ -74,7 +74,7 @@ pub fn superclass(base: &str, roots: &Roots) -> String {
         .strip_prefix('"')
         .and_then(|base| base.strip_suffix('"'))
     {
-        Some(path) => format!("::{}", roots.name_of(path)),
+        Some(path) => format!("::{}", roots.name_by_path(path)),
         None => format!("Godot::{base}"),
     }
 }

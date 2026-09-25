@@ -252,7 +252,7 @@ impl Snapshot {
 }
 ```
 
-## `Snapshot::signals`
+## `Snapshot::signals_by_path`
 
 The signals the class of the file at a path declared, in the order it declared them; none for a file that has not run.
 
@@ -262,11 +262,11 @@ The signals the class of the file at a path declared, in the order it declared t
 
 ```rust
 impl Snapshot {
-    pub fn signals(&self, path: &str) -> &[Signal] {}
+    pub fn signals_by_path(&self, path: &str) -> &[Signal] {}
 }
 ```
 
-## `Snapshot::members`
+## `Snapshot::members_by_path`
 
 What the class of the file at a path declared for the editor, in the order it declared it; none for a file that has not run.
 
@@ -276,11 +276,11 @@ What the class of the file at a path declared for the editor, in the order it de
 
 ```rust
 impl Snapshot {
-    pub fn members(&self, path: &str) -> &[Member] {}
+    pub fn members_by_path(&self, path: &str) -> &[Member] {}
 }
 ```
 
-## `Snapshot::properties`
+## `Snapshot::properties_by_path`
 
 The properties the class of the file at a path exported, in the order it declared them; none for a file that has not run.
 
@@ -290,13 +290,13 @@ The properties the class of the file at a path exported, in the order it declare
 
 ```rust
 impl Snapshot {
-    pub fn properties(&self, path: &str) -> impl Iterator<Item = &Property> {}
+    pub fn properties_by_path(&self, path: &str) -> impl Iterator<Item = &Property> {}
 }
 ```
 
-## `Snapshot::properties_of`
+## `Snapshot::collect_properties`
 
-The properties the classes of the files exported, the first file's first and one to a name, as a class has what it exported and what it inherits. Each file comes with what its source writes, as `members_of` takes it.
+The properties the classes of the files exported, the first file's first and one to a name, as a class has what it exported and what it inherits. Each file comes with what its source writes, as `collect_members` takes it.
 
 | Attribute | Value |
 | --- | --- |
@@ -304,7 +304,7 @@ The properties the classes of the files exported, the first file's first and one
 
 ```rust
 impl Snapshot {
-    pub fn properties_of<'a>(
+    pub fn collect_properties<'a>(
         &self,
         files: impl IntoIterator<Item = (&'a str, Source<'a>)>,
     ) -> Vec<Property> {
@@ -312,7 +312,7 @@ impl Snapshot {
 }
 ```
 
-## `Snapshot::members_of`
+## `Snapshot::collect_members`
 
 What the classes of the files have the editor show: each class's own category and then what it declared, the first file's first, as GDScript lists a script's members before the ones it inherits. A property is listed once, the nearest class's, while a heading belongs to the class that wrote it. Only a build of the editor carries the categories, as GDScript's are compiled out of a game's. Each file comes with what its source writes, which answers for it until it has run. Once it has, what the file declared as it ran answers while the source is the one it ran; a source changed since answers in the order it writes, taking what the run declared for an export it does not write out, and keeping what the run declared through a name no `export` call spelled.
 
@@ -322,7 +322,7 @@ What the classes of the files have the editor show: each class's own category an
 
 ```rust
 impl Snapshot {
-    pub fn members_of<'a>(
+    pub fn collect_members<'a>(
         &self,
         files: impl IntoIterator<Item = (&'a str, Source<'a>)>,
     ) -> Vec<Member> {
@@ -330,7 +330,7 @@ impl Snapshot {
 }
 ```
 
-## `Snapshot::methods`
+## `Snapshot::methods_by_path`
 
 The methods the class of the file at a path defines; none for a file that has not run.
 
@@ -340,7 +340,7 @@ The methods the class of the file at a path defines; none for a file that has no
 
 ```rust
 impl Snapshot {
-    pub fn methods(&self, path: &str) -> &[String] {}
+    pub fn methods_by_path(&self, path: &str) -> &[String] {}
 }
 ```
 

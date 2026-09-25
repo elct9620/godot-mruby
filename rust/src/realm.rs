@@ -160,7 +160,7 @@ enum Origin {
 // has. Ruby itself asks Godot what a class has, so a file's class is read
 // back while the thread that ran it is still inside the realm.
 fn publish_class(mrb: &Mrb, path: &str, signals: Vec<Signal>, members: Vec<Member>, digest: u64) {
-    let methods = methods_of(mrb, path);
+    let methods = methods_by_path(mrb, path);
     let bookkeeping = bookkeeping(mrb);
     let export_names = bookkeeping.files.declarations(path).exports;
     let mut draft = bookkeeping.snapshot.borrow_mut();
@@ -179,8 +179,8 @@ fn publish_class(mrb: &Mrb, path: &str, signals: Vec<Signal>, members: Vec<Membe
 
 // The names of the methods the class the file at `path` names defines
 // itself; none when the file named no class of its own.
-fn methods_of(mrb: &Mrb, path: &str) -> Vec<String> {
-    let Some(class) = constants::constant_at(mrb, &key_of(mrb, path)) else {
+fn methods_by_path(mrb: &Mrb, path: &str) -> Vec<String> {
+    let Some(class) = constants::constant_by_key(mrb, &key_by_path(mrb, path)) else {
         return Vec::new();
     };
     let own = [false.into_value(mrb)];
@@ -200,8 +200,8 @@ fn methods_of(mrb: &Mrb, path: &str) -> Vec<String> {
 }
 
 // The constant path the file at `path` spells in `mrb`'s realm.
-fn key_of(mrb: &Mrb, path: &str) -> index::Key {
-    bookkeeping(mrb).index.borrow().key_of(path)
+fn key_by_path(mrb: &Mrb, path: &str) -> index::Key {
+    bookkeeping(mrb).index.borrow().key_by_path(path)
 }
 
 // The bookkeeping `mrb`'s realm put there as it opened.
@@ -495,7 +495,7 @@ impl Realm {
         let bookkeeping = bookkeeping(&self.mrb);
         bookkeeping.index.borrow_mut().add(
             paths,
-            |key| constants::constant_at(&self.mrb, key).is_some(),
+            |key| constants::constant_by_key(&self.mrb, key).is_some(),
             bookkeeping.log.as_ref(),
         );
     }
@@ -511,14 +511,14 @@ impl Realm {
             .borrow()
             .file_keys()
             .into_iter()
-            .filter(|key| constants::constant_at(&self.mrb, key).is_none())
+            .filter(|key| constants::constant_by_key(&self.mrb, key).is_none())
             .collect();
         self.mrb
             .init_gem::<G>()
             .map_err(|error| RubyError::from_error(&self.mrb, None, &error))?;
         let added = missing
             .into_iter()
-            .filter(|key| constants::constant_at(&self.mrb, key).is_some());
+            .filter(|key| constants::constant_by_key(&self.mrb, key).is_some());
         bookkeeping
             .index
             .borrow_mut()
@@ -580,7 +580,8 @@ impl Realm {
     // The class the file at `path` defined, if it answers `message`, even
     // privately.
     fn respondent(&self, path: &str, message: &CStr) -> Result<Option<Value>, Error> {
-        let Some(class) = constants::constant_at(&self.mrb, &key_of(&self.mrb, path)) else {
+        let Some(class) = constants::constant_by_key(&self.mrb, &key_by_path(&self.mrb, path))
+        else {
             return Ok(None);
         };
         let name = Symbol::new(&self.mrb, message)?.into_value(&self.mrb);
@@ -645,7 +646,8 @@ impl Realm {
         if registry.has_object(&self.mrb, key).map_err(read)? {
             return Ok(Build::Existing);
         }
-        let Some(class) = constants::constant_at(&self.mrb, &key_of(&self.mrb, path)) else {
+        let Some(class) = constants::constant_by_key(&self.mrb, &key_by_path(&self.mrb, path))
+        else {
             if executor::is_running(&self.mrb, path) {
                 return Ok(Build::Pending);
             }
@@ -763,7 +765,7 @@ impl RubyError {
                 backtrace: Vec::new(),
             },
             Error::Exception(_) => {
-                let backtrace = frames_of(mrb, error);
+                let backtrace = collect_frames(mrb, error);
                 if backtrace.is_empty() {
                     Self::from_message(named(error.message(mrb)))
                 } else {
@@ -793,11 +795,11 @@ impl RubyError {
 // The frames of `error`'s backtrace that name a line, most recent first.
 // Under a call from Rust, the top level mruby's base frame kept from the last
 // file it ran is not one Ruby called through, so it is left out.
-fn frames_of(mrb: &Mrb, error: &Error) -> Vec<Location> {
+fn collect_frames(mrb: &Mrb, error: &Error) -> Vec<Location> {
     let mut frames: Vec<Location> = error
         .backtrace(mrb)
         .iter()
-        .filter_map(|frame| location_of(frame))
+        .filter_map(|frame| parse_location(frame))
         .collect();
     let under_call = mrb
         .user_data::<Bookkeeping>()
@@ -811,7 +813,7 @@ fn frames_of(mrb: &Mrb, error: &Error) -> Vec<Location> {
 // The place a backtrace frame names, as mruby writes one: `file:line`, then
 // `:in method` when it is in one. A frame without a line, `(unknown):0`,
 // places nothing.
-fn location_of(frame: &str) -> Option<Location> {
+fn parse_location(frame: &str) -> Option<Location> {
     let (place, function) = frame.rsplit_once(":in ").unwrap_or((frame, ""));
     let (file, line) = place.rsplit_once(':')?;
     let line = line.parse().ok().filter(|&line| line > 0)?;

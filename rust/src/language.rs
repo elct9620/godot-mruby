@@ -115,7 +115,7 @@ impl IScriptLanguageExtension for RubyLanguage {
         class_name: GString,
         base_class_name: GString,
     ) -> Option<Gd<Script>> {
-        let base = script_path_of(&base_class_name.to_string());
+        let base = resolve_base(&base_class_name.to_string());
         let superclass = template::superclass(&base, &GameFiles.roots());
         let source = template::source(
             &template.to_string(),
@@ -510,7 +510,7 @@ const TEMPLATE_BUILT_IN: i64 = 0;
 
 // A base the dialog names by a script's global class, as the quoted path of
 // that script, which is how the dialog names one it only knows by path.
-fn script_path_of(base: &str) -> String {
+fn resolve_base(base: &str) -> String {
     if ClassDb::singleton().class_exists(base) {
         return base.to_owned();
     }

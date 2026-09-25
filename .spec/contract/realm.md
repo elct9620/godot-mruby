@@ -70,7 +70,7 @@ impl Roots {
 }
 ```
 
-## `Roots::key_of`
+## `Roots::key_by_path`
 
 The constant path a file's path names from the nearest root directory it sits under, one segment per namespace as the class index matches it.
 
@@ -80,7 +80,7 @@ The constant path a file's path names from the nearest root directory it sits un
 
 ```rust
 impl Roots {
-    pub fn key_of(&self, path: &str) -> Vec<String> {}
+    pub fn key_by_path(&self, path: &str) -> Vec<String> {}
 }
 ```
 

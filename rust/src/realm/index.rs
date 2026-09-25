@@ -39,7 +39,7 @@ impl Roots {
     }
 
     /// The constant path the file at `path` spells, as the index matches it.
-    pub fn key_of(&self, path: &str) -> Key {
+    pub fn key_by_path(&self, path: &str) -> Key {
         self.segments(path)
             .1
             .iter()
@@ -67,7 +67,7 @@ impl Roots {
 
     /// The constant a path spells as Zeitwerk camelizes it: `http_client` is
     /// `HttpClient`.
-    pub fn name_of(&self, path: &str) -> String {
+    pub fn name_by_path(&self, path: &str) -> String {
         self.segments(path)
             .1
             .iter()
@@ -107,8 +107,8 @@ impl ClassIndex {
     }
 
     /// The constant path the file at `path` spells, as the index matches it.
-    pub fn key_of(&self, path: &str) -> Key {
-        self.roots.key_of(path)
+    pub fn key_by_path(&self, path: &str) -> Key {
+        self.roots.key_by_path(path)
     }
 
     /// Takes in the files at `paths`, refusing a name two files spell and a
@@ -120,7 +120,7 @@ impl ClassIndex {
         log: &dyn Log,
     ) {
         for path in paths {
-            let key = self.key_of(&path);
+            let key = self.key_by_path(&path);
             self.add_namespaces(&path);
             if self.refusals.contains(&key) {
                 continue;
@@ -128,10 +128,10 @@ impl ClassIndex {
             if let Some(other) = self.files.remove(&key) {
                 log.record(
                     Level::Warn,
-                    Some(&first_line_of(&path)),
+                    Some(&locate_first_line(&path)),
                     &format!(
                         "{other} and {path} both name {}, so neither loads by name",
-                        self.roots.name_of(&other)
+                        self.roots.name_by_path(&other)
                     ),
                 );
                 self.refusals.insert(key);
@@ -206,7 +206,7 @@ impl ClassIndex {
     /// Whether the file at `path` is one the index names.
     pub fn is_named(&self, path: &str) -> bool {
         self.files
-            .get(&self.key_of(path))
+            .get(&self.key_by_path(path))
             .is_some_and(|named| named == path)
     }
 
@@ -234,10 +234,10 @@ impl ClassIndex {
     fn warn_of_constant(&self, path: &str, log: &dyn Log) {
         log.record(
             Level::Warn,
-            Some(&first_line_of(path)),
+            Some(&locate_first_line(path)),
             &format!(
                 "{path} names {}, which the realm already has, so it never loads by name",
-                self.roots.name_of(path)
+                self.roots.name_by_path(path)
             ),
         );
     }
@@ -303,7 +303,7 @@ pub fn camelize(segment: &str) -> String {
 }
 
 // A warning about a file as a whole points at its first line.
-fn first_line_of(path: &str) -> Location {
+fn locate_first_line(path: &str) -> Location {
     Location {
         file: path.to_owned(),
         line: 1,
@@ -323,13 +323,13 @@ mod tests {
     fn a_file_is_named_from_the_nearest_root_directory_it_sits_under() {
         let roots = roots(&["res://src", "res://src/ui/"]);
 
-        assert_eq!(roots.key_of("res://src/ui/hud.rb"), ["hud"]);
+        assert_eq!(roots.key_by_path("res://src/ui/hud.rb"), ["hud"]);
         assert_eq!(
-            roots.key_of("res://src/items/potion.rb"),
+            roots.key_by_path("res://src/items/potion.rb"),
             ["items", "potion"]
         );
         assert_eq!(
-            roots.key_of("res://tools/http_client.rb"),
+            roots.key_by_path("res://tools/http_client.rb"),
             ["tools", "httpclient"]
         );
     }
@@ -338,21 +338,24 @@ mod tests {
     fn a_directory_only_sharing_a_root_directorys_prefix_is_named_from_res() {
         let roots = roots(&["res://src"]);
 
-        assert_eq!(roots.key_of("res://srcs/player.rb"), ["srcs", "player"]);
+        assert_eq!(
+            roots.key_by_path("res://srcs/player.rb"),
+            ["srcs", "player"]
+        );
     }
 
     #[test]
     fn res_itself_and_a_directory_outside_it_add_no_root_directory() {
         let roots = roots(&["res://", "user://saves"]);
 
-        assert_eq!(roots.key_of("res://saves/slot.rb"), ["saves", "slot"]);
+        assert_eq!(roots.key_by_path("res://saves/slot.rb"), ["saves", "slot"]);
     }
 
     #[test]
     fn a_path_outside_res_spells_no_constant() {
         let roots = roots(&["res://src"]);
 
-        assert!(roots.key_of("").is_empty());
-        assert!(roots.key_of("user://slot.rb").is_empty());
+        assert!(roots.key_by_path("").is_empty());
+        assert!(roots.key_by_path("user://slot.rb").is_empty());
     }
 }

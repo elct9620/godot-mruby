@@ -211,7 +211,7 @@ impl RubyScript {
     fn ancestry(&self) -> Result<Arc<Ancestry>, Break> {
         self.ancestry.ancestry(|| {
             let path = self.base().get_path().to_string();
-            ancestry::ancestry_of(&path, &self.header, &GameFiles)
+            ancestry::trace_ancestry(&path, &self.header, &GameFiles)
         })
     }
 
@@ -228,7 +228,7 @@ impl RubyScript {
         let mut signals: Vec<Signal> = Vec::new();
         for (path, header) in self.lineage().files() {
             let declared = if snapshot.has_run(path) {
-                snapshot.signals(path)
+                snapshot.signals_by_path(path)
             } else {
                 header.signals()
             };
@@ -270,7 +270,7 @@ impl RubyScript {
         self.header
             .methods()
             .map(str::to_owned)
-            .chain(snapshot::latest().methods(&path).iter().cloned())
+            .chain(snapshot::latest().methods_by_path(&path).iter().cloned())
             .collect()
     }
 

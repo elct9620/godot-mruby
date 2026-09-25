@@ -220,8 +220,11 @@ fn ancestor_by_member(mrb: &Mrb, class: RClass, name: &str) -> Option<String> {
         }
         let names: Vec<String> = path.split("::").map(str::to_owned).collect();
         let declared = file_by_constant(mrb, &names).is_some_and(|file| {
-            snapshot.signals(&file).iter().any(|it| it.name == name)
-                || snapshot.properties(&file).any(|it| it.name == name)
+            snapshot
+                .signals_by_path(&file)
+                .iter()
+                .any(|it| it.name == name)
+                || snapshot.properties_by_path(&file).any(|it| it.name == name)
         });
         if declared {
             return Some(path);
@@ -262,7 +265,7 @@ fn execute<T>(
         digest: 0,
     });
     let outcome = prepare().and_then(|prepared| {
-        let source = source_of(mrb, path)?;
+        let source = source_by_path(mrb, path)?;
         if let Some(frame) = runs.frames.borrow_mut().last_mut() {
             frame.digest = snapshot::digest(&source);
         }
@@ -306,7 +309,7 @@ fn split(declared: Vec<Declaration>) -> (Vec<Signal>, Vec<Member>) {
 }
 
 // The source the realm's files give for the file at `path`.
-fn source_of(mrb: &Mrb, path: &str) -> Result<String, Error> {
+fn source_by_path(mrb: &Mrb, path: &str) -> Result<String, Error> {
     bookkeeping(mrb)
         .files
         .source(path)

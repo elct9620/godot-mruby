@@ -68,9 +68,9 @@ module Minitest
     # connection: a Proc becomes a new Callable each time it reaches the
     # engine, so only the one the engine holds disconnects it.
     def connect_block(signal, &block)
-      held = callables_of(signal)
+      held = list_callables(signal)
       signal.connect(block)
-      callables_of(signal).find { |callable| !held.include?(callable) }
+      list_callables(signal).find { |callable| !held.include?(callable) }
     end
 
     # Undoes connect_block, unless the signal's object was freed meanwhile
@@ -79,7 +79,7 @@ module Minitest
       signal.disconnect(connection) if connection && signal.get_object
     end
 
-    def callables_of(signal)
+    def list_callables(signal)
       signal.get_connections.map { |connection| connection["callable"] }
     end
 

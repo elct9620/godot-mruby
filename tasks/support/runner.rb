@@ -80,7 +80,7 @@ module Godot
       raise "A run of #{ORDER} did not print its seed:\n#{output}" unless seed
 
       again, = run(project, "--dir", ORDER, "--seed", seed)
-      return if order_of(output).any? && order_of(again) == order_of(output)
+      return if scan_order(output).any? && scan_order(again) == scan_order(output)
 
       raise "The seed #{seed} did not repeat the order of #{ORDER}:\n#{output}\n#{again}"
     end
@@ -89,7 +89,7 @@ module Godot
     # tests out of name order.
     # @behavior RT-033
     def verify_shuffled!(project)
-      orders = SEEDS.map { |seed| order_of(run(project, "--dir", ORDER, "--seed", seed).first) }
+      orders = SEEDS.map { |seed| scan_order(run(project, "--dir", ORDER, "--seed", seed).first) }
       return if orders.any? { |order| order.any? && order != order.sort }
 
       raise "No seed of #{SEEDS.join(", ")} ran #{ORDER} out of name order: #{orders}"
@@ -105,7 +105,7 @@ module Godot
       raise "A run of #{ORPHAN} did not warn of its orphan and pass:\n#{output}"
     end
 
-    def order_of(output)
+    def scan_order(output)
       output.scan(RAN).flatten
     end
 
