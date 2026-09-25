@@ -208,7 +208,7 @@ pub fn read(path: &str, header: &Header, files: &impl Files) -> Result<Ancestry,
             path: file.clone(),
             reason,
         })?;
-        let ancestor = Header::read(&file, &source, &roots);
+        let ancestor = Header::from_source(&file, &source, &roots);
         superclass = ancestor.superclass().cloned();
         passed.push(file.clone());
         ancestors.push((file, ancestor));
@@ -246,7 +246,7 @@ pub mod tests {
 
     fn ancestry(path: &str, sources: &[(&'static str, &'static str)]) -> Result<Ancestry, Broken> {
         let files = Sources(sources.iter().copied().collect());
-        let header = Header::read(path, &files.source(path).unwrap(), &files.roots());
+        let header = Header::from_source(path, &files.source(path).unwrap(), &files.roots());
         read(path, &header, &files)
     }
 
@@ -378,7 +378,7 @@ pub mod tests {
             ("res://ally.rb", "class Ally < Godot::Node2D\nend\n"),
         ];
         let files = Sources(sources.iter().copied().collect());
-        let header = Header::read("res://boss.rb", sources[0].1, &files.roots());
+        let header = Header::from_source("res://boss.rb", sources[0].1, &files.roots());
         let ancestry = read("res://boss.rb", &header, &files).map(Arc::new).ok();
 
         let lineage = Lineage::new("res://boss.rb".to_owned(), &header, ancestry);

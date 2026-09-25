@@ -62,7 +62,7 @@ impl Files for GameFiles {
         let Ok(source) = self.source(path) else {
             return Declarations::default();
         };
-        let header = Header::read(path, &source, &self.roots());
+        let header = Header::from_source(path, &source, &self.roots());
         let extends = ancestry::read(path, &header, self)
             .ok()
             .filter(|ancestry| bridge::is_node_class(ancestry.engine_class()))

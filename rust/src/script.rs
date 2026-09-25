@@ -141,7 +141,7 @@ unsafe impl Send for Placeholder {}
 impl RubyScript {
     /// The script of the file at `path`, holding `source`.
     pub fn from_source(path: &str, source: GString) -> Gd<Self> {
-        let header = Header::read(path, &source.to_string(), &GameFiles.roots());
+        let header = Header::from_source(path, &source.to_string(), &GameFiles.roots());
         Gd::from_init_fn(|base| Self {
             base,
             header: Arc::new(header),
@@ -418,7 +418,7 @@ impl IScriptExtension for RubyScript {
 
     fn set_source_code(&mut self, code: GString) {
         let path = self.base().get_path().to_string();
-        let header = Header::read(&path, &code.to_string(), &GameFiles.roots());
+        let header = Header::from_source(&path, &code.to_string(), &GameFiles.roots());
         self.header = Arc::new(header);
         self.source = code;
         ancestry::expire();

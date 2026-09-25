@@ -93,7 +93,7 @@ impl<'a, F: Files> Project<'a, F> {
 
     // The header and ancestry of the file at `path`, when it is a node script.
     fn node_script(&self, path: &str) -> Option<(Header, Ancestry)> {
-        let header = Header::read(path, &self.files.source(path).ok()?, &self.files.roots());
+        let header = Header::from_source(path, &self.files.source(path).ok()?, &self.files.roots());
         let ancestry = ancestry::read(path, &header, self.files).ok()?;
         (self.is_node)(ancestry.engine_class()).then_some((header, ancestry))
     }

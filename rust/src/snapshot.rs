@@ -288,7 +288,7 @@ impl Snapshot {
         for export in source.exports {
             let member = match export {
                 Export::Member(member) => Some(member.clone()),
-                Export::Unread { name, bare } => class
+                Export::Name { name, bare } => class
                     .property(name)
                     .or(bare.as_ref())
                     .cloned()
