@@ -2,8 +2,10 @@
 //! opens with, and the values that cross between the engine and Ruby.
 
 use beni::{Error, Gem, Mrb, Object, ReprValue, Symbol, Value, method};
+use godot::builtin::VariantType;
 use godot::classes::ClassDb;
-use godot::obj::Singleton;
+use godot::global::type_string;
+use godot::obj::{EngineEnum, Singleton};
 
 use crate::{compiler, log};
 
@@ -45,6 +47,11 @@ impl Gem for Godot {
 /// node script extends.
 pub fn is_node_class(class: &str) -> bool {
     ClassDb::singleton().is_parent_class(class, "Node")
+}
+
+/// The name GDScript gives a variant type.
+pub fn type_name(kind: VariantType) -> String {
+    type_string(i64::from(kind.ord())).to_string()
 }
 
 // Godot.__engine_superclass__(name): the name of the engine class `name`

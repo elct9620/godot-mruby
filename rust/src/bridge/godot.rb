@@ -194,8 +194,8 @@ module Godot
         end
       end
 
-      # The hint the keywords name and the string it is read with, as the
-      # engine takes them. A property carries one hint, as a GDScript
+      # The hint the keywords name and the value it is read with, as the
+      # extension takes them. A property carries one hint, as a GDScript
       # variable carries one `@export_*` annotation, and `step:` belongs to
       # the range it steps through rather than being a hint of its own.
       def __hint__(keywords)
@@ -207,22 +207,9 @@ module Godot
         return ["range", __bounds__(keywords[:range], step)] if hint == :range
         raise ArgumentError, %("step:" needs a "range:" to step through.) unless step.nil?
         return ["type", __class_named__(keywords[:type])] if hint == :type
-        return ["none", ""] if hint.nil?
+        return ["none", nil] if hint.nil?
 
-        [hint.to_s, __read_with__(hint, keywords[hint])]
-      end
-
-      # What a hint other than a range is read with: the names a value may
-      # take, the files to choose among, or the text an empty field shows.
-      # A hint that needs none is read with nothing.
-      def __read_with__(hint, value)
-        case hint
-        when :enum, :flags then value.map(&:to_s).join(",")
-        when :file then value == true ? "" : value.to_s
-        when :dir, :multiline then ""
-        when :placeholder then value.to_s
-        else raise ArgumentError, %("#{hint}:" is not a hint a property can be exported with.)
-        end
+        [hint.to_s, keywords[hint]]
       end
 
       # The class a property names its type by, as the realm spells it. Only
@@ -236,24 +223,16 @@ module Godot
         named.to_s
       end
 
-      # A range hint's bounds as the engine reads them, the step included
-      # when one is declared. A range leaving out its end names no highest
-      # value, so it is refused where it is written.
+      # A range hint's bounds, the step included when one is declared. A
+      # range leaving out its end names no highest value, so it is refused
+      # where it is written.
       def __bounds__(range, step)
         unless range.is_a?(::Range) && !range.exclude_end?
           raise ArgumentError,
                 %("range:" needs a range that includes its end, but #{range.inspect} was given instead.)
         end
 
-        bounds = [range.begin, range.end]
-        bounds << step unless step.nil?
-        bounds.map { |bound| __number__(bound) }.join(",")
-      end
-
-      # A bound as GDScript writes it, where a whole number carries no
-      # fraction.
-      def __number__(number)
-        number == number.to_i ? number.to_i.to_s : number.to_s
+        step.nil? ? [range.begin, range.end] : [range.begin, range.end, step]
       end
 
       # The engine's singleton of this engine class, kept once asked for.

@@ -8,6 +8,7 @@ mod compiler;
 mod export;
 mod game;
 mod header;
+mod hint;
 mod instance;
 mod language;
 mod loader;

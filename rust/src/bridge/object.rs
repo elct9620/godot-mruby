@@ -18,6 +18,7 @@ use godot::register::info::PropertyHint;
 use super::value::{self, ToRuby};
 use crate::announcement::Project;
 use crate::game::FilesOnDisk;
+use crate::hint::Hint;
 use crate::realm::{self, Key};
 use crate::settings;
 use crate::snapshot::{Heading, Property, Signal};
@@ -279,30 +280,37 @@ fn declare_signal(
     Ok(Value::nil())
 }
 
-// Godot::Object.__declare_export__(name, default, hint, hint_string): takes
-// the property the class exports as its body runs, its type read from the
-// value it is declared with and its hint from the keyword naming it, for the
-// realm to publish once the file has run. A declaration GDScript would
-// refuse is refused in GDScript's own words, so the two languages read the
-// same when the same mistake is made.
+// Godot::Object.__declare_export__(name, default, hint, written): takes the
+// property the class exports as its body runs, its type read from the value
+// it is declared with and its hint from the keyword naming it, read with
+// the value written with that keyword, for the realm to publish once the
+// file has run. A declaration GDScript would refuse is refused in
+// GDScript's own words, so the two languages read the same when the same
+// mistake is made.
 fn declare_export(
     mrb: &Mrb,
     class: RClass,
     name: String,
     default: Value,
     hint: String,
-    hint_string: String,
+    written: Value,
 ) -> Result<Value, Error> {
+    let keyword = match hint.as_str() {
+        "type" => None,
+        keyword => Some(Hint::by_keyword(keyword).map_err(|reason| argument_error(mrb, &reason))?),
+    };
     let default =
         value::to_engine(mrb, default, 1).map_err(|reason| argument_error(mrb, &reason))?;
+    let written =
+        value::to_engine(mrb, written, 1).map_err(|reason| argument_error(mrb, &reason))?;
     if let Some(engine_class) = engine_member(mrb, class, &name) {
         let message =
             format!("Member \"{name}\" redefined (original in native class '{engine_class}')");
         return Err(argument_error(mrb, &message));
     }
-    let property = match hint.as_str() {
-        "type" => property_of_class(mrb, name, &default, &hint_string),
-        _ => property_of_value(name, &default, &hint, hint_string),
+    let property = match keyword {
+        None => property_of_class(mrb, name, &default, &written.to_string()),
+        Some(hint) => property_of_value(name, &default, hint, &written),
     }
     .map_err(|reason| argument_error(mrb, &reason))?;
     realm::declare_export(mrb, class, property)?;
@@ -354,7 +362,7 @@ fn mismatch(mrb: &Mrb, default: &Variant, class: &str) -> Option<String> {
         return None;
     }
     let Ok(object) = default.try_to::<Gd<Object>>() else {
-        return Some(type_name(kind));
+        return Some(super::type_name(kind));
     };
     (!is_of_class(mrb, &object, class)).then(|| class_of(&object))
 }
@@ -400,8 +408,8 @@ fn written_in(object: &Gd<Object>) -> impl Iterator<Item = String> {
 fn property_of_value(
     name: String,
     default: &Variant,
-    hint: &str,
-    hint_string: String,
+    hint: Hint,
+    written: &Variant,
 ) -> Result<Property, String> {
     if default.get_type() == VariantType::NIL {
         return Err(
@@ -409,8 +417,8 @@ fn property_of_value(
                 .to_owned(),
         );
     }
-    let hint = hint_by_name(hint, default.get_type())?;
-    Ok(Property::new(name, default).with_hint(hint, hint_string))
+    let property_hint = hint.property_hint(default.get_type())?;
+    Ok(Property::new(name, default).with_hint(property_hint, hint.hint_string(written)))
 }
 
 // The hint an exported object takes from the class it names, and the name
@@ -457,58 +465,6 @@ fn editor_name_at(path: &str) -> Option<String> {
 // GDScript's words for a type nothing in the project is known by.
 fn unknown_type(class: &str) -> String {
     format!("The class \"{class}\" was not found in the global scope.")
-}
-
-// The hint the keyword `name` spells, unless the exported type cannot be
-// read with it. Each one takes the types the `@export_*` annotation it
-// answers to takes, and a type none of them takes is refused in GDScript's
-// words. Ruby names the hint, so a name none of them spells is no hint.
-fn hint_by_name(name: &str, kind: VariantType) -> Result<PropertyHint, String> {
-    let (hint, takes): (PropertyHint, &[VariantType]) = match name {
-        "range" => (PropertyHint::RANGE, &[VariantType::INT, VariantType::FLOAT]),
-        "enum" => (
-            PropertyHint::ENUM,
-            &[
-                VariantType::INT,
-                VariantType::STRING,
-                VariantType::STRING_NAME,
-            ],
-        ),
-        "flags" => (PropertyHint::FLAGS, &[VariantType::INT]),
-        "file" => (PropertyHint::FILE, &[VariantType::STRING]),
-        "dir" => (PropertyHint::DIR, &[VariantType::STRING]),
-        "multiline" => (PropertyHint::MULTILINE_TEXT, &[VariantType::STRING]),
-        "placeholder" => (PropertyHint::PLACEHOLDER_TEXT, &[VariantType::STRING]),
-        _ => return Ok(PropertyHint::NONE),
-    };
-    if takes.contains(&kind) {
-        return Ok(hint);
-    }
-    Err(format!(
-        "\"{name}:\" requires a variable of type {}, but type \"{}\" was given instead.",
-        kind_list(takes),
-        type_name(kind)
-    ))
-}
-
-// The types a hint takes, as GDScript lists them in the same refusal: the
-// last is reached through "or", and three or more are separated by commas.
-fn kind_list(kinds: &[VariantType]) -> String {
-    let names: Vec<String> = kinds
-        .iter()
-        .map(|kind| format!("\"{}\"", type_name(*kind)))
-        .collect();
-    match names.split_last() {
-        None => String::new(),
-        Some((last, [])) => last.clone(),
-        Some((last, [first])) => format!("{first} or {last}"),
-        Some((last, rest)) => format!("{}, or {last}", rest.join(", ")),
-    }
-}
-
-// The name GDScript gives a variant type.
-fn type_name(kind: VariantType) -> String {
-    type_string(i64::from(kind.ord())).to_string()
 }
 
 // The engine class `class` extends that has a member of that name, if one
