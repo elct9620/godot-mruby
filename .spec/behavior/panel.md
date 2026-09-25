@@ -20,4 +20,4 @@ How the editor runs a project's Ruby tests: the test panel plays the test runner
 | --- | --- |
 | Given | a failure the test panel lists |
 | When | its row is activated |
-| Then | the script editor opens the test file at the line the failure names |
+| Then | the editor switches to the script editor, showing the test file at the line the failure names |

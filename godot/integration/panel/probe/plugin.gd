@@ -49,7 +49,12 @@ func _look(panel: Node) -> void:
 	var editor := EditorInterface.get_script_editor()
 	var code: CodeEdit = editor.get_current_editor().get_base_editor()
 	print(
-		"panel opened: ", editor.get_current_script().resource_path, ":", code.get_caret_line() + 1
+		"panel opened: ",
+		editor.get_current_script().resource_path,
+		":",
+		code.get_caret_line() + 1,
+		" shown: ",
+		editor.is_visible_in_tree()
 	)
 
 

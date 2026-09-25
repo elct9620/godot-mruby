@@ -14,7 +14,7 @@ module Godot
       "panel status: 1 runs, 1 failures, 0 errors, 0 skips",
       "panel row: failure | FailedAssertionTest#test_one_equals_two | Expected: 1"
     ].freeze
-    OPENED = "panel opened: #{FAILING}:9".freeze
+    OPENED = "panel opened: #{FAILING}:9 shown: true".freeze
 
     module_function
 

@@ -186,11 +186,12 @@ impl RubyTestPanel {
         let script = ResourceLoader::singleton()
             .load(&file)
             .and_then(|resource| resource.try_cast::<Script>().ok());
+        // Editing a script only loads it into the script editor; the screen
+        // stays where it was until switched, as GUT's panel switches it.
         if let Some(script) = script {
-            EditorInterface::singleton()
-                .edit_script_ex(&script)
-                .line(line)
-                .done();
+            let mut editor = EditorInterface::singleton();
+            editor.edit_script_ex(&script).line(line).done();
+            editor.set_main_screen_editor("Script");
         }
     }
 }
