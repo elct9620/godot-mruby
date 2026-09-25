@@ -118,17 +118,17 @@ struct Bookkeeping {
     // run, so what any thread reads is never half-declared.
     snapshot: RefCell<Arc<Snapshot>>,
     // Set while the realm defines a directory's module, which no file created.
-    defining_namespace: Cell<bool>,
+    is_defining_namespace: Cell<bool>,
     // How the Ruby running now started, while any does.
-    outermost: Cell<Option<Started>>,
+    outermost: Cell<Option<Origin>>,
 }
 
 // The realm's outermost Ruby while it runs, forgotten once it returns or
 // panics; an entry inside it leaves it as it is.
-struct Outermost<'a>(Option<&'a Cell<Option<Started>>>);
+struct OutermostGuard<'a>(Option<&'a Cell<Option<Origin>>>);
 
-impl<'a> Outermost<'a> {
-    fn start(outermost: &'a Cell<Option<Started>>, started: Started) -> Self {
+impl<'a> OutermostGuard<'a> {
+    fn start(outermost: &'a Cell<Option<Origin>>, started: Origin) -> Self {
         if outermost.get().is_some() {
             return Self(None);
         }
@@ -137,7 +137,7 @@ impl<'a> Outermost<'a> {
     }
 }
 
-impl Drop for Outermost<'_> {
+impl Drop for OutermostGuard<'_> {
     fn drop(&mut self) {
         if let Some(outermost) = self.0 {
             outermost.set(None);
@@ -149,29 +149,22 @@ impl Drop for Outermost<'_> {
 /// Rust in its base frame and leaves it there once the file has run, so under
 /// a call from Rust a backtrace ends with a top level that finished.
 #[derive(Clone, Copy)]
-enum Started {
+enum Origin {
     Run,
     Call,
 }
 
-impl Bookkeeping {
-    // Publishes what the class of the file at `path` has, now that the file
-    // has run. Ruby itself asks Godot what a class has, so a file's class is
-    // read back while the thread that ran it is still inside the realm.
-    fn ran(&self, path: &str, class: Class) {
-        let mut draft = self.snapshot.borrow_mut();
-        Arc::make_mut(&mut draft).ran(path, class);
-        snapshot::publish(Arc::clone(&draft));
-    }
-}
-
-// What the class of the file at `path` has, now that the file has run from
-// the source of that digest: what its body declared, and the methods it
-// defines, so a method metaprogramming defined is one the class has.
-fn ran(mrb: &Mrb, path: &str, signals: Vec<Signal>, members: Vec<Member>, digest: u64) {
+// Publishes what the class of the file at `path` has, now that the file has
+// run from the source of that digest: what its body declared, and the
+// methods it defines, so a method metaprogramming defined is one the class
+// has. Ruby itself asks Godot what a class has, so a file's class is read
+// back while the thread that ran it is still inside the realm.
+fn publish_class(mrb: &Mrb, path: &str, signals: Vec<Signal>, members: Vec<Member>, digest: u64) {
     let methods = methods_of(mrb, path);
-    let export_names = bookkeeping(mrb).files.declarations(path).exports;
-    bookkeeping(mrb).ran(
+    let bookkeeping = bookkeeping(mrb);
+    let export_names = bookkeeping.files.declarations(path).exports;
+    let mut draft = bookkeeping.snapshot.borrow_mut();
+    Arc::make_mut(&mut draft).record_class(
         path,
         Class {
             signals,
@@ -181,6 +174,7 @@ fn ran(mrb: &Mrb, path: &str, signals: Vec<Signal>, members: Vec<Member>, digest
             export_names,
         },
     );
+    snapshot::publish(Arc::clone(&draft));
 }
 
 // The names of the methods the class the file at `path` names defines
@@ -275,7 +269,7 @@ enum Game {
 pub fn enter<T>(body: impl FnOnce(&Realm) -> Result<T, RubyError>) -> Result<T, RubyError> {
     let game = GAME.lock();
     if game.depth() > DEEPEST_ENTRY {
-        return Err(RubyError::plain(format!(
+        return Err(RubyError::from_message(format!(
             "SystemStackError: the game's realm is already entered {DEEPEST_ENTRY} deep on this thread"
         )));
     }
@@ -285,7 +279,7 @@ pub fn enter<T>(body: impl FnOnce(&Realm) -> Result<T, RubyError>) -> Result<T, 
     }
     let game = game.borrow();
     let Game::Open(realm) = &*game else {
-        return Err(RubyError::plain(
+        return Err(RubyError::from_message(
             "the game's realm was entered while it opens".to_owned(),
         ));
     };
@@ -322,7 +316,7 @@ impl Drop for Opening<'_> {
 fn open_game() -> Result<Realm, RubyError> {
     let opener = opener();
     let open = opener.as_ref().ok_or_else(|| {
-        RubyError::plain("the game's realm was entered before it was prepared".to_owned())
+        RubyError::from_message("the game's realm was entered before it was prepared".to_owned())
     })?;
     open()
 }
@@ -353,8 +347,8 @@ pub fn declare_heading(mrb: &Mrb, heading: Heading) {
 /// Whether this thread is inside the game's realm. Something outside asks
 /// before reaching for what only the realm can answer, since entering it
 /// from another thread waits for the one inside.
-pub fn inside() -> bool {
-    GAME.held_here()
+pub fn is_inside() -> bool {
+    GAME.is_held_here()
 }
 
 /// Holds `object` under `key` in the realm `mrb` belongs to, for an
@@ -371,7 +365,7 @@ pub fn hold_new(mrb: &Mrb, object: Value) -> Result<Key, Error> {
 
 /// The Ruby object `key` holds in the realm `mrb` belongs to, if it holds
 /// one.
-pub fn held(mrb: &Mrb, key: Key) -> Option<Value> {
+pub fn object(mrb: &Mrb, key: Key) -> Option<Value> {
     bookkeeping(mrb).registry.object(mrb, key).ok()
 }
 
@@ -467,7 +461,7 @@ impl Realm {
         extend: impl FnOnce(&Realm) -> Result<(), RubyError>,
     ) -> Result<Self, RubyError> {
         let mut mrb = Mrb::open()
-            .map_err(|error| RubyError::plain(format!("mruby did not open: {error}")))?;
+            .map_err(|error| RubyError::from_message(format!("mruby did not open: {error}")))?;
         let paths = files.paths();
         let index = RefCell::new(ClassIndex::new(files.roots()));
         let bookkeeping = Bookkeeping {
@@ -477,17 +471,17 @@ impl Realm {
             runs: executor::Runs::default(),
             registry: Registry::new(&mrb),
             snapshot: RefCell::default(),
-            defining_namespace: Cell::default(),
+            is_defining_namespace: Cell::default(),
             outermost: Cell::default(),
         };
         if mrb.set_user_data(bookkeeping).is_err() {
-            return Err(RubyError::plain(
+            return Err(RubyError::from_message(
                 "mruby opened holding user data".to_owned(),
             ));
         }
         print::define(&mrb)
             .and_then(|()| constants::define(&mrb))
-            .map_err(|error| RubyError::read(&mrb, None, &error))?;
+            .map_err(|error| RubyError::from_error(&mrb, None, &error))?;
         let realm = Self { mrb };
         extend(&realm)?;
         realm.index_files(paths);
@@ -521,7 +515,7 @@ impl Realm {
             .collect();
         self.mrb
             .init_gem::<G>()
-            .map_err(|error| RubyError::read(&self.mrb, None, &error))?;
+            .map_err(|error| RubyError::from_error(&self.mrb, None, &error))?;
         let added = missing
             .into_iter()
             .filter(|key| constants::constant_at(&self.mrb, key).is_some());
@@ -536,14 +530,14 @@ impl Realm {
     /// has run in this realm already, whether it succeeded or not.
     pub fn run(&self, path: &str) -> Result<(), RubyError> {
         let _scope = self.mrb.arena_scope();
-        self.started_as(Started::Run, || {
+        self.run_as(Origin::Run, || {
             executor::run(
                 &self.mrb,
                 path,
                 || constants::ensure_opened(&self.mrb, path),
                 |extends| constants::keep_extends(&self.mrb, path, extends),
             )
-            .map_err(|error| RubyError::read(&self.mrb, Some(path), &error))
+            .map_err(|error| RubyError::from_error(&self.mrb, Some(path), &error))
         })
     }
 
@@ -551,10 +545,10 @@ impl Realm {
     // around the run when the file ran cleanly before it.
     fn run_again(&self, path: &str, rerun: &Rerun) -> Result<(), RubyError> {
         let _scope = self.mrb.arena_scope();
-        let read = |error| RubyError::read(&self.mrb, Some(path), &error);
-        self.started_as(Started::Run, || {
+        let read = |error| RubyError::from_error(&self.mrb, Some(path), &error);
+        self.run_as(Origin::Run, || {
             let ran = executor::has_run(&self.mrb, path);
-            if ran && let Some(class) = self.class_answering(path, rerun.withdraw).map_err(read)? {
+            if ran && let Some(class) = self.respondent(path, rerun.withdraw).map_err(read)? {
                 class
                     .funcall(&self.mrb, rerun.withdraw, &[])
                     .map_err(read)?;
@@ -566,7 +560,7 @@ impl Realm {
                 |extends| constants::keep_extends(&self.mrb, path, extends),
             )
             .map_err(read)?;
-            if ran && let Some(class) = self.class_answering(path, rerun.adopt).map_err(read)? {
+            if ran && let Some(class) = self.respondent(path, rerun.adopt).map_err(read)? {
                 for object in bookkeeping(&self.mrb).registry.objects(&self.mrb) {
                     if object
                         .funcall(&self.mrb, c"is_a?", &[class])
@@ -585,7 +579,7 @@ impl Realm {
 
     // The class the file at `path` defined, if it answers `message`, even
     // privately.
-    fn class_answering(&self, path: &str, message: &CStr) -> Result<Option<Value>, Error> {
+    fn respondent(&self, path: &str, message: &CStr) -> Result<Option<Value>, Error> {
         let Some(class) = constants::constant_at(&self.mrb, &key_of(&self.mrb, path)) else {
             return Ok(None);
         };
@@ -612,13 +606,13 @@ impl Realm {
             .into_iter()
             .map(|arg| arg.into_value(&self.mrb))
             .collect();
-        let answer = self.started_as(Started::Call, || {
+        let answer = self.run_as(Origin::Call, || {
             self.mrb
                 .object_class()
                 .as_value()
                 .const_get(&self.mrb, receiver)
                 .and_then(|receiver| receiver.funcall(&self.mrb, method, &args))
-                .map_err(|error| RubyError::read(&self.mrb, None, &error))
+                .map_err(|error| RubyError::from_error(&self.mrb, None, &error))
         })?;
         self.converted_answer(answer, || {
             format!("{receiver}.{}", method.to_string_lossy())
@@ -643,19 +637,19 @@ impl Realm {
         key: Key,
         make: &CStr,
         args: impl IntoIterator<Item = A>,
-    ) -> Result<Built, RubyError> {
+    ) -> Result<Build, RubyError> {
         self.run(path)?;
         let _scope = self.mrb.arena_scope();
         let registry = &bookkeeping(&self.mrb).registry;
-        let read = |error| RubyError::read(&self.mrb, Some(path), &error);
-        if registry.holds(&self.mrb, key).map_err(read)? {
-            return Ok(Built::Held);
+        let read = |error| RubyError::from_error(&self.mrb, Some(path), &error);
+        if registry.has_object(&self.mrb, key).map_err(read)? {
+            return Ok(Build::Existing);
         }
         let Some(class) = constants::constant_at(&self.mrb, &key_of(&self.mrb, path)) else {
             if executor::is_running(&self.mrb, path) {
-                return Ok(Built::Waiting);
+                return Ok(Build::Pending);
             }
-            return Err(RubyError::plain(format!(
+            return Err(RubyError::from_message(format!(
                 "{path} has not defined the class its path names, so no object of it is built"
             )));
         };
@@ -663,11 +657,11 @@ impl Realm {
             .into_iter()
             .map(|arg| arg.into_value(&self.mrb))
             .collect();
-        self.started_as(Started::Call, || {
+        self.run_as(Origin::Call, || {
             class
                 .funcall(&self.mrb, make, &args)
                 .and_then(|object| registry.hold(&self.mrb, key, object))
-                .map(|()| Built::Made)
+                .map(|()| Build::New)
                 .map_err(read)
         })
     }
@@ -685,19 +679,19 @@ impl Realm {
             .into_iter()
             .map(|arg| arg.into_value(&self.mrb))
             .collect();
-        let answer = self.started_as(Started::Call, || {
+        let answer = self.run_as(Origin::Call, || {
             bookkeeping(&self.mrb)
                 .registry
                 .object(&self.mrb, key)
                 .and_then(|object| object.funcall(&self.mrb, method, &args))
-                .map_err(|error| RubyError::read(&self.mrb, None, &error))
+                .map_err(|error| RubyError::from_error(&self.mrb, None, &error))
         })?;
         self.converted_answer(answer, || format!("#{method}"))
     }
 
     // Runs `ruby`, which Rust starts; it is the outermost Ruby when none runs.
-    fn started_as<T>(&self, started: Started, ruby: impl FnOnce() -> T) -> T {
-        let _outermost = Outermost::start(&bookkeeping(&self.mrb).outermost, started);
+    fn run_as<T>(&self, started: Origin, ruby: impl FnOnce() -> T) -> T {
+        let _outermost = OutermostGuard::start(&bookkeeping(&self.mrb).outermost, started);
         ruby()
     }
 
@@ -708,7 +702,7 @@ impl Realm {
         called: impl FnOnce() -> String,
     ) -> Result<R, RubyError> {
         R::try_convert(answer, &self.mrb).map_err(|error| {
-            RubyError::plain(format!(
+            RubyError::from_message(format!(
                 "{} answered {}: {}",
                 called(),
                 answer.inspect(&self.mrb),
@@ -720,13 +714,13 @@ impl Realm {
 
 /// What building an object for a key came to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Built {
+pub enum Build {
     /// Made now, for its caller to initialize.
-    Made,
+    New,
     /// Held already, made by whoever made it.
-    Held,
+    Existing,
     /// Not made: its file is still running and has not defined the class.
-    Waiting,
+    Pending,
 }
 
 /// Why Ruby could not do what it was asked, read out of the realm so it can
@@ -739,7 +733,7 @@ pub struct RubyError {
 }
 
 impl RubyError {
-    fn plain(message: String) -> Self {
+    fn from_message(message: String) -> Self {
         Self {
             level: Level::Error,
             message,
@@ -752,7 +746,7 @@ impl RubyError {
     // does not parse; an exception carries the frames of its backtrace that
     // name a line, as GDScript reports one raised at run time. Both read
     // through the realm they came from.
-    fn read(mrb: &Mrb, path: Option<&str>, error: &Error) -> Self {
+    fn from_error(mrb: &Mrb, path: Option<&str>, error: &Error) -> Self {
         let named = |message: String| match path {
             Some(path) => format!("{path}: {message}"),
             None => message,
@@ -771,7 +765,7 @@ impl RubyError {
             Error::Exception(_) => {
                 let backtrace = raised_frames(mrb, error);
                 if backtrace.is_empty() {
-                    Self::plain(named(error.message(mrb)))
+                    Self::from_message(named(error.message(mrb)))
                 } else {
                     Self {
                         level: Level::ScriptError,
@@ -781,7 +775,7 @@ impl RubyError {
                     }
                 }
             }
-            _ => Self::plain(named(error.to_string())),
+            _ => Self::from_message(named(error.to_string())),
         }
     }
 
@@ -807,7 +801,7 @@ fn raised_frames(mrb: &Mrb, error: &Error) -> Vec<Location> {
         .collect();
     let under_call = mrb
         .user_data::<Bookkeeping>()
-        .is_some_and(|kept| matches!(kept.outermost.get(), Some(Started::Call)));
+        .is_some_and(|kept| matches!(kept.outermost.get(), Some(Origin::Call)));
     if under_call && frames.last().is_some_and(|frame| frame.function.is_empty()) {
         frames.pop();
     }

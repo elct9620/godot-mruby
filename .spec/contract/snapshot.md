@@ -358,7 +358,7 @@ impl Snapshot {
 }
 ```
 
-## `Snapshot::ran`
+## `Snapshot::record_class`
 
 Takes what the class of the file at a path has, now that the file has run, in place of what it had before.
 
@@ -368,7 +368,7 @@ Takes what the class of the file at a path has, now that the file has run, in pl
 
 ```rust
 impl Snapshot {
-    pub fn ran(&mut self, path: &str, class: Class) {}
+    pub fn record_class(&mut self, path: &str, class: Class) {}
 }
 ```
 

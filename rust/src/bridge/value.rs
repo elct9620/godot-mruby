@@ -91,7 +91,7 @@ fn to_ruby(mrb: &Mrb, variant: &Variant) -> Value {
             .ok()
             .filter(Gd::is_instance_valid)
             .map_or_else(Value::nil, |object| match object.try_cast::<RubyObject>() {
-                Ok(held) => realm::held(mrb, held.bind().key()).unwrap_or_else(Value::nil),
+                Ok(held) => realm::object(mrb, held.bind().key()).unwrap_or_else(Value::nil),
                 Err(object) => object::ruby_object(mrb, object),
             }),
         kind if value_type::is_value_type(kind) => value_type::ruby_value(mrb, variant),

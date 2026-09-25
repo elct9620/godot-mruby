@@ -48,13 +48,13 @@ impl Registry {
     }
 
     /// Whether `key` holds an object.
-    pub fn holds(&self, mrb: &Mrb, key: Key) -> Result<bool, Error> {
+    pub fn has_object(&self, mrb: &Mrb, key: Key) -> Result<bool, Error> {
         self.objects.contains_key(mrb, key.to_value(mrb))
     }
 
     /// The object `key` holds; a key released already holds none.
     pub fn object(&self, mrb: &Mrb, key: Key) -> Result<Value, Error> {
-        if !self.holds(mrb, key)? {
+        if !self.has_object(mrb, key)? {
             let class = mrb.exc_get(c"RuntimeError")?;
             return Err(Error::new(mrb, class, "the object was released"));
         }

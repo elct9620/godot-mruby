@@ -321,7 +321,7 @@ impl Snapshot {
 
     /// Takes what the class of the file at `path` has, now that the file has
     /// run, in place of what it had before.
-    pub fn ran(&mut self, path: &str, class: Class) {
+    pub fn record_class(&mut self, path: &str, class: Class) {
         self.classes.insert(path.to_owned(), class);
     }
 }
@@ -346,16 +346,16 @@ fn category(path: &str) -> Heading {
 
 // What the game's realm has published. A mod's realm will publish its own,
 // keyed by the mod as its bookkeeping is.
-static PUBLISHED: LazyLock<RwLock<Arc<Snapshot>>> = LazyLock::new(RwLock::default);
+static SNAPSHOT: LazyLock<RwLock<Arc<Snapshot>>> = LazyLock::new(RwLock::default);
 
 /// The snapshot published last, for answering Godot without entering a realm.
 pub fn latest() -> Arc<Snapshot> {
-    Arc::clone(&PUBLISHED.read().unwrap_or_else(PoisonError::into_inner))
+    Arc::clone(&SNAPSHOT.read().unwrap_or_else(PoisonError::into_inner))
 }
 
 /// Publishes `snapshot` for every thread to read from.
 pub fn publish(snapshot: Arc<Snapshot>) {
-    *PUBLISHED.write().unwrap_or_else(PoisonError::into_inner) = snapshot;
+    *SNAPSHOT.write().unwrap_or_else(PoisonError::into_inner) = snapshot;
 }
 
 #[cfg(test)]
@@ -408,7 +408,7 @@ mod tests {
     fn a_file_that_ran_without_declaring_anything_has_still_run() {
         let mut snapshot = Snapshot::default();
 
-        snapshot.ran("res://bell.rb", Class::default());
+        snapshot.record_class("res://bell.rb", Class::default());
 
         assert!(snapshot.has_run("res://bell.rb"));
         assert!(!snapshot.has_run("res://lamp.rb"));
@@ -418,7 +418,7 @@ mod tests {
     fn a_class_answers_the_signals_its_file_declared() {
         let mut snapshot = Snapshot::default();
 
-        snapshot.ran("res://bell.rb", bell());
+        snapshot.record_class("res://bell.rb", bell());
 
         assert_eq!(snapshot.signals("res://bell.rb"), [rung()]);
     }
@@ -434,7 +434,7 @@ mod tests {
     fn a_class_answers_the_properties_its_file_exported() {
         let mut snapshot = Snapshot::default();
 
-        snapshot.ran("res://bell.rb", bell());
+        snapshot.record_class("res://bell.rb", bell());
 
         assert_eq!(
             snapshot.properties("res://bell.rb").collect::<Vec<_>>(),
@@ -446,7 +446,7 @@ mod tests {
     fn a_class_answers_the_methods_it_defines() {
         let mut snapshot = Snapshot::default();
 
-        snapshot.ran("res://bell.rb", bell());
+        snapshot.record_class("res://bell.rb", bell());
 
         assert!(snapshot.has_method("res://bell.rb", "ring"));
     }
@@ -455,8 +455,8 @@ mod tests {
     fn a_file_running_again_stands_in_place_of_what_it_had_before() {
         let mut snapshot = Snapshot::default();
 
-        snapshot.ran("res://bell.rb", bell());
-        snapshot.ran("res://bell.rb", Class::default());
+        snapshot.record_class("res://bell.rb", bell());
+        snapshot.record_class("res://bell.rb", Class::default());
 
         assert!(snapshot.signals("res://bell.rb").is_empty());
         assert_eq!(snapshot.properties("res://bell.rb").count(), 0);

@@ -39,7 +39,7 @@ fn created(mrb: &Mrb, receiver: Value, name: Symbol) -> Value {
     let (Some(scope), Some(name)) = (path_of(mrb, receiver), name.name(mrb)) else {
         return Value::nil();
     };
-    if !bookkeeping(mrb).defining_namespace.get() {
+    if !bookkeeping(mrb).is_defining_namespace.get() {
         executor::record(mrb, scope.clone(), name.clone());
     }
     load_hidden(mrb, &scope, &name);
@@ -100,7 +100,7 @@ fn load_inner(mrb: &Mrb, inner: &[String]) {
         _ => return,
     };
     if let Err(error) = loaded {
-        RubyError::read(mrb, path.as_deref(), &error).write(bookkeeping(mrb).log.as_ref());
+        RubyError::from_error(mrb, path.as_deref(), &error).write(bookkeeping(mrb).log.as_ref());
     }
 }
 
@@ -325,7 +325,7 @@ fn named_scope(mrb: &Mrb, outer: &[String]) -> Result<Value, Error> {
 
 fn define_module(mrb: &Mrb, scope: Value, name: &str) -> Result<Value, Error> {
     let module = mrb.module_new().as_value();
-    let defining = &bookkeeping(mrb).defining_namespace;
+    let defining = &bookkeeping(mrb).is_defining_namespace;
     defining.set(true);
     let defined = scope.const_set(mrb, name, module);
     defining.set(false);

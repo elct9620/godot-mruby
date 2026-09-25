@@ -245,7 +245,7 @@ fn ruby_answer(mrb: &Mrb, answer: &Variant) -> Result<Value, Error> {
 /// The Ruby object for an engine object: the one the realm holds for the
 /// node, or an object of its engine class under Godot.
 pub fn ruby_object(mrb: &Mrb, object: Gd<Object>) -> Value {
-    if let Some(held) = realm::held(mrb, node_key(object.instance_id())) {
+    if let Some(held) = realm::object(mrb, node_key(object.instance_id())) {
         return held;
     }
     let class = mrb

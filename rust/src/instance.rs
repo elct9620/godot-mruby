@@ -22,7 +22,7 @@ use crate::bridge::{self, Owner, ToEngine, ToRuby};
 use crate::error;
 use crate::header::Header;
 use crate::log::GodotLog;
-use crate::realm::{self, Built, Key, RubyError};
+use crate::realm::{self, Build, Key, RubyError};
 use crate::snapshot::{self, Heading, Member, Property};
 
 /// A node's instance of a `RubyScript`. It holds no Ruby value: the node's
@@ -283,11 +283,11 @@ impl Caller {
         let owner = [Owner(self.owner)];
         let built = realm::enter(|realm| realm.build(&self.path, key, c"__build__", owner))
             .and_then(|built| {
-                if built == Built::Waiting {
+                if built == Build::Pending {
                     return Ok(None);
                 }
                 self.settle(Stage::Built(key));
-                if built == Built::Made {
+                if built == Build::New {
                     realm::enter(|realm| realm.send::<ToRuby, ToEngine>(key, "initialize", []))?;
                 }
                 self.write_staged(key);
@@ -544,7 +544,7 @@ unsafe extern "C" fn set(
         if !exported && the_engines_own(instance, &name) {
             return sys::GDExtensionBool::from(false);
         }
-        if instance.unbuilt() && !realm::inside() {
+        if instance.unbuilt() && !realm::is_inside() {
             instance.stage(&name, value);
             return sys::GDExtensionBool::from(true);
         }
@@ -571,7 +571,7 @@ unsafe extern "C" fn get(
         if !exported && the_engines_own(instance, &name) {
             return sys::GDExtensionBool::from(false);
         }
-        if instance.unbuilt() && !realm::inside() {
+        if instance.unbuilt() && !realm::is_inside() {
             let staged = instance
                 .staged_value(&name)
                 .or_else(|| instance.default_value(&name));

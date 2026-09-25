@@ -108,7 +108,7 @@ The file a constant path written inside namespaces names, looked up among paths 
 pub fn file_by_name(paths: Vec<String>, roots: Roots, scope: &[String], names: &[String]) -> Option<String> {}
 ```
 
-## `inside`
+## `is_inside`
 
 Whether this thread is inside the game's realm, which something outside asks before reaching for what only the realm can answer, since entering it from another thread waits for the one inside.
 
@@ -117,7 +117,7 @@ Whether this thread is inside the game's realm, which something outside asks bef
 | internal | yes |
 
 ```rust
-pub fn inside() -> bool {}
+pub fn is_inside() -> bool {}
 ```
 
 ## `hold`
@@ -144,7 +144,7 @@ Holds a Ruby object in the realm an extension's method runs in under a key the r
 pub fn hold_new(mrb: &Mrb, object: Value) -> Result<Key, Error> {}
 ```
 
-## `held`
+## `object`
 
 The Ruby object a key holds in the realm an extension's method runs in, if it holds one, so an object the realm holds for something outside reaches Ruby as itself.
 
@@ -153,7 +153,7 @@ The Ruby object a key holds in the realm an extension's method runs in, if it ho
 | internal | yes |
 
 ```rust
-pub fn held(mrb: &Mrb, key: Key) -> Option<Value> {}
+pub fn object(mrb: &Mrb, key: Key) -> Option<Value> {}
 ```
 
 ## `file_by_constant`
@@ -347,11 +347,11 @@ Runs the Ruby file at a path once, and holds under a key the object a method mak
 
 ```rust
 impl Realm {
-    pub fn build<A: IntoValue>(&self, path: &str, key: Key, make: &CStr, args: impl IntoIterator<Item = A>) -> Result<Built, RubyError> {}
+    pub fn build<A: IntoValue>(&self, path: &str, key: Key, make: &CStr, args: impl IntoIterator<Item = A>) -> Result<Build, RubyError> {}
 }
 ```
 
-## `Built`
+## `Build`
 
 What building an object for a key came to: made now, held already, or waiting for its file to define the class.
 
@@ -360,10 +360,10 @@ What building an object for a key came to: made now, held already, or waiting fo
 | internal | yes |
 
 ```rust
-pub enum Built {
-    Made,
-    Held,
-    Waiting,
+pub enum Build {
+    New,
+    Existing,
+    Pending,
 }
 ```
 

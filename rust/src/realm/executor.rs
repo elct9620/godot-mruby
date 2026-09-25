@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
 
-use super::{bookkeeping, compile, file_by_constant, ran};
+use super::{bookkeeping, compile, file_by_constant, publish_class};
 use crate::snapshot::{self, Heading, Member, Property, Signal};
 use beni::{Error, FromValue, Module, Mrb, RClass, ReprValue, Value};
 
@@ -275,7 +275,7 @@ fn execute<T>(
         (Ok(()), frame) => {
             frame.into_iter().for_each(|frame| {
                 let (signals, members) = split(frame.declared);
-                ran(mrb, &frame.path, signals, members, frame.digest);
+                publish_class(mrb, &frame.path, signals, members, frame.digest);
             });
             Run::Done
         }

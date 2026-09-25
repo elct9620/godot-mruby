@@ -55,7 +55,7 @@ impl<T> ReentrantLock<T> {
 
     /// Whether this thread holds the lock, which it answers without waiting
     /// for the thread that does.
-    pub fn held_here(&self) -> bool {
+    pub fn is_held_here(&self) -> bool {
         self.holder().thread == Some(thread::current().id())
     }
 
