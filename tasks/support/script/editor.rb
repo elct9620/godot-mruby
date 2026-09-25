@@ -15,6 +15,12 @@ module Godot
       # exports.
       EXPORTS_SCENE = "res://integration/script/exports/exports.tscn"
       EXPORTED = "armor listed: true"
+      # A scene whose tool script prints what the extension told a node's
+      # placeholder once the editor's realm ran its file, beside a node whose
+      # script, under a test directory, the editor must never run.
+      EDITOR_SCENE = "res://integration/script/editor/editor.tscn"
+      RAN = "knob turn hint: 0,10, grouped: true"
+      UNTOUCHED = "a test directory's file ran in the editor"
       # The line the editor prints as it takes the scene in, which is what says
       # the run reached it; the editor scans the whole project first, so the run
       # is given frames enough to get there and quits by itself. A run told to
@@ -31,6 +37,9 @@ module Godot
       def verify!(project)
         verify_connected!(project)
         verify_exported!(project)
+        output = open_scene(project, EDITOR_SCENE)
+        verify_ran!(output)
+        verify_left_out!(output)
       end
 
       # @behavior RS-045
@@ -48,6 +57,20 @@ module Godot
         return if output.lines.map(&:chomp).include?(EXPORTED)
 
         raise "The editor's placeholder was not given what a reloaded node script exports:\n#{output}"
+      end
+
+      # @behavior RS-056
+      def verify_ran!(output)
+        return if output.lines.map(&:chomp).include?(RAN)
+
+        raise "The editor's placeholder was not given what a node script declared as it ran:\n#{output}"
+      end
+
+      # @behavior RS-057
+      def verify_left_out!(output)
+        return unless output.include?(UNTOUCHED)
+
+        raise "The editor ran a file under a test directory:\n#{output}"
       end
 
       def open_scene(project, scene)

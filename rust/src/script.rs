@@ -14,11 +14,13 @@ use godot::register::info::PropertyUsageFlags;
 use godot::sys::{self, GodotFfi};
 
 use crate::ancestry::{self, Ancestry, Broken, Cache, Lineage};
-use crate::game::{FilesOnDisk, GameFiles};
+use crate::game::{self, FilesOnDisk, GameFiles};
 use crate::header::Header;
 use crate::instance::RubyInstance;
 use crate::language;
+use crate::log::GodotLog;
 use crate::realm::{self, Files};
+use crate::settings;
 use crate::snapshot::{self, Heading, Member, Property, Signal};
 use crate::{bridge, error};
 
@@ -80,6 +82,50 @@ impl Exports {
     }
 }
 
+// The scripts holding placeholders, which are told what their classes
+// declare whenever a file runs in the editor's realm.
+static PLACED: Mutex<Vec<InstanceId>> = Mutex::new(Vec::new());
+// The paths of scripts Godot made placeholders of since the last frame,
+// whose files the editor's realm runs then.
+static UNRUN: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// Runs in the game's realm the file of each script Godot made a
+/// placeholder of since the last frame, unless it is one the editor leaves
+/// out, then tells every placeholder what its class declares now: the
+/// editor learns a class's hints, headings and the members only running
+/// defines as it would a GDScript's. Placeholders exist only in the editor,
+/// and the extension calls this every frame.
+pub fn run_placed() {
+    let paths = std::mem::take(&mut *UNRUN.lock().unwrap_or_else(PoisonError::into_inner));
+    if paths.is_empty() {
+        return;
+    }
+    let test_directories = settings::test_directories();
+    for path in paths {
+        if game::is_left_out_in_editor(&path, &test_directories) {
+            continue;
+        }
+        if let Err(error) = realm::enter(|realm| realm.run(&path)) {
+            error.write(&GodotLog);
+        }
+    }
+    tell_placed();
+}
+
+// Tells every script holding placeholders to tell them what its class
+// declares, which each does only when that changed.
+fn tell_placed() {
+    let placed = PLACED
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone();
+    for id in placed {
+        if let Ok(mut script) = Gd::<RubyScript>::try_from_instance_id(id) {
+            script.bind_mut().update_exports();
+        }
+    }
+}
+
 /// A placeholder Godot made of a script, which only Godot frees.
 struct Placeholder(sys::GDExtensionScriptInstancePtr);
 
@@ -111,6 +157,21 @@ impl RubyScript {
         };
         script.set_source_code(&source);
         script.reload();
+    }
+
+    // Keeps the script among those holding placeholders, and its file, if it
+    // has one, for the editor's realm to run at the next frame.
+    fn place(&self) {
+        let id = self.base().instance_id();
+        let mut placed = PLACED.lock().unwrap_or_else(PoisonError::into_inner);
+        if !placed.contains(&id) {
+            placed.push(id);
+        }
+        let path = self.base().get_path().to_string();
+        let mut unrun = UNRUN.lock().unwrap_or_else(PoisonError::into_inner);
+        if !path.is_empty() && !unrun.contains(&path) {
+            unrun.push(path);
+        }
     }
 
     fn placeholders(&self) -> MutexGuard<'_, Vec<Placeholder>> {
@@ -277,8 +338,8 @@ impl IScriptExtension for RubyScript {
     }
 
     // The editor makes no instance, so Godot asks for its own placeholder
-    // and shows the node what that carries. The file never runs there, so
-    // what it carries is the header's answer.
+    // and shows the node what that carries: the header's answer at first,
+    // then what the class declares once the editor's realm has run the file.
     unsafe fn placeholder_instance_create_rawptr(
         &self,
         for_object: Gd<Object>,
@@ -297,13 +358,22 @@ impl IScriptExtension for RubyScript {
         };
         self.exports().tell(placeholder);
         self.placeholders().push(Placeholder(placeholder));
+        self.place();
         // SAFETY: the pointer is the placeholder Godot just made.
         unsafe { RawPtr::new(placeholder.cast::<c_void>()) }
     }
 
     unsafe fn placeholder_erased_rawptr(&mut self, placeholder: RawPtr<*mut c_void>) {
         let erased = placeholder.ptr().cast();
-        self.placeholders().retain(|kept| kept.0 != erased);
+        let mut placeholders = self.placeholders();
+        placeholders.retain(|kept| kept.0 != erased);
+        if placeholders.is_empty() {
+            let id = self.base().instance_id();
+            PLACED
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .retain(|placed| *placed != id);
+        }
     }
 
     fn instance_has(&self, _object: Gd<Object>) -> bool {

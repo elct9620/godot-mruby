@@ -2,7 +2,7 @@
 //! the source Godot holds for each as the game's realm is given them, or as
 //! each is on disk for what the editor asks while it scans.
 
-use godot::classes::{FileAccess, Os, ResourceLoader, Script};
+use godot::classes::{Engine, FileAccess, Os, ResourceLoader, Script};
 use godot::global::Error;
 use godot::obj::Singleton;
 
@@ -78,6 +78,40 @@ impl Files for GameFiles {
             exports: header.exported().map(str::to_owned).collect(),
         }
     }
+}
+
+/// The game's files as its realm is given them: the editor leaves the test
+/// directories out as an exported game does, since tests run only in a game
+/// it plays, so no file of theirs runs there, by path or by name.
+pub struct RealmFiles;
+
+impl Files for RealmFiles {
+    fn paths(&self) -> Vec<String> {
+        let test_directories = settings::test_directories();
+        GameFiles
+            .paths()
+            .into_iter()
+            .filter(|path| !is_left_out_in_editor(path, &test_directories))
+            .collect()
+    }
+
+    fn roots(&self) -> Roots {
+        GameFiles.roots()
+    }
+
+    fn source(&self, path: &str) -> Result<String, String> {
+        GameFiles.source(path)
+    }
+
+    fn declarations(&self, path: &str) -> Declarations {
+        GameFiles.declarations(path)
+    }
+}
+
+/// Whether this is the editor and the file at `path` sits under one of
+/// `test_directories`, which the editor never runs.
+pub fn is_left_out_in_editor(path: &str, test_directories: &[String]) -> bool {
+    Engine::singleton().is_editor_hint() && settings::in_test_directory(path, test_directories)
 }
 
 /// The game's files as they are on disk, for answering what the editor asks

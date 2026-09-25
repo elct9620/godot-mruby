@@ -454,3 +454,19 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | the script's source Godot holds, changed elsewhere |
 | When | Godot asks the script for its properties before the file runs again |
 | Then | the list carries that property as the run declared it |
+
+## `RS-056` A node in the editor lists the hints and headings its script declares as its file runs
+
+| Step | Statement |
+| --- | --- |
+| Given | a scene whose node's script is a node script exporting a property with a hint its source does not write out |
+| When | the editor opens that scene |
+| Then | the node's placeholder lists that property with that hint once the file has run in the editor |
+
+## `RS-057` The editor runs no file under a test directory
+
+| Step | Statement |
+| --- | --- |
+| Given | a scene whose node's script is under a test directory, and whose other node's script uses the constant that file names |
+| When | the editor opens that scene |
+| Then | the file under the test directory does not run |

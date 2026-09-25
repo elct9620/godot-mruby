@@ -45,7 +45,7 @@ The node a test reaches the scene through: the test runner gives each test one o
 
 ### Class index
 
-A realm's map from constant paths to the files named after them, built from the files the realm is given by Zeitwerk's rules: every directory below a root directory is a namespace, and a file names the constant its path spells from the nearest root directory it sits under, matched without underscores or case. One namespace may span directories under different root directories. The game's realm is given every file under `res://`, and an exported game leaves the test directories out.
+A realm's map from constant paths to the files named after them, built from the files the realm is given by Zeitwerk's rules: every directory below a root directory is a namespace, and a file names the constant its path spells from the nearest root directory it sits under, matched without underscores or case. One namespace may span directories under different root directories. The game's realm is given every file under `res://`, and an exported game and the editor leave the test directories out, since tests run only in a game the editor plays.
 
 ### Root directory
 

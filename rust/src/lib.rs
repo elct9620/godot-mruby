@@ -34,7 +34,7 @@ unsafe impl ExtensionLibrary for GodotMruby {
             loader::register();
             saver::register();
             realm::prepare(|| {
-                realm::Realm::open(game::GameFiles, log::GodotLog, |realm| {
+                realm::Realm::open(game::RealmFiles, log::GodotLog, |realm| {
                     realm.install::<bridge::Godot>()
                 })
             });
@@ -44,13 +44,15 @@ unsafe impl ExtensionLibrary for GodotMruby {
     // Lets go of the Ruby objects of nodes freed since the last frame, even
     // when no Ruby runs to take them, and runs again the files of scripts
     // reloaded since: each class takes back its exports, then gives the
-    // objects it made before the ones it exports anew.
+    // objects it made before the ones it exports anew. In the editor, runs
+    // the files of the scripts it made placeholders of.
     fn on_main_loop_frame() {
         realm::release_queued();
         realm::rerun_queued(&realm::Rerun {
             withdraw: c"__withdraw__",
             adopt: c"__adopt__",
         });
+        script::run_placed();
     }
 
     fn on_stage_deinit(stage: InitStage) {
