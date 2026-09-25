@@ -242,11 +242,9 @@ impl RubyScript {
     }
 
     // The property of that name the class exported, if it exported one.
-    fn property(&self, name: &StringName) -> Option<Property> {
-        let name = name.to_string();
-        self.properties()
-            .into_iter()
-            .find(|property| property.name == name)
+    fn property_by_name(&self, name: &StringName) -> Option<Property> {
+        self.lineage()
+            .property_by_name(&snapshot::latest(), &name.to_string())
     }
 
     // The methods the file's class has: the ones its source defines, and the
@@ -493,11 +491,11 @@ impl IScriptExtension for RubyScript {
     }
 
     fn has_property_default_value(&self, property: StringName) -> bool {
-        self.property(&property).is_some()
+        self.property_by_name(&property).is_some()
     }
 
     fn get_property_default_value(&self, property: StringName) -> Variant {
-        self.property(&property)
+        self.property_by_name(&property)
             .map_or_else(Variant::nil, |property| property.default_value())
     }
 

@@ -164,15 +164,6 @@ impl RubyInstance {
             .collect()
     }
 
-    // The property of that name the node's class exported, from the nearest
-    // class exporting one.
-    fn property(&self, name: &str) -> Option<Property> {
-        self.lineage()
-            .collect_properties(&snapshot::latest())
-            .into_iter()
-            .find(|property| property.name == name)
-    }
-
     // Whether the node has no Ruby object yet, so what Godot writes has
     // nowhere to go but the instance.
     fn is_unbuilt(&self) -> bool {
@@ -184,7 +175,9 @@ impl RubyInstance {
 
     // Whether the node's class exported a property of that name.
     fn has_export(&self, name: &str) -> bool {
-        self.property(name).is_some()
+        self.lineage()
+            .property_by_name(&snapshot::latest(), name)
+            .is_some()
     }
 
     // Whether the node's own engine class has a property of that name, which
@@ -278,9 +271,7 @@ impl Caller {
             .value(name);
         written.or_else(|| {
             self.lineage()
-                .collect_properties(&snapshot::latest())
-                .into_iter()
-                .find(|property| property.name == name)
+                .property_by_name(&snapshot::latest(), name)
                 .map(|property| property.default_value())
         })
     }

@@ -125,6 +125,14 @@ impl<'a> Lineage<'a> {
         snapshot.collect_properties(self.sources())
     }
 
+    /// The property of that name the class exported, from the nearest class
+    /// exporting one.
+    pub fn property_by_name(&self, snapshot: &Snapshot, name: &str) -> Option<Property> {
+        self.collect_properties(snapshot)
+            .into_iter()
+            .find(|property| property.name == name)
+    }
+
     /// What the class declared for the editor, its ancestors' included and in
     /// the order each class wrote it; a file that has not run has the
     /// properties its header writes and no heading.
