@@ -60,7 +60,11 @@ module Godot
     %w[--rendering-method gl_compatibility]
   end
 
+  # Starts from no editor layout: one a person or an earlier run left names
+  # the scenes and scripts to open, and restoring them runs their tool
+  # scripts, such as the probes' fixtures that do not parse, before any check.
   def verify!(project = PROJECT)
+    FileUtils.rm_rf(File.join(project, ".godot", "editor"))
     verify_loaded!(project)
     CHECKS.each { |check| check.verify!(project) }
   end
