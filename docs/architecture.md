@@ -294,11 +294,9 @@ body(&Realm)
 a Rust value, or a RubyError ──► RubyError::write, at its Ruby line
 ```
 
-The realm is the one way into Ruby. A component hands `realm::enter` a body, and the body is given the realm, never its `mrb_state`.
+The realm is the one way into Ruby. A component hands `realm::enter` a body, which is given the realm, never its `mrb_state`. What comes back is a Rust value, or a `RubyError` the component writes to a log with its backtrace, answered as the language's stack while it is written (`.spec/behavior/report.md`). Since nothing outside holds a Ruby value, the realm's inside changes without its callers changing.
 
-What comes back is a Rust value, or a `RubyError` the component writes to a log; an exception's backtrace goes with it, answered as the language's stack while it is written, as `.spec/behavior/report.md` claims. Since nothing outside holds a Ruby value, the realm's inside changes without its callers changing.
-
-There is one realm, the game's, entered by one thread at a time; that thread enters again when the engine calls back into scripts, up to 24 entries deep, which the smallest thread stack holds. Freeing a node never waits for it: the key goes into a queue that the next entry, or the next frame, empties; a reloaded script's file waits likewise for the next frame, and runs again among the objects it made. Its operations are specified in `.spec/contract/realm.md`.
+There is one realm, the game's, entered by one thread at a time; that thread enters again when the engine calls back into scripts, up to 24 entries deep, which the smallest thread stack holds. Freeing a node never waits: its key goes into a queue the next entry or frame empties, and a reloaded script's file runs again at the next frame among the objects it made. Its operations are in `.spec/contract/realm.md`.
 
 ### 3.2 Internals
 
