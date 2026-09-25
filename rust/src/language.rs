@@ -4,7 +4,8 @@ use std::sync::{Mutex, PoisonError};
 
 use godot::classes::native::ScriptLanguageExtensionProfilingInfo;
 use godot::classes::{
-    Engine, IScriptLanguageExtension, Object, ResourceLoader, Script, ScriptLanguageExtension,
+    ClassDb, EditorInterface, Engine, IScriptLanguageExtension, Object, ProjectSettings,
+    ResourceLoader, Script, ScriptLanguageExtension,
 };
 use godot::global::Error;
 use godot::meta::conv::RawPtr;
@@ -15,6 +16,7 @@ use crate::compiler::CompileError;
 use crate::game::{FilesOnDisk, GameFiles};
 use crate::realm::{Files, Location};
 use crate::script::RubyScript;
+use crate::template;
 use crate::validation::{self, Warning};
 use crate::{bridge, settings, warn};
 
@@ -103,21 +105,43 @@ impl IScriptLanguageExtension for RubyLanguage {
         PackedStringArray::new()
     }
 
+    // The file's name comes without its directory; the class is named after
+    // the file, and extends the base as Ruby writes it.
     fn make_template(
         &self,
-        _template: GString,
-        _class_name: GString,
-        _base_class_name: GString,
+        template: GString,
+        class_name: GString,
+        base_class_name: GString,
     ) -> Option<Gd<Script>> {
-        None
+        let base = script_path_of(&base_class_name.to_string());
+        let superclass = template::superclass(&base, &GameFiles.roots());
+        let source = template::source(
+            &template.to_string(),
+            &class_name.to_string(),
+            &superclass,
+            &indentation(),
+        );
+        Some(RubyScript::from_source("", GString::from(&source)).upcast())
     }
 
-    fn get_built_in_templates(&self, _object: StringName) -> Array<AnyDictionary> {
-        Array::new()
+    fn get_built_in_templates(&self, object: StringName) -> Array<AnyDictionary> {
+        template::built_ins(&object.to_string())
+            .map(|(id, template)| {
+                vdict! {
+                    "inherit" => template.inherit,
+                    "name" => template.name,
+                    "description" => template.description,
+                    "content" => template.content,
+                    "id" => id as i64,
+                    "origin" => TEMPLATE_BUILT_IN,
+                }
+                .upcast_any_dictionary()
+            })
+            .collect()
     }
 
     fn is_using_templates(&mut self) -> bool {
-        false
+        true
     }
 
     // The editor asks as the source is typed. It is compiled and never run,
@@ -477,4 +501,41 @@ fn warn_of_shared_name(name: String, files: Vec<String>) {
         warn!(at: &at, "{warning}");
     })
     .call_deferred(&[]);
+}
+
+// Where Godot's ScriptLanguage::TemplateLocation places a language's own.
+const TEMPLATE_BUILT_IN: i64 = 0;
+
+// A base the dialog names by a script's global class, as the quoted path of
+// that script, which is how the dialog names one it only knows by path.
+fn script_path_of(base: &str) -> String {
+    if ClassDb::singleton().class_exists(base) {
+        return base.to_owned();
+    }
+    ProjectSettings::singleton()
+        .get_global_class_list()
+        .iter_shared()
+        .find(|class| class.get_or_nil("class").to_string() == base)
+        .map_or_else(
+            || base.to_owned(),
+            |class| format!("\"{}\"", class.get_or_nil("path")),
+        )
+}
+
+// One level of indentation as the editor writes it, as GDScript's templates
+// take it: a tab, or the editor's number of spaces.
+fn indentation() -> String {
+    let settings = EditorInterface::singleton().get_editor_settings();
+    let setting = |name: &str| {
+        settings
+            .as_ref()
+            .map(|settings| settings.get_setting(name))
+            .unwrap_or_default()
+    };
+    if setting("text_editor/behavior/indent/type").booleanize() {
+        let size = setting("text_editor/behavior/indent/size").try_to::<u8>();
+        " ".repeat(size.map_or(4, usize::from))
+    } else {
+        "\t".to_owned()
+    }
 }

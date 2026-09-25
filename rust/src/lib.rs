@@ -22,6 +22,7 @@ mod saver;
 mod script;
 mod settings;
 mod snapshot;
+mod template;
 mod validation;
 
 struct GodotMruby;

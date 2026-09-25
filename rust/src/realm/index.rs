@@ -289,7 +289,8 @@ pub fn normalize(segment: &str) -> String {
         .collect()
 }
 
-fn camelize(segment: &str) -> String {
+/// A path segment as Zeitwerk camelizes it: `http_client` is `HttpClient`.
+pub fn camelize(segment: &str) -> String {
     segment
         .split('_')
         .map(|part| {

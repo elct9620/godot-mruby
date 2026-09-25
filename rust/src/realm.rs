@@ -18,7 +18,7 @@ mod registry;
 
 use executor::Declaration;
 use index::ClassIndex;
-pub use index::{Roots, file_by_name, normalize};
+pub use index::{Roots, camelize, file_by_name, normalize};
 use reentrant::ReentrantLock;
 pub use registry::Key;
 use registry::Registry;
