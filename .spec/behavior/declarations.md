@@ -542,3 +542,11 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | Given | a node script whose class exports a value with a keyword no `@export_*` annotation answers to |
 | When | the file runs |
 | Then | the declaration raises where it is written, naming the keyword |
+
+## `RD-068` A list hint written with anything but a list is refused
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a value with `enum:` naming one symbol rather than a list |
+| When | the file runs |
+| Then | the declaration raises where it is written, naming the keyword and the value |

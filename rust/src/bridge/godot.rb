@@ -209,7 +209,17 @@ module Godot
         return ["type", __class_named__(keywords[:type])] if hint == :type
         return ["none", nil] if hint.nil?
 
-        [hint.to_s, keywords[hint]]
+        [hint.to_s, __listed__(hint, keywords[hint])]
+      end
+
+      # The value a hint is read with, a list where the hint takes the names
+      # a value may take, which is refused where it is written otherwise.
+      def __listed__(hint, value)
+        if %i[enum flags].include?(hint) && !value.is_a?(::Array)
+          raise ArgumentError, %("#{hint}:" needs a list of names, but #{value.inspect} was given instead.)
+        end
+
+        value
       end
 
       # The class a property names its type by, as the realm spells it. Only

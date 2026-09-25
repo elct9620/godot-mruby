@@ -3,6 +3,7 @@
 //! hint, the types each takes, and what the editor reads it with.
 
 use godot::builtin::{VarArray, Variant, VariantType};
+use godot::meta::ToGodot;
 use godot::register::info::PropertyHint;
 
 use crate::bridge::type_name;
@@ -77,25 +78,24 @@ impl Hint {
 
     /// What the editor reads the hint with, from the value written with its
     /// keyword: a range's bounds and step, the names a value may take, the
-    /// files to choose among, or the text an empty field shows. `true`, as
-    /// `dir:` and `multiline:` are written, and `file: true` read with
-    /// nothing.
-    pub fn hint_string(self, written: &Variant) -> String {
+    /// files to choose among, or the text an empty field shows; `dir:`,
+    /// `multiline:` and `file: true` are read with nothing. None when the
+    /// value is not the list a range, `enum:` or `flags:` is read from.
+    pub fn hint_string(self, written: &Variant) -> Option<String> {
         match self {
-            Self::Range | Self::Enum | Self::Flags => written
-                .try_to::<VarArray>()
-                .map(|values| {
+            Self::Range | Self::Enum | Self::Flags => {
+                let values = written.try_to::<VarArray>().ok()?;
+                Some(
                     values
                         .iter_shared()
                         .map(|value| text(self, &value))
                         .collect::<Vec<_>>()
-                        .join(",")
-                })
-                .unwrap_or_default(),
-            Self::File | Self::Placeholder if written.get_type() != VariantType::BOOL => {
-                written.to_string()
+                        .join(","),
+                )
             }
-            _ => String::new(),
+            Self::File if *written == true.to_variant() => Some(String::new()),
+            Self::File | Self::Placeholder => Some(written.to_string()),
+            Self::None | Self::Dir | Self::Multiline => Some(String::new()),
         }
     }
 

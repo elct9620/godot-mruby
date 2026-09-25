@@ -418,7 +418,9 @@ fn property_of_value(
         );
     }
     let property_hint = hint.property_hint(default.get_type())?;
-    Ok(Property::new(name, default).with_hint(property_hint, hint.hint_string(written)))
+    // The gem refuses a value of another shape where it is written.
+    let hint_string = hint.hint_string(written).unwrap_or_default();
+    Ok(Property::new(name, default).with_hint(property_hint, hint_string))
 }
 
 // The hint an exported object takes from the class it names, and the name

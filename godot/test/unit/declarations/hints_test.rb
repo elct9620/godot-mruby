@@ -101,6 +101,13 @@ class HintsTest < Minitest::Test
     assert_equal %("slider:" is not a hint a property can be exported with.), error.message
   end
 
+  # @behavior RD-068
+  def test_a_list_hint_written_with_anything_but_a_list_is_refused
+    error = assert_raises(ArgumentError) { Unit::Declarations::Listless }
+
+    assert_equal %("enum:" needs a list of names, but :one was given instead.), error.message
+  end
+
   # @behavior RD-051
   def test_a_nodes_properties_carry_the_hints_its_class_declared
     gauge = autofree(Unit::Declarations::Gauge.new)

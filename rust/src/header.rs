@@ -339,7 +339,7 @@ fn hinted(property: &Property, keywords: &Node) -> Option<Property> {
     Some(
         property
             .clone()
-            .with_hint(property_hint, hint.hint_string(&written)),
+            .with_hint(property_hint, hint.hint_string(&written)?),
     )
 }
 
