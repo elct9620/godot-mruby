@@ -13,7 +13,7 @@ use super::{Extends, RubyError, bookkeeping, compile, executor, key_of};
 pub(super) fn define(mrb: &Mrb) -> Result<(), Error> {
     let module = mrb.class_get(c"Module")?;
     module.define_private_method(mrb, c"__load_by_name__", method!(load_by_name, 1))?;
-    module.define_private_method(mrb, c"__created__", method!(created, 1))?;
+    module.define_private_method(mrb, c"__record_constant__", method!(record_constant, 1))?;
     compile(
         mrb,
         c"godot_mruby/constants.rb",
@@ -33,9 +33,9 @@ fn load_by_name(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error
     })
 }
 
-// Module#__created__(name): the receiver has just been given the constant.
+// Module#__record_constant__(name): the receiver has just been given the constant.
 // A directory's module the realm defines is no file's to take away.
-fn created(mrb: &Mrb, receiver: Value, name: Symbol) -> Value {
+fn record_constant(mrb: &Mrb, receiver: Value, name: Symbol) -> Value {
     let (Some(scope), Some(name)) = (path_of(mrb, receiver), name.name(mrb)) else {
         return Value::nil();
     };
@@ -58,7 +58,7 @@ fn load_hidden(mrb: &Mrb, scope: &[String], name: &str) {
         .map(|segment| index::normalize(segment))
         .collect();
     let index = bookkeeping(mrb).index.borrow();
-    let below = index.below(&key, name);
+    let below = index.keys_below(&key, name);
     key.push(index::normalize(name));
     let inside = index.members(&key);
     drop(index);
@@ -183,7 +183,7 @@ pub(super) fn keep_extends(mrb: &Mrb, path: &str, extends: Option<Extends>) -> R
 // index names the file: the namespace's own file runs, or its directory
 // becomes an empty module.
 fn ensure_namespaces(mrb: &Mrb, path: &str) -> Result<(), Error> {
-    if !bookkeeping(mrb).index.borrow().names(path) {
+    if !bookkeeping(mrb).index.borrow().is_named(path) {
         return Ok(());
     }
     let key = key_of(mrb, path);
@@ -237,7 +237,7 @@ fn constant_by_segment(mrb: &Mrb, scope: Value, segment: &str) -> Option<Value> 
 // innermost scope alone, so the index looks outward from it.
 fn resolve(mrb: &Mrb, receiver: Value, name: &str) -> Result<Option<Value>, Error> {
     let scope = path_of(mrb, receiver).unwrap_or_default();
-    let entry = bookkeeping(mrb).index.borrow().lookup(&scope, name);
+    let entry = bookkeeping(mrb).index.borrow().entry_by_name(&scope, name);
     match entry {
         Some((depth, Entry::File(path))) => {
             constant_from(mrb, &path, &scope[..depth], name).map(Some)

@@ -15,7 +15,7 @@ pub struct ClassIndex {
     roots: Roots,
     files: BTreeMap<Key, String>,
     namespaces: BTreeMap<Key, Namespace>,
-    refused: BTreeSet<Key>,
+    refusals: BTreeSet<Key>,
 }
 
 /// The root directories files are named from: `res://`, and the directories
@@ -122,24 +122,24 @@ impl ClassIndex {
         for path in paths {
             let key = self.key_of(&path);
             self.add_namespaces(&path);
-            if self.refused.contains(&key) {
+            if self.refusals.contains(&key) {
                 continue;
             }
             if let Some(other) = self.files.remove(&key) {
                 log.record(
                     Level::Warn,
-                    Some(&at(&path)),
+                    Some(&first_line_of(&path)),
                     &format!(
                         "{other} and {path} both name {}, so neither loads by name",
                         self.roots.name_of(&other)
                     ),
                 );
-                self.refused.insert(key);
+                self.refusals.insert(key);
                 continue;
             }
             if defined(&key) {
                 self.warn_of_defined(&path, log);
-                self.refused.insert(key);
+                self.refusals.insert(key);
                 continue;
             }
             self.files.insert(key, path);
@@ -157,7 +157,7 @@ impl ClassIndex {
         for key in keys {
             if let Some(path) = self.files.remove(&key) {
                 self.warn_of_defined(&path, log);
-                self.refused.insert(key);
+                self.refusals.insert(key);
             }
         }
     }
@@ -174,7 +174,7 @@ impl ClassIndex {
     /// What `name` names from inside the namespaces `scope` spells, looked for
     /// from the innermost namespace outward, as Rails' classic autoloader does,
     /// and how many of those namespaces it was found inside.
-    pub fn lookup(&self, scope: &[String], name: &str) -> Option<(usize, Entry)> {
+    pub fn entry_by_name(&self, scope: &[String], name: &str) -> Option<(usize, Entry)> {
         (0..=scope.len()).rev().find_map(|depth| {
             let mut key: Key = scope[..depth]
                 .iter()
@@ -195,7 +195,7 @@ impl ClassIndex {
 
     /// What the index names `name` inside the namespaces below the one
     /// `scope` spells.
-    pub fn below(&self, scope: &[String], name: &str) -> Vec<Key> {
+    pub fn keys_below(&self, scope: &[String], name: &str) -> Vec<Key> {
         let name = normalize(name);
         self.keys()
             .filter(|named| named.len() > scope.len() + 1 && named.starts_with(scope))
@@ -204,7 +204,7 @@ impl ClassIndex {
     }
 
     /// Whether the file at `path` is one the index names.
-    pub fn names(&self, path: &str) -> bool {
+    pub fn is_named(&self, path: &str) -> bool {
         self.files
             .get(&self.key_of(path))
             .is_some_and(|named| named == path)
@@ -234,7 +234,7 @@ impl ClassIndex {
     fn warn_of_defined(&self, path: &str, log: &dyn Log) {
         log.record(
             Level::Warn,
-            Some(&at(path)),
+            Some(&first_line_of(path)),
             &format!(
                 "{path} names {}, which the realm already has, so it never loads by name",
                 self.roots.name_of(path)
@@ -254,11 +254,11 @@ pub fn file_by_name(
     names: &[String],
 ) -> Option<String> {
     let mut index = ClassIndex::new(roots);
-    index.add(paths, |_| false, &Unheard);
+    index.add(paths, |_| false, &Silence);
     let mut scope = scope.to_vec();
     let mut named = None;
     for name in names {
-        let (depth, found) = index.lookup(&scope, name)?;
+        let (depth, found) = index.entry_by_name(&scope, name)?;
         scope.truncate(depth);
         scope.push(name.clone());
         named = Some(found);
@@ -270,9 +270,9 @@ pub fn file_by_name(
 }
 
 // A log for an index read outside a realm, whose warnings the realm gives.
-struct Unheard;
+struct Silence;
 
-impl Log for Unheard {
+impl Log for Silence {
     fn message(&self, _text: &str) {}
 
     fn raw(&self, _text: &str) {}
@@ -302,7 +302,7 @@ fn camelize(segment: &str) -> String {
 }
 
 // A warning about a file as a whole points at its first line.
-fn at(path: &str) -> Location {
+fn first_line_of(path: &str) -> Location {
     Location {
         file: path.to_owned(),
         line: 1,

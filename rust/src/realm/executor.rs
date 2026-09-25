@@ -65,8 +65,8 @@ impl PartialEq for Declaration {
 /// digest of the source it runs.
 struct Frame {
     path: String,
-    created: Vec<(Vec<String>, String)>,
-    declared: Vec<Declaration>,
+    constants: Vec<(Vec<String>, String)>,
+    declarations: Vec<Declaration>,
     digest: u64,
 }
 
@@ -160,7 +160,7 @@ pub(super) fn cycle(mrb: &Mrb, path: &str) -> Option<Vec<String>> {
 /// names in `scope` spell.
 pub(super) fn record(mrb: &Mrb, scope: Vec<String>, name: String) {
     if let Some(frame) = runs(mrb).frames.borrow_mut().last_mut() {
-        frame.created.push((scope, name));
+        frame.constants.push((scope, name));
     }
 }
 
@@ -185,11 +185,11 @@ pub(super) fn declare(mrb: &Mrb, class: RClass, declared: Declaration) -> Result
         return Ok(());
     };
     let Some(standing) = frame
-        .declared
+        .declarations
         .iter()
         .find(|standing| standing.name() == declared.name())
     else {
-        frame.declared.push(declared);
+        frame.declarations.push(declared);
         return Ok(());
     };
     if standing == &declared {
@@ -234,7 +234,7 @@ fn ancestor_by_member(mrb: &Mrb, class: RClass, name: &str) -> Option<String> {
 /// one. A heading written while no file runs belongs to no class.
 pub(super) fn declare_heading(mrb: &Mrb, heading: Heading) {
     if let Some(frame) = runs(mrb).frames.borrow_mut().last_mut() {
-        frame.declared.push(Declaration::Heading(heading));
+        frame.declarations.push(Declaration::Heading(heading));
     }
 }
 
@@ -257,8 +257,8 @@ fn execute<T>(
         .insert(path.to_owned(), Run::Running);
     runs.frames.borrow_mut().push(Frame {
         path: path.to_owned(),
-        created: Vec::new(),
-        declared: Vec::new(),
+        constants: Vec::new(),
+        declarations: Vec::new(),
         digest: 0,
     });
     let outcome = prepare().and_then(|prepared| {
@@ -274,7 +274,7 @@ fn execute<T>(
     let run = match (&outcome, frame) {
         (Ok(()), frame) => {
             frame.into_iter().for_each(|frame| {
-                let (signals, members) = split(frame.declared);
+                let (signals, members) = split(frame.declarations);
                 publish_class(mrb, &frame.path, signals, members, frame.digest);
             });
             Run::Done
@@ -316,7 +316,7 @@ fn source_of(mrb: &Mrb, path: &str) -> Result<String, Error> {
 // Removes what `frame` created, the last first, so a constant inside a class
 // goes before the class.
 fn take_away(mrb: &Mrb, frame: &Frame) {
-    for (scope, name) in frame.created.iter().rev() {
+    for (scope, name) in frame.constants.iter().rev() {
         if let Some(scope) = defined_scope(mrb, scope) {
             scope.const_remove(mrb, name.as_str()).ok();
         }

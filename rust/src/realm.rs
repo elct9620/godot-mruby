@@ -930,9 +930,9 @@ mod tests {
             .collect()
     }
 
-    struct Silent;
+    struct Silence;
 
-    impl Log for Silent {
+    impl Log for Silence {
         fn message(&self, _text: &str) {}
         fn raw(&self, _text: &str) {}
         fn record(&self, _level: Level, _at: Option<&Location>, _text: &str) {}
@@ -942,7 +942,7 @@ mod tests {
     fn held_thing() -> (MutexGuard<'static, ()>, Key) {
         let turn = TURN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         close();
-        prepare(|| Realm::open(Thing, Silent, |_| Ok(())));
+        prepare(|| Realm::open(Thing, Silence, |_| Ok(())));
         let key = Key::from(1);
         enter(|realm| realm.build(THING, key, c"new", no_args()))
             .unwrap_or_else(|_| panic!("a Thing is built"));
@@ -1003,7 +1003,7 @@ mod tests {
     fn a_backtrace_raised_by_a_files_top_level_after_a_call_holds_that_top_level() {
         let _turn = TURN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         close();
-        prepare(|| Realm::open(Raising, Silent, |_| Ok(())));
+        prepare(|| Realm::open(Raising, Silence, |_| Ok(())));
 
         let ran = enter(|realm| {
             realm.call::<_, bool>("Integer", c"===", [4_i64])?;
@@ -1018,7 +1018,7 @@ mod tests {
     fn one_namespace_spans_the_directories_spelling_it_under_different_root_directories() {
         let _turn = TURN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         close();
-        prepare(|| Realm::open(Armory, Silent, |_| Ok(())));
+        prepare(|| Realm::open(Armory, Silence, |_| Ok(())));
 
         let armed = enter(|realm| realm.call::<_, bool>("Probe", c"armed", [0_i64]));
 
@@ -1140,7 +1140,7 @@ mod tests {
         let (nested, outcome) = mpsc::channel();
         prepare(move || {
             let nested = nested.clone();
-            Realm::open(Thing, Silent, move |_| {
+            Realm::open(Thing, Silence, move |_| {
                 nested.send(enter(|_| Ok(())).is_err()).ok();
                 Ok(())
             })
@@ -1162,7 +1162,7 @@ mod tests {
             if !first.swap(true, Ordering::SeqCst) {
                 panic!("the opener panics the first time");
             }
-            Realm::open(Thing, Silent, |_| Ok(()))
+            Realm::open(Thing, Silence, |_| Ok(()))
         });
         let panicked = panic::catch_unwind(|| enter(|_| Ok(()))).is_err();
 
