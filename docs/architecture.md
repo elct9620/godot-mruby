@@ -112,7 +112,7 @@ A word ending in `-ing` is a name only where the dictionary lists it as a noun, 
 | `RubyTestRunner` in `runner.rs` | A `Node` in `runner.tscn` |
 | `RubyEditorPlugin`, `RubyExportPlugin` in `export.rs` | `EditorPlugin`, `EditorExportPlugin` |
 | `settings.rs` | `ProjectSettings` under `mruby/` |
-| `GameFiles`, `FilesOnDisk` in `game.rs` | `ResourceLoader` under `res://`, and the files on disk |
+| `GameFiles`, `RealmFiles`, `FilesOnDisk` in `game.rs` | `ResourceLoader` under `res://`, and the files on disk |
 | `GodotLog` in `log.rs` | Godot's log |
 | `Godot` in `bridge.rs` and `bridge/` | `ClassDB`, the engine's singletons, value types and utility functions |
 | `RubyObject` in `bridge/ruby_object.rs` | A `RefCounted` standing for a Ruby object |
@@ -120,9 +120,9 @@ A word ending in `-ing` is a name only where the dictionary lists it as a noun, 
 
 Each class Godot knows answers what Godot already asks of a script language; none opens another way for Godot to reach Ruby.
 
-`ResourceFormatLoaderRubyScript` reads a file's source and runs nothing. The script answers Godot from its header, which Prism reads from that source, and its ancestry; only a node script makes an instance (2.4), and the language announces it (2.5).
+`ResourceFormatLoaderRubyScript` reads a file's source and runs nothing, and `ResourceFormatSaverRubyScript` writes it back. The script answers Godot from its header, which Prism reads from that source, and its ancestry; only a node script makes an instance (2.4), and the language announces it (2.5).
 
-The runner is an ordinary node the addon ships, refused in an exported game, whose export leaves out the tests and the runner scene. `GameFiles`, `GodotLog` and the `Godot` gem are what the game's realm is given: the files under `res://`, Godot's log, and the engine (2.6). The names Godot knows are in `.spec/contract/godot.md`, and the settings in `.spec/contract/project_settings.md`.
+The runner is an ordinary node the addon ships, refused in an exported game, whose export leaves out the tests and the runner scene. `RealmFiles`, `GodotLog` and the `Godot` gem are what the game's realm is given: the files under `res://`, less the test directories in the editor and an exported game, Godot's log, and the engine (2.6). The names Godot knows are in `.spec/contract/godot.md`, and the settings in `.spec/contract/project_settings.md`.
 
 ### 2.2 Lifecycle
 
@@ -134,7 +134,8 @@ Scene stage begins
   │  settings::register     mruby/test/* and their defaults
   │  language::register     RubyLanguage for .rb
   │  loader::register       .rb loads as RubyScript
-  │  realm::prepare         GameFiles, GodotLog, the Godot gem
+  │  saver::register        RubyScript saves as .rb
+  │  realm::prepare         RealmFiles, GodotLog, the Godot gem
   ▼
 Editor stage begins, in the editor
   │  RubyEditorPlugin       added by gdext; adds RubyExportPlugin
@@ -145,8 +146,10 @@ the first entry
 every frame
   │  realm::release_queued  objects of nodes freed since
   │  realm::rerun_queued    files of scripts reloaded since
+  │  script::run_placed     in the editor, files of its placeholders
   ▼
 Scene stage ends
+  │  saver::unregister
   │  loader::unregister
   │  language::unregister
   │  realm::close
@@ -211,9 +214,9 @@ node.set_script ──► instance: recorded        no Ruby runs
 node freed (any thread) ──► release(key) ──► let go at the next entry or frame
 ```
 
-The header and ancestry answer Godot on any thread before the file runs: the engine node class it extends, and what its source writes out — methods, signals and exported values; once it has run, the snapshot answers for the class it became (2.7). A script makes an instance only for such a node.
+The header and ancestry answer Godot on any thread before the file runs: the engine node class it extends, and what its source writes out; once it has run, the snapshot answers (2.7). Only such a node gets an instance, and in the editor only a tool whose source parses; any other node there gets Godot's placeholder, whose file runs at the next frame.
 
-The instance holds no Ruby value: the realm holds the node's Ruby object under the node's instance id, so a node Ruby made with `new` and one Godot made meet the same object. The instance goes to Godot through the extension interface rather than gdext's `ScriptInstance`, and a call copies what it needs before Ruby runs, since the engine may call back into the node or take its script away before Ruby returns. Freeing a node queues its key and never waits for the realm. The rules are in `.spec/behavior/script.md` and `.spec/behavior/held_objects.md`.
+The instance holds no Ruby value: the realm holds the node's object under its instance id, so a node made by `new` or by Godot meets the same object. The instance goes to Godot through the extension interface rather than gdext's `ScriptInstance`, and a call copies what it needs before Ruby runs, since the engine may call back or take the script away before Ruby returns. Freeing a node queues its key and never waits for the realm. The rules are in `.spec/behavior/script.md` and `.spec/behavior/held_objects.md`.
 
 ### 2.5 Announcement
 
@@ -264,7 +267,7 @@ class body runs ──► its declarations, and the methods the class ends up wi
 has_signal, get_property_list, has_method, and the default each property was exported with
 ```
 
-A Ruby class takes its shape as its body runs, so what a class has cannot be read from the source alone. The realm publishes what a file's class has when that file's run commits, and everything answering Godot reads the published value rather than entering the realm, on whatever thread Godot asks from. A file that has not run is answered from its header instead, so a scene connects to a signal declared there before anything enters the realm, while a hint, a heading or a member metaprogramming defined waits for the run. A property's value is the node's own, held by its Ruby object: the instance keeps what Godot writes until that object exists, and answers from what it kept or from the published default. What a class declares is in `.spec/behavior/declarations.md`, and the published shape in `.spec/contract/snapshot.md`.
+A Ruby class takes its shape as its body runs, so its shape cannot be read from the source alone. The realm publishes what a file's class has when its run commits, and whatever answers Godot reads that value on any thread without entering the realm. Until a file runs its header answers, so a scene connects to a signal declared there; only what the source does not write out as literals waits for the run. While Godot holds a source other than the one that ran, as the editor does while a file is typed, what it writes out answers and the run answers for the rest. A property's value is the node's own: the instance keeps what Godot writes until the Ruby object exists, and answers from that or the published default. What a class declares is in `.spec/behavior/declarations.md`, and the published shape in `.spec/contract/snapshot.md`.
 
 ## 3. Realm
 
