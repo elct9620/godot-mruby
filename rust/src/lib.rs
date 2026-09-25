@@ -14,6 +14,8 @@ mod language;
 mod loader;
 mod log;
 mod minitest;
+mod panel;
+mod plugin;
 mod realm;
 mod runner;
 mod saver;

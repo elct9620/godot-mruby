@@ -183,6 +183,9 @@ fn user_args() -> Vec<String> {
     }
 }
 
+/// The addon's scene that holds the runner.
+pub const RUNNER_SCENE: &str = "res://addons/godot_mruby/runner.tscn";
+
 /// Where the editor's test panel leaves the options of the run it plays, as
 /// a JSON array of what would follow `--`.
 pub const RUN_FILE: &str = "user://godot_mruby/run.json";

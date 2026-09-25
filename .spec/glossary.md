@@ -39,6 +39,14 @@ A directory the test runner runs tests from: one of a project's `mruby/test/dire
 
 A file under a test directory whose name matches the project's `mruby/test/pattern`. Only the test runner runs one.
 
+### Test panel
+
+The editor's panel that runs a project's Ruby tests: it plays the test runner's own scene, so a test passes or fails in the editor as it does on the command line, and lists each test's result from the run's results file, opening the Ruby line a failure names.
+
+### Run file
+
+`user://godot_mruby/run.json`: the options the test panel leaves for the test runner, which cannot be given any on a scene the editor plays. The runner takes them only when it has none of its own, and removes the file as it reads it.
+
 ### Test root
 
 The node a test reaches the scene through: the test runner gives each test one of its own in the tree and frees it, with everything under it, once the test's teardown has run. A test class is not a node, so what a test adds to the scene goes under its test root.

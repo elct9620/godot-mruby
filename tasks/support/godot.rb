@@ -5,6 +5,7 @@ require "open3"
 require_relative "declarations"
 require_relative "export"
 require_relative "loader"
+require_relative "panel"
 require_relative "report"
 require_relative "runner"
 require_relative "runner/failing"
@@ -24,7 +25,7 @@ module Godot
   FAILED = /^(ERROR|SCRIPT ERROR):/
   # The checks, each in the module named after the behaviour it claims.
   CHECKS = [
-    Script, Declarations, Report, Runner, Runner::Failing, Runner::Results, Runner::Settings, Loader, Export
+    Script, Declarations, Report, Runner, Runner::Failing, Runner::Results, Runner::Settings, Loader, Export, Panel
   ].freeze
 
   module_function
