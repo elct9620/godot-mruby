@@ -31,7 +31,7 @@ pub struct ToRuby<'a>(&'a Variant);
 impl<'a> ToRuby<'a> {
     /// `variant` for Ruby, or why it cannot reach Ruby.
     pub fn try_new(variant: &'a Variant) -> Result<Self, String> {
-        match unreachable_from_engine(variant) {
+        match unreachable_reason(variant) {
             Some(reason) => Err(reason),
             None => Ok(Self(variant)),
         }
@@ -46,8 +46,8 @@ impl IntoValue for ToRuby<'_> {
 
 // Why an engine value cannot reach Ruby, if it cannot: a container nested
 // too deep, or holding itself.
-fn unreachable_from_engine(variant: &Variant) -> Option<String> {
-    fn depth(variant: &Variant, level: usize) -> bool {
+fn unreachable_reason(variant: &Variant) -> Option<String> {
+    fn is_shallow(variant: &Variant, level: usize) -> bool {
         if level > DEPTH {
             return false;
         }
@@ -55,15 +55,15 @@ fn unreachable_from_engine(variant: &Variant) -> Option<String> {
             VariantType::ARRAY => variant
                 .to::<AnyArray>()
                 .iter_shared()
-                .all(|element| depth(&element, level + 1)),
+                .all(|element| is_shallow(&element, level + 1)),
             VariantType::DICTIONARY => variant
                 .to::<AnyDictionary>()
                 .iter_shared()
-                .all(|(key, value)| depth(&key, level + 1) && depth(&value, level + 1)),
+                .all(|(key, value)| is_shallow(&key, level + 1) && is_shallow(&value, level + 1)),
             _ => true,
         }
     }
-    (!depth(variant, 1)).then(|| {
+    (!is_shallow(variant, 1)).then(|| {
         let kind = godot::global::type_string(i64::from(variant.get_type().ord));
         format!("an {kind} nested more than {DEPTH} deep cannot reach Ruby")
     })

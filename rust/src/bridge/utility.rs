@@ -141,7 +141,7 @@ fn conversion_failure(arg: &Variant, index: usize, to: VariantType) -> String {
 }
 
 /// The names of the utility functions, for `Godot` to define.
-pub fn names(mrb: &Mrb, _godot: Value) -> Value {
+pub fn utilities(mrb: &Mrb, _godot: Value) -> Value {
     let names: Vec<Value> = UTILITIES
         .iter()
         .filter_map(|(name, _, _)| mrb.intern(name.as_bytes()).ok())
@@ -152,7 +152,7 @@ pub fn names(mrb: &Mrb, _godot: Value) -> Value {
 
 /// Godot.__utility__(name, args): the utility function `name` called with
 /// `args`.
-pub fn call(mrb: &Mrb, _godot: Value, name: Symbol, args: Array) -> Result<Value, Error> {
+pub fn utility(mrb: &Mrb, _godot: Value, name: Symbol, args: Array) -> Result<Value, Error> {
     let name = name.name(mrb).unwrap_or_default();
     let Some((_, arity, utility)) = UTILITIES.iter().find(|(row, _, _)| *row == name) else {
         return Ok(Value::nil());

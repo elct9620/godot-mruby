@@ -54,7 +54,7 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     object.define_singleton_method(mrb, c"__make_node__", method!(make_node, 0))?;
     object.define_singleton_method(mrb, c"__allocate__", method!(allocate, 1))?;
     object.define_singleton_method(mrb, c"__singleton__", method!(singleton, 0))?;
-    object.define_singleton_method(mrb, c"__static_method__", method!(static_method, 1))?;
+    object.define_singleton_method(mrb, c"__has_static_method__", method!(has_static_method, 1))?;
     object.define_singleton_method(mrb, c"__call_static__", method!(call_static, 2))?;
     object.define_singleton_method(mrb, c"__engine_constant__", method!(engine_constant, 1))?;
     object.define_singleton_method(mrb, c"__declare_signal__", method!(declare_signal, 2))?;
@@ -157,7 +157,7 @@ fn resolve(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
         return Ok(Value::nil());
     };
     let name = name.name(mrb).unwrap_or_default();
-    let object = held.live(mrb, &name)?;
+    let object = held.live_object(mrb, &name)?;
     let class = StringName::from(&object.get_class());
     let mut class_db = ClassDb::singleton();
     let (target, declared) = if let Some(property) = name.strip_suffix('=') {
@@ -191,7 +191,7 @@ fn resolve(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
 // `args` and answers what it returns.
 fn call(mrb: &Mrb, held: &EngineObject, name: Symbol, args: Array) -> Result<Value, Error> {
     let name = name.name(mrb).unwrap_or_default();
-    let mut object = held.live(mrb, &name)?;
+    let mut object = held.live_object(mrb, &name)?;
     let args = variants(mrb, args)?;
     let answer = object
         .try_call(name.as_str(), &args)
@@ -215,9 +215,9 @@ fn singleton(mrb: &Mrb, class: RClass) -> Value {
         .unwrap_or_else(Value::nil)
 }
 
-// Godot::Object.__static_method__(name): whether the receiver's engine class
+// Godot::Object.__has_static_method__(name): whether the receiver's engine class
 // has a method of that name to call on the class.
-fn static_method(mrb: &Mrb, class: RClass, name: Symbol) -> bool {
+fn has_static_method(mrb: &Mrb, class: RClass, name: Symbol) -> bool {
     let name = name.name(mrb).unwrap_or_default();
     ClassDb::singleton().class_has_method(&engine_name(mrb, class), name.as_str())
 }
@@ -381,13 +381,13 @@ fn is_of_class(mrb: &Mrb, object: &Gd<Object>, class: &str) -> bool {
     let Some(file) = realm::file_by_constant(mrb, &names) else {
         return false;
     };
-    written_in(object).any(|path| path == file)
+    script_files(object).any(|path| path == file)
 }
 
 // The name `object`'s own class is known by: the one its node script is
 // announced under, or the engine class it is of.
 fn class_of(object: &Gd<Object>) -> String {
-    written_in(object)
+    script_files(object)
         .next()
         .and_then(|path| editor_name_at(&path))
         .unwrap_or_else(|| object.get_class().to_string())
@@ -395,7 +395,7 @@ fn class_of(object: &Gd<Object>) -> String {
 
 // The files `object`'s script is written in, nearest first: its own and the
 // ones it inherits from, as Godot answers for them.
-fn written_in(object: &Gd<Object>) -> impl Iterator<Item = String> {
+fn script_files(object: &Gd<Object>) -> impl Iterator<Item = String> {
     let mut script = object.get_script().map(Gd::upcast::<Script>);
     std::iter::from_fn(move || {
         let written = script.take()?;
@@ -541,7 +541,7 @@ impl EngineObject {
 
     // The engine object, or the Godot::CallError calling `method` on a freed
     // one raises, worded as GDScript words it.
-    fn live(&self, mrb: &Mrb, method: &str) -> Result<Gd<Object>, Error> {
+    fn live_object(&self, mrb: &Mrb, method: &str) -> Result<Gd<Object>, Error> {
         if self.0.is_instance_valid() {
             Ok(self.0.clone())
         } else {

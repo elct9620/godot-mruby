@@ -94,7 +94,7 @@ The extension is tested through itself, and `godot/` is sorted by who judges an 
 | What answers a thing and changes nothing | the thing's noun | `signals`, `superclass_of` |
 | What finds a thing by a key | the noun, `_by_` and the key | `file_by_name` |
 | A question | `is_` or `has_`; in Ruby, `?` | `is_hidden`, `has_run` |
-| A new value or a conversion | `new`, `try_new`, `with_`, `from_`, `into_` | `with_hint` |
+| A new value or a conversion | `new`, `try_new`, `with_`, `from_`, `into_`; `to_` for one that borrows | `with_hint`, `to_engine` |
 | What acts | a verb first, a state after it if any | `publish`, `release_queued` |
 
 Outside a state, a word ending in `-ing` or `-ed` is a name only where the dictionary lists it as a noun, as `heading` is, or after a verb, as in `release_queued`. A name another side fixes is kept as it is: Godot's virtuals, Ruby's hooks such as `const_added`, Minitest's `passed?`. A Rust function standing behind a Ruby method `__name__` is named `name`.

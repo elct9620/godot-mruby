@@ -118,7 +118,7 @@ module Godot
 
         singleton = engine_singleton
         return singleton.__send__(name, *args, &block) if singleton
-        return super unless __static_method__(name)
+        return super unless __has_static_method__(name)
 
         __call_static__(name, args)
       end
@@ -127,7 +127,7 @@ module Godot
         return super unless @engine_class == true
 
         singleton = engine_singleton
-        singleton ? singleton.respond_to?(name) : __static_method__(name) || super
+        singleton ? singleton.respond_to?(name) : __has_static_method__(name) || super
       end
 
       # The engine class's integer constants and enum values, kept on the
@@ -140,7 +140,7 @@ module Godot
         engine_class.const_set(name, value)
       end
 
-      private :__make__, :__make_node__, :__allocate__, :__singleton__, :__static_method__, :__call_static__,
+      private :__make__, :__make_node__, :__allocate__, :__singleton__, :__has_static_method__, :__call_static__,
               :__engine_constant__, :__declare_signal__, :__declare_export__, :__declare_heading__
 
       private
@@ -206,7 +206,7 @@ module Godot
         hint = named.first
         return ["range", __bounds__(keywords[:range], step)] if hint == :range
         raise ArgumentError, %("step:" needs a "range:" to step through.) unless step.nil?
-        return ["type", __class_named__(keywords[:type])] if hint == :type
+        return ["type", __type_name__(keywords[:type])] if hint == :type
         return ["none", nil] if hint.nil?
 
         [hint.to_s, __hint_value__(hint, keywords[hint])]
@@ -225,7 +225,7 @@ module Godot
       # The class a property names its type by, as the realm spells it. Only
       # a class names a type, so anything else is refused where it is
       # written.
-      def __class_named__(named)
+      def __type_name__(named)
         unless named.is_a?(::Module)
           raise ArgumentError, %("type:" needs a class, but #{named.inspect} was given instead.)
         end
