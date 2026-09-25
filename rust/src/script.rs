@@ -315,7 +315,7 @@ impl IScriptExtension for RubyScript {
         let path = self.base().get_path().to_string();
         let test_directories = settings::test_directories();
         Project::new(&FilesOnDisk, &test_directories, &bridge::is_node_class)
-            .announce(&path)
+            .announcement(&path)
             .map(|announcement| StringName::from(&announcement.name))
             .unwrap_or_default()
     }

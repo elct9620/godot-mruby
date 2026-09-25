@@ -10,7 +10,7 @@ use godot::global::Error;
 use godot::meta::conv::RawPtr;
 use godot::prelude::*;
 
-use crate::announcement::{self, Clashes, Project, Unannounced};
+use crate::announcement::{self, Clashes, Omission, Project};
 use crate::compiler::CompileError;
 use crate::game::{FilesOnDisk, GameFiles};
 use crate::realm::{Files, Location};
@@ -398,9 +398,9 @@ impl IScriptLanguageExtension for RubyLanguage {
         let test_directories = settings::test_directories();
         let project = Project::new(&FilesOnDisk, &test_directories, &bridge::is_node_class);
         let file = path.to_string();
-        let announced = project.announce(&file);
+        let announced = project.announcement(&file);
         let mut clashes = CLASHES.lock().unwrap_or_else(PoisonError::into_inner);
-        if !matches!(announced, Err(Unannounced::SharedName { .. })) {
+        if !matches!(announced, Err(Omission::SharedName { .. })) {
             clashes.forget(&file);
         }
         match announced {
@@ -416,7 +416,7 @@ impl IScriptLanguageExtension for RubyLanguage {
                 "is_tool" => announcement.is_tool,
             }
             .upcast_any_dictionary(),
-            Err(Unannounced::SharedName { name, mut others }) => {
+            Err(Omission::SharedName { name, mut others }) => {
                 others.push(file);
                 others.sort();
                 if clashes.note(&name, &others) {

@@ -47,7 +47,8 @@ impl IEditorExportPlugin for RubyExportPlugin {
 
     fn export_file(&mut self, path: GString, _type: GString, _features: PackedStringArray) {
         let path = path.to_string();
-        if path == RUNNER_SCENE || settings::in_test_directory(&path, &settings::test_directories())
+        if path == RUNNER_SCENE
+            || settings::is_in_test_directory(&path, &settings::test_directories())
         {
             self.base_mut().skip();
         }

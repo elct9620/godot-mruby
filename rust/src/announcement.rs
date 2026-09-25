@@ -26,7 +26,7 @@ pub struct Announcement {
 
 /// Why a file is not announced.
 #[derive(Debug, PartialEq, Eq)]
-pub enum Unannounced {
+pub enum Omission {
     /// A file under a test directory, which belongs to no game's class list.
     InTestDirectory,
     /// A library file, or one whose ancestry is broken.
@@ -60,14 +60,14 @@ impl<'a, F: Files> Project<'a, F> {
     }
 
     /// The announcement of the file at `path`, or why it has none.
-    pub fn announce(&self, path: &str) -> Result<Announcement, Unannounced> {
-        if self.in_test_directory(path) {
-            return Err(Unannounced::InTestDirectory);
+    pub fn announcement(&self, path: &str) -> Result<Announcement, Omission> {
+        if self.is_in_test_directory(path) {
+            return Err(Omission::InTestDirectory);
         }
-        let (header, ancestry) = self.node_script(path).ok_or(Unannounced::NotNodeScript)?;
-        let others = self.sharing_name(path);
+        let (header, ancestry) = self.node_script(path).ok_or(Omission::NotNodeScript)?;
+        let others = self.namesakes(path);
         if !others.is_empty() {
-            return Err(Unannounced::SharedName {
+            return Err(Omission::SharedName {
                 name: header.name().to_owned(),
                 others,
             });
@@ -76,7 +76,7 @@ impl<'a, F: Files> Project<'a, F> {
             .files()
             .iter()
             .find(|(ancestor, _)| {
-                !self.in_test_directory(ancestor) && self.sharing_name(ancestor).is_empty()
+                !self.is_in_test_directory(ancestor) && self.namesakes(ancestor).is_empty()
             })
             .map_or_else(
                 || ancestry.engine_class().to_owned(),
@@ -100,18 +100,18 @@ impl<'a, F: Files> Project<'a, F> {
 
     // The other game files whose node scripts share the name of the file at
     // `path`: only a file whose last segment spells the same name can.
-    fn sharing_name(&self, path: &str) -> Vec<String> {
+    fn namesakes(&self, path: &str) -> Vec<String> {
         let name = file_name(path);
         self.paths
             .iter()
             .filter(|other| other.as_str() != path && file_name(other) == name)
-            .filter(|other| !self.in_test_directory(other) && self.node_script(other).is_some())
+            .filter(|other| !self.is_in_test_directory(other) && self.node_script(other).is_some())
             .cloned()
             .collect()
     }
 
-    fn in_test_directory(&self, path: &str) -> bool {
-        settings::in_test_directory(path, self.test_directories)
+    fn is_in_test_directory(&self, path: &str) -> bool {
+        settings::is_in_test_directory(path, self.test_directories)
     }
 }
 
@@ -156,17 +156,17 @@ fn file_name(path: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Announcement, Clashes, Project, Unannounced};
+    use super::{Announcement, Clashes, Omission, Project};
     use crate::ancestry::tests::Sources;
 
-    fn announce(
+    fn announcement(
         path: &str,
         sources: &[(&'static str, &'static str)],
-    ) -> Result<Announcement, Unannounced> {
+    ) -> Result<Announcement, Omission> {
         let files = Sources(sources.iter().copied().collect());
         let test_directories = ["res://test".to_owned()];
         let is_node = |class: &str| class != "Resource";
-        Project::new(&files, &test_directories, &is_node).announce(path)
+        Project::new(&files, &test_directories, &is_node).announcement(path)
     }
 
     const ENEMY: (&str, &str) = ("res://enemy.rb", "class Enemy < Godot::Node2D\nend\n");
@@ -179,7 +179,7 @@ mod tests {
             "module Enemies\n  class Boss < Godot::Node2D\n  end\nend\n",
         )];
 
-        let announcement = announce("res://enemies/boss.rb", &sources).unwrap();
+        let announcement = announcement("res://enemies/boss.rb", &sources).unwrap();
 
         assert_eq!(announcement.name, "Boss");
     }
@@ -188,7 +188,7 @@ mod tests {
     #[test]
     fn a_node_script_inheriting_from_no_announced_file_is_announced_with_its_engine_class_as_base()
     {
-        let announcement = announce("res://enemy.rb", &[ENEMY]).unwrap();
+        let announcement = announcement("res://enemy.rb", &[ENEMY]).unwrap();
 
         assert_eq!(announcement.base, "Node2D");
     }
@@ -198,7 +198,7 @@ mod tests {
     fn a_node_script_extending_an_announced_class_is_announced_with_that_class_as_base() {
         let sources = [("res://boss.rb", "class Boss < Enemy\nend\n"), ENEMY];
 
-        let announcement = announce("res://boss.rb", &sources).unwrap();
+        let announcement = announcement("res://boss.rb", &sources).unwrap();
 
         assert_eq!(announcement.base, "Enemy");
     }
@@ -208,9 +208,9 @@ mod tests {
     fn a_file_under_a_test_directory_is_not_announced() {
         let sources = [("res://test/dummy.rb", "class Dummy < Godot::Node\nend\n")];
 
-        let unannounced = announce("res://test/dummy.rb", &sources).unwrap_err();
+        let omission = announcement("res://test/dummy.rb", &sources).unwrap_err();
 
-        assert_eq!(unannounced, Unannounced::InTestDirectory);
+        assert_eq!(omission, Omission::InTestDirectory);
     }
 
     // @behavior RN-005
@@ -218,9 +218,9 @@ mod tests {
     fn a_library_file_is_not_announced() {
         let sources = [("res://save.rb", "class Save < Godot::Resource\nend\n")];
 
-        let unannounced = announce("res://save.rb", &sources).unwrap_err();
+        let omission = announcement("res://save.rb", &sources).unwrap_err();
 
-        assert_eq!(unannounced, Unannounced::NotNodeScript);
+        assert_eq!(omission, Omission::NotNodeScript);
     }
 
     // @behavior RN-006
@@ -237,11 +237,11 @@ mod tests {
             ),
         ];
 
-        let unannounced = announce("res://enemies/boss.rb", &sources).unwrap_err();
+        let omission = announcement("res://enemies/boss.rb", &sources).unwrap_err();
 
         assert_eq!(
-            unannounced,
-            Unannounced::SharedName {
+            omission,
+            Omission::SharedName {
                 name: "Boss".to_owned(),
                 others: vec!["res://levels/boss.rb".to_owned()],
             }
@@ -260,7 +260,7 @@ mod tests {
             ),
         ];
 
-        let announcement = announce("res://boss.rb", &sources).unwrap();
+        let announcement = announcement("res://boss.rb", &sources).unwrap();
 
         assert_eq!(announcement.base, "Node2D");
     }
@@ -270,7 +270,7 @@ mod tests {
     fn an_announcement_carries_whether_the_class_is_a_tool() {
         let sources = [("res://gizmo.rb", "class Gizmo < Godot::Node\n  tool\nend\n")];
 
-        let announcement = announce("res://gizmo.rb", &sources).unwrap();
+        let announcement = announcement("res://gizmo.rb", &sources).unwrap();
 
         assert!(announcement.is_tool);
     }
@@ -283,7 +283,7 @@ mod tests {
             "class Enemy < Godot::Node\n  abstract\nend\n",
         )];
 
-        let announcement = announce("res://enemy.rb", &sources).unwrap();
+        let announcement = announcement("res://enemy.rb", &sources).unwrap();
 
         assert!(announcement.is_abstract);
     }
@@ -296,7 +296,7 @@ mod tests {
             "class Enemy < Godot::Node\n  icon \"enemy.svg\"\nend\n",
         )];
 
-        let announcement = announce("res://enemy.rb", &sources).unwrap();
+        let announcement = announcement("res://enemy.rb", &sources).unwrap();
 
         assert_eq!(announcement.icon.as_deref(), Some("enemy.svg"));
     }

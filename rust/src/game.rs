@@ -22,7 +22,7 @@ impl Files for GameFiles {
     /// an export remapped them. Sorted, since Godot promises no order and the
     /// first directory to spell a namespace names it.
     fn paths(&self) -> Vec<String> {
-        let left_out = left_out();
+        let left_out = left_out_directories();
         let left_out: Vec<&str> = left_out
             .iter()
             .map(|dir| dir.trim_end_matches('/'))
@@ -111,7 +111,7 @@ impl Files for RealmFiles {
 /// Whether this is the editor and the file at `path` sits under one of
 /// `test_directories`, which the editor never runs.
 pub fn is_left_out_in_editor(path: &str, test_directories: &[String]) -> bool {
-    Engine::singleton().is_editor_hint() && settings::in_test_directory(path, test_directories)
+    Engine::singleton().is_editor_hint() && settings::is_in_test_directory(path, test_directories)
 }
 
 /// The game's files as they are on disk, for answering what the editor asks
@@ -152,7 +152,7 @@ pub fn is_exported() -> bool {
 // The directories the class index leaves out: an exported game's test
 // directories. Tests run only on the editor's build, where every file is
 // indexed so a test reaches any file by name.
-fn left_out() -> Vec<String> {
+fn left_out_directories() -> Vec<String> {
     if is_exported() {
         settings::test_directories()
     } else {

@@ -5,7 +5,7 @@
 
 use std::ffi::CString;
 
-use crate::announcement::{self, Project, Unannounced};
+use crate::announcement::{self, Omission, Project};
 use crate::compiler::{self, CompileError};
 use crate::realm::{Declarations, Files, Roots};
 
@@ -67,8 +67,8 @@ pub fn validation<F: Files + Sync>(
         message: warning.message,
     });
     let shared_constant = shared_constant_warning(&typed, path);
-    let shared_name = match Project::new(&typed, test_directories, is_node).announce(path) {
-        Err(Unannounced::SharedName { name, others }) => Some(Warning {
+    let shared_name = match Project::new(&typed, test_directories, is_node).announcement(path) {
+        Err(Omission::SharedName { name, others }) => Some(Warning {
             line: 1,
             kind: Kind::SharedName,
             message: announcement::shared_name_warning(path, &name, &others),

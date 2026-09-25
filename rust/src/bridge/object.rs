@@ -461,7 +461,7 @@ fn editor_name_at(path: &str) -> Option<String> {
     let test_directories = settings::test_directories();
     let project = Project::new(&FilesOnDisk, &test_directories, &super::is_node_class);
     project
-        .announce(path)
+        .announcement(path)
         .ok()
         .map(|announcement| announcement.name)
 }

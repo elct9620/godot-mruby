@@ -66,7 +66,7 @@ fn directories(setting: &str) -> Vec<String> {
 
 /// Whether `path` lies under one of `test_directories`, each written with
 /// or without its trailing slash.
-pub fn in_test_directory(path: &str, test_directories: &[String]) -> bool {
+pub fn is_in_test_directory(path: &str, test_directories: &[String]) -> bool {
     test_directories.iter().any(|directory| {
         path.strip_prefix(directory.trim_end_matches('/'))
             .is_some_and(|rest| rest.starts_with('/'))
@@ -80,14 +80,14 @@ pub fn test_pattern() -> GString {
 
 #[cfg(test)]
 mod tests {
-    use super::in_test_directory;
+    use super::is_in_test_directory;
 
     // @behavior RX-004
     #[test]
     fn a_test_directory_written_with_its_trailing_slash_holds_its_files() {
         let directories = ["res://test/".to_owned()];
 
-        assert!(in_test_directory(
+        assert!(is_in_test_directory(
             "res://test/inventory_test.rb",
             &directories
         ));
@@ -98,7 +98,7 @@ mod tests {
     fn a_directory_whose_name_only_begins_like_a_test_directory_is_not_in_it() {
         let directories = ["res://test".to_owned()];
 
-        assert!(!in_test_directory(
+        assert!(!is_in_test_directory(
             "res://testing/inventory.rb",
             &directories
         ));
