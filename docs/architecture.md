@@ -214,7 +214,7 @@ node.set_script ──► instance: recorded        no Ruby runs
 node freed (any thread) ──► release(key) ──► let go at the next entry or frame
 ```
 
-The header and ancestry answer Godot on any thread before the file runs: the engine node class it extends, and what its source writes out; once it has run, the snapshot answers (2.7). Only such a node gets an instance, and in the editor only a tool whose source parses; any other node there gets Godot's placeholder, whose file runs at the next frame.
+Before the file runs, the header and ancestry answer Godot on any thread: the engine node class, and what the source writes out; then the snapshot answers (2.7). Only such a node gets an instance, in the editor only a tool whose source parses; any other node there gets Godot's placeholder, its file run at the next frame unless under a test directory.
 
 The instance holds no Ruby value: the realm holds the node's object under its instance id, so a node made by `new` or by Godot meets the same object. The instance goes to Godot through the extension interface rather than gdext's `ScriptInstance`, and a call copies what it needs before Ruby runs, since the engine may call back or take the script away before Ruby returns. Freeing a node queues its key and never waits for the realm. The rules are in `.spec/behavior/script.md` and `.spec/behavior/held_objects.md`.
 
