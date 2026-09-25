@@ -273,9 +273,9 @@ pub fn file_by_name(
 struct Silence;
 
 impl Log for Silence {
-    fn message(&self, _text: &str) {}
+    fn print_line(&self, _text: &str) {}
 
-    fn raw(&self, _text: &str) {}
+    fn print(&self, _text: &str) {}
 
     fn record(&self, _level: Level, _at: Option<&Location>, _text: &str) {}
 }

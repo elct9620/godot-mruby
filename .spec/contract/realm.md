@@ -511,7 +511,7 @@ Where a realm's words go: what Ruby prints, and the records placed at a Ruby fil
 pub trait Log {}
 ```
 
-## `Log::message`
+## `Log::print_line`
 
 A line Ruby prints, as `puts` and `p` write one.
 
@@ -521,11 +521,11 @@ A line Ruby prints, as `puts` and `p` write one.
 
 ```rust
 pub trait Log {
-    fn message(&self, text: &str);
+    fn print_line(&self, text: &str);
 }
 ```
 
-## `Log::raw`
+## `Log::print`
 
 Text Ruby prints as it is, as `print` writes it.
 
@@ -535,7 +535,7 @@ Text Ruby prints as it is, as `print` writes it.
 
 ```rust
 pub trait Log {
-    fn raw(&self, text: &str);
+    fn print(&self, text: &str);
 }
 ```
 
@@ -553,7 +553,7 @@ pub trait Log {
 }
 ```
 
-## `Log::exception`
+## `Log::record_exception`
 
 An exception, as a script error at the first frame of its backtrace, with the frames that name a line, most recent first.
 
@@ -563,7 +563,7 @@ An exception, as a script error at the first frame of its backtrace, with the fr
 
 ```rust
 pub trait Log {
-    fn exception(&self, text: &str, backtrace: &[Location]);
+    fn record_exception(&self, text: &str, backtrace: &[Location]);
 }
 ```
 

@@ -17,11 +17,11 @@ use crate::realm::{self, Level, Location};
 pub struct GodotLog;
 
 impl realm::Log for GodotLog {
-    fn message(&self, text: &str) {
+    fn print_line(&self, text: &str) {
         godot_print!("{text}");
     }
 
-    fn raw(&self, text: &str) {
+    fn print(&self, text: &str) {
         printraw(&[text.to_variant()]);
     }
 
@@ -32,7 +32,7 @@ impl realm::Log for GodotLog {
 
     // Godot asks every language for its stack as it prints, so the language
     // answers the exception's backtrace while it is written.
-    fn exception(&self, text: &str, backtrace: &[Location]) {
+    fn record_exception(&self, text: &str, backtrace: &[Location]) {
         language::write_with_stack(backtrace, || {
             write(
                 Level::ScriptError,

@@ -92,16 +92,16 @@ pub enum Extends {
 /// whose log it writes to.
 pub trait Log: Send {
     /// A line Ruby prints, as `puts` and `p` write one.
-    fn message(&self, text: &str);
+    fn print_line(&self, text: &str);
     /// Text Ruby prints as it is, as `print` writes it.
-    fn raw(&self, text: &str);
+    fn print(&self, text: &str);
     /// An error, a warning or a script error, at a Ruby file and line when
     /// it has one.
     #[track_caller]
     fn record(&self, level: Level, at: Option<&Location>, text: &str);
     /// An exception, a script error at the first frame of its backtrace,
     /// with the frames that name a line, most recent first.
-    fn exception(&self, text: &str, backtrace: &[Location]) {
+    fn record_exception(&self, text: &str, backtrace: &[Location]) {
         self.record(Level::ScriptError, backtrace.first(), text);
     }
 }
@@ -785,7 +785,7 @@ impl RubyError {
         if self.backtrace.is_empty() {
             log.record(self.level, self.at.as_ref(), &self.message);
         } else {
-            log.exception(&self.message, &self.backtrace);
+            log.record_exception(&self.message, &self.backtrace);
         }
     }
 }
@@ -933,8 +933,8 @@ mod tests {
     struct Silence;
 
     impl Log for Silence {
-        fn message(&self, _text: &str) {}
-        fn raw(&self, _text: &str) {}
+        fn print_line(&self, _text: &str) {}
+        fn print(&self, _text: &str) {}
         fn record(&self, _level: Level, _at: Option<&Location>, _text: &str) {}
     }
 

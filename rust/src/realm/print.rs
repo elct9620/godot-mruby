@@ -23,11 +23,11 @@ fn puts(mrb: &Mrb, _receiver: Value) -> Result<Value, Error> {
     let log = &bookkeeping(mrb).log;
     let args = arguments(mrb)?;
     if args.is_empty() {
-        log.message("");
+        log.print_line("");
     }
     for arg in args {
         let text = arg.to_string(mrb);
-        log.message(text.strip_suffix('\n').unwrap_or(&text));
+        log.print_line(text.strip_suffix('\n').unwrap_or(&text));
     }
     Ok(Value::nil())
 }
@@ -35,7 +35,7 @@ fn puts(mrb: &Mrb, _receiver: Value) -> Result<Value, Error> {
 fn print(mrb: &Mrb, _receiver: Value) -> Result<Value, Error> {
     let args = arguments(mrb)?;
     let text: String = args.iter().map(|arg| arg.to_string(mrb)).collect();
-    bookkeeping(mrb).log.raw(&text);
+    bookkeeping(mrb).log.print(&text);
     Ok(Value::nil())
 }
 
@@ -43,7 +43,7 @@ fn p(mrb: &Mrb, _receiver: Value) -> Result<Value, Error> {
     let log = &bookkeeping(mrb).log;
     let args = arguments(mrb)?;
     for arg in &args {
-        log.message(&arg.inspect(mrb));
+        log.print_line(&arg.inspect(mrb));
     }
     Ok(match args.as_slice() {
         [] => Value::nil(),
