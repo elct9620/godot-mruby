@@ -18,7 +18,9 @@ end
 # prints whether the node's placeholder lists the property it now exports;
 # its value would come from the script whether or not the placeholder was told.
 func _ready() -> void:
-	if not Engine.is_editor_hint():
+	# A person's editor is left alone: the probe changes a script's source,
+	# which a save there would write to the file.
+	if not Engine.is_editor_hint() or DisplayServer.get_name() != "headless":
 		return
 	var script: Script = $Plated.get_script()
 	script.source_code = CHANGED

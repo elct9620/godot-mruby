@@ -7,7 +7,9 @@ extends Node
 # that does not parse kept of the scene; then widens the knob's bounds,
 # reloads it, and prints the hint once the file ran again.
 func _ready() -> void:
-	if not Engine.is_editor_hint():
+	# A person's editor is left alone: the probe changes a script's source,
+	# which a save there would write to the file.
+	if not Engine.is_editor_hint() or DisplayServer.get_name() != "headless":
 		return
 	await frames()
 	var grouped := listed().any(
