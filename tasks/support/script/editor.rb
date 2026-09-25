@@ -22,6 +22,8 @@ module Godot
       RAN = "knob turn hint: 0,10, grouped: true"
       RAN_AGAIN = "knob turn hint after reload: 0,20"
       UNTOUCHED = "a test directory's file ran in the editor"
+      # What the scene's tool script prints as its node is given each callback.
+      TOOL_CALLBACKS = ["the torch is ready in the editor", "the torch is processed in the editor"].freeze
       # The line the editor prints as it takes the scene in, which is what says
       # the run reached it; the editor scans the whole project first, so the run
       # is given frames enough to get there and quits by itself. A run told to
@@ -42,6 +44,7 @@ module Godot
         verify_ran!(output)
         verify_ran_again!(output)
         verify_left_out!(output)
+        verify_tool_called!(output)
       end
 
       # @behavior RS-045
@@ -80,6 +83,14 @@ module Godot
         return unless output.include?(UNTOUCHED)
 
         raise "The editor ran a file under a test directory:\n#{output}"
+      end
+
+      # @behavior RS-059
+      def verify_tool_called!(output)
+        called = output.lines.map(&:chomp).select { |line| TOOL_CALLBACKS.include?(line) }
+        return if called == TOOL_CALLBACKS
+
+        raise "The editor did not give a tool script's node its callbacks in order:\n#{output}"
       end
 
       def open_scene(project, scene)

@@ -281,11 +281,17 @@ impl IScriptExtension for RubyScript {
         true
     }
 
-    // Scripts only run in a game; the editor gets no instance. Godot asks
+    // The editor makes an instance only of a tool, as it does of a
+    // GDScript, and never of one under a test directory, whose files it
+    // never runs; every other node there is given a placeholder. Godot asks
     // this before making an instance, so a file that is no node script is
     // refused as the instance is made, where the refusal is reported.
     fn can_instantiate(&self) -> bool {
-        !Engine::singleton().is_editor_hint()
+        if !Engine::singleton().is_editor_hint() {
+            return true;
+        }
+        let path = self.base().get_path().to_string();
+        self.header.is_tool() && !game::is_left_out_in_editor(&path, &settings::test_directories())
     }
 
     fn get_base_script(&self) -> Option<Gd<Script>> {

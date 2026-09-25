@@ -479,3 +479,11 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | the script's source Godot holds, changed to export a property with another hint its source does not write out |
 | When | the script is reloaded |
 | Then | the node's placeholder lists that property with the new hint once the file has run again |
+
+## `RS-059` A tool script's node runs its callbacks in the editor
+
+| Step | Statement |
+| --- | --- |
+| Given | a scene whose node's script is a node script whose class calls `tool` and defines `_ready` and `_process` |
+| When | the editor opens that scene |
+| Then | the node's Ruby object is given `_ready` and then `_process` |
