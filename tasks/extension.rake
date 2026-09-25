@@ -20,7 +20,7 @@ namespace :extension do
            "cargo", "build", *flags, "--target", triple, "--manifest-path", Extension::MANIFEST
       end
 
-      output = Extension.universal(profile)
+      output = Extension.universal_library(profile)
       sh "lipo", "-create", "-output", output, *Extension::ARCHES.keys.map { |t| Extension.slice(t, profile) }
       Extension.require_arches!(output)
       Extension.install(output, Extension::MACOS_LIBRARY)

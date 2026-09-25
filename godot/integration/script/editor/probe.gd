@@ -11,8 +11,8 @@ func _ready() -> void:
 	# which a save there would write to the file.
 	if not Engine.is_editor_hint() or DisplayServer.get_name() != "headless":
 		return
-	await frames()
-	var grouped := listed().any(
+	await wait_frames()
+	var grouped := properties().any(
 		func(property): return property.name == "Turning" and property.usage == PROPERTY_USAGE_GROUP
 	)
 	print("knob turn hint: ", turn_hint(), ", grouped: ", grouped)
@@ -20,18 +20,18 @@ func _ready() -> void:
 	var script: Script = $Knob.get_script()
 	script.source_code = script.source_code.replace("0..10", "0..20")
 	script.reload()
-	await frames()
+	await wait_frames()
 	print("knob turn hint after reload: ", turn_hint())
 
 
-func frames() -> void:
+func wait_frames() -> void:
 	for frame in 3:
 		await get_tree().process_frame
 
 
-func listed() -> Array:
+func properties() -> Array:
 	return $Knob.get_property_list()
 
 
 func turn_hint() -> String:
-	return listed().filter(func(property): return property.name == "turn")[0].hint_string
+	return properties().filter(func(property): return property.name == "turn")[0].hint_string

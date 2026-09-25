@@ -17,7 +17,7 @@ module Godot
     # Runs that have to pass, each with the runner's options and the summary it
     # has to end on: a directory whose one test passes and the other skips,
     # and runs narrowed by a filter.
-    PASSING = {
+    SUMMARIES = {
       %W[--dir #{RUNNER_TESTS}/skip] => /^2 runs, \d+ assertions, 0 failures, 0 errors, 1 skips$/,
       %W[--dir #{RUNNER_TESTS}/order --include AlphaOrderTest#test_a] =>
         /^1 runs, \d+ assertions, 0 failures, 0 errors, 0 skips$/,
@@ -38,8 +38,8 @@ module Godot
     module_function
 
     def verify!(project)
-      verify_pass!(project)
-      verify_passing!(project)
+      verify_tests!(project)
+      verify_summaries!(project)
       verify_seed!(project)
       verify_shuffled!(project)
       verify_orphan!(project)
@@ -48,7 +48,7 @@ module Godot
     # Runs the project's Ruby tests and requires a pass that ran at least one,
     # since a run that finds nothing passes too, and that leaked nothing.
     # @behavior RT-001
-    def verify_pass!(project)
+    def verify_tests!(project)
       output, status = run(project, "--dir", TESTS)
       return if status.success? && output[PASSED, 1].to_i.positive? && !output.include?(LEAKED)
 
@@ -58,8 +58,8 @@ module Godot
     # Makes each run that has to pass and requires the summary it has to end
     # on.
     # @behavior RT-009 RT-024 RT-025
-    def verify_passing!(project)
-      PASSING.each do |options, summary|
+    def verify_summaries!(project)
+      SUMMARIES.each do |options, summary|
         output, status = run(project, *options)
         next if status.success? && output.match?(summary)
 

@@ -84,7 +84,7 @@ module Extension
     File.join(TARGET_DIR, triple, profile, "lib#{CRATE}.dylib")
   end
 
-  def universal(profile)
+  def universal_library(profile)
     File.join(TARGET_DIR, profile, MACOS_LIBRARY)
   end
 
