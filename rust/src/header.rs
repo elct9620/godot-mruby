@@ -7,13 +7,15 @@ use godot::builtin::{GString, StringName, VarArray, VarDictionary, Variant};
 use godot::meta::ToGodot;
 use ruby_prism::{CallNode, Integer, Node, NodeList};
 
+use crate::hint::Hint;
 use crate::realm::{self, Roots};
-use crate::snapshot::{Property, Signal};
+use crate::snapshot::{Heading, Member, Property, Signal};
 
 /// A file's header: the constants its `module` and `class` statements write,
 /// the name the class its path names is written with, the superclass written
-/// on it, the names of the methods it defines, the signals and properties
-/// its body declares, and the `tool`, `abstract` and `icon` its body calls.
+/// on it, the names of the methods it defines, the signals, properties and
+/// headings its body declares, and the `tool`, `abstract` and `icon` its
+/// body calls.
 #[derive(Debug, Default)]
 pub struct Header {
     writes: Vec<Vec<String>>,
@@ -21,7 +23,7 @@ pub struct Header {
     superclass: Option<Superclass>,
     methods: BTreeSet<String>,
     signals: Vec<Signal>,
-    exports: Vec<Property>,
+    members: Vec<Member>,
     tool: bool,
     is_abstract: bool,
     icon: Option<String>,
@@ -102,13 +104,16 @@ impl Header {
         &self.signals
     }
 
-    /// The properties the class exports, in the order it declares them, as
-    /// the `export` calls of its body write them. A value the call does not
-    /// write out is the file's to work out as it runs, and the hint and the
-    /// type a keyword names are read only then, so a property here carries
-    /// the name and the value alone.
-    pub fn exports(&self) -> &[Property] {
-        &self.exports
+    /// What the class declares for the editor, in the order it declares it,
+    /// as its body writes it: the properties its `export` calls export, each
+    /// with the hint its keyword spells out, and the headings its
+    /// `export_group`, `export_subgroup` and `export_category` calls write.
+    /// A value, a hint or a name the call does not write out is the file's
+    /// to work out as it runs, and so is a type `type:` names: a property
+    /// whose value is not written out is not here, and one whose hint is not
+    /// carries none.
+    pub fn members(&self) -> &[Member] {
+        &self.members
     }
 
     pub fn is_tool(&self) -> bool {
@@ -160,9 +165,22 @@ impl Header {
                     self.signals.push(signal);
                 }
             }
-            (b"export", [name, default, ..]) => {
-                if let Some(property) = property(name, default) {
-                    self.exports.push(property);
+            (b"export", [name, default, keywords @ ..]) => {
+                if let Some(property) = property(name, default, keywords) {
+                    self.members.push(Member::Property(property));
+                }
+            }
+            (b"export_group" | b"export_subgroup", [name, prefix @ ..]) => {
+                if let Some(heading) = group(call.name().as_slice(), name, prefix) {
+                    self.members.push(Member::Heading(heading));
+                }
+            }
+            (b"export_category", [name]) => {
+                if let Some(name) = name_of(name) {
+                    self.members.push(Member::Heading(Heading::Category {
+                        name,
+                        path: String::new(),
+                    }));
                 }
             }
             _ => {}
@@ -239,11 +257,78 @@ fn signal(name: &Node, parameters: &[Node]) -> Option<Signal> {
 }
 
 // The property an `export` call declares, as it is written: the name Godot
-// reads it by and the value it is declared with, which gives it its type. A
-// value written as anything but a literal is the file's to work out as it
-// runs, so the header carries none of that declaration.
-fn property(name: &Node, default: &Node) -> Option<Property> {
-    Some(Property::new(name_of(name)?, &literal(default)?))
+// reads it by and the value it is declared with, which gives it its type,
+// and the hint its keywords spell out. A value written as anything but a
+// literal is the file's to work out as it runs, so the header carries none
+// of that declaration.
+fn property(name: &Node, default: &Node, keywords: &[Node]) -> Option<Property> {
+    let property = Property::new(name_of(name)?, &literal(default)?);
+    let Some((hint, written)) = keywords.first().and_then(written_hint) else {
+        return Some(property);
+    };
+    Some(match hint.property_hint(property.default_value().get_type()) {
+        Ok(property_hint) => property.with_hint(property_hint, hint.hint_string(&written)),
+        Err(_) => property,
+    })
+}
+
+// The one hint an export's keywords name and the value it is read with, as
+// the running file would take them: a range's bounds and its step, or the
+// literal the keyword is written with. Keywords the file would refuse, or
+// write as anything but literals, spell out none.
+fn written_hint(keywords: &Node) -> Option<(Hint, Variant)> {
+    let mut step = None;
+    let mut named = Vec::new();
+    for element in keywords.as_keyword_hash_node()?.elements().iter() {
+        let pair = element.as_assoc_node()?;
+        let keyword = text(pair.key().as_symbol_node()?.unescaped());
+        if keyword == "step" {
+            step = Some(literal(&pair.value())?);
+        } else {
+            named.push((keyword, pair.value()));
+        }
+    }
+    let [(keyword, value)] = named.as_slice() else {
+        return None;
+    };
+    let hint = Hint::by_keyword(keyword).ok()?;
+    let written = match (hint, step) {
+        (Hint::Range, step) => bounds(value, step)?,
+        (_, Some(_)) => return None,
+        (_, None) => literal(value)?,
+    };
+    Some((hint, written))
+}
+
+// A range's bounds, its step after them when one is written, as a range
+// literal including its end writes them.
+fn bounds(range: &Node, step: Option<Variant>) -> Option<Variant> {
+    let range = range.as_range_node()?;
+    if range.is_exclude_end() {
+        return None;
+    }
+    let mut bounds = VarArray::new();
+    bounds.push(&literal(&range.left()?)?);
+    bounds.push(&literal(&range.right()?)?);
+    if let Some(step) = step {
+        bounds.push(&step);
+    }
+    Some(bounds.to_variant())
+}
+
+// The group or subgroup an `export_group` or `export_subgroup` call writes,
+// with the prefix its properties are taken by when one is written.
+fn group(call: &[u8], name: &Node, prefix: &[Node]) -> Option<Heading> {
+    let name = name_of(name)?;
+    let prefix = match prefix {
+        [] => String::new(),
+        [prefix] => name_of(prefix)?,
+        _ => return None,
+    };
+    Some(match call {
+        b"export_subgroup" => Heading::Subgroup { name, prefix },
+        _ => Heading::Group { name, prefix },
+    })
 }
 
 // The value a literal writes, as the engine takes it, following the Ruby

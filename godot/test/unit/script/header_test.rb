@@ -1,5 +1,7 @@
 class HeaderTest < Minitest::Test
   DIRECTORY = "res://test/unit/script/header".freeze
+  RANGE = 1
+  GROUP = 64
 
   # @behavior RS-008
   def test_a_node_script_reports_the_engine_class_it_extends_before_its_file_runs
@@ -67,6 +69,22 @@ class HeaderTest < Minitest::Test
   def test_a_node_lists_the_methods_its_class_inherits_from_another_file
     with_node(:boss) { |node| assert_includes names(node.get_method_list), "charge" }
     refute ran?(:Boss)
+  end
+
+  # @behavior RS-050
+  def test_a_node_script_lists_an_exported_propertys_hint_before_its_file_runs
+    angle = script(:dial).get_script_property_list.find { |property| property["name"] == "angle" }
+
+    assert_equal [RANGE, "0,360"], [angle["hint"], angle["hint_string"]]
+    refute ran?(:Dial)
+  end
+
+  # @behavior RS-051
+  def test_a_node_script_lists_the_headings_its_class_writes_before_its_file_runs
+    listed = names(script(:dial).get_script_property_list)
+
+    assert_equal %w[Aim angle], listed.last(2)
+    refute ran?(:Dial)
   end
 
   private

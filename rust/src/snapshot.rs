@@ -185,7 +185,7 @@ impl Snapshot {
     /// writes, which answers for it until it has run.
     pub fn properties_of<'a>(
         &self,
-        files: impl IntoIterator<Item = (&'a str, &'a [Property])>,
+        files: impl IntoIterator<Item = (&'a str, &'a [Member])>,
     ) -> Vec<Property> {
         let mut properties: Vec<Property> = Vec::new();
         for (path, written) in files {
@@ -200,11 +200,11 @@ impl Snapshot {
 
     // The properties the class of the file at `path` has: the ones it
     // exported as it ran, or the ones its header writes while it has not run.
-    fn file_properties<'a>(&'a self, path: &str, written: &'a [Property]) -> Vec<&'a Property> {
+    fn file_properties<'a>(&'a self, path: &str, written: &'a [Member]) -> Vec<&'a Property> {
         if self.has_run(path) {
             self.properties(path).collect()
         } else {
-            written.iter().collect()
+            written.iter().filter_map(Member::property).collect()
         }
     }
 
@@ -213,11 +213,10 @@ impl Snapshot {
     /// first, as GDScript lists a script's members before the ones it
     /// inherits. A property is listed once, the nearest class's, while a
     /// heading belongs to the class that wrote it. Each file comes with what
-    /// its header writes, which answers for it until it has run, headings
-    /// included in what running adds.
+    /// its header writes, which answers for it until it has run.
     pub fn members_of<'a>(
         &self,
-        files: impl IntoIterator<Item = (&'a str, &'a [Property])>,
+        files: impl IntoIterator<Item = (&'a str, &'a [Member])>,
     ) -> Vec<Member> {
         let mut members: Vec<Member> = Vec::new();
         for (path, written) in files {
@@ -240,13 +239,12 @@ impl Snapshot {
     }
 
     // What the class of the file at `path` declared for the editor: what it
-    // declared as it ran, or the properties its header writes while it has
-    // not run, which carry no heading of their own.
-    fn file_members(&self, path: &str, written: &[Property]) -> Vec<Member> {
+    // declared as it ran, or what its header writes while it has not run.
+    fn file_members(&self, path: &str, written: &[Member]) -> Vec<Member> {
         if self.has_run(path) {
             self.members(path).to_vec()
         } else {
-            written.iter().cloned().map(Member::Property).collect()
+            written.to_vec()
         }
     }
 

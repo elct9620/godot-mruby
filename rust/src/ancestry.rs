@@ -108,20 +108,20 @@ impl<'a> Lineage<'a> {
     /// first: what each file declared as it ran, or what its header writes
     /// while it has not run.
     pub fn properties(&self, snapshot: &Snapshot) -> Vec<Property> {
-        snapshot.properties_of(self.exports())
+        snapshot.properties_of(self.header_members())
     }
 
     /// What the class declared for the editor, its ancestors' included and in
     /// the order each class wrote it; a file that has not run has the
     /// properties its header writes and no heading.
     pub fn members(&self, snapshot: &Snapshot) -> Vec<Member> {
-        snapshot.members_of(self.exports())
+        snapshot.members_of(self.header_members())
     }
 
-    // Each file by path, with what its header exports, which answers for the
-    // file while it has not run.
-    fn exports(&self) -> impl Iterator<Item = (&str, &[Property])> {
-        self.files().map(|(path, header)| (path, header.exports()))
+    // Each file by path, with what its header declares, which answers for
+    // the file while it has not run.
+    fn header_members(&self) -> impl Iterator<Item = (&str, &[Member])> {
+        self.files().map(|(path, header)| (path, header.members()))
     }
 
     /// Whether a file of the lineage defines the method `name`, as its source

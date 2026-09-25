@@ -402,3 +402,19 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a Ruby script whose source Godot holds, changed from its file's |
 | When | Godot saves the script to a `.rb` file |
 | Then | the file holds the source Godot holds |
+
+## `RS-050` A node script lists an exported property's hint before its file runs
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a property with a hint its source writes out |
+| When | Godot asks the script for its properties |
+| Then | the property carries that hint |
+
+## `RS-051` A node script lists the headings its class writes before its file runs
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class body writes `export_group` with its name spelled out |
+| When | Godot asks the script for its properties |
+| Then | the list carries that group before the properties written after it |
