@@ -76,6 +76,8 @@ pub struct Declarations {
     pub extends: Option<Extends>,
     /// The names its class body's `export` calls spell out.
     pub exports: Vec<String>,
+    /// The names its class body's `signal` calls spell out.
+    pub signals: Vec<String>,
 }
 
 /// The superclass a file's class is held to.
@@ -162,7 +164,7 @@ enum Origin {
 fn publish_class(mrb: &Mrb, path: &str, signals: Vec<Signal>, members: Vec<Member>, digest: u64) {
     let methods = methods_by_path(mrb, path);
     let bookkeeping = bookkeeping(mrb);
-    let export_names = bookkeeping.files.declarations(path).exports;
+    let declarations = bookkeeping.files.declarations(path);
     let mut draft = bookkeeping.snapshot.borrow_mut();
     Arc::make_mut(&mut draft).record_class(
         path,
@@ -171,7 +173,8 @@ fn publish_class(mrb: &Mrb, path: &str, signals: Vec<Signal>, members: Vec<Membe
             members,
             methods,
             digest,
-            export_names,
+            export_names: declarations.exports,
+            signal_names: declarations.signals,
         },
     );
     snapshot::publish(Arc::clone(&draft));

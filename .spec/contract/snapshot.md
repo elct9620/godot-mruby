@@ -110,7 +110,7 @@ impl Member {
 
 ## `Class`
 
-What a class has once its file has run: what its body declared, and the methods it defines, those metaprogramming defined included, with the digest of the source it ran and the names that source's `export` calls write, which tell what the source Godot holds now has changed and what it cannot answer for.
+What a class has once its file has run: what its body declared, and the methods it defines, those metaprogramming defined included, with the digest of the source it ran and the names that source's `export` and `signal` calls write, which tell what the source Godot holds now has changed and what it cannot answer for.
 
 | Attribute | Value |
 | --- | --- |
@@ -123,6 +123,7 @@ pub struct Class {
     pub methods: Vec<String>,
     pub digest: u64,
     pub export_names: Vec<String>,
+    pub signal_names: Vec<String>,
 }
 ```
 
@@ -136,6 +137,8 @@ What a file's source writes, for its class to be answered from: what its header 
 
 ```rust
 pub struct Source<'a> {
+    pub signals: &'a [Signal],
+    pub signal_names: &'a [String],
     pub exports: &'a [Export],
     pub digest: u64,
 }
@@ -238,20 +241,6 @@ What the classes of a realm's files have, as one value that never changes once i
 pub struct Snapshot;
 ```
 
-## `Snapshot::has_run`
-
-Whether the file at a path has run, which tells a class with nothing to declare from one whose declarations are still to come: a file that has not run is answered from its header instead.
-
-| Attribute | Value |
-| --- | --- |
-| internal | yes |
-
-```rust
-impl Snapshot {
-    pub fn has_run(&self, path: &str) -> bool {}
-}
-```
-
 ## `Snapshot::signals_by_path`
 
 The signals the class of the file at a path declared, in the order it declared them; none for a file that has not run.
@@ -291,6 +280,24 @@ The properties the class of the file at a path exported, in the order it declare
 ```rust
 impl Snapshot {
     pub fn properties_by_path(&self, path: &str) -> impl Iterator<Item = &Property> {}
+}
+```
+
+## `Snapshot::collect_signals`
+
+The signals the classes of the files declared, the first file's first and one to a name, as a class has what it declared and what it inherits. Each file comes with what its source writes, as `collect_members` takes it.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Snapshot {
+    pub fn collect_signals<'a>(
+        &self,
+        files: impl IntoIterator<Item = (&'a str, Source<'a>)>,
+    ) -> Vec<Signal> {
+    }
 }
 ```
 

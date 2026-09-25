@@ -503,3 +503,39 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a node script the editor lists by its announcement |
 | When | Godot asks the script for its global name |
 | Then | the script answers the name it is announced by |
+
+## `RS-062` A node script lists a signal its changed source declares before the file runs again
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose file has run |
+| Given | the script's source Godot holds, changed to declare another signal it writes out |
+| When | Godot asks the script for its signals before the file runs again |
+| Then | the list carries that signal with its parameters |
+
+## `RS-063` A node script drops a signal its changed source no longer declares
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose file has run, declaring a signal |
+| Given | the script's source Godot holds, changed to declare it no more |
+| When | Godot asks the script for its signals before the file runs again |
+| Then | the list does not carry that signal |
+
+## `RS-064` A node script keeps a signal no `signal` call of its source names while its source changes
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose file has run, declaring a signal through a name its source does not spell out |
+| Given | the script's source Godot holds, changed elsewhere |
+| When | Godot asks the script for its signals before the file runs again |
+| Then | the list carries that signal as the run declared it |
+
+## `RS-065` A node script keeps what its run declared for a signal whose parameters its changed source does not write out
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose file has run, declaring a signal with parameters its source does not write out |
+| Given | the script's source Godot holds, changed elsewhere |
+| When | Godot asks the script for its signals before the file runs again |
+| Then | the list carries that signal as the run declared it |

@@ -138,9 +138,9 @@ impl Member {
 
 /// What a class has once its file has run: what its body declared, and the
 /// methods it defines, those metaprogramming defined included, with the
-/// digest of the source it ran and the names that source's `export` calls
-/// write, which tell what the source Godot holds now has changed and what it
-/// cannot answer for.
+/// digest of the source it ran and the names that source's `export` and
+/// `signal` calls write, which tell what the source Godot holds now has
+/// changed and what it cannot answer for.
 #[derive(Clone, Debug, Default)]
 pub struct Class {
     pub signals: Vec<Signal>,
@@ -148,11 +148,17 @@ pub struct Class {
     pub methods: Vec<String>,
     pub digest: u64,
     pub export_names: Vec<String>,
+    pub signal_names: Vec<String>,
 }
 
 impl Class {
+    // The signal of that name the class declared.
+    fn signal_by_name(&self, name: &str) -> Option<&Signal> {
+        self.signals.iter().find(|signal| signal.name == name)
+    }
+
     // The property of that name the class declared.
-    fn property(&self, name: &str) -> Option<&Property> {
+    fn property_by_name(&self, name: &str) -> Option<&Property> {
         self.members
             .iter()
             .filter_map(Member::property)
@@ -172,6 +178,8 @@ impl Class {
 /// header declares and the digest of that source.
 #[derive(Clone, Copy, Debug)]
 pub struct Source<'a> {
+    pub signals: &'a [Signal],
+    pub signal_names: &'a [String],
     pub exports: &'a [Export],
     pub digest: u64,
 }
@@ -191,13 +199,6 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
-    /// Whether the file at `path` has run, which is what tells a class with
-    /// nothing to declare from one whose declarations are still to come: a
-    /// file that has not run is answered from its header instead.
-    pub fn has_run(&self, path: &str) -> bool {
-        self.classes.contains_key(path)
-    }
-
     /// The signals the class of the file at `path` declared, in the order it
     /// declared them; none for a file that has not run.
     pub fn signals_by_path(&self, path: &str) -> &[Signal] {
@@ -222,6 +223,60 @@ impl Snapshot {
             .filter_map(Member::property)
     }
 
+    /// The signals the classes of the files at `files` declared, the first
+    /// file's first and one to a name, as a class has what it declared and
+    /// what it inherits. Each file comes with what its source writes, as
+    /// `collect_members` takes it.
+    pub fn collect_signals<'a>(
+        &self,
+        files: impl IntoIterator<Item = (&'a str, Source<'a>)>,
+    ) -> Vec<Signal> {
+        let mut signals: Vec<Signal> = Vec::new();
+        for (path, source) in files {
+            for signal in self.merge_file_signals(path, source) {
+                if !signals.iter().any(|kept| kept.name == signal.name) {
+                    signals.push(signal);
+                }
+            }
+        }
+        signals
+    }
+
+    // The signals the class of the file at `path` declared, answered as
+    // `merge_file_members` answers its members: from its source until it has
+    // run, then from the run while the source is the one it ran. A source changed since
+    // answers in the order it writes, taking what the run declared for a
+    // signal whose parameters it does not write out, and keeping what the run
+    // declared through a name no `signal` call spelled.
+    fn merge_file_signals(&self, path: &str, source: Source) -> Vec<Signal> {
+        let Some(class) = self.classes.get(path) else {
+            return source.signals.to_vec();
+        };
+        if class.digest == source.digest {
+            return class.signals.clone();
+        }
+        let mut signals: Vec<Signal> = source
+            .signal_names
+            .iter()
+            .filter_map(|name| {
+                source
+                    .signals
+                    .iter()
+                    .find(|signal| &signal.name == name)
+                    .or_else(|| class.signal_by_name(name))
+                    .cloned()
+            })
+            .collect();
+        signals.extend(
+            class
+                .signals
+                .iter()
+                .filter(|signal| !class.signal_names.contains(&signal.name))
+                .cloned(),
+        );
+        signals
+    }
+
     /// The properties the classes of the files at `files` exported, the
     /// first file's first and one to a name, as a class has what it
     /// exported and what it inherits. Each file comes with what its source
@@ -232,7 +287,7 @@ impl Snapshot {
     ) -> Vec<Property> {
         let mut properties: Vec<Property> = Vec::new();
         for (path, source) in files {
-            for member in self.file_members(path, source) {
+            for member in self.merge_file_members(path, source) {
                 if let Member::Property(property) = member
                     && !properties.iter().any(|kept| kept.name == property.name)
                 {
@@ -262,7 +317,7 @@ impl Snapshot {
             if is_editor_build() {
                 members.push(Member::Heading(category(path)));
             }
-            for member in self.file_members(path, source) {
+            for member in self.merge_file_members(path, source) {
                 let listed = member.property().is_some_and(|property| {
                     members
                         .iter()
@@ -279,7 +334,7 @@ impl Snapshot {
 
     // What the class of the file at `path` declared for the editor, as
     // `collect_members` answers each file.
-    fn file_members(&self, path: &str, source: Source) -> Vec<Member> {
+    fn merge_file_members(&self, path: &str, source: Source) -> Vec<Member> {
         let Some(class) = self.classes.get(path) else {
             return source.exports.iter().filter_map(Export::member).collect();
         };
@@ -291,7 +346,7 @@ impl Snapshot {
             let member = match export {
                 Export::Member(member) => Some(member.clone()),
                 Export::Name { name, bare } => class
-                    .property(name)
+                    .property_by_name(name)
                     .or(bare.as_ref())
                     .cloned()
                     .map(Member::Property),
@@ -409,13 +464,28 @@ mod tests {
     }
 
     #[test]
-    fn a_file_that_ran_without_declaring_anything_has_still_run() {
+    fn a_file_that_ran_without_declaring_anything_answers_none_of_what_its_source_writes() {
         let mut snapshot = Snapshot::default();
+        let written = [rung()];
+        let names = ["rung".to_owned()];
+        let source = Source {
+            signals: &written,
+            signal_names: &names,
+            exports: &[],
+            digest: 0,
+        };
 
         snapshot.record_class("res://bell.rb", Class::default());
 
-        assert!(snapshot.has_run("res://bell.rb"));
-        assert!(!snapshot.has_run("res://lamp.rb"));
+        assert!(
+            snapshot
+                .collect_signals([("res://bell.rb", source)])
+                .is_empty()
+        );
+        assert_eq!(
+            snapshot.collect_signals([("res://lamp.rb", source)]),
+            [rung()]
+        );
     }
 
     #[test]

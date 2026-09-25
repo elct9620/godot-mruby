@@ -220,39 +220,25 @@ impl RubyScript {
         Lineage::new(path, &self.header, self.ancestry().ok())
     }
 
-    // The signals the class has, its ancestors' included, nearest first:
-    // what each file declared as it ran, or what its header writes while it
-    // has not run, so a scene's connection is made before anything runs.
+    // The signals the class declared, its ancestors' included, nearest
+    // first: what each file declared as it ran, or what its header writes
+    // while it has not run.
     fn signals(&self) -> Vec<Signal> {
-        let snapshot = snapshot::latest();
-        let mut signals: Vec<Signal> = Vec::new();
-        for (path, header) in self.lineage().files() {
-            let declared = if snapshot.has_run(path) {
-                snapshot.signals_by_path(path)
-            } else {
-                header.signals()
-            };
-            for signal in declared {
-                if !signals.iter().any(|kept| kept.name == signal.name) {
-                    signals.push(signal.clone());
-                }
-            }
-        }
-        signals
+        self.lineage().collect_signals(&snapshot::latest())
     }
 
     // The properties the class exported, its ancestors' included, nearest
     // first: what each file declared as it ran, or what its header writes
     // while it has not run.
     fn properties(&self) -> Vec<Property> {
-        self.lineage().properties(&snapshot::latest())
+        self.lineage().collect_properties(&snapshot::latest())
     }
 
     // What the class declared for the editor, its ancestors' included and
     // in the order each class wrote it; a file that has not run has the
     // properties its header writes and no heading.
     fn members(&self) -> Vec<Member> {
-        self.lineage().members(&snapshot::latest())
+        self.lineage().collect_members(&snapshot::latest())
     }
 
     // The property of that name the class exported, if it exported one.

@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use crate::header::Header;
 use crate::realm::{self, Files};
-use crate::snapshot::{Member, Property, Snapshot, Source};
+use crate::snapshot::{Member, Property, Signal, Snapshot, Source};
 
 /// The files a class inherits from, nearest first, and the engine class the
 /// farthest of them extends.
@@ -110,17 +110,25 @@ impl<'a> Lineage<'a> {
         )
     }
 
+    /// The signals the class declared, its ancestors' included, nearest
+    /// first: what each file declared as it ran, or what its header writes
+    /// while it has not run, so a scene's connection is made before anything
+    /// runs.
+    pub fn collect_signals(&self, snapshot: &Snapshot) -> Vec<Signal> {
+        snapshot.collect_signals(self.sources())
+    }
+
     /// The properties the class exported, its ancestors' included, nearest
     /// first: what each file declared as it ran, or what its header writes
     /// while it has not run.
-    pub fn properties(&self, snapshot: &Snapshot) -> Vec<Property> {
+    pub fn collect_properties(&self, snapshot: &Snapshot) -> Vec<Property> {
         snapshot.collect_properties(self.sources())
     }
 
     /// What the class declared for the editor, its ancestors' included and in
     /// the order each class wrote it; a file that has not run has the
     /// properties its header writes and no heading.
-    pub fn members(&self, snapshot: &Snapshot) -> Vec<Member> {
+    pub fn collect_members(&self, snapshot: &Snapshot) -> Vec<Member> {
         snapshot.collect_members(self.sources())
     }
 
@@ -130,6 +138,8 @@ impl<'a> Lineage<'a> {
             (
                 path,
                 Source {
+                    signals: header.signals(),
+                    signal_names: header.signal_names(),
                     exports: header.exports(),
                     digest: header.digest(),
                 },

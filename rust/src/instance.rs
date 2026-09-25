@@ -146,7 +146,7 @@ impl RubyInstance {
     // and in the order each class wrote it; a file that has not run has the
     // properties its header writes and no heading.
     fn members(&self) -> Vec<Member> {
-        self.lineage().members(&snapshot::latest())
+        self.lineage().collect_members(&snapshot::latest())
     }
 
     // The methods the node's class has, its ancestors' included: the ones
@@ -168,7 +168,7 @@ impl RubyInstance {
     // class exporting one.
     fn property(&self, name: &str) -> Option<Property> {
         self.lineage()
-            .properties(&snapshot::latest())
+            .collect_properties(&snapshot::latest())
             .into_iter()
             .find(|property| property.name == name)
     }
@@ -317,7 +317,7 @@ impl Caller {
             &self.header,
             Some(Arc::clone(&self.ancestry)),
         );
-        let properties = lineage.properties(&snapshot::latest());
+        let properties = lineage.collect_properties(&snapshot::latest());
         for (name, value) in staged {
             let exported = properties.iter().any(|property| property.name == name);
             write(key, &name, exported, &value);

@@ -23,6 +23,7 @@ pub struct Header {
     superclass: Option<Superclass>,
     methods: BTreeSet<String>,
     signals: Vec<Signal>,
+    signal_names: Vec<String>,
     exports: Vec<Export>,
     digest: u64,
     is_tool: bool,
@@ -132,6 +133,12 @@ impl Header {
         &self.signals
     }
 
+    /// The names the class body's `signal` calls spell out, in the order
+    /// they are written, whether or not the rest of each call is.
+    pub fn signal_names(&self) -> &[String] {
+        &self.signal_names
+    }
+
     /// What the class declares for the editor, in the order it declares it,
     /// as its body writes it: the properties its `export` calls export, each
     /// with the hint its keyword spells out, and the headings its
@@ -209,6 +216,7 @@ impl Header {
                 }
             }
             (b"signal", [name, parameters @ ..]) => {
+                self.signal_names.extend(read_name(name));
                 if let Some(signal) = signal(name, parameters) {
                     self.signals.push(signal);
                 }
