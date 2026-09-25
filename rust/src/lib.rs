@@ -45,14 +45,15 @@ unsafe impl ExtensionLibrary for GodotMruby {
     // when no Ruby runs to take them, and runs again the files of scripts
     // reloaded since: each class takes back its exports, then gives the
     // objects it made before the ones it exports anew. In the editor, runs
-    // the files of the scripts it made placeholders of.
+    // the files of the scripts it made placeholders of, and tells the
+    // placeholders what the files run declared.
     fn on_main_loop_frame() {
         realm::release_queued();
-        realm::rerun_queued(&realm::Rerun {
+        let run_again = realm::rerun_queued(&realm::Rerun {
             withdraw: c"__withdraw__",
             adopt: c"__adopt__",
         });
-        script::run_placed();
+        script::run_placed(run_again);
     }
 
     fn on_stage_deinit(stage: InitStage) {

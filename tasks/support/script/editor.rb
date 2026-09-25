@@ -20,6 +20,7 @@ module Godot
       # script, under a test directory, the editor must never run.
       EDITOR_SCENE = "res://integration/script/editor/editor.tscn"
       RAN = "knob turn hint: 0,10, grouped: true"
+      RAN_AGAIN = "knob turn hint after reload: 0,20"
       UNTOUCHED = "a test directory's file ran in the editor"
       # The line the editor prints as it takes the scene in, which is what says
       # the run reached it; the editor scans the whole project first, so the run
@@ -39,6 +40,7 @@ module Godot
         verify_exported!(project)
         output = open_scene(project, EDITOR_SCENE)
         verify_ran!(output)
+        verify_ran_again!(output)
         verify_left_out!(output)
       end
 
@@ -64,6 +66,13 @@ module Godot
         return if output.lines.map(&:chomp).include?(RAN)
 
         raise "The editor's placeholder was not given what a node script declared as it ran:\n#{output}"
+      end
+
+      # @behavior RS-058
+      def verify_ran_again!(output)
+        return if output.lines.map(&:chomp).include?(RAN_AGAIN)
+
+        raise "The editor's placeholder was not given what a reloaded node script declared as it ran again:\n#{output}"
       end
 
       # @behavior RS-057

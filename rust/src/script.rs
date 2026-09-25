@@ -91,13 +91,17 @@ static UNRUN: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 /// Runs in the game's realm the file of each script Godot made a
 /// placeholder of since the last frame, unless it is one the editor leaves
-/// out, then tells every placeholder what its class declares now: the
-/// editor learns a class's hints, headings and the members only running
-/// defines as it would a GDScript's. Placeholders exist only in the editor,
-/// and the extension calls this every frame.
-pub fn run_placed() {
+/// out, then tells every placeholder what its class declares now, as it
+/// does once files have `run_again`: the editor learns a class's hints,
+/// headings and the members only running defines as it would a GDScript's.
+/// Placeholders exist only in the editor, and the extension calls this
+/// every frame.
+pub fn run_placed(run_again: bool) {
     let paths = std::mem::take(&mut *UNRUN.lock().unwrap_or_else(PoisonError::into_inner));
     if paths.is_empty() {
+        if run_again {
+            tell_placed();
+        }
         return;
     }
     let test_directories = settings::test_directories();

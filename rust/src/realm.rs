@@ -424,20 +424,24 @@ pub struct Rerun {
 /// Runs again each file whose source changed, if the game's realm is open;
 /// one that has not run is left to run when it is needed. The class of a
 /// file that ran cleanly is sent what `rerun` names, and what a file raises
-/// is written to the realm's log. The extension calls it every frame.
-pub fn rerun_queued(rerun: &Rerun) {
+/// is written to the realm's log. Answers whether any file was run again, so
+/// what was told of the classes can be told anew. The extension calls it
+/// every frame.
+pub fn rerun_queued(rerun: &Rerun) -> bool {
     let paths = std::mem::take(&mut *CHANGED.lock().unwrap());
     if paths.is_empty() {
-        return;
+        return false;
     }
     let game = GAME.lock();
-    if let Game::Open(realm) = &*game.borrow() {
-        for path in paths {
-            if let Err(error) = realm.run_again(&path, rerun) {
-                error.write(bookkeeping(&realm.mrb).log.as_ref());
-            }
+    let Game::Open(realm) = &*game.borrow() else {
+        return false;
+    };
+    for path in &paths {
+        if let Err(error) = realm.run_again(path, rerun) {
+            error.write(bookkeeping(&realm.mrb).log.as_ref());
         }
     }
+    true
 }
 
 /// Closes the game's realm, unless this thread is inside it; a key released
