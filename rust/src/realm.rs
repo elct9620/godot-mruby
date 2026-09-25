@@ -865,9 +865,9 @@ mod tests {
     const RAISING: &str = "res://raising.rb";
 
     // A file whose top level raises on its second line.
-    struct Raising;
+    struct Raiser;
 
-    impl Files for Raising {
+    impl Files for Raiser {
         fn paths(&self) -> Vec<String> {
             vec![RAISING.to_owned()]
         }
@@ -1003,7 +1003,7 @@ mod tests {
     fn a_backtrace_raised_by_a_files_top_level_after_a_call_holds_that_top_level() {
         let _turn = TURN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         close();
-        prepare(|| Realm::open(Raising, Silence, |_| Ok(())));
+        prepare(|| Realm::open(Raiser, Silence, |_| Ok(())));
 
         let ran = enter(|realm| {
             realm.call::<_, bool>("Integer", c"===", [4_i64])?;

@@ -51,21 +51,21 @@ pub struct RubyInstance {
     stage: Arc<Mutex<Stage>>,
     // What Godot wrote to the node's properties before it had a Ruby object,
     // waiting for the object to be built.
-    staged: Arc<Mutex<Staged>>,
+    stash: Arc<Mutex<Stash>>,
 }
 
 /// What Godot wrote to a node's properties before it had a Ruby object, in
 /// the order it wrote them: a node made for a scene is given the scene's
 /// values before anything builds it.
 #[derive(Default)]
-struct Staged(Vec<(String, Variant)>);
+struct Stash(Vec<(String, Variant)>);
 
 // SAFETY: the mutex holding it lets one thread reach it at a time, and the
 // engine's values are shared across threads under gdext's
 // experimental-threads.
-unsafe impl Send for Staged {}
+unsafe impl Send for Stash {}
 
-impl Staged {
+impl Stash {
     // What was written to the property `name`, if anything was.
     fn value(&self, name: &str) -> Option<Variant> {
         self.0
@@ -111,7 +111,7 @@ impl RubyInstance {
             language,
             display: GString::from(&owner.to_string()),
             stage: Arc::new(Mutex::new(Stage::Recorded)),
-            staged: Arc::new(Mutex::new(Staged::default())),
+            stash: Arc::new(Mutex::new(Stash::default())),
         }
     }
 
@@ -176,7 +176,7 @@ impl RubyInstance {
     // What Godot wrote to the property `name` before the node had a Ruby
     // object, if it wrote one.
     fn staged_value(&self, name: &str) -> Option<Variant> {
-        self.staged
+        self.stash
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .value(name)
@@ -200,7 +200,7 @@ impl RubyInstance {
     // Keeps `value` for the property `name` until the node's Ruby object is
     // built, which is when a class's own values are written too.
     fn stage(&self, name: &str, value: &Variant) {
-        self.staged
+        self.stash
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .keep(name, value);
@@ -233,7 +233,7 @@ impl RubyInstance {
             header: Arc::clone(&self.header),
             ancestry: Arc::clone(&self.ancestry),
             stage: Arc::clone(&self.stage),
-            staged: Arc::clone(&self.staged),
+            stash: Arc::clone(&self.stash),
         }
     }
 }
@@ -257,7 +257,7 @@ struct Caller {
     header: Arc<Header>,
     ancestry: Arc<Ancestry>,
     stage: Arc<Mutex<Stage>>,
-    staged: Arc<Mutex<Staged>>,
+    stash: Arc<Mutex<Stash>>,
 }
 
 impl Caller {
@@ -308,7 +308,7 @@ impl Caller {
     // sets itself up before the scene it was made for has its say.
     fn write_staged(&self, key: Key) {
         let staged =
-            std::mem::take(&mut self.staged.lock().unwrap_or_else(PoisonError::into_inner).0);
+            std::mem::take(&mut self.stash.lock().unwrap_or_else(PoisonError::into_inner).0);
         if staged.is_empty() {
             return;
         }
