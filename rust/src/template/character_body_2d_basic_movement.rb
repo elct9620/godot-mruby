@@ -14,7 +14,7 @@ _TS__TS_end
 _TS__TS_# Get the input direction and handle the movement/deceleration.
 _TS__TS_# As good practice, you should replace UI actions with custom gameplay actions.
 _TS__TS_direction = Godot::Input.get_axis("ui_left", "ui_right")
-_TS__TS_x = direction == 0 ? Godot.move_toward(velocity.x, 0, SPEED) : direction * SPEED
+_TS__TS_x = direction.zero? ? Godot.move_toward(velocity.x, 0, SPEED) : direction * SPEED
 _TS__TS_self.velocity = Godot::Vector2.new(x, velocity.y)
 
 _TS__TS_move_and_slide

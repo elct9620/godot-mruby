@@ -62,3 +62,11 @@ How Ruby computes in a realm: Ruby's own `Math`, `rand` and `srand` behave as Ru
 | Given | an engine object, and two equal values of a value type |
 | When | Ruby compares the object with itself, and the values with each other, through `Godot.is_same` |
 | Then | each answers true, as the engine does |
+
+## `RC-008` Ruby's numbers answer Ruby's numeric predicates
+
+| Step | Statement |
+| --- | --- |
+| Given | a realm |
+| When | Ruby asks an Integer or a Float `zero?`, `positive?`, `negative?` or an Integer `even?` |
+| Then | each answers as Ruby's does |
