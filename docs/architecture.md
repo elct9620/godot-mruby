@@ -106,6 +106,7 @@ A word ending in `-ing` is a name only where the dictionary lists it as a noun, 
 | --- | --- |
 | `RubyLanguage` in `language.rs`, its `Project` in `announcement.rs` | `ScriptLanguageExtension` |
 | `ResourceFormatLoaderRubyScript` in `loader.rs` | `ResourceFormatLoader` |
+| `ResourceFormatSaverRubyScript` in `saver.rs` | `ResourceFormatSaver` |
 | `RubyScript` in `script.rs`, answered from `header.rs` and `ancestry.rs` | `ScriptExtension` |
 | `RubyInstance` in `instance.rs` | A script instance |
 | `RubyTestRunner` in `runner.rs` | A `Node` in `runner.tscn` |

@@ -394,3 +394,11 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | the script's source Godot holds, changed to export another property |
 | When | the script is reloaded |
 | Then | the node lists that property |
+
+## `RS-049` Godot saving a Ruby script writes its source to the file
+
+| Step | Statement |
+| --- | --- |
+| Given | a Ruby script whose source Godot holds, changed from its file's |
+| When | Godot saves the script to a `.rb` file |
+| Then | the file holds the source Godot holds |

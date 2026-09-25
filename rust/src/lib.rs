@@ -15,6 +15,7 @@ mod log;
 mod minitest;
 mod realm;
 mod runner;
+mod saver;
 mod script;
 mod settings;
 mod snapshot;
@@ -30,6 +31,7 @@ unsafe impl ExtensionLibrary for GodotMruby {
             settings::register();
             language::register();
             loader::register();
+            saver::register();
             realm::prepare(|| {
                 realm::Realm::open(game::GameFiles, log::GodotLog, |realm| {
                     realm.install::<bridge::Godot>()
@@ -52,6 +54,7 @@ unsafe impl ExtensionLibrary for GodotMruby {
 
     fn on_stage_deinit(stage: InitStage) {
         if stage == InitStage::Scene {
+            saver::unregister();
             loader::unregister();
             language::unregister();
             realm::close();
