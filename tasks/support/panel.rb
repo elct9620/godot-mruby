@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-require "fileutils"
-require "tmpdir"
-
 module Godot
   # Opens a copy of the integration-test project in the editor with a probe
   # plugin that runs one test directory from the test panel, and reads what
@@ -10,15 +7,6 @@ module Godot
   # runner runs where the check does. Part of Godot.verify!.
   module Panel
     PROBE = File.join("integration", "panel", "probe")
-    PLUGIN_SETTINGS = <<~SETTINGS
-      [editor_plugins]
-
-      enabled=PackedStringArray("res://addons/panel_probe/plugin.cfg")
-
-      [editor]
-
-      run/main_run_args="--headless"
-    SETTINGS
     # Frames enough for the panel to play the runner scene and look after it.
     FRAMES = "900"
     FAILING = "res://integration/runner/failing/assertion/failed_assertion_test.rb"
@@ -53,15 +41,7 @@ module Godot
 
     # Opens the editor on a copy of the project with the probe enabled.
     def run_probe(project)
-      Dir.mktmpdir do |dir|
-        copy = File.join(dir, "project")
-        FileUtils.cp_r(project, copy)
-        FileUtils.rm_rf(File.join(copy, ".godot", "editor"))
-        FileUtils.cp_r(File.join(project, PROBE), File.join(copy, "addons", "panel_probe"))
-        File.write(File.join(copy, "project.godot"), "\n#{PLUGIN_SETTINGS}", mode: "a")
-        output, = Open3.capture2e(EXECUTABLE, "--headless", "--editor", "--quit-after", FRAMES, "--path", copy)
-        output
-      end
+      Godot.with_probe(project, PROBE) { |copy| Godot.run_editor_frames(copy, FRAMES).first }
     end
   end
 end

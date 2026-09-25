@@ -9,7 +9,10 @@ use godot::global::Error;
 use godot::obj::Singleton;
 use godot::prelude::*;
 
+use crate::game::GameFiles;
+use crate::realm::Files;
 use crate::script::RubyScript;
+use crate::{language, template};
 
 // The editor setting that has a script saved in the editor reload, which
 // GDScript's saver follows too.
@@ -40,12 +43,23 @@ pub fn unregister() {
 #[godot_api]
 impl IResourceFormatSaver for ResourceFormatSaverRubyScript {
     // The file takes the source as Godot holds it, and a script saved in the
-    // editor reloads, as a GDScript does.
+    // editor reloads, as a GDScript does. A template made for a new file
+    // learns the file's path only here, so its class is put inside the
+    // namespaces the path spells now.
     fn save(&mut self, resource: Option<Gd<Resource>>, path: GString, _flags: u32) -> Error {
         let Some(mut script) = resource.and_then(|resource| resource.try_cast::<RubyScript>().ok())
         else {
             return Error::ERR_INVALID_PARAMETER;
         };
+        if script.bind_mut().take_template_mark() {
+            let constant = GameFiles.roots().name_of(&path.to_string());
+            let nested = template::source_in_namespaces(
+                &script.get_source_code().to_string(),
+                &constant,
+                &language::indentation(),
+            );
+            script.set_source_code(&nested);
+        }
         let Some(mut file) = FileAccess::open(&path, ModeFlags::WRITE) else {
             return FileAccess::get_open_error();
         };

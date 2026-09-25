@@ -50,6 +50,9 @@ pub struct RubyScript {
     // the exports again for every property of a scene it saves, and telling
     // a placeholder makes the editor list its properties anew.
     last_exports_digest: Mutex<Option<(u32, u32)>>,
+    // Whether the script is a template made for a new file, which learns its
+    // path only as it is first saved.
+    is_from_template: bool,
 }
 
 /// What a placeholder is told of the class: what it exports, and the value
@@ -148,8 +151,22 @@ impl RubyScript {
             ancestry: Cache::default(),
             placeholders: Mutex::default(),
             last_exports_digest: Mutex::default(),
+            is_from_template: false,
             source,
         })
+    }
+
+    /// The script a template made for a new file, holding `source`.
+    pub fn from_template(source: GString) -> Gd<Self> {
+        let mut script = Self::from_source("", source);
+        script.bind_mut().is_from_template = true;
+        script
+    }
+
+    /// Whether the script is a template made for a new file, which it stops
+    /// being once asked.
+    pub fn take_template_mark(&mut self) -> bool {
+        std::mem::take(&mut self.is_from_template)
     }
 
     /// Takes the source its file holds now and reloads, as a GDScript reads

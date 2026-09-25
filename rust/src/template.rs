@@ -26,25 +26,25 @@ pub const BUILT_INS: [Template; 5] = [
         inherit: "Node",
         name: "Default",
         description: "Base template for Node with default Godot cycle methods.",
-        content: include_str!("template/node_default.rb"),
+        content: include_str!("template/node_default.rb.template"),
     },
     Template {
         inherit: "CharacterBody2D",
         name: "Basic Movement",
         description: "Classic movement for gravity games (platformer, ...).",
-        content: include_str!("template/character_body_2d_basic_movement.rb"),
+        content: include_str!("template/character_body_2d_basic_movement.rb.template"),
     },
     Template {
         inherit: "CharacterBody3D",
         name: "Basic Movement",
         description: "Classic movement for gravity games (FPS, TPS, ...).",
-        content: include_str!("template/character_body_3d_basic_movement.rb"),
+        content: include_str!("template/character_body_3d_basic_movement.rb.template"),
     },
     Template {
         inherit: "EditorPlugin",
         name: "Plugin",
         description: "Basic plugin template.",
-        content: include_str!("template/editor_plugin_plugin.rb"),
+        content: include_str!("template/editor_plugin_plugin.rb.template"),
     },
 ];
 
@@ -79,9 +79,35 @@ pub fn superclass(base: &str, roots: &Roots) -> String {
     }
 }
 
+/// `source`, made for the file whose constant is `constant`, inside the
+/// modules of the namespaces the constant spells, each a level deeper by
+/// `indent`, since a template knows only the file's name.
+pub fn source_in_namespaces(source: &str, constant: &str, indent: &str) -> String {
+    let namespaces: Vec<&str> = constant.split("::").collect();
+    let Some((_, namespaces)) = namespaces.split_last() else {
+        return source.to_owned();
+    };
+    namespaces
+        .iter()
+        .rev()
+        .fold(source.to_owned(), |inner, namespace| {
+            let indented: Vec<String> = inner
+                .lines()
+                .map(|line| {
+                    if line.is_empty() {
+                        String::new()
+                    } else {
+                        format!("{indent}{line}")
+                    }
+                })
+                .collect();
+            format!("module {namespace}\n{}\nend\n", indented.join("\n"))
+        })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{BUILT_INS, built_ins, source, superclass};
+    use super::{BUILT_INS, built_ins, source, source_in_namespaces, superclass};
     use crate::compiler;
     use crate::realm::Roots;
 
@@ -151,5 +177,28 @@ mod tests {
         let made = source(BUILT_INS[1].content, "made", "Godot::Node", "    ");
 
         assert!(made.contains("\n    def _ready\n"));
+    }
+
+    // @behavior RY-007
+    #[test]
+    fn a_template_saved_under_a_namespace_opens_the_namespaces_its_path_spells() {
+        let made = source(BUILT_INS[1].content, "hero_ship", "Godot::Node", "  ");
+
+        let nested = source_in_namespaces(&made, "Enemies::Ships::HeroShip", "  ");
+
+        assert!(
+            nested
+                .starts_with("module Enemies\n  module Ships\n    class HeroShip < Godot::Node\n")
+        );
+        assert!(nested.ends_with("    end\n  end\nend\n"));
+        assert!(nested.contains("\n\n      # Called every frame."));
+    }
+
+    // @behavior RY-007
+    #[test]
+    fn a_template_saved_under_a_root_directory_stays_as_it_was_made() {
+        let made = source(BUILT_INS[0].content, "hero", "Godot::Node", "  ");
+
+        assert_eq!(source_in_namespaces(&made, "Hero", "  "), made);
     }
 }

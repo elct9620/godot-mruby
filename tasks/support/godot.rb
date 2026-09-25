@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
+require "fileutils"
 require "open3"
+require "tmpdir"
 
 require_relative "declarations"
 require_relative "export"
@@ -12,6 +14,7 @@ require_relative "runner/failing"
 require_relative "runner/results"
 require_relative "runner/settings"
 require_relative "script"
+require_relative "template"
 
 # Runs the integration-test project headless and reads what it reports.
 # Backs tasks/godot.rake.
@@ -23,9 +26,21 @@ module Godot
   # What gdext prints once the engine has called into the library.
   LOADED = "Initialize godot-rust"
   FAILED = /^(ERROR|SCRIPT ERROR):/
+  # What a copy of the project adds to enable a probe and play headless.
+  PROBE_SETTINGS = <<~SETTINGS
+
+    [editor_plugins]
+
+    enabled=PackedStringArray("res://addons/probe/plugin.cfg")
+
+    [editor]
+
+    run/main_run_args="--headless"
+  SETTINGS
   # The checks, each in the module named after the behaviour it claims.
   CHECKS = [
-    Script, Declarations, Report, Runner, Runner::Failing, Runner::Results, Runner::Settings, Loader, Export, Panel
+    Script, Declarations, Report, Runner, Runner::Failing, Runner::Results, Runner::Settings, Loader, Export,
+    Panel, Template
   ].freeze
 
   module_function
@@ -62,6 +77,26 @@ module Godot
     return if status.success? && errors.empty? && output.include?(LOADED)
 
     raise "The extension did not load:\n#{errors.empty? ? output : errors.join}"
+  end
+
+  # Yields a copy of the project whose editor enables the plugin at `probe`,
+  # a directory of the project, and plays its scenes headless, so a probe acts
+  # in an editor no person uses and the scenes it plays run where the check
+  # does.
+  def with_probe(project, probe)
+    Dir.mktmpdir do |dir|
+      copy = File.join(dir, "project")
+      FileUtils.cp_r(project, copy)
+      FileUtils.rm_rf(File.join(copy, ".godot", "editor"))
+      FileUtils.cp_r(File.join(project, probe), File.join(copy, "addons", "probe"))
+      File.write(File.join(copy, "project.godot"), PROBE_SETTINGS, mode: "a")
+      yield copy
+    end
+  end
+
+  # Opens the project in the editor for this many frames.
+  def run_editor_frames(project, frames)
+    Open3.capture2e(EXECUTABLE, "--headless", "--editor", "--quit-after", frames, "--path", project)
   end
 
   # Opens the project in the editor, which scans it, and quits.

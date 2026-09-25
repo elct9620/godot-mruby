@@ -121,7 +121,7 @@ impl IScriptLanguageExtension for RubyLanguage {
             &superclass,
             &indentation(),
         );
-        Some(RubyScript::from_source("", GString::from(&source)).upcast())
+        Some(RubyScript::from_template(GString::from(&source)).upcast())
     }
 
     fn get_built_in_templates(&self, object: StringName) -> Array<AnyDictionary> {
@@ -524,7 +524,7 @@ fn script_path_of(base: &str) -> String {
 
 // One level of indentation as the editor writes it, as GDScript's templates
 // take it: a tab, or the editor's number of spaces.
-fn indentation() -> String {
+pub fn indentation() -> String {
     let settings = EditorInterface::singleton().get_editor_settings();
     let setting = |name: &str| {
         settings

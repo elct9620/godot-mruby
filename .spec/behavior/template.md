@@ -9,6 +9,7 @@ What the editor offers when a Ruby script is created: the templates GDScript has
 ## Includes
 
 - `rust/src/template.rs`
+- `tasks/support/template.rb`
 
 ## `RY-001` A base class offers the templates GDScript has for it
 
@@ -57,3 +58,11 @@ What the editor offers when a Ruby script is created: the templates GDScript has
 | Given | the editor's indentation |
 | When | a template is made into a script |
 | Then | each level of its body is indented by it |
+
+## `RY-007` A template saved under a namespace opens the namespaces its path spells
+
+| Step | Statement |
+| --- | --- |
+| Given | a template made for a new file, which knows only the file's name |
+| When | it is first saved at a path under a namespace, as `res://enemies/ships/hero_ship.rb` |
+| Then | its class is written inside a module for each namespace the path spells, `Enemies` then `Ships`, each a level deeper, and a file under a root directory stays as it was made |
