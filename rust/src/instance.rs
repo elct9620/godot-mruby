@@ -173,21 +173,6 @@ impl RubyInstance {
             .find(|property| property.name == name)
     }
 
-    // What Godot wrote to the property `name` before the node had a Ruby
-    // object, if it wrote one.
-    fn stash_value_by_name(&self, name: &str) -> Option<Variant> {
-        self.stash
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .value(name)
-    }
-
-    // The value the class exported the property with, which answers Godot
-    // while the node has no object of its own to answer from.
-    fn default_value_by_name(&self, name: &str) -> Option<Variant> {
-        self.property(name).map(|property| property.default_value())
-    }
-
     // Whether the node has no Ruby object yet, so what Godot writes has
     // nowhere to go but the instance.
     fn is_unbuilt(&self) -> bool {
@@ -195,15 +180,6 @@ impl RubyInstance {
             *self.stage.lock().unwrap_or_else(PoisonError::into_inner),
             Stage::Recorded
         )
-    }
-
-    // Keeps `value` for the property `name` until the node's Ruby object is
-    // built, which is when a class's own values are written too.
-    fn stage(&self, name: &str, value: &Variant) {
-        self.stash
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .keep(name, value);
     }
 
     // Whether the node's class exported a property of that name.
@@ -269,6 +245,46 @@ impl Caller {
         *self.stage.lock().unwrap_or_else(PoisonError::into_inner) = stage;
     }
 
+    // Whether building the node's object failed, so it never has one.
+    fn is_failed(&self) -> bool {
+        matches!(self.current_stage(), Stage::Failed)
+    }
+
+    fn lineage(&self) -> Lineage<'_> {
+        Lineage::new(
+            self.path.clone(),
+            &self.header,
+            Some(Arc::clone(&self.ancestry)),
+        )
+    }
+
+    // Keeps `value` for the property `name` while the node has no object:
+    // until it is built, when a class's own values are written too, or for
+    // good once building it failed, so a scene saved with it keeps the value.
+    fn keep(&self, name: &str, value: &Variant) {
+        self.stash
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .keep(name, value);
+    }
+
+    // What answers the property `name` while the node has no object: what
+    // Godot wrote to it, or else the value its class exported it with.
+    fn answer_from_stash(&self, name: &str) -> Option<Variant> {
+        let written = self
+            .stash
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .value(name);
+        written.or_else(|| {
+            self.lineage()
+                .collect_properties(&snapshot::latest())
+                .into_iter()
+                .find(|property| property.name == name)
+                .map(|property| property.default_value())
+        })
+    }
+
     // The node's Ruby object, built at the first call that needs it and
     // initialized once it is held, unless Ruby made the node and built it.
     // A call arriving while it initializes finds it held; one arriving while
@@ -312,12 +328,7 @@ impl Caller {
         if staged.is_empty() {
             return;
         }
-        let lineage = Lineage::new(
-            self.path.clone(),
-            &self.header,
-            Some(Arc::clone(&self.ancestry)),
-        );
-        let properties = lineage.collect_properties(&snapshot::latest());
+        let properties = self.lineage().collect_properties(&snapshot::latest());
         for (name, value) in staged {
             let exported = properties.iter().any(|property| property.name == name);
             write(key, &name, exported, &value);
@@ -527,7 +538,9 @@ unsafe fn name(method: sys::GDExtensionConstStringNamePtr) -> String {
 // A property of the node's class is its Ruby object's to answer, so a
 // thread inside the realm has the object built as a call builds it, and one
 // outside leaves the value with the instance rather than waiting for the
-// realm: the object is given it once something builds it.
+// realm: the object is given it once something builds it. A node whose
+// object failed to build keeps what is written to it, as a GDScript tool
+// keeps its members after an error, so saving its scene loses nothing.
 unsafe extern "C" fn set(
     data: sys::GDExtensionScriptInstanceDataPtr,
     property: sys::GDExtensionConstStringNamePtr,
@@ -544,17 +557,20 @@ unsafe extern "C" fn set(
         if !exported && is_engines_own(instance, &name) {
             return sys::GDExtensionBool::from(false);
         }
-        if instance.is_unbuilt() && !realm::is_inside() {
-            instance.stage(&name, value);
-            return sys::GDExtensionBool::from(true);
+        let is_deferred = instance.is_unbuilt() && !realm::is_inside();
+        (instance.caller(), exported, is_deferred)
+    };
+    let (caller, exported, is_deferred) = reached;
+    let key = if is_deferred { None } else { caller.object() };
+    let is_written = match key {
+        Some(key) => write(key, &name, exported, value),
+        None if is_deferred || caller.is_failed() => {
+            caller.keep(&name, value);
+            true
         }
-        (instance.caller(), exported)
+        None => false,
     };
-    let (caller, exported) = reached;
-    let Some(key) = caller.object() else {
-        return sys::GDExtensionBool::from(false);
-    };
-    sys::GDExtensionBool::from(write(key, &name, exported, value))
+    sys::GDExtensionBool::from(is_written)
 }
 
 unsafe extern "C" fn get(
@@ -571,28 +587,21 @@ unsafe extern "C" fn get(
         if !exported && is_engines_own(instance, &name) {
             return sys::GDExtensionBool::from(false);
         }
-        if instance.is_unbuilt() && !realm::is_inside() {
-            let staged = instance
-                .stash_value_by_name(&name)
-                .or_else(|| instance.default_value_by_name(&name));
-            let Some(answered) = staged else {
-                return sys::GDExtensionBool::from(false);
-            };
-            // SAFETY: Godot hands a variant of its own to write into.
-            unsafe { *answer.cast::<Variant>() = answered };
-            return sys::GDExtensionBool::from(true);
-        }
-        (instance.caller(), exported)
+        let is_deferred = instance.is_unbuilt() && !realm::is_inside();
+        (instance.caller(), exported, is_deferred)
     };
-    let (caller, exported) = reached;
-    let Some(key) = caller.object() else {
-        return sys::GDExtensionBool::from(false);
+    let (caller, exported, is_deferred) = reached;
+    let key = if is_deferred { None } else { caller.object() };
+    let value = match key {
+        Some(key) => read(key, &name, exported),
+        None if is_deferred || caller.is_failed() => caller.answer_from_stash(&name),
+        None => None,
     };
-    let Some(answered) = read(key, &name, exported) else {
+    let Some(value) = value else {
         return sys::GDExtensionBool::from(false);
     };
     // SAFETY: Godot hands a variant of its own to write the answer into.
-    unsafe { *answer.cast::<Variant>() = answered };
+    unsafe { *answer.cast::<Variant>() = value };
     sys::GDExtensionBool::from(true)
 }
 

@@ -539,3 +539,11 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | the script's source Godot holds, changed elsewhere |
 | When | Godot asks the script for its signals before the file runs again |
 | Then | the list carries that signal as the run declared it |
+
+## `RS-066` A node whose object failed to build keeps the values Godot writes to it
+
+| Step | Statement |
+| --- | --- |
+| Given | a node the engine made, whose script's `initialize` raises |
+| When | Godot writes a property its class exports and reads it back |
+| Then | the node answers the value written |
