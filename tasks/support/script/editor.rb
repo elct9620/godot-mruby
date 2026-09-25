@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require "fileutils"
 require "open3"
 
 module Godot
@@ -32,11 +31,6 @@ module Godot
       # is given frames enough to get there and quits by itself. A run told to
       # quit sooner ends during that scan and opens no scene at all.
       REACHED = "Loading resource: %s"
-      # Where the editor keeps the scenes it has open, and writes them as it
-      # quits, so the next editor opens them again. A scene opened to probe
-      # it is put back out of it, so no later run, nor the person using the
-      # editor, is left with it open.
-      LAYOUT = ".godot/editor/editor_layout.cfg"
       FRAMES = "3000"
       # What Godot says of a connection to a signal the node has not got, which
       # is every scene connection while a node script has no script instance.
@@ -110,22 +104,12 @@ module Godot
       end
 
       def open_scene(project, scene)
-        output, status = keep_layout(project) do
-          Open3.capture2e(EXECUTABLE, "--headless", "--editor", "--verbose",
-                          "--path", project, scene, "--quit-after", FRAMES)
-        end
+        output, status = Open3.capture2e(EXECUTABLE, "--headless", "--editor", "--verbose",
+                                         "--path", project, scene, "--quit-after", FRAMES)
         raise "The editor did not run:\n#{output}" unless status.success?
         raise "The editor did not reach #{scene}:\n#{output}" unless output.include?(format(REACHED, scene))
 
         output
-      end
-
-      def keep_layout(project)
-        layout = File.join(project, LAYOUT)
-        kept = File.exist?(layout) ? File.binread(layout) : nil
-        yield
-      ensure
-        kept ? File.binwrite(layout, kept) : FileUtils.rm_f(layout)
       end
     end
   end
