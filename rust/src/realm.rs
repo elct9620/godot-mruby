@@ -522,7 +522,7 @@ impl Realm {
         bookkeeping
             .index
             .borrow_mut()
-            .refuse_defined(added, bookkeeping.log.as_ref());
+            .refuse_constants(added, bookkeeping.log.as_ref());
         Ok(())
     }
 
@@ -614,7 +614,7 @@ impl Realm {
                 .and_then(|receiver| receiver.funcall(&self.mrb, method, &args))
                 .map_err(|error| RubyError::from_error(&self.mrb, None, &error))
         })?;
-        self.converted_answer(answer, || {
+        self.to_rust(answer, || {
             format!("{receiver}.{}", method.to_string_lossy())
         })
     }
@@ -686,7 +686,7 @@ impl Realm {
                 .and_then(|object| object.funcall(&self.mrb, method, &args))
                 .map_err(|error| RubyError::from_error(&self.mrb, None, &error))
         })?;
-        self.converted_answer(answer, || format!("#{method}"))
+        self.to_rust(answer, || format!("#{method}"))
     }
 
     // Runs `ruby`, which Rust starts; it is the outermost Ruby when none runs.
@@ -696,15 +696,15 @@ impl Realm {
     }
 
     // `answer` as the Rust value its caller takes, or why it is not one.
-    fn converted_answer<R: TryConvert>(
+    fn to_rust<R: TryConvert>(
         &self,
         answer: Value,
-        called: impl FnOnce() -> String,
+        call: impl FnOnce() -> String,
     ) -> Result<R, RubyError> {
         R::try_convert(answer, &self.mrb).map_err(|error| {
             RubyError::from_message(format!(
                 "{} answered {}: {}",
-                called(),
+                call(),
                 answer.inspect(&self.mrb),
                 error.message(&self.mrb)
             ))
@@ -763,7 +763,7 @@ impl RubyError {
                 backtrace: Vec::new(),
             },
             Error::Exception(_) => {
-                let backtrace = raised_frames(mrb, error);
+                let backtrace = frames_of(mrb, error);
                 if backtrace.is_empty() {
                     Self::from_message(named(error.message(mrb)))
                 } else {
@@ -793,7 +793,7 @@ impl RubyError {
 // The frames of `error`'s backtrace that name a line, most recent first.
 // Under a call from Rust, the top level mruby's base frame kept from the last
 // file it ran is not one Ruby called through, so it is left out.
-fn raised_frames(mrb: &Mrb, error: &Error) -> Vec<Location> {
+fn frames_of(mrb: &Mrb, error: &Error) -> Vec<Location> {
     let mut frames: Vec<Location> = error
         .backtrace(mrb)
         .iter()

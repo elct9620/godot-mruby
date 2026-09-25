@@ -68,7 +68,7 @@ fn type_name(kind: VariantType) -> String {
 pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     let class = godot.define_class(mrb, c"Value", mrb.object_class())?;
     class.set_instance_data_tt(mrb)?;
-    class.define_singleton_method(mrb, c"__value_type__", method!(value_type, 1))?;
+    class.define_singleton_method(mrb, c"__has_value_type__", method!(has_value_type, 1))?;
     class.define_singleton_method(mrb, c"__construct__", method!(construct, 1))?;
     class.define_singleton_method(mrb, c"__call_static__", method!(call_static, 2))?;
     class.define_singleton_method(mrb, c"__constant__", method!(constant, 1))?;
@@ -99,9 +99,9 @@ impl EngineValue {
     }
 }
 
-// Godot::Value.__value_type__(name): whether the engine has a value type of
+// Godot::Value.__has_value_type__(name): whether the engine has a value type of
 // that name for Ruby to hold.
-fn value_type(mrb: &Mrb, _class: Value, name: Symbol) -> bool {
+fn has_value_type(mrb: &Mrb, _class: Value, name: Symbol) -> bool {
     let name = name.name(mrb).unwrap_or_default();
     kind_by_name(&name).is_some()
 }
@@ -193,7 +193,7 @@ fn call(mrb: &Mrb, held: &EngineValue, name: Symbol, args: Array) -> Result<Valu
     let mut receiver = held.0.clone();
     // SAFETY: the name and argument pointers live for the call, which runs on
     // a copy of the value, so the Ruby value never changes.
-    let answered = engine_call(|answer, error| unsafe {
+    let outcome = engine_call(|answer, error| unsafe {
         sys::interface_fn!(variant_call)(
             receiver.var_sys_mut(),
             name.string_sys(),
@@ -203,7 +203,7 @@ fn call(mrb: &Mrb, held: &EngineValue, name: Symbol, args: Array) -> Result<Valu
             error,
         )
     });
-    wrap_answer(mrb, answered, &type_name(held.0.get_type()), &method, &args)
+    wrap_answer(mrb, outcome, &type_name(held.0.get_type()), &method, &args)
 }
 
 // Godot::Value.__call_static__(name, args): the static method `name` of the
@@ -217,7 +217,7 @@ fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: Array) -> Result<Va
     let name = StringName::from(method.as_str());
     let kind_sys = kind.ord as sys::GDExtensionVariantType;
     // SAFETY: the name and argument pointers live for the call.
-    let answered = engine_call(|answer, error| unsafe {
+    let outcome = engine_call(|answer, error| unsafe {
         sys::interface_fn!(variant_call_static)(
             kind_sys,
             name.string_sys(),
@@ -227,7 +227,7 @@ fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: Array) -> Result<Va
             error,
         )
     });
-    wrap_answer(mrb, answered, &type_name(kind), &method, &args)
+    wrap_answer(mrb, outcome, &type_name(kind), &method, &args)
 }
 
 // Runs an engine call that writes its answer into an uninitialized variant
@@ -255,12 +255,12 @@ fn engine_call(
 // failure.
 fn wrap_answer(
     mrb: &Mrb,
-    answered: Result<Variant, sys::GDExtensionCallError>,
+    outcome: Result<Variant, sys::GDExtensionCallError>,
     base: &str,
     method: &str,
     args: &[Variant],
 ) -> Result<Value, Error> {
-    match answered {
+    match outcome {
         Ok(answer) => Ok(mrb.ary_new_from_values(&[to_ruby(mrb, &answer)]).as_value()),
         Err(error) if error.error == sys::GDEXTENSION_CALL_ERROR_INVALID_METHOD => Ok(Value::nil()),
         Err(error) => {

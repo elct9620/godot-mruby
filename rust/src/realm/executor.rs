@@ -242,14 +242,14 @@ fn runs(mrb: &Mrb) -> &Runs {
     &bookkeeping(mrb).runs
 }
 
-// Runs the file at `path`, and leaves it as `raised` says when it raises:
+// Runs the file at `path`, and leaves it as `on_raise` says when it raises:
 // failed, with what it created taken away, or done, keeping all of it.
 fn execute<T>(
     mrb: &Mrb,
     path: &str,
     prepare: impl FnOnce() -> Result<T, Error>,
     settle: impl FnOnce(T) -> Result<(), Error>,
-    raised: Run,
+    on_raise: Run,
 ) -> Result<(), Error> {
     let runs = runs(mrb);
     runs.files
@@ -280,10 +280,10 @@ fn execute<T>(
             Run::Done
         }
         (Err(_), frame) => {
-            if matches!(raised, Run::Failed) {
+            if matches!(on_raise, Run::Failed) {
                 frame.iter().for_each(|frame| take_away(mrb, frame));
             }
-            raised
+            on_raise
         }
     };
     runs.files.borrow_mut().insert(path.to_owned(), run);
@@ -317,7 +317,7 @@ fn source_of(mrb: &Mrb, path: &str) -> Result<String, Error> {
 // goes before the class.
 fn take_away(mrb: &Mrb, frame: &Frame) {
     for (scope, name) in frame.constants.iter().rev() {
-        if let Some(scope) = defined_scope(mrb, scope) {
+        if let Some(scope) = scope_by_names(mrb, scope) {
             scope.const_remove(mrb, name.as_str()).ok();
         }
     }
@@ -325,7 +325,7 @@ fn take_away(mrb: &Mrb, frame: &Frame) {
 
 // The module the names in `scope` spell exactly, if each is still defined;
 // asking for a missing one would load it by name.
-fn defined_scope(mrb: &Mrb, scope: &[String]) -> Option<Value> {
+fn scope_by_names(mrb: &Mrb, scope: &[String]) -> Option<Value> {
     scope
         .iter()
         .try_fold(mrb.object_class().as_value(), |outer, name| {

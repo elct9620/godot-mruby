@@ -112,11 +112,11 @@ impl ClassIndex {
     }
 
     /// Takes in the files at `paths`, refusing a name two files spell and a
-    /// name `defined` says the realm already has.
+    /// name `is_defined` says the realm already has.
     pub fn add(
         &mut self,
         paths: impl IntoIterator<Item = String>,
-        defined: impl Fn(&[String]) -> bool,
+        is_defined: impl Fn(&[String]) -> bool,
         log: &dyn Log,
     ) {
         for path in paths {
@@ -137,8 +137,8 @@ impl ClassIndex {
                 self.refusals.insert(key);
                 continue;
             }
-            if defined(&key) {
-                self.warn_of_defined(&path, log);
+            if is_defined(&key) {
+                self.warn_of_constant(&path, log);
                 self.refusals.insert(key);
                 continue;
             }
@@ -153,10 +153,10 @@ impl ClassIndex {
 
     /// Refuses the files naming `keys`, constants the realm has come to have
     /// since it took the files in.
-    pub fn refuse_defined(&mut self, keys: impl IntoIterator<Item = Key>, log: &dyn Log) {
+    pub fn refuse_constants(&mut self, keys: impl IntoIterator<Item = Key>, log: &dyn Log) {
         for key in keys {
             if let Some(path) = self.files.remove(&key) {
-                self.warn_of_defined(&path, log);
+                self.warn_of_constant(&path, log);
                 self.refusals.insert(key);
             }
         }
@@ -231,7 +231,7 @@ impl ClassIndex {
         }
     }
 
-    fn warn_of_defined(&self, path: &str, log: &dyn Log) {
+    fn warn_of_constant(&self, path: &str, log: &dyn Log) {
         log.record(
             Level::Warn,
             Some(&first_line_of(path)),

@@ -561,7 +561,7 @@ impl EngineObject {
 fn call_refusal(mrb: &Mrb, error: &CallError, base: &str, method: &str) -> Error {
     let reason = error.message(false);
     let reason = reason.rsplit("Reason: ").next().unwrap_or_default();
-    let message = if let Some(expected) = expected_count(reason) {
+    let message = if let Some(expected) = parameter_count(reason) {
         format!(
             "Invalid call to function '{method}' in base '{base}'. Expected {expected} argument(s)."
         )
@@ -598,7 +598,7 @@ pub(super) fn type_message(
 }
 
 // "function has N parameters, but received M arguments": N.
-fn expected_count(reason: &str) -> Option<&str> {
+fn parameter_count(reason: &str) -> Option<&str> {
     reason
         .strip_prefix("function has ")?
         .split_once(" parameter")

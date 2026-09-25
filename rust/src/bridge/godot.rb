@@ -15,7 +15,7 @@ module Godot
   class << self
     def const_missing(name)
       superclass = __engine_superclass__(name)
-      return const_set(name, Class.new(Value)) if superclass.nil? && Value.__send__(:__value_type__, name)
+      return const_set(name, Class.new(Value)) if superclass.nil? && Value.__send__(:__has_value_type__, name)
       return super if superclass.nil?
 
       engine_class = Class.new(const_get(superclass))
@@ -327,7 +327,7 @@ module Godot
         const_set(name, value)
       end
 
-      private :__value_type__, :__construct__, :__call_static__, :__constant__
+      private :__has_value_type__, :__construct__, :__call_static__, :__constant__
 
       private
 

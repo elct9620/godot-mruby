@@ -9,7 +9,7 @@ use std::thread::{self, ThreadId};
 
 pub(super) struct ReentrantLock<T> {
     holder: Mutex<Holder>,
-    released: Condvar,
+    release: Condvar,
     value: UnsafeCell<T>,
 }
 
@@ -30,7 +30,7 @@ impl<T> ReentrantLock<T> {
                 thread: None,
                 depth: 0,
             }),
-            released: Condvar::new(),
+            release: Condvar::new(),
             value: UnsafeCell::new(value),
         }
     }
@@ -41,7 +41,7 @@ impl<T> ReentrantLock<T> {
         let mut holder = self.holder();
         while holder.thread.is_some_and(|thread| thread != current) {
             holder = self
-                .released
+                .release
                 .wait(holder)
                 .unwrap_or_else(PoisonError::into_inner);
         }
@@ -97,7 +97,7 @@ impl<T> Drop for ReentrantLockGuard<'_, T> {
         holder.depth -= 1;
         if holder.depth == 0 {
             holder.thread = None;
-            self.lock.released.notify_one();
+            self.lock.release.notify_one();
         }
     }
 }

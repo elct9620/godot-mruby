@@ -175,7 +175,7 @@ impl RubyInstance {
 
     // What Godot wrote to the property `name` before the node had a Ruby
     // object, if it wrote one.
-    fn staged_value(&self, name: &str) -> Option<Variant> {
+    fn stash_value(&self, name: &str) -> Option<Variant> {
         self.stash
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -290,7 +290,7 @@ impl Caller {
                 if built == Build::New {
                     realm::enter(|realm| realm.send::<ToRuby, ToEngine>(key, "initialize", []))?;
                 }
-                self.write_staged(key);
+                self.write_stash(key);
                 Ok(Some(key))
             });
         built
@@ -306,7 +306,7 @@ impl Caller {
     // Writes what Godot wrote to the node's properties before it had an
     // object, in the order it wrote them and after `initialize`, so a class
     // sets itself up before the scene it was made for has its say.
-    fn write_staged(&self, key: Key) {
+    fn write_stash(&self, key: Key) {
         let staged =
             std::mem::take(&mut self.stash.lock().unwrap_or_else(PoisonError::into_inner).0);
         if staged.is_empty() {
@@ -573,7 +573,7 @@ unsafe extern "C" fn get(
         }
         if instance.is_unbuilt() && !realm::is_inside() {
             let staged = instance
-                .staged_value(&name)
+                .stash_value(&name)
                 .or_else(|| instance.default_value(&name));
             let Some(answered) = staged else {
                 return sys::GDExtensionBool::from(false);

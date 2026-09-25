@@ -268,21 +268,18 @@ fn constant_from(mrb: &Mrb, path: &str, outer: &[String], name: &str) -> Result<
     if let Some(chain) = executor::cycle(mrb, path) {
         let message = format!(
             "{} is needed while its own file is still running: {}",
-            qualified_name(outer, name),
+            full_name(outer, name),
             chain.join(" -> ")
         );
         return Err(name_error(mrb, &message, name));
     }
     run_by_name(mrb, path).map_err(|error| with_file(mrb, path, error))?;
-    let scope = named_scope(mrb, outer)?;
+    let scope = scope_by_names(mrb, outer)?;
     let symbol = mrb.intern(name.as_bytes())?;
     if scope.const_defined_at(mrb, symbol) {
         scope.const_get(mrb, symbol)
     } else {
-        let message = format!(
-            "{path} ran without defining {}",
-            qualified_name(outer, name)
-        );
+        let message = format!("{path} ran without defining {}", full_name(outer, name));
         Err(name_error(mrb, &message, name))
     }
 }
@@ -307,17 +304,17 @@ fn namespace_module(
         let message = format!(
             "{} is the namespace {}, not {}",
             namespace.directory,
-            qualified_name(outer, &namespace.name),
-            qualified_name(outer, name)
+            full_name(outer, &namespace.name),
+            full_name(outer, name)
         );
         return Err(name_error(mrb, &message, name));
     }
-    let scope = named_scope(mrb, outer)?;
+    let scope = scope_by_names(mrb, outer)?;
     define_module(mrb, scope, &namespace.name)
 }
 
 // The module the names in `outer` spell exactly, from Object.
-fn named_scope(mrb: &Mrb, outer: &[String]) -> Result<Value, Error> {
+fn scope_by_names(mrb: &Mrb, outer: &[String]) -> Result<Value, Error> {
     outer.iter().try_fold(object(mrb), |scope, name| {
         scope.const_get(mrb, name.as_str())
     })
@@ -359,7 +356,7 @@ fn with_file(mrb: &Mrb, path: &str, error: Error) -> Error {
     }
 }
 
-fn qualified_name(outer: &[String], name: &str) -> String {
+fn full_name(outer: &[String], name: &str) -> String {
     outer
         .iter()
         .map(String::as_str)
