@@ -27,7 +27,7 @@ class TypingTest < Minitest::Test
 
   # @behavior RS-052
   def test_a_node_script_lists_what_its_changed_source_exports_before_the_file_runs_again
-    volume = listed.find { |property| property["name"] == "volume" }
+    volume = members.find { |property| property["name"] == "volume" }
 
     assert_equal [RANGE, "0,10"], [volume["hint"], volume["hint_string"]]
   end
@@ -53,11 +53,11 @@ class TypingTest < Minitest::Test
     Godot::ResourceLoader.load(PATH)
   end
 
-  def listed
+  def members
     script.get_script_property_list
   end
 
   def names
-    listed.map { |property| property["name"] }
+    members.map { |property| property["name"] }
   end
 end

@@ -103,7 +103,7 @@ class RerunTest < Minitest::Test
     node = with_node(:counter)
     node.call(:answer)
 
-    reloading(:counter, COUNTER) { assert_equal "added", node.call(:added) }
+    stub_source(:counter, COUNTER) { assert_equal "added", node.call(:added) }
   end
 
   # @behavior RF-003
@@ -111,7 +111,7 @@ class RerunTest < Minitest::Test
     node = with_node(:counter)
     node.call(:bump)
 
-    reloading(:counter, COUNTER) { assert_equal 2, node.call(:bump) }
+    stub_source(:counter, COUNTER) { assert_equal 2, node.call(:bump) }
   end
 
   # @behavior RF-004
@@ -119,7 +119,7 @@ class RerunTest < Minitest::Test
     node = with_node(:counter)
     node.call(:answer)
 
-    reloading(:counter, COUNTER) { assert_equal "dropped", node.call(:dropped) }
+    stub_source(:counter, COUNTER) { assert_equal "dropped", node.call(:dropped) }
   end
 
   # @behavior RF-005
@@ -127,21 +127,21 @@ class RerunTest < Minitest::Test
     node = with_node(:counter)
     node.call(:answer)
 
-    reloading(:counter, UNFINISHED) { assert_equal "before", node.call(:answer) }
+    stub_source(:counter, UNFINISHED) { assert_equal "before", node.call(:answer) }
   end
 
   # @behavior RF-009
   def test_a_changed_source_that_raises_keeps_the_constants_it_assigned_again
     with_node(:counter).call(:answer)
 
-    reloading(:counter, UNFINISHED) { assert Unit::Reload::Counter.const_defined?(:LIMIT, false) }
+    stub_source(:counter, UNFINISHED) { assert Unit::Reload::Counter.const_defined?(:LIMIT, false) }
   end
 
   # @behavior RF-006
   def test_a_node_script_whose_file_raised_makes_objects_again_once_its_changed_source_runs
     with_node(:broken).call(:answer)
 
-    reloading(:broken, BROKEN) { assert_equal "mended", with_node(:broken).call(:answer) }
+    stub_source(:broken, BROKEN) { assert_equal "mended", with_node(:broken).call(:answer) }
   end
 
   # @behavior RF-007
@@ -149,14 +149,14 @@ class RerunTest < Minitest::Test
     node = with_node(:failing)
     node.call(:answer)
 
-    reloading(:failing, FAILING) { assert_nil node.call(:answer) }
+    stub_source(:failing, FAILING) { assert_nil node.call(:answer) }
   end
 
   # @behavior RF-008
   def test_a_property_the_changed_source_no_longer_exports_is_not_given_to_a_new_object
     with_node(:exporting).call(:speed?)
 
-    reloading(:exporting, EXPORTING) { refute with_node(:exporting).call(:speed?) }
+    stub_source(:exporting, EXPORTING) { refute with_node(:exporting).call(:speed?) }
   end
 
   # @behavior RF-010
@@ -164,7 +164,7 @@ class RerunTest < Minitest::Test
     node = with_node(:armored)
     node.call(:build)
 
-    reloading(:armored, ARMORED) { assert_equal 5, node.get(:armor) }
+    stub_source(:armored, ARMORED) { assert_equal 5, node.get(:armor) }
   end
 
   # @behavior RF-011
@@ -172,14 +172,14 @@ class RerunTest < Minitest::Test
     node = with_node(:armored)
     node.call(:wear)
 
-    reloading(:armored, ARMORED) { assert_equal 9, node.get(:armor) }
+    stub_source(:armored, ARMORED) { assert_equal 9, node.get(:armor) }
   end
 
   # @behavior RF-012
   def test_a_reloaded_node_script_answers_the_default_its_changed_source_exports
     with_node(:exporting).call(:speed?)
 
-    reloading(:exporting, FASTER) { assert_equal 20, script(:exporting).get_property_default_value(:speed) }
+    stub_source(:exporting, FASTER) { assert_equal 20, script(:exporting).get_property_default_value(:speed) }
   end
 
   private
@@ -196,7 +196,7 @@ class RerunTest < Minitest::Test
 
   # Runs the block once the script of that name has reloaded holding
   # `source`, then reloads it with what it held.
-  def reloading(name, source)
+  def stub_source(name, source)
     held = script(name).source_code
     reload(name, source)
     yield

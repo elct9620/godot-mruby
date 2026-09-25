@@ -31,7 +31,7 @@ module Addon
     section.scan(/^\s*[\w.]+\s*=\s*"([^"]+)"/).flatten.map { |path| File.join(SOURCE, path) }
   end
 
-  def missing_libraries
+  def absent_libraries
     libraries.reject { |path| File.exist?(path) }
   end
 
@@ -47,7 +47,7 @@ module Addon
   # beni builds, and every crate the extension depends on at run time.
   def notices
     sections = [notice("mruby", File.join(Extension::VENDOR_DIR, "mruby"), "MIT")]
-    shipped_crates.each do |package|
+    runtime_crates.each do |package|
       sections << notice("#{package["name"]} #{package["version"]}",
                          File.dirname(package["manifest_path"]), package["license"])
     end
@@ -69,7 +69,7 @@ module Addon
   # Crates reached from the extension through normal dependencies. Build and
   # dev dependencies, and proc macros with everything under them, only run
   # while compiling and never end up in the library.
-  def shipped_crates
+  def runtime_crates
     metadata = cargo_metadata
     packages = metadata["packages"]
     macros = packages.select { |package| proc_macro?(package) }.map { |package| package["id"] }

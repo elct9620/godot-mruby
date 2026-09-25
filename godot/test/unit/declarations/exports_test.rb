@@ -26,7 +26,7 @@ class ExportsTest < Minitest::Test
     cannon = autofree(Unit::Declarations::Cannon.new)
     script = Godot::ResourceLoader.load("res://test/unit/declarations/cannon.rb")
 
-    names = exported_names(script)
+    names = export_names(script)
 
     assert_equal %w[barrel mode range], names
   end
@@ -157,7 +157,7 @@ class ExportsTest < Minitest::Test
 
   # The names of the properties a script has, without the headings they are
   # listed under.
-  def exported_names(script)
+  def export_names(script)
     script.get_script_property_list
           .select { |member| member["usage"] & SCRIPT_VARIABLE != 0 }
           .map { |property| property["name"] }

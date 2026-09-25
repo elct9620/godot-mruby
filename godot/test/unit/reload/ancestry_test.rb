@@ -14,7 +14,7 @@ class AncestryTest < Minitest::Test
   def test_a_node_script_reports_the_engine_class_the_file_it_extends_now_reaches
     shifted = script(:shifted)
     shifted.get_instance_base_type
-    changing(script(:shifting), SHIFTED) do
+    stub_source(script(:shifting), SHIFTED) do
       assert_equal :Node2D, shifted.get_instance_base_type
     end
   end
@@ -27,7 +27,7 @@ class AncestryTest < Minitest::Test
 
   # Runs the block while Godot holds `source` for `script`, then gives back
   # what it held.
-  def changing(script, source)
+  def stub_source(script, source)
     held = script.source_code
     script.source_code = source
     yield

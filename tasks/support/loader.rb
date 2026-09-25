@@ -67,7 +67,7 @@ module Godot
     # raised as the constant outside it loaded, at the file's line.
     # @behavior RL-035
     def verify_hidden_raised!(output)
-      missing = Runner.missing_in_order(output, HIDDEN_RAISED)
+      missing = Runner.absent_in_order(output, HIDDEN_RAISED)
       return if missing.empty?
 
       raise "A run of #{Runner::TESTS} did not report the hidden file that raised #{missing}:\n#{output}"
@@ -78,7 +78,7 @@ module Godot
     # @behavior RL-021
     def verify_raised!(project)
       output, status = Runner.run(project, "--dir", RAISING)
-      missing = Runner.missing_in_order(output, RAISED)
+      missing = Runner.absent_in_order(output, RAISED)
       return if status.exitstatus == 1 && missing.empty?
 
       raise "A run of #{RAISING} did not fail as it should #{missing}:\n#{output}"

@@ -7,7 +7,7 @@ class TypesTest < Minitest::Test
 
   # @behavior RD-052
   def test_an_export_naming_a_node_class_is_read_as_a_node_of_it
-    spot = exported("spot")
+    spot = property_by_name("spot")
 
     assert_equal OBJECT, spot["type"]
     assert_equal NODE_TYPE, spot["hint"]
@@ -16,7 +16,7 @@ class TypesTest < Minitest::Test
 
   # @behavior RD-053
   def test_an_export_naming_a_resource_class_is_read_as_a_resource_of_it
-    level = exported("level")
+    level = property_by_name("level")
 
     assert_equal RESOURCE_TYPE, level["hint"]
     assert_equal "PackedScene", level["hint_string"]
@@ -24,7 +24,7 @@ class TypesTest < Minitest::Test
 
   # @behavior RD-054
   def test_an_export_naming_a_ruby_class_is_read_by_the_name_it_was_announced_under
-    guard = exported("guard")
+    guard = property_by_name("guard")
 
     assert_equal NODE_TYPE, guard["hint"]
     assert_equal "Turret", guard["hint_string"]
@@ -63,7 +63,7 @@ class TypesTest < Minitest::Test
   private
 
   # The property of that name among the ones the aiming class exported.
-  def exported(name)
+  def property_by_name(name)
     Unit::Declarations::Aiming
     script = Godot::ResourceLoader.load("res://test/unit/declarations/aiming.rb")
     script.get_script_property_list.find { |property| property["name"] == name }

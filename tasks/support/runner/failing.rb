@@ -57,7 +57,7 @@ module Godot
       def verify!(project)
         FAILING.each do |options, expected|
           output, status = Runner.run(project, *options)
-          missing = Runner.missing_in_order(output, expected)
+          missing = Runner.absent_in_order(output, expected)
           missing << "no #{FRAMEWORK_FRAME} frame" if output.include?(FRAMEWORK_FRAME)
           next if status.exitstatus == 1 && missing.empty?
 

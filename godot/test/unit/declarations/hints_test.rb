@@ -10,7 +10,7 @@ class HintsTest < Minitest::Test
 
   # @behavior RD-039
   def test_a_range_hint_carries_the_bounds_it_was_declared_with
-    angle = exported("angle")
+    angle = property_by_name("angle")
 
     assert_equal RANGE, angle["hint"]
     assert_equal "0,360", angle["hint_string"]
@@ -18,14 +18,14 @@ class HintsTest < Minitest::Test
 
   # @behavior RD-040
   def test_a_range_hint_carries_the_step_it_was_declared_with
-    speed = exported("speed")
+    speed = property_by_name("speed")
 
     assert_equal "1,10,2", speed["hint_string"]
   end
 
   # @behavior RD-041
   def test_an_enum_hint_names_the_values_it_was_declared_with
-    aim = exported("aim")
+    aim = property_by_name("aim")
 
     assert_equal ENUM, aim["hint"]
     assert_equal "nearest,strongest", aim["hint_string"]
@@ -33,7 +33,7 @@ class HintsTest < Minitest::Test
 
   # @behavior RD-042
   def test_a_flags_hint_names_the_flags_it_was_declared_with
-    terrain = exported("terrain")
+    terrain = property_by_name("terrain")
 
     assert_equal FLAGS, terrain["hint"]
     assert_equal "water,fire", terrain["hint_string"]
@@ -41,7 +41,7 @@ class HintsTest < Minitest::Test
 
   # @behavior RD-043
   def test_a_file_hint_carries_the_filter_it_was_declared_with
-    sound = exported("sound")
+    sound = property_by_name("sound")
 
     assert_equal FILE, sound["hint"]
     assert_equal "*.ogg", sound["hint_string"]
@@ -49,7 +49,7 @@ class HintsTest < Minitest::Test
 
   # @behavior RD-044
   def test_a_directory_hint_is_declared_without_a_filter
-    folder = exported("folder")
+    folder = property_by_name("folder")
 
     assert_equal DIR, folder["hint"]
     assert_equal "", folder["hint_string"]
@@ -57,7 +57,7 @@ class HintsTest < Minitest::Test
 
   # @behavior RD-045
   def test_a_multiline_hint_is_declared_without_a_filter
-    notes = exported("notes")
+    notes = property_by_name("notes")
 
     assert_equal MULTILINE_TEXT, notes["hint"]
     assert_equal "", notes["hint_string"]
@@ -65,7 +65,7 @@ class HintsTest < Minitest::Test
 
   # @behavior RD-046
   def test_a_placeholder_hint_carries_the_text_it_was_declared_with
-    title = exported("title")
+    title = property_by_name("title")
 
     assert_equal PLACEHOLDER_TEXT, title["hint"]
     assert_equal "Name", title["hint_string"]
@@ -121,7 +121,7 @@ class HintsTest < Minitest::Test
   private
 
   # The property of that name among the ones the gauge's script exported.
-  def exported(name)
+  def property_by_name(name)
     Unit::Declarations::Gauge
     script = Godot::ResourceLoader.load("res://test/unit/declarations/gauge.rb")
     script.get_script_property_list.find { |property| property["name"] == name }

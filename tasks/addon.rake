@@ -5,7 +5,7 @@ require_relative "support/addon"
 namespace :addon do
   desc "Package the addon with every platform's library and its licenses into #{Addon::PACKAGE}"
   task package: "beni:vendor:setup" do
-    missing = Addon.missing_libraries
+    missing = Addon.absent_libraries
     abort "The addon is missing libraries:\n#{missing.join("\n")}" unless missing.empty?
 
     rm_f Addon::PACKAGE
