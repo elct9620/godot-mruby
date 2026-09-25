@@ -8,6 +8,7 @@ require_relative "loader"
 require_relative "report"
 require_relative "runner"
 require_relative "runner/failing"
+require_relative "runner/results"
 require_relative "runner/settings"
 require_relative "script"
 
@@ -22,7 +23,9 @@ module Godot
   LOADED = "Initialize godot-rust"
   FAILED = /^(ERROR|SCRIPT ERROR):/
   # The checks, each in the module named after the behaviour it claims.
-  CHECKS = [Script, Declarations, Report, Runner, Runner::Failing, Runner::Settings, Loader, Export].freeze
+  CHECKS = [
+    Script, Declarations, Report, Runner, Runner::Failing, Runner::Results, Runner::Settings, Loader, Export
+  ].freeze
 
   module_function
 

@@ -6,6 +6,7 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 
 - `tasks/support/runner.rb`
 - `tasks/support/runner/failing.rb`
+- `tasks/support/runner/results.rb`
 - `tasks/support/runner/settings.rb`
 
 ## `RT-001` A test method of a test class runs
@@ -215,3 +216,27 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 | Given | a test that makes a node outside the tree and does not free it |
 | When | the run is over |
 | Then | the log warns that the test leaves 1 orphan node, and the run passes |
+
+## `RT-036` A run writes each test's result where `--results` names
+
+| Step | Statement |
+| --- | --- |
+| Given | tests that pass, skip and fail |
+| When | the runner scene runs headless on their directories with `--results` naming a file |
+| Then | the file lists each test by class and name with its result, and the failure with its message at its Ruby file and line |
+
+## `RT-037` A test file that does not load is among the results
+
+| Step | Statement |
+| --- | --- |
+| Given | a test directory with a test file that does not parse |
+| When | the runner scene runs headless on it with `--results` naming a file |
+| Then | the file's `errors` carry the compiler's message at the test file's path and line |
+
+## `RT-038` A run given no options takes them from the editor's run file
+
+| Step | Statement |
+| --- | --- |
+| Given | `user://godot_mruby/run.json` holding a `--dir` and a `--results` |
+| When | the runner scene runs headless with no options |
+| Then | it runs only that directory, writes its results there, and the run file is gone |

@@ -1,11 +1,13 @@
-use godot::classes::{DirAccess, INode, Node, Os, ResourceLoader};
+use std::cell::RefCell;
+
+use godot::classes::{DirAccess, FileAccess, INode, Json, Node, Os, ResourceLoader};
 use godot::prelude::*;
 
 use crate::error;
 use crate::game;
 use crate::log::GodotLog;
-use crate::minitest::{self, Frame, Minitest};
-use crate::realm::{self, RubyError};
+use crate::minitest::{self, Frame, LoadFailure, Minitest};
+use crate::realm::{self, Level, Location, Log, RubyError};
 use crate::settings;
 
 /// The node the addon's runner scene holds. Once in the tree it installs the
@@ -13,7 +15,8 @@ use crate::settings;
 /// directories it is given there. The tests run from the next process frame
 /// on, the run resumed as each process or physics frame begins while a test
 /// waits, so every test starts and continues where a frame begins. It quits
-/// with 0 when every test passed and 1 otherwise.
+/// with 0 when every test passed and 1 otherwise. Given no options, it takes
+/// the ones the editor's test panel left in the run file.
 #[derive(GodotClass)]
 #[class(base = Node, init)]
 pub struct RubyTestRunner {
@@ -44,8 +47,9 @@ impl INode for RubyTestRunner {
             .and_then(|directories| test_files(&directories))
             .and_then(|tests| Ok((tests, test_options(&args)?)));
         match run_as_asked {
-            Ok((tests, options)) => {
-                self.is_loaded = load(&tests);
+            Ok((tests, mut options)) => {
+                options.load_failures = load(&tests);
+                self.is_loaded = options.load_failures.is_empty();
                 self.run = Run::Starting(options);
                 let tree = self.base().get_tree();
                 tree.signals()
@@ -108,18 +112,41 @@ fn test_files(directories: &[String]) -> Result<Vec<String>, String> {
     Ok(tests)
 }
 
-// Installs the test framework and runs every test file, answering whether
-// each one ran without an error. Every file runs, so each one's problems are
-// in the log before any test runs, where a reader of the run's output looks
-// for them.
-fn load(tests: &[String]) -> bool {
-    log_outcome(realm::enter(|realm| {
+// Installs the test framework and runs every test file, answering the ones
+// that did not load. Every file runs, so each one's problems are in the log
+// before any test runs, where a reader of the run's output looks for them.
+fn load(tests: &[String]) -> Vec<LoadFailure> {
+    let failures = LoadFailures::default();
+    let report = |failed: RubyError| {
+        failed.write(&GodotLog);
+        failed.write(&failures);
+    };
+    let outcome = realm::enter(|realm| {
         realm.install::<Minitest>()?;
-        Ok(tests
-            .iter()
-            .map(|path| log_outcome(realm.run(path).map(|()| true)))
-            .fold(true, |all, loaded| all & loaded))
-    }))
+        for path in tests {
+            realm.run(path).unwrap_or_else(report);
+        }
+        Ok(())
+    });
+    outcome.unwrap_or_else(report);
+    failures.0.into_inner()
+}
+
+// What a test file that did not load reported, kept for the run's results.
+#[derive(Default)]
+struct LoadFailures(RefCell<Vec<LoadFailure>>);
+
+impl Log for LoadFailures {
+    fn print_line(&self, _text: &str) {}
+
+    fn print(&self, _text: &str) {}
+
+    fn record(&self, _level: Level, at: Option<&Location>, text: &str) {
+        self.0.borrow_mut().push(LoadFailure {
+            message: text.to_owned(),
+            at: at.cloned(),
+        });
+    }
 }
 
 // An outcome Ruby could not reach counts as a failed run, written to the log.
@@ -140,14 +167,38 @@ fn refuse_exported_game() -> Result<(), String> {
     }
 }
 
-// What follows `--` on Godot's command line.
+// What follows `--` on Godot's command line, or what the run file holds
+// when nothing does.
 fn user_args() -> Vec<String> {
-    Os::singleton()
+    let args: Vec<String> = Os::singleton()
         .get_cmdline_user_args()
         .as_slice()
         .iter()
         .map(GString::to_string)
-        .collect()
+        .collect();
+    if args.is_empty() {
+        run_file_args()
+    } else {
+        args
+    }
+}
+
+/// Where the editor's test panel leaves the options of the run it plays, as
+/// a JSON array of what would follow `--`.
+pub const RUN_FILE: &str = "user://godot_mruby/run.json";
+
+// The options the run file holds, removed as they are read, so a later run
+// is not given them again.
+fn run_file_args() -> Vec<String> {
+    if !FileAccess::file_exists(RUN_FILE) {
+        return Vec::new();
+    }
+    let text = FileAccess::get_file_as_string(RUN_FILE);
+    DirAccess::remove_absolute(RUN_FILE);
+    Json::parse_string(&text)
+        .try_to::<VarArray>()
+        .map(|args| args.iter_shared().map(|arg| arg.to_string()).collect())
+        .unwrap_or_default()
 }
 
 // @option --dir
@@ -189,6 +240,9 @@ fn test_options(args: &[String]) -> Result<minitest::Options, String> {
         // @option --exclude
         exclude: option(args, &["-e", "--exclude"]),
         seed,
+        // @option --results
+        results: option(args, &["--results"]),
+        load_failures: Vec::new(),
     })
 }
 

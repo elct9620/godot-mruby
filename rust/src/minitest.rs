@@ -76,6 +76,41 @@ pub struct Options {
     pub exclude: Option<String>,
     /// The seed that orders the tests; a random one when there is none.
     pub seed: Option<i64>,
+    /// The file the run writes its results to as JSON, if any.
+    pub results: Option<String>,
+    /// The test files that did not load, which the results carry too.
+    pub load_failures: Vec<LoadFailure>,
+}
+
+/// A test file that did not load: why, and where Ruby placed it.
+pub struct LoadFailure {
+    pub message: String,
+    pub at: Option<Location>,
+}
+
+impl IntoValue for &LoadFailure {
+    // Keyed by strings, as the results' JSON spells them.
+    fn into_value(self, mrb: &Mrb) -> Value {
+        let hash = mrb.hash_new();
+        let file = self.at.as_ref().map(|at| at.file.as_str());
+        let line = self.at.as_ref().map(|at| i64::from(at.line));
+        let entries = [
+            ("message", mrb.str_new(self.message.as_bytes()).as_value()),
+            (
+                "file",
+                file.map_or_else(Value::nil, |file| mrb.str_new(file.as_bytes()).as_value()),
+            ),
+            (
+                "line",
+                line.map_or_else(Value::nil, |line| line.into_value(mrb)),
+            ),
+        ];
+        for (key, value) in entries {
+            hash.set(mrb, mrb.str_new(key.as_bytes()).as_value(), value)
+                .expect("a fresh hash takes a string key");
+        }
+        hash.as_value()
+    }
 }
 
 impl IntoValue for Options {
@@ -94,6 +129,24 @@ impl IntoValue for Options {
                     .map(|value| mrb.str_new(value.as_bytes()).as_value()),
             ),
             ("seed", self.seed.map(|seed| seed.into_value(mrb))),
+            (
+                "results",
+                self.results
+                    .map(|value| mrb.str_new(value.as_bytes()).as_value()),
+            ),
+            (
+                "load_failures",
+                Some(
+                    mrb.ary_new_from_values(
+                        &self
+                            .load_failures
+                            .iter()
+                            .map(|failure| failure.into_value(mrb))
+                            .collect::<Vec<_>>(),
+                    )
+                    .as_value(),
+                ),
+            ),
         ];
         for (key, value) in entries {
             if let Some(value) = value {
