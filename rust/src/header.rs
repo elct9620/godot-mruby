@@ -27,6 +27,7 @@ pub struct Header {
     digest: u64,
     tool: bool,
     is_abstract: bool,
+    parses: bool,
     icon: Option<String>,
 }
 
@@ -92,6 +93,7 @@ impl Header {
         Header {
             writes: reader.writes,
             digest: snapshot::digest(source),
+            parses: result.errors().next().is_none(),
             ..reader.header.unwrap_or_default()
         }
     }
@@ -158,6 +160,12 @@ impl Header {
 
     pub fn is_tool(&self) -> bool {
         self.tool
+    }
+
+    /// Whether the source parses, with no syntax error to stop the file as
+    /// it runs.
+    pub fn parses(&self) -> bool {
+        self.parses
     }
 
     pub fn is_abstract(&self) -> bool {

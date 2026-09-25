@@ -1,9 +1,10 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://integration/script/editor/probe.gd" id="1"]
 [ext_resource type="Script" path="res://integration/script/editor/knob.rb" id="2"]
 [ext_resource type="Script" path="res://test/unit/script/untouched.rb" id="3"]
 [ext_resource type="Script" path="res://integration/script/editor/torch.rb" id="4"]
+[ext_resource type="Script" path="res://integration/script/editor/cracked.rb" id="5"]
 
 [node name="Editor" type="Node"]
 script = ExtResource("1")
@@ -16,3 +17,7 @@ script = ExtResource("3")
 
 [node name="Torch" type="Node2D" parent="."]
 script = ExtResource("4")
+
+[node name="Cracked" type="Node2D" parent="."]
+script = ExtResource("5")
+kept = 7

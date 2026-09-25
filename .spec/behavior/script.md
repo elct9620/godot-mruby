@@ -487,3 +487,11 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a scene whose node's script is a node script whose class calls `tool` and defines `_ready` and `_process` |
 | When | the editor opens that scene |
 | Then | the node's Ruby object is given `_ready` and then `_process` |
+
+## `RS-060` A tool script whose source does not parse keeps a scene's values in the editor
+
+| Step | Statement |
+| --- | --- |
+| Given | a scene whose node's script is a tool script with a syntax error, and which writes the node a value its class declares nothing for |
+| When | the editor opens that scene |
+| Then | the node answers that value |

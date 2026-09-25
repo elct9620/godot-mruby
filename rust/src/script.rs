@@ -281,17 +281,20 @@ impl IScriptExtension for RubyScript {
         true
     }
 
-    // The editor makes an instance only of a tool, as it does of a
-    // GDScript, and never of one under a test directory, whose files it
-    // never runs; every other node there is given a placeholder. Godot asks
-    // this before making an instance, so a file that is no node script is
-    // refused as the instance is made, where the refusal is reported.
+    // The editor makes an instance only of a tool whose source parses, as it
+    // does of a GDScript, and never of one under a test directory, whose
+    // files it never runs; every other node there is given a placeholder.
+    // Godot asks this before making an instance, so a file that is no node
+    // script is refused as the instance is made, where the refusal is
+    // reported.
     fn can_instantiate(&self) -> bool {
         if !Engine::singleton().is_editor_hint() {
             return true;
         }
         let path = self.base().get_path().to_string();
-        self.header.is_tool() && !game::is_left_out_in_editor(&path, &settings::test_directories())
+        self.header.is_tool()
+            && self.header.parses()
+            && !game::is_left_out_in_editor(&path, &settings::test_directories())
     }
 
     fn get_base_script(&self) -> Option<Gd<Script>> {
@@ -366,7 +369,9 @@ impl IScriptExtension for RubyScript {
                 for_object.obj_sys(),
             )
         };
-        self.exports().tell(placeholder);
+        if self.header.parses() {
+            self.exports().tell(placeholder);
+        }
         self.placeholders().push(Placeholder(placeholder));
         self.place();
         // SAFETY: the pointer is the placeholder Godot just made.
@@ -476,8 +481,13 @@ impl IScriptExtension for RubyScript {
     }
 
     // Godot asks the script about the class as each placeholder is told, so
-    // the script is let go of while they are.
+    // the script is let go of while they are. A source that does not parse
+    // tells them nothing, as a GDScript's does not: telling a placeholder
+    // drops what it kept of the scene beyond what the class declares.
     fn update_exports(&mut self) {
+        if !self.header.parses() {
+            return;
+        }
         let exported = self.exports();
         let digest = Some(exported.digest());
         let mut told_digest = self
@@ -519,8 +529,11 @@ impl IScriptExtension for RubyScript {
         Array::new()
     }
 
+    // A placeholder of a script whose source does not parse keeps what a
+    // scene wrote to the node, whatever the class is found to declare, so
+    // the scene saves it back as a GDScript's does.
     fn is_placeholder_fallback_enabled(&self) -> bool {
-        false
+        Engine::singleton().is_editor_hint() && !self.header.parses()
     }
 
     fn get_rpc_config(&self) -> Variant {
