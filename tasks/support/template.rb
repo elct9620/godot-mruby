@@ -6,11 +6,12 @@ module Godot
   # plays a scene holding it. Part of Godot.verify!.
   module Template
     PROBE = File.join("integration", "template", "probe")
-    FRAMES = "90"
+    FRAMES = "120"
     MADE = File.join("enemies", "ships", "hero_ship.rb")
-    OPENED = [
-      "module Enemies\n", "  module Ships\n", "    class HeroShip < Godot::CharacterBody2D\n"
-    ].freeze
+    # The namespaces the path spells around the class, each a level deeper by
+    # whatever the editor indents with.
+    OPENED = /\Amodule Enemies\n(\s+)module Ships\n\1\1class HeroShip < Godot::CharacterBody2D\n/
+    CLOSED = /\n(\s+)\1end\n\1end\nend\n\z/
     # The project's own template, listed by the name its meta line gives.
     LISTED = "template listed: Node: Friendly Hello"
     SCENE = "hero.tscn"
@@ -52,7 +53,7 @@ module Godot
     end
 
     def verify_opened!(source)
-      return if source.start_with?(OPENED.join) && source.end_with?("    end\n  end\nend\n")
+      return if source.match?(OPENED) && source.match?(CLOSED) && source.include?("move_and_slide")
 
       raise "#{MADE} was not made inside its namespaces:\n#{source}"
     end
