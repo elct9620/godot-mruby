@@ -23,6 +23,11 @@ func _process(_delta: float) -> void:
 		if languages.get_item_text(index) == "Ruby":
 			languages.select(index)
 			languages.item_selected.emit(index)
+	dialog.config("Node2D", PATH)
+	dialog.popup_centered()
+	for menu: OptionButton in dialog.find_children("*", "OptionButton", true, false):
+		for index in menu.item_count:
+			print("template listed: ", menu.get_item_text(index))
 	dialog.config("CharacterBody2D", PATH)
 	dialog.popup_centered()
 	dialog.get_ok_button().pressed.emit()

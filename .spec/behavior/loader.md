@@ -289,3 +289,11 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 | Given | an existing namespace whose file raises, whose name a file outside the namespace shares |
 | When | the outer file loads |
 | Then | the log carries the namespace's file's exception at its line |
+
+## `RL-036` The class index names no file under the project's template directory
+
+| Step | Statement |
+| --- | --- |
+| Given | a `.rb` file under the directory the editor reads the project's script templates from |
+| When | Ruby uses the constant its path would spell |
+| Then | it raises `NameError`, since a template is no file of the game |

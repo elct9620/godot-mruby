@@ -49,6 +49,11 @@ pub fn root_directories() -> Vec<String> {
     directories(ROOT_DIRECTORIES)
 }
 
+// The editor's own setting, with the default it registers it with; a game
+// that is not the editor never registers it.
+const TEMPLATES_SEARCH_PATH: &str = "editor/script/templates_search_path";
+const DEFAULT_TEMPLATE_DIRECTORY: &str = "res://script_templates";
+
 /// The directories the test runner runs.
 pub fn test_directories() -> Vec<String> {
     directories(TEST_DIRECTORIES)
@@ -64,13 +69,24 @@ fn directories(setting: &str) -> Vec<String> {
         .collect()
 }
 
-/// Whether `path` lies under one of `test_directories`, each written with
+/// Whether `path` lies under one of `directories`, each written with
 /// or without its trailing slash.
-pub fn is_in_test_directory(path: &str, test_directories: &[String]) -> bool {
-    test_directories.iter().any(|directory| {
+pub fn is_in_directory(path: &str, directories: &[String]) -> bool {
+    directories.iter().any(|directory| {
         path.strip_prefix(directory.trim_end_matches('/'))
             .is_some_and(|rest| rest.starts_with('/'))
     })
+}
+
+/// Where the project keeps its own script templates, which the editor reads
+/// as text and fills in, so none of them is a file of the game.
+pub fn template_directory() -> String {
+    let directory = ProjectSettings::singleton().get_setting(TEMPLATES_SEARCH_PATH);
+    if directory.is_nil() {
+        DEFAULT_TEMPLATE_DIRECTORY.to_owned()
+    } else {
+        directory.to_string()
+    }
 }
 
 /// The glob a file name under a test directory matches to be a test file.
@@ -80,14 +96,14 @@ pub fn test_pattern() -> GString {
 
 #[cfg(test)]
 mod tests {
-    use super::is_in_test_directory;
+    use super::is_in_directory;
 
     // @behavior RX-004
     #[test]
     fn a_test_directory_written_with_its_trailing_slash_holds_its_files() {
         let directories = ["res://test/".to_owned()];
 
-        assert!(is_in_test_directory(
+        assert!(is_in_directory(
             "res://test/inventory_test.rb",
             &directories
         ));
@@ -98,9 +114,6 @@ mod tests {
     fn a_directory_whose_name_only_begins_like_a_test_directory_is_not_in_it() {
         let directories = ["res://test".to_owned()];
 
-        assert!(!is_in_test_directory(
-            "res://testing/inventory.rb",
-            &directories
-        ));
+        assert!(!is_in_directory("res://testing/inventory.rb", &directories));
     }
 }

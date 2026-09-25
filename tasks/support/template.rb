@@ -11,6 +11,8 @@ module Godot
     OPENED = [
       "module Enemies\n", "  module Ships\n", "    class HeroShip < Godot::CharacterBody2D\n"
     ].freeze
+    # The project's own template, listed by the name its meta line gives.
+    LISTED = "template listed: Node: Friendly Hello"
     SCENE = "hero.tscn"
     SCENE_SOURCE = <<~TSCN.freeze
       [gd_scene load_steps=2 format=3]
@@ -23,18 +25,30 @@ module Godot
 
     module_function
 
-    # A template saved under a namespace opens the namespaces its path
-    # spells, and the class it made runs as the node's script.
-    # @behavior RY-007
     def verify!(project)
       Godot.with_probe(project, PROBE) do |copy|
         output, = Godot.run_editor_frames(copy, FRAMES)
-        made = File.join(copy, MADE)
-        raise "The script dialog made no #{MADE}:\n#{output}" unless File.exist?(made)
-
-        verify_opened!(File.read(made))
-        verify_played!(copy)
+        verify_listed!(output)
+        verify_made!(copy, output)
       end
+    end
+
+    # @behavior RY-008
+    def verify_listed!(output)
+      return if output.include?(LISTED)
+
+      raise "The script dialog did not list the project's template as #{LISTED}:\n#{output}"
+    end
+
+    # A template saved under a namespace opens the namespaces its path
+    # spells, and the class it made runs as the node's script.
+    # @behavior RY-007
+    def verify_made!(copy, output)
+      made = File.join(copy, MADE)
+      raise "The script dialog made no #{MADE}:\n#{output}" unless File.exist?(made)
+
+      verify_opened!(File.read(made))
+      verify_played!(copy)
     end
 
     def verify_opened!(source)

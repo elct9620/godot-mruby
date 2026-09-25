@@ -111,7 +111,7 @@ impl Files for RealmFiles {
 /// Whether this is the editor and the file at `path` sits under one of
 /// `test_directories`, which the editor never runs.
 pub fn is_left_out_in_editor(path: &str, test_directories: &[String]) -> bool {
-    Engine::singleton().is_editor_hint() && settings::is_in_test_directory(path, test_directories)
+    Engine::singleton().is_editor_hint() && settings::is_in_directory(path, test_directories)
 }
 
 /// The game's files as they are on disk, for answering what the editor asks
@@ -149,15 +149,16 @@ pub fn is_exported() -> bool {
     Os::singleton().has_feature("template")
 }
 
-// The directories the class index leaves out: an exported game's test
-// directories. Tests run only on the editor's build, where every file is
-// indexed so a test reaches any file by name.
+// The directories the class index leaves out: the project's script
+// templates, and an exported game's test directories. Tests run only on the
+// editor's build, where every other file is indexed so a test reaches any
+// file by name.
 fn left_out_directories() -> Vec<String> {
+    let mut left_out = vec![settings::template_directory()];
     if is_exported() {
-        settings::test_directories()
-    } else {
-        Vec::new()
+        left_out.extend(settings::test_directories());
     }
+    left_out
 }
 
 fn collect(directory: &str, left_out: &[&str], paths: &mut Vec<String>) {

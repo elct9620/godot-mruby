@@ -333,10 +333,15 @@ impl IScriptExtension for RubyScript {
     fn get_global_name(&self) -> StringName {
         let path = self.base().get_path().to_string();
         let test_directories = settings::test_directories();
-        Project::new(&FilesOnDisk, &test_directories, &bridge::is_node_class)
-            .announcement(&path)
-            .map(|announcement| StringName::from(&announcement.name))
-            .unwrap_or_default()
+        Project::new(
+            &FilesOnDisk,
+            &test_directories,
+            settings::template_directory(),
+            &bridge::is_node_class,
+        )
+        .announcement(&path)
+        .map(|announcement| StringName::from(&announcement.name))
+        .unwrap_or_default()
     }
 
     // Whether `script` is this script or one its class inherits from, as a

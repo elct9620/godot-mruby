@@ -89,6 +89,7 @@ module Godot
       FileUtils.cp_r(project, copy)
       FileUtils.rm_rf(File.join(copy, ".godot", "editor"))
       FileUtils.cp_r(File.join(project, probe), File.join(copy, "addons", "probe"))
+      FileUtils.rm(Dir.glob(File.join(copy, "addons", "probe", "*.uid")))
       File.write(File.join(copy, "project.godot"), PROBE_SETTINGS, mode: "a")
       yield copy
     end

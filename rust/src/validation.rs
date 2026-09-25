@@ -50,6 +50,7 @@ impl Kind {
 pub fn validation<F: Files + Sync>(
     files: &F,
     test_directories: &[String],
+    template_directory: &str,
     is_node: &dyn Fn(&str) -> bool,
     path: &str,
     source: &str,
@@ -67,7 +68,14 @@ pub fn validation<F: Files + Sync>(
         message: warning.message,
     });
     let shared_constant = shared_constant_warning(&typed, path);
-    let shared_name = match Project::new(&typed, test_directories, is_node).announcement(path) {
+    let shared_name = match Project::new(
+        &typed,
+        test_directories,
+        template_directory.to_owned(),
+        is_node,
+    )
+    .announcement(path)
+    {
         Err(Omission::SharedName { name, others }) => Some(Warning {
             line: 1,
             kind: Kind::SharedName,
@@ -154,7 +162,14 @@ mod tests {
         let files = Sources(sources.iter().copied().collect());
         let test_directories = ["res://test".to_owned()];
         let is_node = |class: &str| class != "Resource";
-        validation(&files, &test_directories, &is_node, path, source)
+        validation(
+            &files,
+            &test_directories,
+            "res://script_templates",
+            &is_node,
+            path,
+            source,
+        )
     }
 
     fn warnings_of(validation: &Validation, kind: Kind) -> Vec<(u32, &str)> {

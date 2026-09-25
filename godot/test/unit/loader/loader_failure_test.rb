@@ -66,4 +66,9 @@ class LoaderFailureTest < Minitest::Test
     assert_equal "Unit::Loader::Posts::Shadowed in res://test/unit/loader/posts/shadowed.rb extends Unit::Loader::Posts::Sentry, " \
                  "not the class res://test/unit/loader/sentry.rb names", error.message
   end
+
+  # @behavior RL-036
+  def test_the_class_index_names_no_file_under_the_template_directory
+    assert_raises(NameError) { ScriptTemplates::Node::Greeting }
+  end
 end

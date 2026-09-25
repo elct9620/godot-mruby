@@ -97,8 +97,10 @@ impl IScriptLanguageExtension for RubyLanguage {
         false
     }
 
+    // The editor comments lines out with it, and reads a project template's
+    // `# meta-` lines by it.
     fn get_comment_delimiters(&self) -> PackedStringArray {
-        PackedStringArray::new()
+        PackedStringArray::from(&[GString::from("#")])
     }
 
     fn get_string_delimiters(&self) -> PackedStringArray {
@@ -161,6 +163,7 @@ impl IScriptLanguageExtension for RubyLanguage {
         let checked = validation::validation(
             &FilesOnDisk,
             &test_directories,
+            &settings::template_directory(),
             &bridge::is_node_class,
             &path.to_string(),
             &script.to_string(),
@@ -420,7 +423,12 @@ impl IScriptLanguageExtension for RubyLanguage {
     // lists the file as a class by the name answered.
     fn get_global_class_name(&self, path: GString) -> AnyDictionary {
         let test_directories = settings::test_directories();
-        let project = Project::new(&FilesOnDisk, &test_directories, &bridge::is_node_class);
+        let project = Project::new(
+            &FilesOnDisk,
+            &test_directories,
+            settings::template_directory(),
+            &bridge::is_node_class,
+        );
         let file = path.to_string();
         let announced = project.announcement(&file);
         let mut clashes = CLASHES.lock().unwrap_or_else(PoisonError::into_inner);

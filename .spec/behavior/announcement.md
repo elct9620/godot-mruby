@@ -93,3 +93,11 @@ How a node script is announced to the editor, which lists it as a class like a G
 | Given | node scripts whose shared name was warned of, and one of them since announced |
 | When | the same files share the name again |
 | Then | the clash is warned of again |
+
+## `RN-012` A file under the project's template directory is not announced
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script under the directory the editor reads the project's script templates from |
+| When | the editor asks for its class name |
+| Then | it is not announced, since the editor fills a template in as text |

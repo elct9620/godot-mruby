@@ -29,6 +29,8 @@ pub struct Announcement {
 pub enum Omission {
     /// A file under a test directory, which belongs to no game's class list.
     InTestDirectory,
+    /// A script template of the project's, which the editor fills in as text.
+    InTemplateDirectory,
     /// A library file, or one whose ancestry is broken.
     NotNodeScript,
     /// Node scripts in other files share the name, so no one of them is
@@ -37,11 +39,13 @@ pub enum Omission {
 }
 
 /// The project a node script is announced in: its files, its test
-/// directories, and which engine classes are node classes.
+/// directories and template directory, and which engine classes are node
+/// classes.
 pub struct Project<'a, F: Files> {
     files: &'a F,
     paths: Vec<String>,
     test_directories: &'a [String],
+    template_directory: String,
     is_node: &'a dyn Fn(&str) -> bool,
 }
 
@@ -49,12 +53,14 @@ impl<'a, F: Files> Project<'a, F> {
     pub fn new(
         files: &'a F,
         test_directories: &'a [String],
+        template_directory: String,
         is_node: &'a dyn Fn(&str) -> bool,
     ) -> Self {
         Self {
             files,
             paths: files.paths(),
             test_directories,
+            template_directory,
             is_node,
         }
     }
@@ -63,6 +69,9 @@ impl<'a, F: Files> Project<'a, F> {
     pub fn announcement(&self, path: &str) -> Result<Announcement, Omission> {
         if self.is_in_test_directory(path) {
             return Err(Omission::InTestDirectory);
+        }
+        if settings::is_in_directory(path, std::slice::from_ref(&self.template_directory)) {
+            return Err(Omission::InTemplateDirectory);
         }
         let (header, ancestry) = self.node_script(path).ok_or(Omission::NotNodeScript)?;
         let others = self.namesakes(path);
@@ -111,7 +120,7 @@ impl<'a, F: Files> Project<'a, F> {
     }
 
     fn is_in_test_directory(&self, path: &str) -> bool {
-        settings::is_in_test_directory(path, self.test_directories)
+        settings::is_in_directory(path, self.test_directories)
     }
 }
 
@@ -166,7 +175,8 @@ mod tests {
         let files = Sources(sources.iter().copied().collect());
         let test_directories = ["res://test".to_owned()];
         let is_node = |class: &str| class != "Resource";
-        Project::new(&files, &test_directories, &is_node).announcement(path)
+        let template_directory = "res://script_templates".to_owned();
+        Project::new(&files, &test_directories, template_directory, &is_node).announcement(path)
     }
 
     const ENEMY: (&str, &str) = ("res://enemy.rb", "class Enemy < Godot::Node2D\nend\n");
@@ -201,6 +211,18 @@ mod tests {
         let announcement = announcement("res://boss.rb", &sources).unwrap();
 
         assert_eq!(announcement.base, "Enemy");
+    }
+
+    // @behavior RN-012
+    #[test]
+    fn a_file_under_the_template_directory_is_not_announced() {
+        let path = "res://script_templates/node/hero.rb";
+        let source =
+            "module ScriptTemplates\nmodule Node\nclass Hero < Godot::Node\nend\nend\nend\n";
+
+        let omission = announcement(path, &[(path, source)]).unwrap_err();
+
+        assert_eq!(omission, Omission::InTemplateDirectory);
     }
 
     // @behavior RN-004

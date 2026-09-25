@@ -66,3 +66,11 @@ What the editor offers when a Ruby script is created: the templates GDScript has
 | Given | a template made for a new file, which knows only the file's name |
 | When | it is first saved at a path under a namespace, as `res://enemies/ships/hero_ship.rb` |
 | Then | its class is written inside a module for each namespace the path spells, `Enemies` then `Ships`, each a level deeper, and a file under a root directory stays as it was made |
+
+## `RY-008` A project's own Ruby template is listed by its meta lines
+
+| Step | Statement |
+| --- | --- |
+| Given | a `.rb` template in the project's template directory whose `# meta-name:` line names it |
+| When | the script dialog lists the templates for its base class |
+| Then | it is listed under the project by that name |
