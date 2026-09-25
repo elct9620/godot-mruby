@@ -105,13 +105,14 @@ Outside a state, a word ending in `-ing` or `-ed` is a name only where the dicti
 
 | Component | Godot counterpart |
 | --- | --- |
-| `RubyLanguage` in `language.rs`, its `Project` in `announcement.rs` | `ScriptLanguageExtension` |
+| `RubyLanguage` in `language.rs`, its `Project` in `announcement.rs`, its templates in `template.rs` | `ScriptLanguageExtension` |
 | `ResourceFormatLoaderRubyScript` in `loader.rs` | `ResourceFormatLoader` |
 | `ResourceFormatSaverRubyScript` in `saver.rs` | `ResourceFormatSaver` |
 | `RubyScript` in `script.rs`, answered from `header.rs` and `ancestry.rs` | `ScriptExtension` |
 | `RubyInstance` in `instance.rs` | A script instance |
 | `RubyTestRunner` in `runner.rs` | A `Node` in `runner.tscn` |
-| `RubyEditorPlugin`, `RubyExportPlugin` in `export.rs` | `EditorPlugin`, `EditorExportPlugin` |
+| `RubyEditorPlugin` in `plugin.rs`, `RubyExportPlugin` in `export.rs` | `EditorPlugin`, `EditorExportPlugin` |
+| `RubyTestPanel` in `panel.rs` | `EditorDock` |
 | `settings.rs` | `ProjectSettings` under `mruby/` |
 | `GameFiles`, `RealmFiles`, `FilesOnDisk` in `game.rs` | `ResourceLoader` under `res://`, and the files on disk |
 | `GodotLog` in `log.rs` | Godot's log |
@@ -123,7 +124,7 @@ Each class Godot knows answers what Godot already asks of a script language; non
 
 `ResourceFormatLoaderRubyScript` reads a file's source and runs nothing, and `ResourceFormatSaverRubyScript` writes it back. The script answers Godot from its header, which Prism reads from that source, and its ancestry; only a node script makes an instance (2.4), and the language announces it (2.5).
 
-The runner is an ordinary node the addon ships, refused in an exported game, whose export leaves out the tests and the runner scene. `RealmFiles`, `GodotLog` and the `Godot` gem are what the game's realm is given: the files under `res://`, less the test directories in the editor and an exported game, Godot's log, and the engine (2.6). The names Godot knows are in `.spec/contract/godot.md`, and the settings in `.spec/contract/project_settings.md`.
+The runner is an ordinary node the addon ships, refused in an exported game, whose export leaves out the tests and the runner scene; the test panel plays it with the run file's options. `RealmFiles`, `GodotLog` and the `Godot` gem are what the game's realm is given: the files under `res://`, less the test directories in the editor and an exported game, Godot's log, and the engine (2.6). The names Godot knows are in `.spec/contract/godot.md`, and the settings in `.spec/contract/project_settings.md`.
 
 ### 2.2 Lifecycle
 
@@ -139,7 +140,7 @@ Scene stage begins
   │  realm::prepare         RealmFiles, GodotLog, the Godot gem
   ▼
 Editor stage begins, in the editor
-  │  RubyEditorPlugin       added by gdext; adds RubyExportPlugin
+  │  RubyEditorPlugin       added by gdext; adds RubyExportPlugin, RubyTestPanel
   ▼
 the first entry
   │  the game's realm opens as prepared
