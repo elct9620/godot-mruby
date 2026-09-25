@@ -122,11 +122,11 @@ pub struct Class {
     pub members: Vec<Member>,
     pub methods: Vec<String>,
     pub digest: u64,
-    pub exported: Vec<String>,
+    pub export_names: Vec<String>,
 }
 ```
 
-## `Written`
+## `Source`
 
 What a file's source writes, for its class to be answered from: what its header declares and the digest of that source.
 
@@ -135,8 +135,8 @@ What a file's source writes, for its class to be answered from: what its header 
 | internal | yes |
 
 ```rust
-pub struct Written<'a> {
-    pub declared: &'a [Declared],
+pub struct Source<'a> {
+    pub exports: &'a [Export],
     pub digest: u64,
 }
 ```
@@ -306,7 +306,7 @@ The properties the classes of the files exported, the first file's first and one
 impl Snapshot {
     pub fn properties_of<'a>(
         &self,
-        files: impl IntoIterator<Item = (&'a str, Written<'a>)>,
+        files: impl IntoIterator<Item = (&'a str, Source<'a>)>,
     ) -> Vec<Property> {
     }
 }
@@ -324,7 +324,7 @@ What the classes of the files have the editor show: each class's own category an
 impl Snapshot {
     pub fn members_of<'a>(
         &self,
-        files: impl IntoIterator<Item = (&'a str, Written<'a>)>,
+        files: impl IntoIterator<Item = (&'a str, Source<'a>)>,
     ) -> Vec<Member> {
     }
 }

@@ -294,7 +294,7 @@ impl IScriptExtension for RubyScript {
         }
         let path = self.base().get_path().to_string();
         self.header.is_tool()
-            && self.header.parses()
+            && self.header.is_parsed()
             && !game::is_left_out_in_editor(&path, &settings::test_directories())
     }
 
@@ -382,7 +382,7 @@ impl IScriptExtension for RubyScript {
                 for_object.obj_sys(),
             )
         };
-        if self.header.parses() {
+        if self.header.is_parsed() {
             self.exports().tell(placeholder);
         }
         self.placeholders().push(Placeholder(placeholder));
@@ -498,7 +498,7 @@ impl IScriptExtension for RubyScript {
     // tells them nothing, as a GDScript's does not: telling a placeholder
     // drops what it kept of the scene beyond what the class declares.
     fn update_exports(&mut self) {
-        if !self.header.parses() {
+        if !self.header.is_parsed() {
             return;
         }
         let exported = self.exports();
@@ -546,7 +546,7 @@ impl IScriptExtension for RubyScript {
     // scene wrote to the node, whatever the class is found to declare, so
     // the scene saves it back as a GDScript's does.
     fn is_placeholder_fallback_enabled(&self) -> bool {
-        Engine::singleton().is_editor_hint() && !self.header.parses()
+        Engine::singleton().is_editor_hint() && !self.header.is_parsed()
     }
 
     fn get_rpc_config(&self) -> Variant {

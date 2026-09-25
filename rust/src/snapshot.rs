@@ -13,7 +13,7 @@ use godot::global::{bytes_to_var, var_to_bytes};
 use godot::obj::Singleton;
 use godot::register::info::{PropertyHint, PropertyUsageFlags};
 
-use crate::header::Declared;
+use crate::header::Export;
 
 /// A signal a class declared, with the names its parameters were declared
 /// with.
@@ -147,7 +147,7 @@ pub struct Class {
     pub members: Vec<Member>,
     pub methods: Vec<String>,
     pub digest: u64,
-    pub exported: Vec<String>,
+    pub export_names: Vec<String>,
 }
 
 impl Class {
@@ -164,15 +164,15 @@ impl Class {
     fn is_exported_unwritten(&self, member: &Member) -> bool {
         member
             .property()
-            .is_some_and(|property| !self.exported.contains(&property.name))
+            .is_some_and(|property| !self.export_names.contains(&property.name))
     }
 }
 
 /// What a file's source writes, for its class to be answered from: what its
 /// header declares and the digest of that source.
 #[derive(Clone, Copy, Debug)]
-pub struct Written<'a> {
-    pub declared: &'a [Declared],
+pub struct Source<'a> {
+    pub exports: &'a [Export],
     pub digest: u64,
 }
 
@@ -226,11 +226,11 @@ impl Snapshot {
     /// writes, as `members_of` takes it.
     pub fn properties_of<'a>(
         &self,
-        files: impl IntoIterator<Item = (&'a str, Written<'a>)>,
+        files: impl IntoIterator<Item = (&'a str, Source<'a>)>,
     ) -> Vec<Property> {
         let mut properties: Vec<Property> = Vec::new();
-        for (path, written) in files {
-            for member in self.file_members(path, written) {
+        for (path, source) in files {
+            for member in self.file_members(path, source) {
                 if let Member::Property(property) = member
                     && !properties.iter().any(|kept| kept.name == property.name)
                 {
@@ -253,14 +253,14 @@ impl Snapshot {
     /// keeping what the run declared through a name no `export` call spelled.
     pub fn members_of<'a>(
         &self,
-        files: impl IntoIterator<Item = (&'a str, Written<'a>)>,
+        files: impl IntoIterator<Item = (&'a str, Source<'a>)>,
     ) -> Vec<Member> {
         let mut members: Vec<Member> = Vec::new();
-        for (path, written) in files {
+        for (path, source) in files {
             if is_editor_build() {
                 members.push(Member::Heading(category(path)));
             }
-            for member in self.file_members(path, written) {
+            for member in self.file_members(path, source) {
                 let listed = member.property().is_some_and(|property| {
                     members
                         .iter()
@@ -277,22 +277,18 @@ impl Snapshot {
 
     // What the class of the file at `path` declared for the editor, as
     // `members_of` answers each file.
-    fn file_members(&self, path: &str, written: Written) -> Vec<Member> {
+    fn file_members(&self, path: &str, source: Source) -> Vec<Member> {
         let Some(class) = self.classes.get(path) else {
-            return written
-                .declared
-                .iter()
-                .filter_map(Declared::member)
-                .collect();
+            return source.exports.iter().filter_map(Export::member).collect();
         };
-        if class.digest == written.digest {
+        if class.digest == source.digest {
             return class.members.clone();
         }
         let mut members: Vec<Member> = Vec::new();
-        for declared in written.declared {
-            let member = match declared {
-                Declared::Member(member) => Some(member.clone()),
-                Declared::Unread { name, bare } => class
+        for export in source.exports {
+            let member = match export {
+                Export::Member(member) => Some(member.clone()),
+                Export::Unread { name, bare } => class
                     .property(name)
                     .or(bare.as_ref())
                     .cloned()

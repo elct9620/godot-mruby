@@ -23,11 +23,11 @@ pub struct Header {
     superclass: Option<Superclass>,
     methods: BTreeSet<String>,
     signals: Vec<Signal>,
-    declared: Vec<Declared>,
+    exports: Vec<Export>,
     digest: u64,
     tool: bool,
     is_abstract: bool,
-    parses: bool,
+    is_parsed: bool,
     icon: Option<String>,
 }
 
@@ -54,7 +54,7 @@ impl Superclass {
 
 /// What a class body declares for the editor, as its source writes it.
 #[derive(Clone, Debug, PartialEq)]
-pub enum Declared {
+pub enum Export {
     /// A property or a heading the source writes out in full.
     Member(Member),
     /// An export whose value or hint the source does not write out: what
@@ -66,7 +66,7 @@ pub enum Declared {
     },
 }
 
-impl Declared {
+impl Export {
     /// What answers for it while the file has not run.
     pub fn member(&self) -> Option<Member> {
         match self {
@@ -93,7 +93,7 @@ impl Header {
         Header {
             writes: reader.writes,
             digest: snapshot::digest(source),
-            parses: result.errors().next().is_none(),
+            is_parsed: result.errors().next().is_none(),
             ..reader.header.unwrap_or_default()
         }
     }
@@ -139,17 +139,17 @@ impl Header {
     /// A value or a hint the call does not write out is the file's to work
     /// out as it runs, and so is a type `type:` names; a call not spelling
     /// out the name it exports declares nothing here.
-    pub fn declared(&self) -> &[Declared] {
-        &self.declared
+    pub fn exports(&self) -> &[Export] {
+        &self.exports
     }
 
     /// The names the class body's `export` calls spell out, in the order
     /// they are written, whether or not the rest of each call is.
-    pub fn exported(&self) -> impl Iterator<Item = &str> {
-        self.declared.iter().filter_map(|declared| match declared {
-            Declared::Member(Member::Property(property)) => Some(property.name.as_str()),
-            Declared::Member(Member::Heading(_)) => None,
-            Declared::Unread { name, .. } => Some(name.as_str()),
+    pub fn export_names(&self) -> impl Iterator<Item = &str> {
+        self.exports.iter().filter_map(|export| match export {
+            Export::Member(Member::Property(property)) => Some(property.name.as_str()),
+            Export::Member(Member::Heading(_)) => None,
+            Export::Unread { name, .. } => Some(name.as_str()),
         })
     }
 
@@ -164,8 +164,8 @@ impl Header {
 
     /// Whether the source parses, with no syntax error to stop the file as
     /// it runs.
-    pub fn parses(&self) -> bool {
-        self.parses
+    pub fn is_parsed(&self) -> bool {
+        self.is_parsed
     }
 
     pub fn is_abstract(&self) -> bool {
@@ -214,20 +214,19 @@ impl Header {
                 }
             }
             (b"export", [name, default, keywords @ ..]) => {
-                if let Some(declared) = export(name, default, keywords) {
-                    self.declared.push(declared);
+                if let Some(export) = export(name, default, keywords) {
+                    self.exports.push(export);
                 }
             }
             (b"export_group" | b"export_subgroup", [name, prefix @ ..]) => {
                 if let Some(heading) = group(call.name().as_slice(), name, prefix) {
-                    self.declared
-                        .push(Declared::Member(Member::Heading(heading)));
+                    self.exports.push(Export::Member(Member::Heading(heading)));
                 }
             }
             (b"export_category", [name]) => {
                 if let Some(name) = name_of(name) {
-                    self.declared
-                        .push(Declared::Member(Member::Heading(Heading::Category {
+                    self.exports
+                        .push(Export::Member(Member::Heading(Heading::Category {
                             name,
                             path: String::new(),
                         })));
@@ -311,18 +310,18 @@ fn signal(name: &Node, parameters: &[Node]) -> Option<Signal> {
 // type, and the hint its keywords spell out. A value or a hint written as
 // anything but a literal is the file's to work out as it runs, and a name
 // written so is none the header knows.
-fn export(name: &Node, default: &Node, keywords: &[Node]) -> Option<Declared> {
+fn export(name: &Node, default: &Node, keywords: &[Node]) -> Option<Export> {
     let name = name_of(name)?;
     let Some(value) = literal(default) else {
-        return Some(Declared::Unread { name, bare: None });
+        return Some(Export::Unread { name, bare: None });
     };
     let property = Property::new(name.clone(), &value);
     let Some(keywords) = keywords.first() else {
-        return Some(Declared::Member(Member::Property(property)));
+        return Some(Export::Member(Member::Property(property)));
     };
-    Some(match hinted(&property, keywords) {
-        Some(hinted) => Declared::Member(Member::Property(hinted)),
-        None => Declared::Unread {
+    Some(match with_keyword_hint(&property, keywords) {
+        Some(hinted) => Export::Member(Member::Property(hinted)),
+        None => Export::Unread {
             name,
             bare: Some(property),
         },
@@ -331,8 +330,8 @@ fn export(name: &Node, default: &Node, keywords: &[Node]) -> Option<Declared> {
 
 // `property` with the hint `keywords` spell out, if they spell out one the
 // property's type takes.
-fn hinted(property: &Property, keywords: &Node) -> Option<Property> {
-    let (hint, written) = written_hint(keywords)?;
+fn with_keyword_hint(property: &Property, keywords: &Node) -> Option<Property> {
+    let (hint, written) = keyword_hint(keywords)?;
     let property_hint = hint
         .property_hint(property.default_value().get_type())
         .ok()?;
@@ -347,7 +346,7 @@ fn hinted(property: &Property, keywords: &Node) -> Option<Property> {
 // the running file would take them: a range's bounds and its step, or the
 // literal the keyword is written with. Keywords the file would refuse, or
 // write as anything but literals, spell out none.
-fn written_hint(keywords: &Node) -> Option<(Hint, Variant)> {
+fn keyword_hint(keywords: &Node) -> Option<(Hint, Variant)> {
     let mut step = None;
     let mut named = Vec::new();
     for element in keywords.as_keyword_hash_node()?.elements().iter() {
@@ -362,7 +361,7 @@ fn written_hint(keywords: &Node) -> Option<(Hint, Variant)> {
     let [(keyword, value)] = named.as_slice() else {
         return None;
     };
-    let hint = Hint::by_keyword(keyword).ok()?;
+    let hint = Hint::from_keyword(keyword).ok()?;
     let written = match (hint, step) {
         (Hint::Range, step) => bounds(value, step)?,
         (_, Some(_)) => return None,

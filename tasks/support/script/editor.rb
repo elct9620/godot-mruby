@@ -110,7 +110,7 @@ module Godot
       end
 
       def open_scene(project, scene)
-        output, status = keeping_layout(project) do
+        output, status = keep_layout(project) do
           Open3.capture2e(EXECUTABLE, "--headless", "--editor", "--verbose",
                           "--path", project, scene, "--quit-after", FRAMES)
         end
@@ -120,7 +120,7 @@ module Godot
         output
       end
 
-      def keeping_layout(project)
+      def keep_layout(project)
         layout = File.join(project, LAYOUT)
         kept = File.exist?(layout) ? File.binread(layout) : nil
         yield

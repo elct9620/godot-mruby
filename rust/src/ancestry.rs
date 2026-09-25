@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use crate::header::Header;
 use crate::realm::{self, Files};
-use crate::snapshot::{Member, Property, Snapshot, Written};
+use crate::snapshot::{Member, Property, Snapshot, Source};
 
 /// The files a class inherits from, nearest first, and the engine class the
 /// farthest of them extends.
@@ -114,23 +114,23 @@ impl<'a> Lineage<'a> {
     /// first: what each file declared as it ran, or what its header writes
     /// while it has not run.
     pub fn properties(&self, snapshot: &Snapshot) -> Vec<Property> {
-        snapshot.properties_of(self.written())
+        snapshot.properties_of(self.sources())
     }
 
     /// What the class declared for the editor, its ancestors' included and in
     /// the order each class wrote it; a file that has not run has the
     /// properties its header writes and no heading.
     pub fn members(&self, snapshot: &Snapshot) -> Vec<Member> {
-        snapshot.members_of(self.written())
+        snapshot.members_of(self.sources())
     }
 
     // Each file by path, with what its source writes.
-    fn written(&self) -> impl Iterator<Item = (&str, Written<'_>)> {
+    fn sources(&self) -> impl Iterator<Item = (&str, Source<'_>)> {
         self.files().map(|(path, header)| {
             (
                 path,
-                Written {
-                    declared: header.declared(),
+                Source {
+                    exports: header.exports(),
                     digest: header.digest(),
                 },
             )

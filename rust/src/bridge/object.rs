@@ -297,7 +297,9 @@ fn declare_export(
 ) -> Result<Value, Error> {
     let keyword = match hint.as_str() {
         "type" => None,
-        keyword => Some(Hint::by_keyword(keyword).map_err(|reason| argument_error(mrb, &reason))?),
+        keyword => {
+            Some(Hint::from_keyword(keyword).map_err(|reason| argument_error(mrb, &reason))?)
+        }
     };
     let default =
         value::to_engine(mrb, default, 1).map_err(|reason| argument_error(mrb, &reason))?;

@@ -170,7 +170,7 @@ impl Bookkeeping {
 // defines, so a method metaprogramming defined is one the class has.
 fn ran(mrb: &Mrb, path: &str, signals: Vec<Signal>, members: Vec<Member>, digest: u64) {
     let methods = methods_of(mrb, path);
-    let exported = bookkeeping(mrb).files.declarations(path).exports;
+    let export_names = bookkeeping(mrb).files.declarations(path).exports;
     bookkeeping(mrb).ran(
         path,
         Class {
@@ -178,7 +178,7 @@ fn ran(mrb: &Mrb, path: &str, signals: Vec<Signal>, members: Vec<Member>, digest
             members,
             methods,
             digest,
-            exported,
+            export_names,
         },
     );
 }

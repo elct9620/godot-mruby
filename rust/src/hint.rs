@@ -25,7 +25,7 @@ pub enum Hint {
 impl Hint {
     /// The hint `keyword` names, `none` naming none; any other word is no
     /// hint a property can be exported with, and is refused.
-    pub fn by_keyword(keyword: &str) -> Result<Self, String> {
+    pub fn from_keyword(keyword: &str) -> Result<Self, String> {
         Ok(match keyword {
             "none" => Self::None,
             "range" => Self::Range,
