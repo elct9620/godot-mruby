@@ -110,7 +110,7 @@ impl Member {
 
 ## `Class`
 
-What a class has once its file has run: what its body declared, and the methods it defines, those metaprogramming defined included.
+What a class has once its file has run: what its body declared, and the methods it defines, those metaprogramming defined included, with the digest of the source it ran and the names that source's `export` calls write, which tell what the source Godot holds now has changed and what it cannot answer for.
 
 | Attribute | Value |
 | --- | --- |
@@ -121,7 +121,36 @@ pub struct Class {
     pub signals: Vec<Signal>,
     pub members: Vec<Member>,
     pub methods: Vec<String>,
+    pub digest: u64,
+    pub exported: Vec<String>,
 }
+```
+
+## `Written`
+
+What a file's source writes, for its class to be answered from: what its header declares and the digest of that source.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub struct Written<'a> {
+    pub declared: &'a [Declared],
+    pub digest: u64,
+}
+```
+
+## `digest`
+
+A digest of a file's source, which differs whenever the source does.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub fn digest(source: &str) -> u64 {}
 ```
 
 ## `Property`
@@ -267,7 +296,7 @@ impl Snapshot {
 
 ## `Snapshot::properties_of`
 
-The properties the classes of the files exported, the first file's first and one to a name, as a class has what it exported and what it inherits. Each file comes with what its header writes, which answers for it until it has run.
+The properties the classes of the files exported, the first file's first and one to a name, as a class has what it exported and what it inherits. Each file comes with what its source writes, as `members_of` takes it.
 
 | Attribute | Value |
 | --- | --- |
@@ -277,7 +306,7 @@ The properties the classes of the files exported, the first file's first and one
 impl Snapshot {
     pub fn properties_of<'a>(
         &self,
-        files: impl IntoIterator<Item = (&'a str, &'a [Member])>,
+        files: impl IntoIterator<Item = (&'a str, Written<'a>)>,
     ) -> Vec<Property> {
     }
 }
@@ -285,7 +314,7 @@ impl Snapshot {
 
 ## `Snapshot::members_of`
 
-What the classes of the files have the editor show: each class's own category and then what it declared, the first file's first, as GDScript lists a script's members before the ones it inherits. A property is listed once, the nearest class's, while a heading belongs to the class that wrote it. Only a build of the editor carries the categories, as GDScript's are compiled out of a game's. Each file comes with what its header writes, which answers for it until it has run.
+What the classes of the files have the editor show: each class's own category and then what it declared, the first file's first, as GDScript lists a script's members before the ones it inherits. A property is listed once, the nearest class's, while a heading belongs to the class that wrote it. Only a build of the editor carries the categories, as GDScript's are compiled out of a game's. Each file comes with what its source writes, which answers for it until it has run. Once it has, what the file declared as it ran answers while the source is the one it ran; a source changed since answers in the order it writes, taking what the run declared for an export it does not write out, and keeping what the run declared through a name no `export` call spelled.
 
 | Attribute | Value |
 | --- | --- |
@@ -295,7 +324,7 @@ What the classes of the files have the editor show: each class's own category an
 impl Snapshot {
     pub fn members_of<'a>(
         &self,
-        files: impl IntoIterator<Item = (&'a str, &'a [Member])>,
+        files: impl IntoIterator<Item = (&'a str, Written<'a>)>,
     ) -> Vec<Member> {
     }
 }

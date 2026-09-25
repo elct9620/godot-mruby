@@ -418,3 +418,39 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a node script whose class body writes `export_group` with its name spelled out |
 | When | Godot asks the script for its properties |
 | Then | the list carries that group before the properties written after it |
+
+## `RS-052` A node script lists what its changed source exports before the file runs again
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose file has run |
+| Given | the script's source Godot holds, changed to export another property with a hint it writes out |
+| When | Godot asks the script for its properties before the file runs again |
+| Then | the list carries that property with that hint |
+
+## `RS-053` A node script keeps what its run declared for an export its changed source does not write out
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose file has run, exporting a property with a value its source does not write out |
+| Given | the script's source Godot holds, changed elsewhere |
+| When | Godot asks the script for its properties before the file runs again |
+| Then | the list carries that property as the run declared it |
+
+## `RS-054` A node script drops an export its changed source no longer writes
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose file has run, exporting a property |
+| Given | the script's source Godot holds, changed to export it no more |
+| When | Godot asks the script for its properties before the file runs again |
+| Then | the list does not carry that property |
+
+## `RS-055` A node script keeps an export no `export` call of its source names while its source changes
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose file has run, exporting a property through a name its source does not spell out |
+| Given | the script's source Godot holds, changed elsewhere |
+| When | Godot asks the script for its properties before the file runs again |
+| Then | the list carries that property as the run declared it |

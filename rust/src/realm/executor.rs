@@ -9,7 +9,7 @@ use std::ffi::{CStr, CString};
 use std::sync::Arc;
 
 use super::{bookkeeping, compile, file_by_constant, ran};
-use crate::snapshot::{Heading, Member, Property, Signal};
+use crate::snapshot::{self, Heading, Member, Property, Signal};
 use beni::{Error, FromValue, Module, Mrb, RClass, ReprValue, Value};
 
 /// How far a file has run in a realm.
@@ -61,11 +61,13 @@ impl PartialEq for Declaration {
 }
 
 /// A file running now, the constants it has created so far, each as the
-/// names of its namespace and its own, and what its class has declared.
+/// names of its namespace and its own, what its class has declared, and the
+/// digest of the source it runs.
 struct Frame {
     path: String,
     created: Vec<(Vec<String>, String)>,
     declared: Vec<Declaration>,
+    digest: u64,
 }
 
 /// How far each file has run in a realm, and the files running now.
@@ -257,9 +259,13 @@ fn execute<T>(
         path: path.to_owned(),
         created: Vec::new(),
         declared: Vec::new(),
+        digest: 0,
     });
     let outcome = prepare().and_then(|prepared| {
         let source = source_of(mrb, path)?;
+        if let Some(frame) = runs.frames.borrow_mut().last_mut() {
+            frame.digest = snapshot::digest(&source);
+        }
         let name = CString::new(path).map_err(|error| runtime_error(mrb, &error.to_string()))?;
         compile(mrb, &name, &source)?;
         settle(prepared)
@@ -269,7 +275,7 @@ fn execute<T>(
         (Ok(()), frame) => {
             frame.into_iter().for_each(|frame| {
                 let (signals, members) = split(frame.declared);
-                ran(mrb, &frame.path, signals, members);
+                ran(mrb, &frame.path, signals, members, frame.digest);
             });
             Run::Done
         }

@@ -75,6 +75,7 @@ impl Files for GameFiles {
         Declarations {
             writes: header.writes().to_vec(),
             extends,
+            exports: header.exported().map(str::to_owned).collect(),
         }
     }
 }

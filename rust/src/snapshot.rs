@@ -4,6 +4,7 @@
 //! whole, since a realm publishes a class only once its file has run.
 
 use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::{Arc, LazyLock, OnceLock, PoisonError, RwLock};
 
 use godot::builtin::{PackedByteArray, Variant, VariantType};
@@ -11,6 +12,8 @@ use godot::classes::Os;
 use godot::global::{bytes_to_var, var_to_bytes};
 use godot::obj::Singleton;
 use godot::register::info::{PropertyHint, PropertyUsageFlags};
+
+use crate::header::Declared;
 
 /// A signal a class declared, with the names its parameters were declared
 /// with.
@@ -134,12 +137,50 @@ impl Member {
 }
 
 /// What a class has once its file has run: what its body declared, and the
-/// methods it defines, those metaprogramming defined included.
+/// methods it defines, those metaprogramming defined included, with the
+/// digest of the source it ran and the names that source's `export` calls
+/// write, which tell what the source Godot holds now has changed and what it
+/// cannot answer for.
 #[derive(Clone, Debug, Default)]
 pub struct Class {
     pub signals: Vec<Signal>,
     pub members: Vec<Member>,
     pub methods: Vec<String>,
+    pub digest: u64,
+    pub exported: Vec<String>,
+}
+
+impl Class {
+    // The property of that name the class declared.
+    fn property(&self, name: &str) -> Option<&Property> {
+        self.members
+            .iter()
+            .filter_map(Member::property)
+            .find(|property| property.name == name)
+    }
+
+    // Whether `member` is a property the class exported through a name no
+    // `export` call of the source it ran spelled, which only running tells.
+    fn is_exported_unwritten(&self, member: &Member) -> bool {
+        member
+            .property()
+            .is_some_and(|property| !self.exported.contains(&property.name))
+    }
+}
+
+/// What a file's source writes, for its class to be answered from: what its
+/// header declares and the digest of that source.
+#[derive(Clone, Copy, Debug)]
+pub struct Written<'a> {
+    pub declared: &'a [Declared],
+    pub digest: u64,
+}
+
+/// A digest of a file's source, which differs whenever the source does.
+pub fn digest(source: &str) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    source.hash(&mut hasher);
+    hasher.finish()
 }
 
 /// What the classes of a realm's files have, as one value that never changes
@@ -181,31 +222,23 @@ impl Snapshot {
 
     /// The properties the classes of the files at `files` exported, the
     /// first file's first and one to a name, as a class has what it
-    /// exported and what it inherits. Each file comes with what its header
-    /// writes, which answers for it until it has run.
+    /// exported and what it inherits. Each file comes with what its source
+    /// writes, as `members_of` takes it.
     pub fn properties_of<'a>(
         &self,
-        files: impl IntoIterator<Item = (&'a str, &'a [Member])>,
+        files: impl IntoIterator<Item = (&'a str, Written<'a>)>,
     ) -> Vec<Property> {
         let mut properties: Vec<Property> = Vec::new();
         for (path, written) in files {
-            for property in self.file_properties(path, written) {
-                if !properties.iter().any(|kept| kept.name == property.name) {
-                    properties.push(property.clone());
+            for member in self.file_members(path, written) {
+                if let Member::Property(property) = member
+                    && !properties.iter().any(|kept| kept.name == property.name)
+                {
+                    properties.push(property);
                 }
             }
         }
         properties
-    }
-
-    // The properties the class of the file at `path` has: the ones it
-    // exported as it ran, or the ones its header writes while it has not run.
-    fn file_properties<'a>(&'a self, path: &str, written: &'a [Member]) -> Vec<&'a Property> {
-        if self.has_run(path) {
-            self.properties(path).collect()
-        } else {
-            written.iter().filter_map(Member::property).collect()
-        }
     }
 
     /// What the classes of the files at `files` have the editor show: each
@@ -213,10 +246,14 @@ impl Snapshot {
     /// first, as GDScript lists a script's members before the ones it
     /// inherits. A property is listed once, the nearest class's, while a
     /// heading belongs to the class that wrote it. Each file comes with what
-    /// its header writes, which answers for it until it has run.
+    /// its source writes, which answers for it until it has run. Once it
+    /// has, what the file declared as it ran answers while the source is the
+    /// one it ran; a source changed since answers in the order it writes,
+    /// taking what the run declared for an export it does not write out, and
+    /// keeping what the run declared through a name no `export` call spelled.
     pub fn members_of<'a>(
         &self,
-        files: impl IntoIterator<Item = (&'a str, &'a [Member])>,
+        files: impl IntoIterator<Item = (&'a str, Written<'a>)>,
     ) -> Vec<Member> {
         let mut members: Vec<Member> = Vec::new();
         for (path, written) in files {
@@ -238,14 +275,39 @@ impl Snapshot {
         members
     }
 
-    // What the class of the file at `path` declared for the editor: what it
-    // declared as it ran, or what its header writes while it has not run.
-    fn file_members(&self, path: &str, written: &[Member]) -> Vec<Member> {
-        if self.has_run(path) {
-            self.members(path).to_vec()
-        } else {
-            written.to_vec()
+    // What the class of the file at `path` declared for the editor, as
+    // `members_of` answers each file.
+    fn file_members(&self, path: &str, written: Written) -> Vec<Member> {
+        let Some(class) = self.classes.get(path) else {
+            return written
+                .declared
+                .iter()
+                .filter_map(Declared::member)
+                .collect();
+        };
+        if class.digest == written.digest {
+            return class.members.clone();
         }
+        let mut members: Vec<Member> = Vec::new();
+        for declared in written.declared {
+            let member = match declared {
+                Declared::Member(member) => Some(member.clone()),
+                Declared::Unread { name, bare } => class
+                    .property(name)
+                    .or(bare.as_ref())
+                    .cloned()
+                    .map(Member::Property),
+            };
+            members.extend(member);
+        }
+        members.extend(
+            class
+                .members
+                .iter()
+                .filter(|member| class.is_exported_unwritten(member))
+                .cloned(),
+        );
+        members
     }
 
     /// The methods the class of the file at `path` defines; none for a file
@@ -328,6 +390,7 @@ mod tests {
             signals: vec![rung()],
             members: vec![Member::Property(tone())],
             methods: vec!["ring".to_owned()],
+            ..Class::default()
         }
     }
 

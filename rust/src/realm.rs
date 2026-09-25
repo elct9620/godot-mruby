@@ -74,6 +74,8 @@ pub struct Declarations {
     /// The superclass its class extends when something relies on it; once the
     /// file has run, a class extending another raises `TypeError`.
     pub extends: Option<Extends>,
+    /// The names its class body's `export` calls spell out.
+    pub exports: Vec<String>,
 }
 
 /// The superclass a file's class is held to.
@@ -163,17 +165,20 @@ impl Bookkeeping {
     }
 }
 
-// What the class of the file at `path` has, now that the file has run: what
-// its body declared, and the methods it defines, so a method metaprogramming
-// defined is one the class has.
-fn ran(mrb: &Mrb, path: &str, signals: Vec<Signal>, members: Vec<Member>) {
+// What the class of the file at `path` has, now that the file has run from
+// the source of that digest: what its body declared, and the methods it
+// defines, so a method metaprogramming defined is one the class has.
+fn ran(mrb: &Mrb, path: &str, signals: Vec<Signal>, members: Vec<Member>, digest: u64) {
     let methods = methods_of(mrb, path);
+    let exported = bookkeeping(mrb).files.declarations(path).exports;
     bookkeeping(mrb).ran(
         path,
         Class {
             signals,
             members,
             methods,
+            digest,
+            exported,
         },
     );
 }

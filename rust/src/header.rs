@@ -9,7 +9,7 @@ use ruby_prism::{CallNode, Integer, Node, NodeList};
 
 use crate::hint::Hint;
 use crate::realm::{self, Roots};
-use crate::snapshot::{Heading, Member, Property, Signal};
+use crate::snapshot::{self, Heading, Member, Property, Signal};
 
 /// A file's header: the constants its `module` and `class` statements write,
 /// the name the class its path names is written with, the superclass written
@@ -23,7 +23,8 @@ pub struct Header {
     superclass: Option<Superclass>,
     methods: BTreeSet<String>,
     signals: Vec<Signal>,
-    members: Vec<Member>,
+    declared: Vec<Declared>,
+    digest: u64,
     tool: bool,
     is_abstract: bool,
     icon: Option<String>,
@@ -50,6 +51,30 @@ impl Superclass {
     }
 }
 
+/// What a class body declares for the editor, as its source writes it.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Declared {
+    /// A property or a heading the source writes out in full.
+    Member(Member),
+    /// An export whose value or hint the source does not write out: what
+    /// the file declared as it ran answers for it, or `bare`, the property
+    /// without the hint its keyword names, while the file has not run.
+    Unread {
+        name: String,
+        bare: Option<Property>,
+    },
+}
+
+impl Declared {
+    /// What answers for it while the file has not run.
+    pub fn member(&self) -> Option<Member> {
+        match self {
+            Self::Member(member) => Some(member.clone()),
+            Self::Unread { bare, .. } => bare.clone().map(Member::Property),
+        }
+    }
+}
+
 impl Header {
     /// Reads the header of the file at `path`, named from `roots`, from
     /// `source`. A file that does not parse still has one: Prism reads on
@@ -66,6 +91,7 @@ impl Header {
         }
         Header {
             writes: reader.writes,
+            digest: snapshot::digest(source),
             ..reader.header.unwrap_or_default()
         }
     }
@@ -108,12 +134,26 @@ impl Header {
     /// as its body writes it: the properties its `export` calls export, each
     /// with the hint its keyword spells out, and the headings its
     /// `export_group`, `export_subgroup` and `export_category` calls write.
-    /// A value, a hint or a name the call does not write out is the file's
-    /// to work out as it runs, and so is a type `type:` names: a property
-    /// whose value is not written out is not here, and one whose hint is not
-    /// carries none.
-    pub fn members(&self) -> &[Member] {
-        &self.members
+    /// A value or a hint the call does not write out is the file's to work
+    /// out as it runs, and so is a type `type:` names; a call not spelling
+    /// out the name it exports declares nothing here.
+    pub fn declared(&self) -> &[Declared] {
+        &self.declared
+    }
+
+    /// The names the class body's `export` calls spell out, in the order
+    /// they are written, whether or not the rest of each call is.
+    pub fn exported(&self) -> impl Iterator<Item = &str> {
+        self.declared.iter().filter_map(|declared| match declared {
+            Declared::Member(Member::Property(property)) => Some(property.name.as_str()),
+            Declared::Member(Member::Heading(_)) => None,
+            Declared::Unread { name, .. } => Some(name.as_str()),
+        })
+    }
+
+    /// The digest of the source the header was read from.
+    pub fn digest(&self) -> u64 {
+        self.digest
     }
 
     pub fn is_tool(&self) -> bool {
@@ -166,21 +206,23 @@ impl Header {
                 }
             }
             (b"export", [name, default, keywords @ ..]) => {
-                if let Some(property) = property(name, default, keywords) {
-                    self.members.push(Member::Property(property));
+                if let Some(declared) = export(name, default, keywords) {
+                    self.declared.push(declared);
                 }
             }
             (b"export_group" | b"export_subgroup", [name, prefix @ ..]) => {
                 if let Some(heading) = group(call.name().as_slice(), name, prefix) {
-                    self.members.push(Member::Heading(heading));
+                    self.declared
+                        .push(Declared::Member(Member::Heading(heading)));
                 }
             }
             (b"export_category", [name]) => {
                 if let Some(name) = name_of(name) {
-                    self.members.push(Member::Heading(Heading::Category {
-                        name,
-                        path: String::new(),
-                    }));
+                    self.declared
+                        .push(Declared::Member(Member::Heading(Heading::Category {
+                            name,
+                            path: String::new(),
+                        })));
                 }
             }
             _ => {}
@@ -256,20 +298,41 @@ fn signal(name: &Node, parameters: &[Node]) -> Option<Signal> {
     })
 }
 
-// The property an `export` call declares, as it is written: the name Godot
-// reads it by and the value it is declared with, which gives it its type,
-// and the hint its keywords spell out. A value written as anything but a
-// literal is the file's to work out as it runs, so the header carries none
-// of that declaration.
-fn property(name: &Node, default: &Node, keywords: &[Node]) -> Option<Property> {
-    let property = Property::new(name_of(name)?, &literal(default)?);
-    let Some((hint, written)) = keywords.first().and_then(written_hint) else {
-        return Some(property);
+// What an `export` call declares, as it is written: the property of the
+// name Godot reads it by, the value it is declared with, which gives it its
+// type, and the hint its keywords spell out. A value or a hint written as
+// anything but a literal is the file's to work out as it runs, and a name
+// written so is none the header knows.
+fn export(name: &Node, default: &Node, keywords: &[Node]) -> Option<Declared> {
+    let name = name_of(name)?;
+    let Some(value) = literal(default) else {
+        return Some(Declared::Unread { name, bare: None });
     };
-    Some(match hint.property_hint(property.default_value().get_type()) {
-        Ok(property_hint) => property.with_hint(property_hint, hint.hint_string(&written)),
-        Err(_) => property,
+    let property = Property::new(name.clone(), &value);
+    let Some(keywords) = keywords.first() else {
+        return Some(Declared::Member(Member::Property(property)));
+    };
+    Some(match hinted(&property, keywords) {
+        Some(hinted) => Declared::Member(Member::Property(hinted)),
+        None => Declared::Unread {
+            name,
+            bare: Some(property),
+        },
     })
+}
+
+// `property` with the hint `keywords` spell out, if they spell out one the
+// property's type takes.
+fn hinted(property: &Property, keywords: &Node) -> Option<Property> {
+    let (hint, written) = written_hint(keywords)?;
+    let property_hint = hint
+        .property_hint(property.default_value().get_type())
+        .ok()?;
+    Some(
+        property
+            .clone()
+            .with_hint(property_hint, hint.hint_string(&written)),
+    )
 }
 
 // The one hint an export's keywords name and the value it is read with, as
