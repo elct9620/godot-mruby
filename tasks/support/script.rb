@@ -25,7 +25,7 @@ module Godot
       "ERROR: res://integration/script/attach/library.rb defines no class extending an engine node class, " \
       "so it cannot be a node's script",
       "ERROR: res://integration/script/attach/planar.rb extends Node2D, so it cannot be the script of a Node",
-      'ERROR: Node "Abstract" previously had a script, but that script is now abstract.',
+      'ERROR: Node "Abstract" previously had a class of type "Abstract", but that class is now abstract.',
       "ERROR: res://integration/script/attach/orphan.rb extends Missing, which no one file names, " \
       "so it cannot be a node's script"
     ].freeze
