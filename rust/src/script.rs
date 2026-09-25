@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
 use std::ffi::c_void;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use godot::classes::{
@@ -50,8 +51,9 @@ pub struct RubyScript {
     // a placeholder makes the editor list its properties anew.
     last_exports_digest: Mutex<Option<(u32, u32)>>,
     // Whether the script is a template made for a new file, which learns its
-    // path only as it is first saved.
-    is_from_template: bool,
+    // path only as it is first saved. Taken without binding the script
+    // mutably, since another thread may be reading it then.
+    is_from_template: AtomicBool,
 }
 
 /// What a placeholder is told of the class: what it exports, and the value
@@ -150,22 +152,25 @@ impl RubyScript {
             ancestry: Cache::default(),
             placeholders: Mutex::default(),
             last_exports_digest: Mutex::default(),
-            is_from_template: false,
+            is_from_template: AtomicBool::new(false),
             source,
         })
     }
 
     /// The script a template made for a new file, holding `source`.
     pub fn from_template(source: GString) -> Gd<Self> {
-        let mut script = Self::from_source("", source);
-        script.bind_mut().is_from_template = true;
+        let script = Self::from_source("", source);
+        script
+            .bind()
+            .is_from_template
+            .store(true, Ordering::Relaxed);
         script
     }
 
     /// Whether the script is a template made for a new file, which it stops
     /// being once asked.
-    pub fn take_template_mark(&mut self) -> bool {
-        std::mem::take(&mut self.is_from_template)
+    pub fn take_template_mark(&self) -> bool {
+        self.is_from_template.swap(false, Ordering::Relaxed)
     }
 
     /// Takes the source its file holds now and reloads, as a GDScript reads

@@ -49,7 +49,7 @@ impl IResourceFormatSaver for ResourceFormatSaverRubyScript {
         else {
             return Error::ERR_INVALID_PARAMETER;
         };
-        if script.bind_mut().take_template_mark() {
+        if script.bind().take_template_mark() {
             nest_template(&mut script, &path.to_string());
         }
         let Some(mut file) = FileAccess::open(&path, ModeFlags::WRITE) else {
