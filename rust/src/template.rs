@@ -92,6 +92,7 @@ pub fn source_in_namespaces(source: &str, constant: &str, indent: &str) -> Strin
         .rev()
         .fold(source.to_owned(), |inner, namespace| {
             let indented: Vec<String> = inner
+                .trim_end()
                 .lines()
                 .map(|line| {
                     if line.is_empty() {
@@ -200,5 +201,17 @@ mod tests {
         let made = source(BUILT_INS[0].content, "hero", "Godot::Node", "  ");
 
         assert_eq!(source_in_namespaces(&made, "Hero", "  "), made);
+    }
+
+    // @behavior RY-007
+    #[test]
+    fn a_template_ending_in_blank_lines_closes_its_namespaces_right_after_it() {
+        let nested =
+            source_in_namespaces("class Hero < Godot::Node\nend\n\n", "Enemies::Hero", "\t");
+
+        assert_eq!(
+            nested,
+            "module Enemies\n\tclass Hero < Godot::Node\n\tend\nend\n"
+        );
     }
 }
