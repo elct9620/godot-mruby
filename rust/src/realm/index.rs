@@ -48,7 +48,8 @@ impl Roots {
     }
 
     // The nearest root directory `path` sits under, and the segments of its
-    // path from there.
+    // path from there; a path outside `res://`, such as a script's that has
+    // no file, has none.
     fn segments<'a>(&'a self, path: &'a str) -> (&'a str, Vec<&'a str>) {
         let root = self
             .0
@@ -57,10 +58,10 @@ impl Roots {
             .filter(|root| path.starts_with(root))
             .max_by_key(|root| root.len())
             .unwrap_or(ROOT);
-        let segments = path[root.len()..]
-            .trim_end_matches(".rb")
-            .split('/')
-            .collect();
+        let Some(rest) = path.strip_prefix(root) else {
+            return (root, Vec::new());
+        };
+        let segments = rest.trim_end_matches(".rb").split('/').collect();
         (root, segments)
     }
 
@@ -344,5 +345,13 @@ mod tests {
         let roots = roots(&["res://", "user://saves"]);
 
         assert_eq!(roots.key_of("res://saves/slot.rb"), ["saves", "slot"]);
+    }
+
+    #[test]
+    fn a_path_outside_res_spells_no_constant() {
+        let roots = roots(&["res://src"]);
+
+        assert!(roots.key_of("").is_empty());
+        assert!(roots.key_of("user://slot.rb").is_empty());
     }
 }
