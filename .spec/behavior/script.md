@@ -495,3 +495,11 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a scene whose node's script is a tool script with a syntax error, and which writes the node a value its class declares nothing for |
 | When | the editor opens that scene |
 | Then | the node answers that value |
+
+## `RS-061` A node script answers the name the editor lists it by as its global name
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script the editor lists by its announcement |
+| When | Godot asks the script for its global name |
+| Then | the script answers the name it is announced by |

@@ -87,6 +87,11 @@ class HeaderTest < Minitest::Test
     refute ran?(:Dial)
   end
 
+  # @behavior RS-061
+  def test_a_node_script_answers_the_name_the_editor_lists_it_by_as_its_global_name
+    assert_equal :Turret, Godot::ResourceLoader.load("res://src/turret.rb").get_global_name
+  end
+
   private
 
   def script(name)

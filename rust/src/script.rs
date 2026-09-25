@@ -14,6 +14,7 @@ use godot::register::info::PropertyUsageFlags;
 use godot::sys::{self, GodotFfi};
 
 use crate::ancestry::{self, Ancestry, Broken, Cache, Lineage};
+use crate::announcement::Project;
 use crate::game::{self, FilesOnDisk, GameFiles};
 use crate::header::Header;
 use crate::instance::RubyInstance;
@@ -308,8 +309,15 @@ impl IScriptExtension for RubyScript {
             .ok()
     }
 
+    // The name the editor lists the script by, as a GDScript answers its
+    // `class_name`; none for a script it does not announce.
     fn get_global_name(&self) -> StringName {
-        StringName::default()
+        let path = self.base().get_path().to_string();
+        let test_directories = settings::test_directories();
+        Project::new(&FilesOnDisk, &test_directories, &bridge::is_node_class)
+            .announce(&path)
+            .map(|announcement| StringName::from(&announcement.name))
+            .unwrap_or_default()
     }
 
     fn inherits_script(&self, _script: Gd<Script>) -> bool {
