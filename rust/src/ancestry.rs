@@ -42,10 +42,10 @@ pub fn expire() {
 /// An ancestry kept from the first question that needs it until a source
 /// changes.
 #[derive(Default)]
-pub struct Cache(Mutex<Option<Kept>>);
+pub struct Cache(Mutex<Option<Entry>>);
 
 // An ancestry as read, and how many changes there had been when it was read.
-type Kept = (u64, Result<Arc<Ancestry>, Broken>);
+type Entry = (u64, Result<Arc<Ancestry>, Break>);
 
 impl Cache {
     /// The ancestry kept, or what `read` answers when none is kept since the
@@ -53,20 +53,20 @@ impl Cache {
     /// reads leaves what it read to be read again.
     pub fn ancestry(
         &self,
-        read: impl FnOnce() -> Result<Ancestry, Broken>,
-    ) -> Result<Arc<Ancestry>, Broken> {
+        read: impl FnOnce() -> Result<Ancestry, Break>,
+    ) -> Result<Arc<Ancestry>, Break> {
         let changes = CHANGES.load(Ordering::Acquire);
-        if let Some((kept_at, ancestry)) = &*self.kept()
+        if let Some((kept_at, ancestry)) = &*self.entry()
             && *kept_at == changes
         {
             return ancestry.clone();
         }
         let ancestry = read().map(Arc::new);
-        *self.kept() = Some((changes, ancestry.clone()));
+        *self.entry() = Some((changes, ancestry.clone()));
         ancestry
     }
 
-    fn kept(&self) -> MutexGuard<'_, Option<Kept>> {
+    fn entry(&self) -> MutexGuard<'_, Option<Entry>> {
         self.0.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }
@@ -147,29 +147,29 @@ impl<'a> Lineage<'a> {
 
 /// Why a file has no ancestry.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Broken {
+pub enum Break {
     /// A superclass, as written, that names no one file.
-    Unnamed(String),
+    NoFile(String),
     /// The file at this path comes back as its own ancestor.
     Cycle(String),
     /// No engine node class is reached: a file on the way writes no superclass
     /// that is a constant, or the engine class reached is no node's.
     NoEngineClass,
     /// The source of the file at `path` could not be read.
-    Unread { path: String, reason: String },
+    NoSource { path: String, reason: String },
 }
 
 /// Says why, following the path of the file whose ancestry broke.
-impl fmt::Display for Broken {
+impl fmt::Display for Break {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Unnamed(superclass) => write!(f, "extends {superclass}, which no one file names"),
+            Self::NoFile(superclass) => write!(f, "extends {superclass}, which no one file names"),
             Self::Cycle(path) => write!(
                 f,
                 "inherits from {path} again on the way to an engine class"
             ),
             Self::NoEngineClass => write!(f, "defines no class extending an engine node class"),
-            Self::Unread { path, reason } => {
+            Self::NoSource { path, reason } => {
                 write!(f, "inherits from {path}, which cannot be read: {reason}")
             }
         }
@@ -178,14 +178,14 @@ impl fmt::Display for Broken {
 
 /// The ancestry of the file at `path`, whose header is `header`, among
 /// `files`, each superclass found as the realm's loader would find it.
-pub fn read(path: &str, header: &Header, files: &impl Files) -> Result<Ancestry, Broken> {
+pub fn ancestry_of(path: &str, header: &Header, files: &impl Files) -> Result<Ancestry, Break> {
     let paths = files.paths();
     let roots = files.roots();
     let mut passed = vec![path.to_owned()];
     let mut ancestors = Vec::new();
     let mut superclass = header.superclass().cloned();
     loop {
-        let written = superclass.ok_or(Broken::NoEngineClass)?;
+        let written = superclass.ok_or(Break::NoEngineClass)?;
         if let [godot, engine_class] = written.names()
             && godot == "Godot"
         {
@@ -200,11 +200,11 @@ pub fn read(path: &str, header: &Header, files: &impl Files) -> Result<Ancestry,
             written.scope(),
             written.names(),
         )
-        .ok_or_else(|| Broken::Unnamed(written.names().join("::")))?;
+        .ok_or_else(|| Break::NoFile(written.names().join("::")))?;
         if passed.contains(&file) {
-            return Err(Broken::Cycle(file));
+            return Err(Break::Cycle(file));
         }
-        let source = files.source(&file).map_err(|reason| Broken::Unread {
+        let source = files.source(&file).map_err(|reason| Break::NoSource {
             path: file.clone(),
             reason,
         })?;
@@ -220,7 +220,7 @@ pub mod tests {
     use std::collections::BTreeMap;
     use std::sync::Arc;
 
-    use super::{Ancestry, Broken, Lineage, read};
+    use super::{Ancestry, Break, Lineage, ancestry_of};
     use crate::header::Header;
     use crate::realm::{Declarations, Files};
 
@@ -244,10 +244,10 @@ pub mod tests {
         }
     }
 
-    fn ancestry(path: &str, sources: &[(&'static str, &'static str)]) -> Result<Ancestry, Broken> {
+    fn ancestry(path: &str, sources: &[(&'static str, &'static str)]) -> Result<Ancestry, Break> {
         let files = Sources(sources.iter().copied().collect());
         let header = Header::from_source(path, &files.source(path).unwrap(), &files.roots());
-        read(path, &header, &files)
+        ancestry_of(path, &header, &files)
     }
 
     fn nearest(ancestry: &Ancestry) -> &str {
@@ -323,7 +323,7 @@ pub mod tests {
 
         let broken = ancestry("res://boss.rb", &sources).unwrap_err();
 
-        assert_eq!(broken, Broken::Unnamed("Enemy".to_owned()));
+        assert_eq!(broken, Break::NoFile("Enemy".to_owned()));
     }
 
     // @behavior RI-006
@@ -340,7 +340,7 @@ pub mod tests {
 
         let broken = ancestry("res://boss.rb", &sources).unwrap_err();
 
-        assert_eq!(broken, Broken::Unnamed("HttpEnemy".to_owned()));
+        assert_eq!(broken, Break::NoFile("HttpEnemy".to_owned()));
     }
 
     // @behavior RI-007
@@ -353,7 +353,7 @@ pub mod tests {
 
         let broken = ancestry("res://boss.rb", &sources).unwrap_err();
 
-        assert_eq!(broken, Broken::Cycle("res://boss.rb".to_owned()));
+        assert_eq!(broken, Break::Cycle("res://boss.rb".to_owned()));
     }
 
     // @behavior RI-008
@@ -366,7 +366,7 @@ pub mod tests {
 
         let broken = ancestry("res://boss.rb", &sources).unwrap_err();
 
-        assert_eq!(broken, Broken::NoEngineClass);
+        assert_eq!(broken, Break::NoEngineClass);
     }
 
     // @behavior RI-009
@@ -379,7 +379,9 @@ pub mod tests {
         ];
         let files = Sources(sources.iter().copied().collect());
         let header = Header::from_source("res://boss.rb", sources[0].1, &files.roots());
-        let ancestry = read("res://boss.rb", &header, &files).map(Arc::new).ok();
+        let ancestry = ancestry_of("res://boss.rb", &header, &files)
+            .map(Arc::new)
+            .ok();
 
         let lineage = Lineage::new("res://boss.rb".to_owned(), &header, ancestry);
 

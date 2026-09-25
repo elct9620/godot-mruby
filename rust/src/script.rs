@@ -13,7 +13,7 @@ use godot::prelude::*;
 use godot::register::info::PropertyUsageFlags;
 use godot::sys::{self, GodotFfi};
 
-use crate::ancestry::{self, Ancestry, Broken, Cache, Lineage};
+use crate::ancestry::{self, Ancestry, Break, Cache, Lineage};
 use crate::announcement::Project;
 use crate::game::{self, FilesOnDisk, GameFiles};
 use crate::header::Header;
@@ -185,10 +185,10 @@ impl RubyScript {
             .unwrap_or_else(PoisonError::into_inner)
     }
 
-    fn ancestry(&self) -> Result<Arc<Ancestry>, Broken> {
+    fn ancestry(&self) -> Result<Arc<Ancestry>, Break> {
         self.ancestry.ancestry(|| {
             let path = self.base().get_path().to_string();
-            ancestry::read(&path, &self.header, &GameFiles)
+            ancestry::ancestry_of(&path, &self.header, &GameFiles)
         })
     }
 
@@ -267,12 +267,12 @@ impl RubyScript {
 
     // The engine node class the file's class extends when it is a node
     // script, or why it is none.
-    fn node_class(&self) -> Result<StringName, Broken> {
+    fn node_class(&self) -> Result<StringName, Break> {
         let ancestry = self.ancestry()?;
         let engine_class = ancestry.engine_class();
         bridge::is_node_class(engine_class)
             .then(|| StringName::from(engine_class))
-            .ok_or(Broken::NoEngineClass)
+            .ok_or(Break::NoEngineClass)
     }
 }
 

@@ -16,9 +16,9 @@ use crate::realm::{self, Key};
 
 /// A key the engine keeps for a Ruby object, let go of when the engine lets
 /// go of it, on whatever thread that is.
-struct Kept(Key);
+struct Hold(Key);
 
-impl Drop for Kept {
+impl Drop for Hold {
     fn drop(&mut self) {
         realm::release(self.0);
     }
@@ -26,11 +26,11 @@ impl Drop for Kept {
 
 /// A Callable calling `call` on the Proc or Method `key` holds.
 pub fn callable(key: Key, name: String) -> Callable {
-    let kept = Kept(key);
-    Callable::from_sync_fn(name, move |args: &[&Variant]| call(&kept, args))
+    let hold = Hold(key);
+    Callable::from_sync_fn(name, move |args: &[&Variant]| call(&hold, args))
 }
 
-fn call(kept: &Kept, args: &[&Variant]) -> Variant {
+fn call(hold: &Hold, args: &[&Variant]) -> Variant {
     let checked = args.iter().map(|arg| ToRuby::try_new(arg));
     let args = match checked.collect::<Result<Vec<_>, _>>() {
         Ok(args) => args,
@@ -39,7 +39,7 @@ fn call(kept: &Kept, args: &[&Variant]) -> Variant {
             return Variant::nil();
         }
     };
-    realm::enter(|realm| realm.send::<_, ToEngine>(kept.0, "call", args))
+    realm::enter(|realm| realm.send::<_, ToEngine>(hold.0, "call", args))
         .map(|ToEngine(answer)| answer)
         .unwrap_or_else(|failed| {
             failed.write(&GodotLog);
@@ -52,7 +52,7 @@ fn call(kept: &Kept, args: &[&Variant]) -> Variant {
 #[derive(GodotClass)]
 #[class(base = RefCounted, no_init)]
 pub struct RubyObject {
-    kept: Kept,
+    hold: Hold,
     // What the engine prints it as: the Ruby object's class.
     class: GString,
     base: Base<RefCounted>,
@@ -69,7 +69,7 @@ impl RubyObject {
     /// A new `RubyObject` for the object of class `class` that `key` holds.
     pub fn new(key: Key, class: &str) -> Gd<Self> {
         Gd::from_init_fn(|base| Self {
-            kept: Kept(key),
+            hold: Hold(key),
             class: GString::from(class),
             base,
         })
@@ -77,6 +77,6 @@ impl RubyObject {
 
     /// The key the realm holds the Ruby object under.
     pub fn key(&self) -> Key {
-        self.kept.0
+        self.hold.0
     }
 }
