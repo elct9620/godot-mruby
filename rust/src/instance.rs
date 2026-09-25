@@ -130,7 +130,7 @@ impl RubyInstance {
 
     // Whether the node's class defines `method` or inherits it from a file,
     // whether its source writes it or its class defined it as it ran.
-    fn has(&self, method: &str) -> bool {
+    fn has_method(&self, method: &str) -> bool {
         self.lineage().has_method(&snapshot::latest(), method)
     }
 
@@ -190,7 +190,7 @@ impl RubyInstance {
 
     // Whether the node has no Ruby object yet, so what Godot writes has
     // nowhere to go but the instance.
-    fn unbuilt(&self) -> bool {
+    fn is_unbuilt(&self) -> bool {
         matches!(
             *self.stage.lock().unwrap_or_else(PoisonError::into_inner),
             Stage::Recorded
@@ -207,7 +207,7 @@ impl RubyInstance {
     }
 
     // Whether the node's class exported a property of that name.
-    fn exports(&self, name: &str) -> bool {
+    fn has_export(&self, name: &str) -> bool {
         self.property(name).is_some()
     }
 
@@ -215,7 +215,7 @@ impl RubyInstance {
     // is the engine's to answer even where the Ruby object holds one too. A
     // node may descend from the class its script extends, so the class asked
     // is the node's rather than the script's.
-    fn engine_property(&self, name: &str) -> bool {
+    fn has_engine_property(&self, name: &str) -> bool {
         let mut class_db = ClassDb::singleton();
         !class_db
             .class_get_property_setter(&self.class_name, name)
@@ -261,7 +261,7 @@ struct Caller {
 }
 
 impl Caller {
-    fn stage(&self) -> Stage {
+    fn current_stage(&self) -> Stage {
         *self.stage.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
@@ -274,7 +274,7 @@ impl Caller {
     // A call arriving while it initializes finds it held; one arriving while
     // its file runs, before the class exists, finds none and builds nothing.
     fn object(&self) -> Option<Key> {
-        match self.stage() {
+        match self.current_stage() {
             Stage::Built(key) => return Some(key),
             Stage::Failed => return None,
             Stage::Recorded => {}
@@ -461,8 +461,8 @@ fn answer_info() -> sys::GDExtensionPropertyInfo {
 // its engine class has is the engine's, whatever the Ruby object holds under
 // that name, and so is a name Godot spells with a slash, as metadata and
 // property groups are.
-fn the_engines_own(instance: &RubyInstance, name: &str) -> bool {
-    instance.engine_property(name) || name.contains('/')
+fn is_engines_own(instance: &RubyInstance, name: &str) -> bool {
+    instance.has_engine_property(name) || name.contains('/')
 }
 
 // A string the array holds for Godot to read until it hands the array back,
@@ -540,11 +540,11 @@ unsafe extern "C" fn set(
     // SAFETY: the instance lives until Ruby runs, and is not used after.
     let reached = {
         let instance = unsafe { instance(data) };
-        let exported = instance.exports(&name);
-        if !exported && the_engines_own(instance, &name) {
+        let exported = instance.has_export(&name);
+        if !exported && is_engines_own(instance, &name) {
             return sys::GDExtensionBool::from(false);
         }
-        if instance.unbuilt() && !realm::is_inside() {
+        if instance.is_unbuilt() && !realm::is_inside() {
             instance.stage(&name, value);
             return sys::GDExtensionBool::from(true);
         }
@@ -567,11 +567,11 @@ unsafe extern "C" fn get(
     // SAFETY: the instance lives until Ruby runs, and is not used after.
     let reached = {
         let instance = unsafe { instance(data) };
-        let exported = instance.exports(&name);
-        if !exported && the_engines_own(instance, &name) {
+        let exported = instance.has_export(&name);
+        if !exported && is_engines_own(instance, &name) {
             return sys::GDExtensionBool::from(false);
         }
-        if instance.unbuilt() && !realm::is_inside() {
+        if instance.is_unbuilt() && !realm::is_inside() {
             let staged = instance
                 .staged_value(&name)
                 .or_else(|| instance.default_value(&name));
@@ -688,7 +688,7 @@ unsafe extern "C" fn has_method(
     method: sys::GDExtensionConstStringNamePtr,
 ) -> sys::GDExtensionBool {
     // SAFETY: the instance lives for this call, which runs no Ruby.
-    let has = unsafe { instance(data).has(&name(method)) };
+    let has = unsafe { instance(data).has_method(&name(method)) };
     sys::GDExtensionBool::from(has)
 }
 
@@ -737,7 +737,7 @@ unsafe fn revert_answer(
     let caller = {
         // SAFETY: as the caller promises.
         let instance = unsafe { instance(data) };
-        if !instance.has(method) {
+        if !instance.has_method(method) {
             return Variant::nil();
         }
         instance.caller()
@@ -758,7 +758,7 @@ unsafe extern "C" fn call(
     // SAFETY: the instance lives until Ruby runs, and is not used after.
     let caller = {
         let instance = unsafe { instance(data) };
-        if !instance.has(&method) {
+        if !instance.has_method(&method) {
             // SAFETY: Godot hands an error to fill.
             unsafe { (*error).error = sys::GDEXTENSION_CALL_ERROR_INVALID_METHOD };
             return;
@@ -789,7 +789,7 @@ unsafe extern "C" fn notification(
     // SAFETY: the instance lives until Ruby runs, and is not used after.
     let caller = {
         let instance = unsafe { instance(data) };
-        if !instance.has("_notification") {
+        if !instance.has_method("_notification") {
             return;
         }
         instance.caller()
