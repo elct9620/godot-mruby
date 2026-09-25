@@ -29,7 +29,7 @@ pub struct RubyLanguage {
     base: Base<ScriptLanguageExtension>,
 }
 
-static REGISTERED: Mutex<Option<InstanceId>> = Mutex::new(None);
+static LANGUAGE: Mutex<Option<InstanceId>> = Mutex::new(None);
 static CLASHES: Mutex<Clashes> = Mutex::new(Clashes::new());
 
 thread_local! {
@@ -40,7 +40,7 @@ thread_local! {
 
 /// Runs `write` while the language answers `backtrace` as this thread's
 /// stack, so what it writes to Godot's log carries the frames.
-pub fn answering_stack(backtrace: &[Location], write: impl FnOnce()) {
+pub fn write_with_stack(backtrace: &[Location], write: impl FnOnce()) {
     let answered = STACK.replace(backtrace.to_vec());
     write();
     STACK.set(answered);
@@ -49,11 +49,11 @@ pub fn answering_stack(backtrace: &[Location], write: impl FnOnce()) {
 pub fn register() {
     let language = RubyLanguage::new_alloc();
     Engine::singleton().register_script_language(&language);
-    *REGISTERED.lock().unwrap() = Some(language.instance_id());
+    *LANGUAGE.lock().unwrap() = Some(language.instance_id());
 }
 
 pub fn unregister() {
-    if let Some(id) = REGISTERED.lock().unwrap().take() {
+    if let Some(id) = LANGUAGE.lock().unwrap().take() {
         let language = Gd::<RubyLanguage>::from_instance_id(id);
         Engine::singleton().unregister_script_language(&language);
         language.free();
@@ -61,8 +61,8 @@ pub fn unregister() {
 }
 
 /// The registered language, which every script reports as its own.
-pub fn registered_language() -> Option<Gd<RubyLanguage>> {
-    REGISTERED.lock().unwrap().map(Gd::from_instance_id)
+pub fn language() -> Option<Gd<RubyLanguage>> {
+    LANGUAGE.lock().unwrap().map(Gd::from_instance_id)
 }
 
 fn empty_dictionary() -> AnyDictionary {

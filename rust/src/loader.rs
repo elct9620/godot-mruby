@@ -15,16 +15,16 @@ pub struct ResourceFormatLoaderRubyScript {
     base: Base<ResourceFormatLoader>,
 }
 
-static REGISTERED: Mutex<Option<InstanceId>> = Mutex::new(None);
+static LOADER: Mutex<Option<InstanceId>> = Mutex::new(None);
 
 pub fn register() {
     let loader = ResourceFormatLoaderRubyScript::new_gd();
     ResourceLoader::singleton().add_resource_format_loader(&loader);
-    *REGISTERED.lock().unwrap() = Some(loader.instance_id());
+    *LOADER.lock().unwrap() = Some(loader.instance_id());
 }
 
 pub fn unregister() {
-    if let Some(id) = REGISTERED.lock().unwrap().take() {
+    if let Some(id) = LOADER.lock().unwrap().take() {
         let loader = Gd::<ResourceFormatLoaderRubyScript>::from_instance_id(id);
         ResourceLoader::singleton().remove_resource_format_loader(&loader);
     }

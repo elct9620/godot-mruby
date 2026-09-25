@@ -56,7 +56,7 @@ pub fn validation<F: Files + Sync>(
 ) -> Validation {
     let name = CString::new(path).unwrap_or_default();
     let diagnostics = compiler::diagnostics(&name, source);
-    let typed = Typed {
+    let typed = DraftFiles {
         files,
         path,
         source,
@@ -109,13 +109,13 @@ fn shared_constant_warning(files: &impl Files, path: &str) -> Option<Warning> {
 
 // The project's files, with the one being typed read as typed: a file not
 // saved yet is among them too.
-struct Typed<'a, F> {
+struct DraftFiles<'a, F> {
     files: &'a F,
     path: &'a str,
     source: &'a str,
 }
 
-impl<F: Files + Sync> Files for Typed<'_, F> {
+impl<F: Files + Sync> Files for DraftFiles<'_, F> {
     fn paths(&self) -> Vec<String> {
         let mut paths = self.files.paths();
         if !paths.iter().any(|path| path == self.path) {
@@ -157,7 +157,7 @@ mod tests {
         validation(&files, &test_directories, &is_node, path, source)
     }
 
-    fn warned(validation: &Validation, kind: Kind) -> Vec<(u32, &str)> {
+    fn warnings_of(validation: &Validation, kind: Kind) -> Vec<(u32, &str)> {
         validation
             .warnings
             .iter()
@@ -176,7 +176,7 @@ mod tests {
         let checked = validation_of("res://potion.rb", POTION, &sources);
 
         assert_eq!(
-            warned(&checked, Kind::SharedConstant),
+            warnings_of(&checked, Kind::SharedConstant),
             vec![(
                 1,
                 "res://potion.rb and res://po_tion.rb both name Potion, so neither loads by name"
@@ -198,7 +198,7 @@ mod tests {
         let checked = validation_of("res://enemy.rb", ENEMY, &sources);
 
         assert_eq!(
-            warned(&checked, Kind::SharedName),
+            warnings_of(&checked, Kind::SharedName),
             vec![(
                 1,
                 "res://enemy.rb and res://bosses/enemy.rb define node scripts named Enemy, so none is listed by that name"
@@ -216,6 +216,6 @@ mod tests {
 
         let checked = validation_of("res://enemy.rb", ENEMY, &sources);
 
-        assert_eq!(warned(&checked, Kind::SharedName).len(), 1);
+        assert_eq!(warnings_of(&checked, Kind::SharedName).len(), 1);
     }
 }

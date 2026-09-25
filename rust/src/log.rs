@@ -33,7 +33,7 @@ impl realm::Log for GodotLog {
     // Godot asks every language for its stack as it prints, so the language
     // answers the exception's backtrace while it is written.
     fn exception(&self, text: &str, backtrace: &[Location]) {
-        language::answering_stack(backtrace, || {
+        language::write_with_stack(backtrace, || {
             write(
                 Level::ScriptError,
                 backtrace.first(),

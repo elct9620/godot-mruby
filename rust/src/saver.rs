@@ -22,16 +22,16 @@ pub struct ResourceFormatSaverRubyScript {
     base: Base<ResourceFormatSaver>,
 }
 
-static REGISTERED: Mutex<Option<InstanceId>> = Mutex::new(None);
+static SAVER: Mutex<Option<InstanceId>> = Mutex::new(None);
 
 pub fn register() {
     let saver = ResourceFormatSaverRubyScript::new_gd();
     ResourceSaver::singleton().add_resource_format_saver(&saver);
-    *REGISTERED.lock().unwrap() = Some(saver.instance_id());
+    *SAVER.lock().unwrap() = Some(saver.instance_id());
 }
 
 pub fn unregister() {
-    if let Some(id) = REGISTERED.lock().unwrap().take() {
+    if let Some(id) = SAVER.lock().unwrap().take() {
         let saver = Gd::<ResourceFormatSaverRubyScript>::from_instance_id(id);
         ResourceSaver::singleton().remove_resource_format_saver(&saver);
     }

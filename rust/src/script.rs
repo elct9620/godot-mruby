@@ -49,7 +49,7 @@ pub struct RubyScript {
     // What they were last told, as `Exports::digest` has it: Godot asks for
     // the exports again for every property of a scene it saves, and telling
     // a placeholder makes the editor list its properties anew.
-    told_digest: Mutex<Option<(u32, u32)>>,
+    last_exports_digest: Mutex<Option<(u32, u32)>>,
 }
 
 /// What a placeholder is told of the class: what it exports, and the value
@@ -85,10 +85,10 @@ impl Exports {
 
 // The scripts holding placeholders, which are told what their classes
 // declare whenever a file runs in the editor's realm.
-static PLACED: Mutex<Vec<InstanceId>> = Mutex::new(Vec::new());
+static PLACEHOLDER_SCRIPTS: Mutex<Vec<InstanceId>> = Mutex::new(Vec::new());
 // The paths of scripts Godot made placeholders of since the last frame,
 // whose files the editor's realm runs then.
-static UNRUN: Mutex<Vec<String>> = Mutex::new(Vec::new());
+static PENDING_PATHS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 /// Runs in the game's realm the file of each script Godot made a
 /// placeholder of since the last frame, unless it is one the editor leaves
@@ -98,7 +98,7 @@ static UNRUN: Mutex<Vec<String>> = Mutex::new(Vec::new());
 /// Placeholders exist only in the editor, and the extension calls this
 /// every frame.
 pub fn run_placed(run_again: bool) {
-    let paths = std::mem::take(&mut *UNRUN.lock().unwrap_or_else(PoisonError::into_inner));
+    let paths = std::mem::take(&mut *PENDING_PATHS.lock().unwrap_or_else(PoisonError::into_inner));
     if paths.is_empty() {
         if run_again {
             tell_placed();
@@ -120,7 +120,7 @@ pub fn run_placed(run_again: bool) {
 // Tells every script holding placeholders to tell them what its class
 // declares, which each does only when that changed.
 fn tell_placed() {
-    let placed = PLACED
+    let placed = PLACEHOLDER_SCRIPTS
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .clone();
@@ -147,7 +147,7 @@ impl RubyScript {
             header: Arc::new(header),
             ancestry: Cache::default(),
             placeholders: Mutex::default(),
-            told_digest: Mutex::default(),
+            last_exports_digest: Mutex::default(),
             source,
         })
     }
@@ -168,12 +168,14 @@ impl RubyScript {
     // has one, for the editor's realm to run at the next frame.
     fn place(&self) {
         let id = self.base().instance_id();
-        let mut placed = PLACED.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut placed = PLACEHOLDER_SCRIPTS
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
         if !placed.contains(&id) {
             placed.push(id);
         }
         let path = self.base().get_path().to_string();
-        let mut unrun = UNRUN.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut unrun = PENDING_PATHS.lock().unwrap_or_else(PoisonError::into_inner);
         if !path.is_empty() && !unrun.contains(&path) {
             unrun.push(path);
         }
@@ -397,7 +399,7 @@ impl IScriptExtension for RubyScript {
         placeholders.retain(|kept| kept.0 != erased);
         if placeholders.is_empty() {
             let id = self.base().instance_id();
-            PLACED
+            PLACEHOLDER_SCRIPTS
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner)
                 .retain(|placed| *placed != id);
@@ -470,7 +472,7 @@ impl IScriptExtension for RubyScript {
     }
 
     fn get_language(&self) -> Option<Gd<ScriptLanguage>> {
-        language::registered_language().map(Gd::upcast)
+        language::language().map(Gd::upcast)
     }
 
     fn has_script_signal(&self, signal: StringName) -> bool {
@@ -503,15 +505,15 @@ impl IScriptExtension for RubyScript {
         }
         let exported = self.exports();
         let digest = Some(exported.digest());
-        let mut told_digest = self
-            .told_digest
+        let mut last_exports_digest = self
+            .last_exports_digest
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
-        if *told_digest == digest {
+        if *last_exports_digest == digest {
             return;
         }
-        *told_digest = digest;
-        drop(told_digest);
+        *last_exports_digest = digest;
+        drop(last_exports_digest);
         let placeholders: Vec<_> = self.placeholders().iter().map(|kept| kept.0).collect();
         let _released = self.base_mut();
         for placeholder in placeholders {

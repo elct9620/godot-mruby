@@ -239,10 +239,10 @@ static GAME: ReentrantLock<RefCell<Game>> = ReentrantLock::new(RefCell::new(Game
 // stay within half of the 512 KiB the smallest thread stack holds.
 const DEEPEST_ENTRY: usize = 24;
 // Keys let go of on any thread, waiting for the game's realm to take them.
-static RELEASED: Mutex<Vec<Key>> = Mutex::new(Vec::new());
+static RELEASES: Mutex<Vec<Key>> = Mutex::new(Vec::new());
 // Paths of files whose source changed, waiting for the game's realm's next
 // frame to run them again.
-static CHANGED: Mutex<Vec<String>> = Mutex::new(Vec::new());
+static SOURCE_CHANGES: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 // The way the game's realm opens, which an opener that panicked leaves as it
 // was, so the lock is taken whether or not that poisoned it.
@@ -382,13 +382,13 @@ pub fn file_by_constant(mrb: &Mrb, names: &[String]) -> Option<String> {
 /// Lets go of the object `key` holds at the realm's next entry or frame,
 /// never waiting for the realm, so whatever frees a node never waits for Ruby.
 pub fn release(key: Key) {
-    RELEASED.lock().unwrap().push(key);
+    RELEASES.lock().unwrap().push(key);
 }
 
 /// Lets go of the objects released keys hold, entering the game's realm only
 /// when a key is waiting; the extension calls it every frame.
 pub fn release_queued() {
-    if RELEASED.lock().unwrap().is_empty() {
+    if RELEASES.lock().unwrap().is_empty() {
         return;
     }
     let game = GAME.lock();
@@ -401,7 +401,7 @@ pub fn release_queued() {
 /// source it has then, if it has run; it never waits for the realm, so Godot
 /// reloads a script on any thread, Ruby's included.
 pub fn rerun(path: &str) {
-    let mut changed = CHANGED.lock().unwrap();
+    let mut changed = SOURCE_CHANGES.lock().unwrap();
     if !changed.iter().any(|queued| queued == path) {
         changed.push(path.to_owned());
     }
@@ -422,7 +422,7 @@ pub struct Rerun {
 /// what was told of the classes can be told anew. The extension calls it
 /// every frame.
 pub fn rerun_queued(rerun: &Rerun) -> bool {
-    let paths = std::mem::take(&mut *CHANGED.lock().unwrap());
+    let paths = std::mem::take(&mut *SOURCE_CHANGES.lock().unwrap());
     if paths.is_empty() {
         return false;
     }
@@ -446,8 +446,8 @@ pub fn close() {
         return;
     }
     *game.borrow_mut() = Game::Closed;
-    RELEASED.lock().unwrap().clear();
-    CHANGED.lock().unwrap().clear();
+    RELEASES.lock().unwrap().clear();
+    SOURCE_CHANGES.lock().unwrap().clear();
     snapshot::publish(Arc::default());
 }
 
@@ -620,7 +620,7 @@ impl Realm {
     }
 
     fn release_queued(&self) {
-        let keys = std::mem::take(&mut *RELEASED.lock().unwrap());
+        let keys = std::mem::take(&mut *RELEASES.lock().unwrap());
         let registry = &bookkeeping(&self.mrb).registry;
         for key in keys {
             registry.release(&self.mrb, key);

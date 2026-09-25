@@ -21,7 +21,7 @@ pub struct RubyTestRunner {
     run: Run,
     // Whether every test file ran without an error, which a passing run
     // still needs.
-    loaded: bool,
+    is_loaded: bool,
 }
 
 // Where the run stands, which decides what a beginning frame does to it.
@@ -45,7 +45,7 @@ impl INode for RubyTestRunner {
             .and_then(|tests| Ok((tests, test_options(&args)?)));
         match run_as_asked {
             Ok((tests, options)) => {
-                self.loaded = load(&tests);
+                self.is_loaded = load(&tests);
                 self.run = Run::Starting(options);
                 let tree = self.base().get_tree();
                 tree.signals()
@@ -80,7 +80,7 @@ impl RubyTestRunner {
             }
         };
         match over {
-            Some(passed) => self.quit(passed && self.loaded),
+            Some(passed) => self.quit(passed && self.is_loaded),
             None => self.run = Run::Running,
         }
     }
