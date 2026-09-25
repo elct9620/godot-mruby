@@ -94,6 +94,13 @@ class HintsTest < Minitest::Test
     assert_raises(ArgumentError) { Unit::Declarations::Doubling }
   end
 
+  # @behavior RD-067
+  def test_a_keyword_naming_no_hint_is_refused
+    error = assert_raises(ArgumentError) { Unit::Declarations::Misnamed }
+
+    assert_equal %("slider:" is not a hint a property can be exported with.), error.message
+  end
+
   # @behavior RD-051
   def test_a_nodes_properties_carry_the_hints_its_class_declared
     gauge = autofree(Unit::Declarations::Gauge.new)

@@ -534,3 +534,11 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | Given | a node script whose class exports a class with an object of another class for its value |
 | When | the file runs |
 | Then | the declaration is refused, in the words GDScript refuses a mismatched value with |
+
+## `RD-067` A keyword naming no hint is refused
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a value with a keyword no `@export_*` annotation answers to |
+| When | the file runs |
+| Then | the declaration raises where it is written, naming the keyword |
