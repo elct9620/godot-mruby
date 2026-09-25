@@ -5,6 +5,7 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 ## Includes
 
 - `godot/test/unit/engine_classes/**/*_test.rb`
+- `tasks/support/runner.rb`
 
 ## `RG-001` An engine class is a class under Godot
 
@@ -158,3 +159,11 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | an engine object whose engine class has a method Ruby's `Object` also defines |
 | When | Ruby calls the name, and calls `call` with the name |
 | Then | the first keeps Ruby's meaning, and `call` reaches the engine's method |
+
+## `RG-020` Calling a static method writes nothing to the log
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine class the engine keeps no singleton of |
+| When | Ruby calls one of its static methods |
+| Then | the log carries nothing about a singleton, as a GDScript call's does not |

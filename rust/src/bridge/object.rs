@@ -206,10 +206,15 @@ fn instance_id(_mrb: &Mrb, held: &EngineObject) -> i64 {
 }
 
 // Godot::Object.__singleton__: the engine's singleton of the receiver's
-// engine class, or nil when the engine keeps none.
+// engine class, or nil when the engine keeps none. The engine is asked
+// first, since it reports a singleton it lacks as an error.
 fn singleton(mrb: &Mrb, class: RClass) -> Value {
     let name = engine_name(mrb, class);
-    Engine::singleton()
+    let engine = Engine::singleton();
+    if !engine.has_singleton(&name) {
+        return Value::nil();
+    }
+    engine
         .get_singleton(&name)
         .map(|object| mrb.wrap_as(EngineObject(object), class).as_value())
         .unwrap_or_else(Value::nil)
