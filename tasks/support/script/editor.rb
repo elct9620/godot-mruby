@@ -6,9 +6,10 @@ require "open3"
 module Godot
   module Script
     # Opens scenes in a headless editor and reads what it printed: a node whose
-    # script is a node script is given Godot's placeholder, so what the class
-    # declares reaches the node while no Ruby runs, and what it exports once
-    # its source changes. Part of Script.verify!.
+    # script is a node script is given Godot's placeholder, told what the
+    # class declares before its file runs, as the editor's realm runs it, and
+    # once its source changes; a tool's node is given its callbacks, and no
+    # file under a test directory runs. Part of Script.verify!.
     module Editor
       SCENE = "res://integration/script/header/header.tscn"
       # A scene whose tool script changes a node script's source, reloads it,
