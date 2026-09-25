@@ -320,8 +320,13 @@ impl IScriptExtension for RubyScript {
             .unwrap_or_default()
     }
 
-    fn inherits_script(&self, _script: Gd<Script>) -> bool {
-        false
+    // Whether `script` is this script or one its class inherits from, as a
+    // GDScript answers of its own chain; a script of another language is
+    // neither.
+    fn inherits_script(&self, script: Gd<Script>) -> bool {
+        script
+            .try_cast::<RubyScript>()
+            .is_ok_and(|script| self.lineage().has_file(&script.get_path().to_string()))
     }
 
     fn get_instance_base_type(&self) -> StringName {

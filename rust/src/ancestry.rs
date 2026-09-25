@@ -91,6 +91,12 @@ impl<'a> Lineage<'a> {
         }
     }
 
+    /// Whether the class is, or inherits from, the class of the file at
+    /// `path`.
+    pub fn has_file(&self, path: &str) -> bool {
+        self.files().any(|(file, _)| file == path)
+    }
+
     /// Each file by path, with its header.
     pub fn files(&self) -> impl Iterator<Item = (&str, &Header)> {
         let inherited = self
@@ -212,8 +218,9 @@ pub fn read(path: &str, header: &Header, files: &impl Files) -> Result<Ancestry,
 #[cfg(test)]
 pub mod tests {
     use std::collections::BTreeMap;
+    use std::sync::Arc;
 
-    use super::{Ancestry, Broken, read};
+    use super::{Ancestry, Broken, Lineage, read};
     use crate::header::Header;
     use crate::realm::{Declarations, Files};
 
@@ -360,5 +367,24 @@ pub mod tests {
         let broken = ancestry("res://boss.rb", &sources).unwrap_err();
 
         assert_eq!(broken, Broken::NoEngineClass);
+    }
+
+    // @behavior RI-009
+    #[test]
+    fn a_class_has_the_files_it_is_and_inherits_from_and_no_other() {
+        let sources = [
+            ("res://boss.rb", "class Boss < Enemy\nend\n"),
+            ("res://enemy.rb", "class Enemy < Godot::Node2D\nend\n"),
+            ("res://ally.rb", "class Ally < Godot::Node2D\nend\n"),
+        ];
+        let files = Sources(sources.iter().copied().collect());
+        let header = Header::read("res://boss.rb", sources[0].1, &files.roots());
+        let ancestry = read("res://boss.rb", &header, &files).map(Arc::new).ok();
+
+        let lineage = Lineage::new("res://boss.rb".to_owned(), &header, ancestry);
+
+        assert!(lineage.has_file("res://boss.rb"));
+        assert!(lineage.has_file("res://enemy.rb"));
+        assert!(!lineage.has_file("res://ally.rb"));
     }
 }
