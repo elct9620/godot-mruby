@@ -13,7 +13,7 @@ use godot::prelude::*;
 
 use crate::announcement::{self, Clashes, Omission};
 use crate::compiler::CompileError;
-use crate::game::{self, FilesOnDisk, GameFiles};
+use crate::game::{self, GameFiles};
 use crate::realm::{Files, Location};
 use crate::script::RubyScript;
 use crate::template;
@@ -161,7 +161,7 @@ impl IScriptLanguageExtension for RubyLanguage {
     ) -> AnyDictionary {
         let test_directories = settings::test_directories();
         let checked = validation::validation(
-            &FilesOnDisk,
+            game::listing(),
             &test_directories,
             &settings::template_directory(),
             &bridge::is_node_class,

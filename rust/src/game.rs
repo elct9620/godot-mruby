@@ -116,8 +116,13 @@ pub fn is_left_out_in_editor(path: &str, test_directories: &[String]) -> bool {
     Engine::singleton().is_editor_hint() && settings::is_in_directory(path, test_directories)
 }
 
-// The game's files on disk as last listed.
 static LISTING: Listing<FilesOnDisk> = Listing::new(FilesOnDisk, is_listed);
+
+/// The game's files on disk as last listed, for what the editor asks while
+/// it holds the language.
+pub fn listing() -> &'static Listing<FilesOnDisk> {
+    &LISTING
+}
 
 /// The announcement of the file at `path`, read from disk as the editor
 /// scans the project.
