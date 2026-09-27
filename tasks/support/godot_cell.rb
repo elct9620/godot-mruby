@@ -40,13 +40,19 @@ module GodotCell
 
   module_function
 
+  # The change as the addon's third-party notices show it.
+  def change
+    "This build changes #{FILE}, in `borrow_mut`, from\n\n#{CONDITION}\nto\n\n#{REPLACEMENT}\n" \
+      "The changed source is godot-cell #{VERSION} from crates.io with this change, under the same license.\n"
+  end
+
   # Writes the changed copy into vendor/ unless it is already there.
   def vendor
-    return if changed?
+    return if applied?
 
     FileUtils.rm_rf(DIR)
     unpack(download)
-    change
+    apply
   end
 
   # Refuses a lockfile in which cargo builds any godot-cell but this copy, as
@@ -61,7 +67,7 @@ module GodotCell
           "gdext now requires another version, whose bind needs checking before the change moves to it"
   end
 
-  def changed?
+  def applied?
     File.exist?(File.join(DIR, FILE)) && File.binread(File.join(DIR, FILE)).include?(REPLACEMENT)
   end
 
@@ -85,7 +91,7 @@ module GodotCell
     end
   end
 
-  def change
+  def apply
     path = File.join(DIR, FILE)
     source = File.binread(path)
     raise "#{FILE} of godot-cell #{VERSION} no longer reads as expected" unless source.scan(CONDITION).size == 1

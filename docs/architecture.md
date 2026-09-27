@@ -38,7 +38,7 @@ res://addons/godot_mruby/
 ├─ bin/                       one library per platform
 ├─ runner.tscn                the test runner scene
 ├─ LICENSE
-└─ THIRD_PARTY_LICENSES.txt   mruby and the shipped crates
+└─ THIRD_PARTY_LICENSES.txt   mruby, the shipped crates, what was changed in them
 ```
 
 What ships is the addon folder, placed where Godot expects a non-project asset: `addons/<name>/`, so its files clash with neither the project nor other assets.

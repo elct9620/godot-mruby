@@ -5,6 +5,7 @@ How a project comes to run Ruby: the addon under `addons/godot_mruby/` carries t
 ## Includes
 
 - `godot/test/unit/addon/**/*_test.rb`
+- `tasks/support/addon.rb`
 - `tasks/support/godot.rb`
 
 ## `RA-001` The editor loads the addon at startup
@@ -22,3 +23,11 @@ How a project comes to run Ruby: the addon under `addons/godot_mruby/` carries t
 | Given | a project with the addon |
 | When | Godot lists the project's settings |
 | Then | each setting under `mruby/` is one the Project Settings dialog shows without its Advanced Settings toggle |
+
+## `RA-003` The package names each crate it changed, with the change
+
+| Step | Statement |
+| --- | --- |
+| Given | a package built with a crate changed from its published version |
+| When | its third-party notices are read |
+| Then | the crate's section says it was changed and shows the source before and after |
