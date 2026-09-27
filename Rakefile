@@ -4,6 +4,7 @@ require "beni/tasks"
 require "rubocop/rake_task"
 
 require_relative "tasks/support/extension"
+require_relative "tasks/support/godot_cell"
 
 # mruby is built once per architecture the extension ships: the host build is
 # what cargo links by default, and on macOS the x86_64 build is the other half

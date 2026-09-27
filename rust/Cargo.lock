@@ -156,8 +156,6 @@ dependencies = [
 [[package]]
 name = "godot-cell"
 version = "0.5.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edc4695597110f27de8f0adbdf3afd01692e3596cc89de2aaa2a42d31b93bfc4"
 
 [[package]]
 name = "godot-codegen"
@@ -214,6 +212,7 @@ version = "0.1.0"
 dependencies = [
  "beni",
  "godot",
+ "godot-cell",
  "ruby-prism",
 ]
 

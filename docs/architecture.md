@@ -69,7 +69,7 @@ A module in `rust/src/` is named after the Godot extension point it implements, 
 
 A `.rake` file is thin glue; what a task does lives in `tasks/support/`.
 
-Build output stays out of the repository: `vendor/` holds mruby's source and archives, `rust/target/` the crate's builds, `bin/` the installed library, and `pkg/` the package.
+Build output stays out of the repository: `vendor/` holds mruby's source and archives and the changed godot-cell (`tasks/support/godot_cell.rb`), `rust/target/` the crate's builds, `bin/` the installed library, and `pkg/` the package.
 
 ### 1.4 Tests
 
@@ -82,7 +82,7 @@ godot/
                          └─ read by tasks/support/<spec>.rb or <spec>/
 ```
 
-The extension is tested through itself, and `godot/` is sorted by who judges an outcome, then by the `.spec/behavior` file it claims. The extension's own runner judges `test/unit/<spec>/`, whose files loaded by name sit beside their tests, and `test/e2e/`, which plays the game in `src/` and claims what its node scripts do. `godot:verify` judges `integration/<spec>/`, for what no Ruby test can observe: a log line, a run's exit, the editor, an exported game. Its checks are named after the same spec, and GDScript stays only where a check must ask from outside the realm. What only the extension's own code reaches, such as a header, an ancestry or a realm entry, is judged by `cargo test` beside that code in `rust/src/`.
+The extension is tested through itself, and `godot/` is sorted by who judges an outcome, then by the `.spec/behavior` file it claims. The extension's own runner judges `test/unit/<spec>/`, whose files loaded by name sit beside their tests, and `test/e2e/`, which plays the game in `src/` and claims what its node scripts do. `godot:verify` judges `integration/<spec>/`, for what no Ruby test can observe: a log line, a run's exit, the editor, an exported game. Its checks are named after the same spec, and GDScript stays only where a check must ask from outside the realm. What only the extension's own code reaches, such as a header, an ancestry or a realm entry, is judged by `cargo test` beside that code in `rust/src/`, and what a dependency must keep for the extension, such as the order gdext's cell gives threads, in `rust/tests/`.
 
 ### 1.5 Naming
 

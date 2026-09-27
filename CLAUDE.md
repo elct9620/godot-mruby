@@ -24,7 +24,7 @@ The full source layout, and how the parts fit together, is in `docs/architecture
 
 ```bash
 bundle install
-bundle exec rake beni:build              # download mruby into vendor/ and build its archives
+bundle exec rake beni:build              # download mruby and godot-cell into vendor/, build mruby's archives
 bundle exec rake extension:build         # host debug build, installed into the addon's bin/
 bundle exec rake godot:verify            # headless editor pass, then its scenes and the Ruby tests
 bundle exec rake editor                  # build, then open the editor on godot/
@@ -40,7 +40,7 @@ sumi fmt                                 # write .spec/ in sumi's form (--check 
 
 `sumi help glossary|contract|behavior` has the form of each specification.
 
-`cargo` works directly from the repo root or `rust/`: `.cargo/config.toml` points it at `vendor/` and `rust-toolchain.toml` pins the compiler.
+`cargo` works directly from the repo root or `rust/` once `rake beni:build` has filled `vendor/`: `.cargo/config.toml` points it there, `rust/Cargo.toml` patches godot-cell from there, and `rust-toolchain.toml` pins the compiler.
 
 ## Guidelines
 
@@ -48,7 +48,7 @@ sumi fmt                                 # write .spec/ in sumi's form (--check 
 - Minimum Godot is 4.6: keep gdext's `api-4-6` feature and the `.gdextension`'s `compatibility_minimum` in step.
 - `godot/.godot/extension_list.cfg` is committed so Godot loads the addon at startup; an editor that first discovers it and quits at once crashes (godotengine/godot#111048).
 - Library file names are shared by `godot_mruby.gdextension` and `tasks/support/extension.rb`; change both together.
-- A scenario is claimed where its outcome is observed: a Ruby test under `godot/test/unit/<spec>/` or, playing the game, `godot/test/e2e/`; or, when only a log or a run's outcome shows it, a check in `tasks/support/<spec>` reading `godot/integration/<spec>/`; or, when only the extension's own code reaches it, a Rust test beside that code; a fixture claims nothing.
+- A scenario is claimed where its outcome is observed: a Ruby test under `godot/test/unit/<spec>/` or, playing the game, `godot/test/e2e/`; or, when only a log or a run's outcome shows it, a check in `tasks/support/<spec>` reading `godot/integration/<spec>/`; or, when only the extension's own code reaches it, a Rust test beside that code; or, when a dependency must keep it, a Rust test under `rust/tests/`; a fixture claims nothing.
 - Name Rust and Ruby code as `docs/architecture.md` 1.5 lays out; a name joins the rule its module follows.
 - Put task logic in `tasks/support/` (the only Ruby RuboCop checks) and keep `.rake` files as thin glue.
 - beni skips `beni:build` while an archive exists, so a config change needs `beni:clean` first.

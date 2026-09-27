@@ -14,9 +14,19 @@ crate-type = ["cdylib"]
 # Its blocking bind can still fail: a mutable bind does not wait for another
 # thread's shared one once the calling thread has held the first shared bind,
 # so a `&mut self` virtual (`frame`, or the stack Godot asks for as it prints)
-# may panic while another thread's call on the language is under way.
+# would panic while another thread's call on the language is under way; the
+# godot-cell patched in below makes it wait.
 godot = { version = "0.5.5", features = ["api-4-6", "experimental-threads"] }
 # Links the mruby archive the beni gem builds; the gem and the crate release
 # in lockstep, so their versions move together.
 beni = "0.17.0"
 ruby-prism = "1.9.0"
+
+[dev-dependencies]
+# The cell gdext holds objects in, for the orderings Godot's threads rely on.
+godot-cell = "=0.5.5"
+
+[patch.crates-io]
+# gdext's godot-cell with its mutable bind made to wait for other threads'
+# shared ones; `rake beni:build` writes it (tasks/support/godot_cell.rb).
+godot-cell = { path = "../vendor/godot-cell" }
