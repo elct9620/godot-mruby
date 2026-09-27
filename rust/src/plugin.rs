@@ -1,13 +1,15 @@
 //! What the addon adds to the editor while it is open.
 
-use godot::classes::{EditorPlugin, IEditorPlugin};
+use godot::classes::{EditorInterface, EditorPlugin, IEditorPlugin};
 use godot::prelude::*;
 
 use crate::export::RubyExportPlugin;
+use crate::game;
 use crate::panel::RubyTestPanel;
 
 /// Hands the editor the export plugin and the test panel for as long as the
-/// editor is open.
+/// editor is open, and lists the game's files again whenever the editor
+/// finds them changed.
 #[derive(GodotClass)]
 #[class(tool, init, base = EditorPlugin)]
 pub struct RubyEditorPlugin {
@@ -25,6 +27,12 @@ impl IEditorPlugin for RubyEditorPlugin {
         let panel = RubyTestPanel::new();
         self.base_mut().add_dock(&panel);
         self.panel = Some(panel);
+        if let Some(file_system) = EditorInterface::singleton().get_resource_filesystem() {
+            file_system
+                .signals()
+                .filesystem_changed()
+                .connect_other(&*self, |_| game::relist_files());
+        }
     }
 
     fn exit_tree(&mut self) {

@@ -320,8 +320,7 @@ impl IScriptExtension for RubyScript {
     // `class_name`; none for a script it does not announce.
     fn get_global_name(&self) -> StringName {
         let path = self.base().get_path().to_string();
-        game::project_on_disk()
-            .announcement(&path)
+        game::announcement_by_path(&path)
             .map(|announcement| StringName::from(&announcement.name))
             .unwrap_or_default()
     }

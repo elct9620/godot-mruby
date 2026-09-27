@@ -461,9 +461,7 @@ fn editor_name(mrb: &Mrb, class: &str) -> Option<String> {
 
 // The name the editor lists the file at `path` under, if it is announced.
 fn editor_name_by_path(path: &str) -> Option<String> {
-    let project = game::project_on_disk();
-    project
-        .announcement(path)
+    game::announcement_by_path(path)
         .ok()
         .map(|announcement| announcement.name)
 }

@@ -3,10 +3,11 @@
 //! the editor scans a project without running any of it.
 
 use std::collections::BTreeSet;
+use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use crate::ancestry::{self, Ancestry};
 use crate::header::Header;
-use crate::realm::{self, Files};
+use crate::realm::{self, Declarations, Files, Roots};
 use crate::settings;
 
 /// What the editor lists a node script by.
@@ -128,6 +129,74 @@ impl<'a, F: Files> Project<'a, F> {
     }
 }
 
+/// A project's files as last listed, for what the editor asks while it
+/// scans: listing walks every directory, which the editor would otherwise
+/// wait on for each file it asks about. A file asked about joins the listing,
+/// and a removed one leaves it once the project is listed again.
+pub struct Listing<F: Files> {
+    files: F,
+    is_listed: fn(&str) -> bool,
+    paths: Mutex<Option<Vec<String>>>,
+}
+
+impl<F: Files> Listing<F> {
+    /// `files`, listed the first time a question needs them; `is_listed`
+    /// says whether a file asked about belongs to the listing.
+    pub const fn new(files: F, is_listed: fn(&str) -> bool) -> Self {
+        Self {
+            files,
+            is_listed,
+            paths: Mutex::new(None),
+        }
+    }
+
+    /// Takes the file at `path` into the listing, as the editor asks about
+    /// it: it may have been added since the project was listed.
+    pub fn take_in(&self, path: &str) {
+        if !(self.is_listed)(path) {
+            return;
+        }
+        if let Some(paths) = self.lock_paths().as_mut()
+            && let Err(at) = paths.binary_search_by(|other| other.as_str().cmp(path))
+        {
+            paths.insert(at, path.to_owned());
+        }
+    }
+
+    /// Lists the project again, walking its directories outside the lock so
+    /// no question waits on the walk.
+    pub fn relist(&self) {
+        let paths = self.files.paths();
+        *self.lock_paths() = Some(paths);
+    }
+
+    fn lock_paths(&self) -> MutexGuard<'_, Option<Vec<String>>> {
+        self.paths.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+}
+
+impl<F: Files> Files for Listing<F> {
+    fn paths(&self) -> Vec<String> {
+        if let Some(paths) = &*self.lock_paths() {
+            return paths.clone();
+        }
+        let paths = self.files.paths();
+        self.lock_paths().get_or_insert(paths).clone()
+    }
+
+    fn roots(&self) -> Roots {
+        self.files.roots()
+    }
+
+    fn source(&self, path: &str) -> Result<String, String> {
+        self.files.source(path)
+    }
+
+    fn declarations(&self, path: &str) -> Declarations {
+        self.files.declarations(path)
+    }
+}
+
 /// The names node scripts share, each with the files sharing it, already
 /// warned of: the editor scans the project again and again and asks of every
 /// file, and each clash is warned of once while it lasts.
@@ -169,8 +238,12 @@ fn file_name(path: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Announcement, Clashes, Omission, Project};
+    use std::collections::BTreeMap;
+    use std::sync::Mutex;
+
+    use super::{Announcement, Clashes, Listing, Omission, Project};
     use crate::ancestry::tests::Sources;
+    use crate::realm::{Declarations, Files, Roots};
 
     fn announcement(
         path: &str,
@@ -338,5 +411,91 @@ mod tests {
         let is_news = clashes.note("Twin", &files);
 
         assert!(is_news);
+    }
+
+    /// Files on a disk the tests change, under `res://` and `res://src`.
+    struct Disk(Mutex<BTreeMap<&'static str, &'static str>>);
+
+    impl Disk {
+        fn new(sources: &[(&'static str, &'static str)]) -> Self {
+            Self(Mutex::new(sources.iter().copied().collect()))
+        }
+
+        fn write(&self, path: &'static str, source: &'static str) {
+            self.0.lock().unwrap().insert(path, source);
+        }
+
+        fn remove(&self, path: &str) {
+            self.0.lock().unwrap().remove(path);
+        }
+    }
+
+    impl Files for &Disk {
+        fn paths(&self) -> Vec<String> {
+            self.0
+                .lock()
+                .unwrap()
+                .keys()
+                .map(|path| (*path).to_owned())
+                .collect()
+        }
+
+        fn roots(&self) -> Roots {
+            Roots::new(["res://src".to_owned()])
+        }
+
+        fn source(&self, path: &str) -> Result<String, String> {
+            let sources = self.0.lock().unwrap();
+            sources
+                .get(path)
+                .map(|source| (*source).to_owned())
+                .ok_or_else(|| "no such file".to_owned())
+        }
+
+        fn declarations(&self, _path: &str) -> Declarations {
+            Declarations::default()
+        }
+    }
+
+    fn announce<F: Files>(listing: &Listing<F>, path: &str) -> Result<Announcement, Omission> {
+        let is_node = |class: &str| class != "Resource";
+        listing.take_in(path);
+        Project::new(listing, Vec::new(), String::new(), &is_node).announcement(path)
+    }
+
+    // @behavior RN-013
+    #[test]
+    fn a_file_added_since_the_project_was_listed_is_announced() {
+        let disk = Disk::new(&[ENEMY]);
+        let listing = Listing::new(&disk, |_| true);
+        announce(&listing, "res://enemy.rb").unwrap();
+        disk.write(
+            "res://levels/enemy.rb",
+            "module Levels\n  class Enemy < Godot::Node\n  end\nend\n",
+        );
+
+        let added = announce(&listing, "res://levels/enemy.rb");
+        let earlier = announce(&listing, "res://enemy.rb");
+
+        assert!(matches!(added, Err(Omission::SharedName { .. })));
+        assert!(matches!(earlier, Err(Omission::SharedName { .. })));
+    }
+
+    // @behavior RN-014
+    #[test]
+    fn a_removed_file_is_forgotten_once_the_project_is_listed_again() {
+        let disk = Disk::new(&[
+            ("res://boss.rb", "class Boss < Enemy\nend\n"),
+            ENEMY,
+            ("res://src/enemy.rb", "class Enemy < Godot::Node2D\nend\n"),
+        ]);
+        let listing = Listing::new(&disk, |_| true);
+        announce(&listing, "res://boss.rb").unwrap_err();
+        disk.remove("res://src/enemy.rb");
+
+        listing.relist();
+        let announcement = announce(&listing, "res://boss.rb").unwrap();
+
+        assert_eq!(announcement.base, "Enemy");
     }
 }

@@ -6,7 +6,7 @@ use godot::classes::{Engine, FileAccess, Os, ResourceLoader, Script};
 use godot::global::Error;
 use godot::obj::Singleton;
 
-use crate::announcement::Project;
+use crate::announcement::{Announcement, Listing, Omission, Project};
 use crate::header::Header;
 use crate::realm::{Declarations, Extends, Files, Roots};
 use crate::settings;
@@ -116,14 +116,31 @@ pub fn is_left_out_in_editor(path: &str, test_directories: &[String]) -> bool {
     Engine::singleton().is_editor_hint() && settings::is_in_directory(path, test_directories)
 }
 
-/// The project as the editor scans it, whose files are read from disk.
-pub fn project_on_disk() -> Project<'static, FilesOnDisk> {
+// The game's files on disk as last listed.
+static LISTING: Listing<FilesOnDisk> = Listing::new(FilesOnDisk, is_listed);
+
+/// The announcement of the file at `path`, read from disk as the editor
+/// scans the project.
+pub fn announcement_by_path(path: &str) -> Result<Announcement, Omission> {
+    LISTING.take_in(path);
     Project::new(
-        &FilesOnDisk,
+        &LISTING,
         settings::test_directories(),
         settings::template_directory(),
         &bridge::is_node_class,
     )
+    .announcement(path)
+}
+
+/// Lists the game's files on disk again, as the editor found the project's
+/// files changed.
+pub fn relist_files() {
+    LISTING.relist();
+}
+
+// Whether `GameFiles` lists the file at `path`.
+fn is_listed(path: &str) -> bool {
+    path.ends_with(".rb") && !settings::is_in_directory(path, &left_out_directories())
 }
 
 /// The game's files as they are on disk, for answering what the editor asks

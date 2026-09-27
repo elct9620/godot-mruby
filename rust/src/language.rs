@@ -422,9 +422,8 @@ impl IScriptLanguageExtension for RubyLanguage {
     // The editor asks this of every script file as it scans the project, and
     // lists the file as a class by the name answered.
     fn get_global_class_name(&self, path: GString) -> AnyDictionary {
-        let project = game::project_on_disk();
         let file = path.to_string();
-        let announced = project.announcement(&file);
+        let announced = game::announcement_by_path(&file);
         let mut clashes = CLASHES.lock().unwrap_or_else(PoisonError::into_inner);
         if !matches!(announced, Err(Omission::SharedName { .. })) {
             clashes.forget(&file);

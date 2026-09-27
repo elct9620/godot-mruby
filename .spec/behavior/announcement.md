@@ -101,3 +101,19 @@ How a node script is announced to the editor, which lists it as a class like a G
 | Given | a node script under the directory the editor reads the project's script templates from |
 | When | the editor asks for its class name |
 | Then | it is not announced, since the editor fills a template in as text |
+
+## `RN-013` A file added since the project was listed is announced
+
+| Step | Statement |
+| --- | --- |
+| Given | a project whose files were listed before a node script's file was added |
+| When | the editor asks for the new file's class name |
+| Then | it is announced, and later questions count it among the project's files |
+
+## `RN-014` A removed file is forgotten once the project is listed again
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script extending a class two files named, one of which was removed |
+| When | the project is listed again and the node script is announced |
+| Then | its base is the class the remaining file names |
