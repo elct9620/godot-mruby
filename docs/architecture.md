@@ -68,9 +68,21 @@ mruby carries only the gems `build_config/mruby.rb` lists, and none that reaches
 
 A module in `rust/src/` is named after the Godot extension point it implements, as `language` and `script` are, or after what it produces or does, as `header` and `bridge` are; one with parts of its own keeps them in a directory of its name.
 
-A `.rake` file is thin glue; what a task does lives in `tasks/support/`. `rake bench` reports what a game's Ruby costs without judging it. It copies `tasks/bench/growth/` into a project it generates at each size. It plays the battle of `godot/src` against its GDScript twin in `tasks/bench/battle/`, as written and in the recommended style. It times the library the addon holds, so a release build measures what ships.
+A `.rake` file is thin glue; what a task does lives in `tasks/support/`.
 
 Build output stays out of the repository: `vendor/` holds mruby's source and archives and the changed godot-cell (`tasks/support/godot_cell.rb`), `rust/target/` the crate's builds, `bin/` the installed library, and `pkg/` the package.
+
+#### 1.3.1 Bench
+
+`rake bench` reports what a game's Ruby costs without judging it, in projects it generates from the templates under `tasks/bench/`.
+
+| Part | Template | What it times |
+|---|---|---|
+| Growth | `growth/` | a project's files at each size |
+| Battle | `battle/` | a round of `godot/src`'s battle, in two styles |
+| Calls | `battle/base/` | one call of each kind a game makes |
+
+Battle and calls run Ruby and a GDScript twin in turns and report the ratio. The bench times the library the addon holds, so a release build measures what ships.
 
 ### 1.4 Tests
 

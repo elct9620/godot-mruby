@@ -4,28 +4,29 @@ require "json"
 require "tmpdir"
 
 require_relative "bench/battle"
+require_relative "bench/operations"
 require_relative "bench/project"
 require_relative "godot"
 
 # Measures what a game's Ruby costs: as its project grows, in a generated
-# project played and scanned headless at each size, and per round of the
-# game's battle against its GDScript twin. Reports the numbers and judges
-# nothing. Backs tasks/bench.rake.
+# project played and scanned headless at each size; per round of the game's
+# battle against its GDScript twin; and per call of each kind a game makes.
+# Reports the numbers and judges nothing. Backs tasks/bench.rake.
 module Bench
   SIZES = [100, 1000].freeze
   SCENE = "res://bench.tscn"
   # What the bench scene prints: a measure's name and its microseconds.
-  MEASURED = /^bench (\w+) (\d+)$/
+  MEASURE = /^bench (\w+) (\d+)$/
 
   module_function
 
-  # Measures the sizes `BENCH_SIZES` lists in `env` and the battle, prints
-  # their tables, and writes the measures as JSON where `BENCH_JSON` names a
-  # file.
+  # Measures the sizes `BENCH_SIZES` lists in `env`, the battle and the
+  # calls, prints their tables, and writes the measures as JSON where
+  # `BENCH_JSON` names a file.
   def report!(env)
     sizes = env.fetch("BENCH_SIZES", SIZES.join(",")).split(",").map { |size| Integer(size) }
-    results = { "growth" => measure(sizes), "battle" => Battle.measure }
-    puts tabulate(results["growth"]), "", tabulate_battle(results["battle"])
+    results = { "growth" => measure(sizes), "battle" => Battle.measure, "operations" => Operations.measure }
+    puts tabulate_results(results)
     File.write(env.fetch("BENCH_JSON"), JSON.pretty_generate(results)) if env.key?("BENCH_JSON")
   end
 
@@ -56,7 +57,7 @@ module Bench
     errors = output.lines.grep(Godot::FAILED)
     raise "The bench scene failed:\n#{output}" unless errors.empty?
 
-    measures = output.scan(MEASURED).to_h { |name, usec| [name, Integer(usec)] }
+    measures = output.scan(MEASURE).to_h { |name, usec| [name, Integer(usec)] }
     raise "The bench scene measured nothing:\n#{output}" if measures.empty?
 
     measures
@@ -77,15 +78,33 @@ module Bench
     [header, "|---|#{"---|" * sizes.size}", *rows].join("\n")
   end
 
+  # Each part of the results as its Markdown table.
+  def tabulate_results(results)
+    [tabulate(results["growth"]), tabulate_battle(results["battle"]),
+     tabulate_operations(results["operations"])].join("\n\n")
+  end
+
   # The battle's styles as a Markdown table: a round's milliseconds in each
-  # language and the ratio, each the median with the range of the pairs.
+  # language and the ratio.
   def tabulate_battle(styles)
-    rows = styles.map do |style, measures|
-      cells = measures.map { |name, spread| format_spread(spread, name == "ratio" ? "%.1f×" : "%.1f") }
-      "| #{style} | #{cells.join(" | ")} |"
-    end
-    ["| battle, ms a round | Ruby | GDScript | Ruby ÷ GDScript |", "|---|---|---|---|", *rows, "",
+    [tabulate_spreads("battle, ms a round", styles, "%.1f"), "",
      "The call-cost gate is to judge the recommended style's ratio."].join("\n")
+  end
+
+  # The calls as a Markdown table: one call's nanoseconds in each language
+  # and the ratio.
+  def tabulate_operations(calls)
+    tabulate_spreads("call, ns", calls, "%.0f")
+  end
+
+  # Rows of each language's measure and the ratio, each the median with the
+  # range of the pairs.
+  def tabulate_spreads(heading, rows, unit)
+    lines = rows.map do |name, measures|
+      cells = measures.map { |measure, spread| format_spread(spread, measure == "ratio" ? "%.1f×" : unit) }
+      "| #{name} | #{cells.join(" | ")} |"
+    end
+    ["| #{heading} | Ruby | GDScript | Ruby ÷ GDScript |", "|---|---|---|---|", *lines].join("\n")
   end
 
   def format_spread(spread, unit)
