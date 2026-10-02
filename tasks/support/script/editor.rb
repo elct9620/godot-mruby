@@ -36,6 +36,11 @@ module Godot
       # is every scene connection while a node script has no script instance.
       REFUSED = "Attempt to connect nonexistent signal"
       DECLARED = "wailed"
+      # A plugin whose script is a Ruby tool script, and what it prints as the
+      # editor adds it.
+      PLUGIN = File.join("integration", "script", "plugin")
+      PLUGIN_ENTERED = "a Ruby editor plugin entered the tree"
+      PLUGIN_FRAMES = "60"
 
       module_function
 
@@ -48,6 +53,7 @@ module Godot
         verify_left_out!(output)
         verify_tool_called!(output)
         verify_kept!(output)
+        verify_plugin_entered!(project)
       end
 
       # @behavior RS-045
@@ -101,6 +107,14 @@ module Godot
         return if output.lines.map(&:chomp).include?(KEPT)
 
         raise "The editor lost a scene's value for a tool script that does not parse:\n#{output}"
+      end
+
+      # @behavior RS-067
+      def verify_plugin_entered!(project)
+        output = Godot.with_probe(project, PLUGIN) { |copy| Godot.run_editor_frames(copy, PLUGIN_FRAMES).first }
+        return if output.lines.map(&:chomp).include?(PLUGIN_ENTERED)
+
+        raise "The editor did not add a plugin whose script is a Ruby tool script:\n#{output}"
       end
 
       def open_scene(project, scene)

@@ -547,3 +547,11 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a node the engine made, whose script's `initialize` raises |
 | When | Godot writes a property its class exports and reads it back |
 | Then | the node answers the value written |
+
+## `RS-067` A Ruby tool script extending `EditorPlugin` runs as an editor plugin
+
+| Step | Statement |
+| --- | --- |
+| Given | a project enabling a plugin whose `plugin.cfg` names a node script whose class calls `tool` and extends `Godot::EditorPlugin` |
+| When | the editor opens the project |
+| Then | the class's object is given `_enter_tree` as the editor adds the plugin |

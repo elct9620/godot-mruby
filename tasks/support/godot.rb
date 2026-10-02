@@ -27,12 +27,13 @@ module Godot
   # What gdext prints once the engine has called into the library.
   LOADED = "Initialize godot-rust"
   FAILED = /^(ERROR|SCRIPT ERROR):/
-  # What a copy of the project adds to enable a probe and play headless.
+  # What a copy of the project adds to enable the probe in a directory and
+  # play headless.
   PROBE_SETTINGS = <<~SETTINGS
 
     [editor_plugins]
 
-    enabled=PackedStringArray("res://addons/probe/plugin.cfg")
+    enabled=PackedStringArray("res://%s/plugin.cfg")
 
     [editor]
 
@@ -84,8 +85,9 @@ module Godot
     raise "The extension did not load:\n#{errors.empty? ? output : errors.join}"
   end
 
-  # Yields a copy of the project whose editor enables the plugin at `probe`,
-  # a directory of the project, and plays its scenes headless, so a probe acts
+  # Yields a copy of the project whose editor enables the plugin in `probe`,
+  # a directory of the project, where it stands, so a Ruby plugin keeps the
+  # name its path spells; the copy plays its scenes headless, so a probe acts
   # in an editor no person uses and the scenes it plays run where the check
   # does.
   def with_probe(project, probe)
@@ -93,9 +95,7 @@ module Godot
       copy = File.join(dir, "project")
       FileUtils.cp_r(project, copy)
       FileUtils.rm_rf(File.join(copy, ".godot", "editor"))
-      FileUtils.cp_r(File.join(project, probe), File.join(copy, "addons", "probe"))
-      FileUtils.rm(Dir.glob(File.join(copy, "addons", "probe", "*.uid")))
-      File.write(File.join(copy, "project.godot"), PROBE_SETTINGS, mode: "a")
+      File.write(File.join(copy, "project.godot"), format(PROBE_SETTINGS, probe), mode: "a")
       yield copy
     end
   end
