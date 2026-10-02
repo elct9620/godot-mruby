@@ -115,3 +115,11 @@ How the script editor colours a Ruby file: a highlighter of the extension's own 
 | Given | a Ruby file whose second line starts with `def` |
 | When | the script editor opens it |
 | Then | the `def` takes the keyword colour of the editor's theme |
+
+## `RU-014` An edited line is coloured anew
+
+| Step | Statement |
+| --- | --- |
+| Given | a Ruby script open in the script editor whose second line starts with `def` |
+| When | the second line is replaced by an assignment |
+| Then | its first column no longer takes the keyword colour |

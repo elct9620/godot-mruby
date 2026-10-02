@@ -9,17 +9,30 @@ module Godot
     FRAMES = "60"
     CHOSEN = "highlighter chosen: RubySyntaxHighlighter"
     COLOURED = "keyword coloured: true"
+    RECOLOURED = "edited keyword coloured: false"
 
     module_function
 
-    # @behavior RU-013
     def verify!(project)
       Godot.with_probe(project, PROBE) do |copy|
         output, = Godot.run_editor_frames(copy, FRAMES)
-        next if output.include?(CHOSEN) && output.include?(COLOURED)
-
-        raise "The script editor did not colour a Ruby script's keyword with the Ruby highlighter:\n#{output}"
+        verify_coloured!(output)
+        verify_recoloured!(output)
       end
+    end
+
+    # @behavior RU-013
+    def verify_coloured!(output)
+      return if output.include?(CHOSEN) && output.include?(COLOURED)
+
+      raise "The script editor did not colour a Ruby script's keyword with the Ruby highlighter:\n#{output}"
+    end
+
+    # @behavior RU-014
+    def verify_recoloured!(output)
+      return if output.include?(RECOLOURED)
+
+      raise "The script editor kept a keyword's colour on a line edited into an assignment:\n#{output}"
     end
   end
 end

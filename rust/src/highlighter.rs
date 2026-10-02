@@ -230,16 +230,12 @@ fn role_by_kind(kind: pm_token_type_t, text: &str, is_engine_class: impl Fn(&str
 #[class(base = EditorSyntaxHighlighter, init, tool)]
 pub struct RubySyntaxHighlighter {
     palette: Palette,
-    coloring: RefCell<Coloring>,
+    // The whole text's colours, kept until its lines are edited: the editor
+    // asks line by line, and a line's colours turn on the lines before it.
+    lines: RefCell<Option<Vec<Vec<Highlight>>>>,
+    // The text edit whose edits drop the kept colours.
+    text_edit: Option<InstanceId>,
     base: Base<EditorSyntaxHighlighter>,
-}
-
-// The source last coloured, kept with its colours, since the editor asks
-// line by line and a line's colours turn on the lines before it.
-#[derive(Default)]
-struct Coloring {
-    source: String,
-    lines: Vec<Vec<Highlight>>,
 }
 
 #[derive(Default)]
@@ -310,6 +306,19 @@ impl IEditorSyntaxHighlighter for RubySyntaxHighlighter {
 
     fn update_cache(&mut self) {
         self.palette = Palette::from_settings();
+        self.lines.take();
+        let Some(text_edit) = self.base().get_text_edit() else {
+            return;
+        };
+        if self.text_edit != Some(text_edit.instance_id()) {
+            self.text_edit = Some(text_edit.instance_id());
+            text_edit
+                .signals()
+                .lines_edited_from()
+                .connect_other(&*self, |this, _, _| {
+                    this.lines.take();
+                });
+        }
     }
 
     fn get_line_syntax_highlighting(&self, line: i32) -> AnyDictionary {
@@ -317,16 +326,14 @@ impl IEditorSyntaxHighlighter for RubySyntaxHighlighter {
         let Some(text_edit) = self.base().get_text_edit() else {
             return colors.upcast_any_dictionary();
         };
-        let source = text_edit.get_text().to_string();
-        let mut coloring = self.coloring.borrow_mut();
-        if coloring.source != source {
+        let mut lines = self.lines.borrow_mut();
+        let lines = lines.get_or_insert_with(|| {
             let class_db = ClassDb::singleton();
-            let lines = highlight(&source, |name| class_db.class_exists(name));
-            *coloring = Coloring { source, lines };
-        }
-        let highlights = usize::try_from(line)
-            .ok()
-            .and_then(|line| coloring.lines.get(line));
+            highlight(&text_edit.get_text().to_string(), |name| {
+                class_db.class_exists(name)
+            })
+        });
+        let highlights = usize::try_from(line).ok().and_then(|line| lines.get(line));
         for highlight in highlights.into_iter().flatten() {
             let color = self.palette.color_by_role(highlight.role);
             colors.set(highlight.column as i64, &vdict! { "color" => color });
