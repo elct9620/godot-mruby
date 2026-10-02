@@ -17,7 +17,7 @@ use godot::register::info::PropertyHint;
 
 use super::value::{self, ToRuby};
 use crate::game;
-use crate::hint::Hint;
+use crate::hint::{Hint, type_name};
 use crate::realm::{self, Key};
 use crate::snapshot::{Heading, Property, Signal};
 
@@ -367,7 +367,7 @@ fn mismatch(mrb: &Mrb, default: &Variant, class: &str) -> Option<String> {
         return None;
     }
     let Ok(object) = default.try_to::<Gd<Object>>() else {
-        return Some(super::type_name(kind));
+        return Some(type_name(kind));
     };
     (!is_of_class(mrb, &object, class)).then(|| resolve_class_name(&object))
 }

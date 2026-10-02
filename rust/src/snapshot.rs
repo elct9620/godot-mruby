@@ -13,8 +13,6 @@ use godot::global::{bytes_to_var, var_to_bytes};
 use godot::obj::Singleton;
 use godot::register::info::{PropertyHint, PropertyUsageFlags};
 
-use crate::header::Export;
-
 /// A signal a class declared, with the names its parameters were declared
 /// with.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -189,6 +187,30 @@ pub fn digest(source: &str) -> u64 {
     let mut hasher = DefaultHasher::new();
     source.hash(&mut hasher);
     hasher.finish()
+}
+
+/// What a class body declares for the editor, as its source writes it.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Export {
+    /// A property or a heading the source writes out in full.
+    Member(Member),
+    /// An export whose value or hint the source does not write out: what
+    /// the file declared as it ran answers for it, or `bare`, the property
+    /// without the hint its keyword names, while the file has not run.
+    Name {
+        name: String,
+        bare: Option<Property>,
+    },
+}
+
+impl Export {
+    /// What answers for it while the file has not run.
+    pub fn member(&self) -> Option<Member> {
+        match self {
+            Self::Member(member) => Some(member.clone()),
+            Self::Name { bare, .. } => bare.clone().map(Member::Property),
+        }
+    }
 }
 
 /// What the classes of a realm's files have, as one value that never changes

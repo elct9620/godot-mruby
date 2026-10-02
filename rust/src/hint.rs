@@ -1,12 +1,18 @@
 //! How an export's keyword tells the editor to show a property, as a
 //! GDScript variable's `@export_*` annotation does: which keywords name a
-//! hint, the types each takes, and what the editor reads it with.
+//! hint, the types each takes, and what the editor reads it with; the types
+//! are named as GDScript names them, which the bridge's messages share.
 
 use godot::builtin::{VarArray, Variant, VariantType};
+use godot::global::type_string;
 use godot::meta::ToGodot;
+use godot::obj::EngineEnum;
 use godot::register::info::PropertyHint;
 
-use crate::bridge::type_name;
+/// The name GDScript gives a variant type.
+pub fn type_name(kind: VariantType) -> String {
+    type_string(i64::from(kind.ord())).to_string()
+}
 
 /// A hint an export's keyword names, each one the `@export_*` annotation it
 /// answers to, or none.

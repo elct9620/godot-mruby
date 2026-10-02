@@ -9,7 +9,7 @@ use ruby_prism::{CallNode, Integer, Node, NodeList};
 
 use crate::hint::Hint;
 use crate::realm::{self, Roots};
-use crate::snapshot::{self, Heading, Member, Property, Signal};
+use crate::snapshot::{self, Export, Heading, Member, Property, Signal};
 
 /// A file's header: the constants its `module` and `class` statements write,
 /// the name the class its path names is written with, the superclass written
@@ -50,30 +50,6 @@ impl Superclass {
     /// The constant path as written, as `["Godot", "Node"]`.
     pub fn names(&self) -> &[String] {
         &self.names
-    }
-}
-
-/// What a class body declares for the editor, as its source writes it.
-#[derive(Clone, Debug, PartialEq)]
-pub enum Export {
-    /// A property or a heading the source writes out in full.
-    Member(Member),
-    /// An export whose value or hint the source does not write out: what
-    /// the file declared as it ran answers for it, or `bare`, the property
-    /// without the hint its keyword names, while the file has not run.
-    Name {
-        name: String,
-        bare: Option<Property>,
-    },
-}
-
-impl Export {
-    /// What answers for it while the file has not run.
-    pub fn member(&self) -> Option<Member> {
-        match self {
-            Self::Member(member) => Some(member.clone()),
-            Self::Name { bare, .. } => bare.clone().map(Member::Property),
-        }
     }
 }
 

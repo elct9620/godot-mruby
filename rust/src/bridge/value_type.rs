@@ -11,11 +11,11 @@ use beni::{
     Symbol, TypedData, Value, method,
 };
 use godot::builtin::{GString, StringName, Variant, VariantOperator, VariantType};
-use godot::global::type_string;
 use godot::obj::EngineEnum;
 use godot::sys;
 
 use super::value::{self, ToRuby};
+use crate::hint::type_name;
 
 /// A value of one of the engine's value types, as Ruby holds it.
 pub struct EngineValue(Variant);
@@ -58,10 +58,6 @@ fn value_types() -> impl Iterator<Item = VariantType> {
 /// Whether the engine's values of `kind` reach Ruby as `Godot::Value`s.
 pub fn is_value_type(kind: VariantType) -> bool {
     value_types().any(|value_type| value_type == kind)
-}
-
-fn type_name(kind: VariantType) -> String {
-    type_string(i64::from(kind.ord)).to_string()
 }
 
 /// Defines Godot::Value, the class every value type's class descends from.
