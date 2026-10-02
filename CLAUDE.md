@@ -18,7 +18,7 @@ The full source layout, and how the parts fit together, is in `docs/architecture
 | `godot/test/e2e/` | Ruby tests playing the game in `godot/src/` to its end |
 | `godot/integration/` | What only a log or a run's outcome shows, one directory per `.spec/behavior` file, read by `tasks/support/` |
 | `build_config/mruby.rb` | mruby build config (host + x86_64 cross build) |
-| `.github/workflows/pipeline.yml` | Reusable check → build → package → integration → publish, with a bench beside; `ci.yml` calls it |
+| `.github/workflows/pipeline.yml` | Reusable check → build → package → integration → publish, with a bench beside compared with main's; `ci.yml` calls it |
 
 ## Commands
 
@@ -31,7 +31,7 @@ bundle exec rake editor                  # build, then open the editor on godot/
 godot --headless --path godot res://addons/godot_mruby/runner.tscn -- --dir res://test   # the Ruby tests alone
 bundle exec rake extension:dist          # the library this platform ships (PROFILE=release|debug; macOS: lipo universal)
 bundle exec rake addon:package           # zip the addon with every platform's library and third-party licenses
-bundle exec rake bench                   # time a generated project's Ruby as it grows
+bundle exec rake bench                   # time a game's Ruby beside GDScript; read it on a release build
 bundle exec rake addon:verify            # install the zip into a copy of godot/ and run godot:verify's checks on it
 bundle exec rake                         # rubocop + extension:build + godot:verify
 bundle exec rake beni:clean beni:build   # rebuild mruby after editing build_config/mruby.rb
