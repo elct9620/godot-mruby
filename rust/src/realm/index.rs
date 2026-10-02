@@ -16,6 +16,9 @@ pub struct ClassIndex {
     files: BTreeMap<Key, String>,
     namespaces: BTreeMap<Key, Namespace>,
     refusals: BTreeSet<Key>,
+    // Every key a file or a namespace was taken in under, by its last name,
+    // so a name is found without reading every key.
+    keys_by_last_name: BTreeMap<String, BTreeSet<Key>>,
 }
 
 /// The root directories files are named from: `res://`, and the directories
@@ -130,6 +133,7 @@ impl ClassIndex {
         for path in paths {
             let key = self.key_by_path(&path);
             self.add_namespaces(&path);
+            add_last_name(&mut self.keys_by_last_name, &key);
             if self.refusals.contains(&key) {
                 continue;
             }
@@ -214,18 +218,28 @@ impl ClassIndex {
     /// What the index names directly inside the namespace `key` spells: its
     /// files, and its directories' modules.
     pub fn members(&self, key: &[String]) -> Vec<Key> {
-        self.keys()
-            .filter(|named| named.len() == key.len() + 1 && named.starts_with(key))
+        let below = |named: &&Key| named.starts_with(key);
+        let start = key.to_vec();
+        let files = self.files.range(start.clone()..).map(|(named, _)| named);
+        let namespaces = self.namespaces.range(start..).map(|(named, _)| named);
+        files
+            .take_while(below)
+            .chain(namespaces.take_while(below))
+            .filter(|named| named.len() == key.len() + 1)
+            .cloned()
             .collect()
     }
 
     /// What the index names `name` inside the namespaces below the one
     /// `scope` spells.
     pub fn keys_below(&self, scope: &[String], name: &str) -> Vec<Key> {
-        let name = normalize(name);
-        self.keys()
+        self.keys_by_last_name
+            .get(&normalize(name))
+            .into_iter()
+            .flatten()
             .filter(|named| named.len() > scope.len() + 1 && named.starts_with(scope))
-            .filter(|named| named.last() == Some(&name))
+            .filter(|named| self.files.contains_key(*named) || self.namespaces.contains_key(*named))
+            .cloned()
             .collect()
     }
 
@@ -234,10 +248,6 @@ impl ClassIndex {
         self.files
             .get(&self.key_by_path(path))
             .is_some_and(|named| named == path)
-    }
-
-    fn keys(&self) -> impl Iterator<Item = Key> + '_ {
-        self.files.keys().chain(self.namespaces.keys()).cloned()
     }
 
     // Every directory a file sits in below its root directory is a
@@ -250,6 +260,7 @@ impl ClassIndex {
                 .iter()
                 .map(|segment| normalize(segment))
                 .collect();
+            add_last_name(&mut self.keys_by_last_name, &key);
             self.namespaces.entry(key).or_insert_with(|| Namespace {
                 directory: format!("{root}{}/", segments[..depth].join("/")),
                 name: camelize(segments[depth - 1]),
@@ -266,6 +277,16 @@ impl ClassIndex {
                 self.roots.name_by_path(path)
             ),
         );
+    }
+}
+
+// Files `key` under its last name in `keys_by_last_name`.
+fn add_last_name(keys_by_last_name: &mut BTreeMap<String, BTreeSet<Key>>, key: &Key) {
+    if let Some(name) = key.last() {
+        keys_by_last_name
+            .entry(name.clone())
+            .or_default()
+            .insert(key.clone());
     }
 }
 

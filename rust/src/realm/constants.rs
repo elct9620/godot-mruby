@@ -35,13 +35,19 @@ fn load_by_name(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error
 
 // Module#__record_constant__(name): the receiver has just been given the constant.
 // A directory's module the realm defines is no file's to take away.
-fn record_constant(mrb: &Mrb, receiver: Value, name: Symbol) -> Value {
-    let (Some(scope), Some(name)) = (split_path(mrb, receiver), name.name(mrb)) else {
+fn record_constant(mrb: &Mrb, receiver: Value, symbol: Symbol) -> Value {
+    let (Some(scope), Some(name)) = (split_path(mrb, receiver), symbol.name(mrb)) else {
         return Value::nil();
     };
     if !bookkeeping(mrb).is_defining_namespace.get() {
         executor::record(mrb, scope.clone(), name.clone());
     }
+    let key = scope
+        .iter()
+        .chain([&name])
+        .map(|segment| index::normalize(segment))
+        .collect();
+    bookkeeping(mrb).spellings.borrow_mut().insert(key, symbol);
     load_hidden(mrb, &scope, &name);
     Value::nil()
 }
@@ -211,13 +217,31 @@ fn ensure_namespaces(mrb: &Mrb, path: &str) -> Result<(), Error> {
 /// The constant `key` spells, if it is already here, matched the way the
 /// class index matches it.
 pub(super) fn constant_by_key(mrb: &Mrb, key: &[String]) -> Option<Value> {
-    key.iter().try_fold(object(mrb), |scope, segment| {
-        constant_by_segment(mrb, scope, segment)
+    (1..=key.len()).try_fold(object(mrb), |scope, depth| {
+        spelling_by_key(mrb, &key[..depth])
+            .and_then(|name| constant_by_name(mrb, scope, name))
+            .or_else(|| constant_by_segment(mrb, scope, &key[depth - 1]))
     })
 }
 
 fn object(mrb: &Mrb) -> Value {
     mrb.object_class().as_value()
+}
+
+// How the constant the class index matches to `key` was last defined, which
+// spares reading every constant of the namespace it sits in.
+fn spelling_by_key(mrb: &Mrb, key: &[String]) -> Option<Symbol> {
+    bookkeeping(mrb).spellings.borrow().get(key).copied()
+}
+
+// The constant `scope` itself holds as `name`, asking without loading one.
+fn constant_by_name(mrb: &Mrb, scope: Value, name: Symbol) -> Option<Value> {
+    let inherit = false.into_value(mrb);
+    scope
+        .funcall(mrb, c"const_defined?", &[name.into_value(mrb), inherit])
+        .ok()
+        .filter(|defined| defined.is_true())?;
+    scope.const_get(mrb, name).ok()
 }
 
 // The constant `scope` holds whose name the class index matches to

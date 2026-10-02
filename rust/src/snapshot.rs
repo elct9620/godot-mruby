@@ -192,10 +192,11 @@ pub fn digest(source: &str) -> u64 {
 }
 
 /// What the classes of a realm's files have, as one value that never changes
-/// once it is published.
+/// once it is published. Each class is shared between the snapshots that
+/// have it, so a realm publishing one class more copies no other class.
 #[derive(Clone, Debug, Default)]
 pub struct Snapshot {
-    classes: HashMap<String, Class>,
+    classes: HashMap<Arc<str>, Arc<Class>>,
 }
 
 impl Snapshot {
@@ -381,7 +382,7 @@ impl Snapshot {
     /// Takes what the class of the file at `path` has, now that the file has
     /// run, in place of what it had before.
     pub fn record_class(&mut self, path: &str, class: Class) {
-        self.classes.insert(path.to_owned(), class);
+        self.classes.insert(Arc::from(path), Arc::new(class));
     }
 }
 

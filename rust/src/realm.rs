@@ -1,4 +1,5 @@
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::ffi::CStr;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
@@ -127,6 +128,9 @@ struct Bookkeeping {
     is_defining_namespace: Cell<bool>,
     // How the Ruby running now started, while any does.
     outermost: Cell<Option<Origin>>,
+    // How each constant defined since the realm opened is spelled, by the
+    // key the class index matches it with.
+    spellings: RefCell<HashMap<Vec<String>, Symbol>>,
 }
 
 // The realm's outermost Ruby while it runs, forgotten once it returns or
@@ -480,6 +484,7 @@ impl Realm {
             snapshot: RefCell::default(),
             is_defining_namespace: Cell::default(),
             outermost: Cell::default(),
+            spellings: RefCell::default(),
         };
         if mrb.set_user_data(bookkeeping).is_err() {
             return Err(RubyError::from_message(
