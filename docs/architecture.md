@@ -113,6 +113,7 @@ A preposition names nothing, so no name ends in `_of`. Outside a state, a word e
 | `RubyInstance` in `instance.rs` | A script instance |
 | `RubyTestRunner` in `runner.rs` | A `Node` in `runner.tscn` |
 | `RubyEditorPlugin` in `plugin.rs`, `RubyExportPlugin` in `export.rs` | `EditorPlugin`, `EditorExportPlugin` |
+| `RubySyntaxHighlighter` in `highlighter.rs`, from Prism's tokens | `EditorSyntaxHighlighter` |
 | `RubyTestPanel` in `panel.rs` | `EditorDock` |
 | `settings.rs` | `ProjectSettings` under `mruby/` |
 | `GameFiles`, `RealmFiles`, `FilesOnDisk` in `game.rs` | `ResourceLoader` under `res://`, and the files on disk |
@@ -177,6 +178,7 @@ lib.rs    registers Scripting and settings, prepares the realm
 │               │            │              │   └──┬───────────────────┘
 │               ▼            ▼              │      │  export ──► settings
 │            instance    announcement       │      │
+│  highlighter ──► Prism, language          │      │
 └──┬────────────────────────────────────────┘      │
    │                                               │
    ▼                                               ▼

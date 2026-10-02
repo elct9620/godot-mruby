@@ -8,7 +8,7 @@ The classes the extension registers with Godot. The editor and GDScript know the
 
 ## `RubyEditorPlugin`
 
-The editor plugin the extension adds to every editor: it hands the editor the export plugin and the test panel as it opens.
+The editor plugin the extension adds to every editor: it hands the editor the export plugin, the test panel and the Ruby highlighter as it opens.
 
 ```rust
 struct RubyEditorPlugin;
@@ -44,6 +44,14 @@ The script a `.rb` file loads as, the way a `.gd` file loads as a `GDScript`.
 
 ```rust
 struct RubyScript;
+```
+
+## `RubySyntaxHighlighter`
+
+The script editor's highlighter for Ruby files, offered as `Ruby` among the editor's highlighters.
+
+```rust
+struct RubySyntaxHighlighter;
 ```
 
 ## `RubyTestPanel`

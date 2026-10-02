@@ -31,6 +31,9 @@ pub struct RubyLanguage {
     base: Base<ScriptLanguageExtension>,
 }
 
+/// The language's name, by which the editor matches it with a highlighter.
+pub const NAME: &str = "Ruby";
+
 static LANGUAGE: Mutex<Option<InstanceId>> = Mutex::new(None);
 static CLASHES: Mutex<Clashes> = Mutex::new(Clashes::new());
 
@@ -74,7 +77,7 @@ fn empty_dictionary() -> AnyDictionary {
 #[godot_api]
 impl IScriptLanguageExtension for RubyLanguage {
     fn get_name(&self) -> GString {
-        "Ruby".into()
+        NAME.into()
     }
 
     fn init_ext(&mut self) {}
@@ -544,8 +547,8 @@ pub fn indentation() -> String {
     }
 }
 
-// Ruby's keywords, as the parser spells them.
-const KEYWORDS: &[&str] = &[
+/// Ruby's keywords, as the parser spells them.
+pub const KEYWORDS: &[&str] = &[
     "__ENCODING__",
     "__FILE__",
     "__LINE__",
@@ -596,7 +599,7 @@ const CONTROL_FLOW: &[&str] = &[
     "rescue", "retry", "return", "then", "unless", "until", "when", "while", "yield",
 ];
 
-fn is_control_flow(word: &str) -> bool {
+pub fn is_control_flow(word: &str) -> bool {
     CONTROL_FLOW.contains(&word)
 }
 
