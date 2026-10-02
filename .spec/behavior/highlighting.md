@@ -10,6 +10,7 @@ How the script editor colours a Ruby file: a highlighter of the extension's own 
 
 - `rust/src/language.rs`
 - `rust/src/highlighter.rs`
+- `tasks/support/highlighting.rb`
 
 ## `RU-001` A control-flow keyword is a reserved word
 
@@ -106,3 +107,11 @@ How the script editor colours a Ruby file: a highlighter of the extension's own 
 | Given | a method whose body has a syntax error before a keyword |
 | When | the lines are coloured |
 | Then | the keyword after the error still takes a keyword's colour |
+
+## `RU-013` The script editor colours a Ruby script with the Ruby highlighter
+
+| Step | Statement |
+| --- | --- |
+| Given | a Ruby file whose second line starts with `def` |
+| When | the script editor opens it |
+| Then | the `def` takes the keyword colour of the editor's theme |

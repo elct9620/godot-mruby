@@ -6,6 +6,7 @@ require "tmpdir"
 
 require_relative "declarations"
 require_relative "export"
+require_relative "highlighting"
 require_relative "loader"
 require_relative "panel"
 require_relative "report"
@@ -40,7 +41,7 @@ module Godot
   # The checks, each in the module named after the behaviour it claims.
   CHECKS = [
     Script, Declarations, Report, Runner, Runner::Failing, Runner::Results, Runner::Settings, Loader, Export,
-    Panel, Template
+    Panel, Template, Highlighting
   ].freeze
 
   module_function
