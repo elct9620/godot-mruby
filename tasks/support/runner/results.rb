@@ -2,7 +2,6 @@
 
 require "fileutils"
 require "json"
-require "open3"
 require "tmpdir"
 
 require_relative "../runner"
@@ -24,7 +23,7 @@ module Godot
       UNPARSED = "#{RUNNER_TESTS}/failing/syntax".freeze
       UNPARSED_AT = ["#{UNPARSED}/broken_syntax_test.rb", 4].freeze
       # The script that prints where user:// is, and the run file under it.
-      USER_DIR_SCRIPT = "res://integration/runner/run_file/user_dir.gd"
+      USER_DIR_SCENE = "res://integration/runner/run_file/user_dir.tscn"
       USER_DIR = /^user_dir=(.+)$/
       RUN_FILE = File.join("godot_mruby", "run.json")
 
@@ -99,7 +98,7 @@ module Godot
 
       # Where Godot keeps user:// for the project.
       def user_dir(project)
-        output, = Open3.capture2e(Godot::EXECUTABLE, "--headless", "--path", project, "--script", USER_DIR_SCRIPT)
+        output, = Godot.run_scene(project, USER_DIR_SCENE, "--quit-after", "10")
         output[USER_DIR, 1] or raise "Godot did not say where user:// is:\n#{output}"
       end
     end
