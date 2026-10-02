@@ -118,3 +118,15 @@ An object of an engine class, which the engine and Ruby share: Ruby holds the en
 ### Value type
 
 One of the engine's own values that are neither Ruby's nor objects, such as `Vector2`, `Color` or `NodePath`: a class under `Godot::Value` whose values the engine builds and computes with, and which never change, since each side holds its own copy.
+
+### GDScript twin
+
+A GDScript script the bench keeps beside a Ruby one, written line for line after it, so both languages do the same work and the bench can give how many times GDScript's time the Ruby takes. A pair of battles whose frames or outcome differ fails the bench, since a twin that drifted times something else.
+
+### Recommended style
+
+The way the call-cost analysis recommends writing a game's per-frame Ruby: engine state read once and kept in Ruby with only results written back, many entities moved by one node, and collections kept in Ruby rather than walked through the engine. The bench plays the battle in it beside the game as written.
+
+### Call-cost gate
+
+The check that is to fail a change that makes a round of the battle in the recommended style take more than twice its GDScript twin's time, and warn past one and a half times. Until it judges, the bench only reports the ratio.
