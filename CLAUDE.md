@@ -18,7 +18,7 @@ The full source layout, and how the parts fit together, is in `docs/architecture
 | `godot/test/e2e/` | Ruby tests playing the game in `godot/src/` to its end |
 | `godot/integration/` | What only a log or a run's outcome shows, one directory per `.spec/behavior` file, read by `tasks/support/` |
 | `build_config/mruby.rb` | mruby build config (host + x86_64 cross build) |
-| `.github/workflows/pipeline.yml` | Reusable check → build → package → integration → publish; `ci.yml` calls it |
+| `.github/workflows/pipeline.yml` | Reusable check → build → package → integration → publish, with a bench beside; `ci.yml` calls it |
 
 ## Commands
 

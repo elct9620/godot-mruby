@@ -1,5 +1,10 @@
 # frozen_string_literal: true
 
+require "json"
+require "tmpdir"
+
+require_relative "runner/workflow"
+
 module Godot
   # Runs the integration-test project's Ruby tests through the addon's runner
   # scene and reads what the runs report. Part of Godot.verify!.
@@ -52,7 +57,7 @@ module Godot
     # static calls asked the engine for no singleton it lacks.
     # @behavior RT-001 RG-020
     def verify_tests!(project)
-      output, status = run(project, "--dir", TESTS)
+      output, status = run_reported(project, "--dir", TESTS)
       return if status.success? && output[PASSED, 1].to_i.positive? && !output.include?(LEAKED) &&
                 !output.include?(NO_SINGLETON)
 
@@ -117,6 +122,17 @@ module Godot
         found = output.index(line, position)
         position = found + line.size if found
         found
+      end
+    end
+
+    # Runs with these options and tells GitHub Actions what the run's
+    # results hold, when it runs there.
+    def run_reported(project, *options)
+      Dir.mktmpdir do |dir|
+        results = File.join(dir, "results.json")
+        run(project, *options, "--results", results).tap do
+          Workflow.report(JSON.parse(File.read(results))) if File.exist?(results)
+        end
       end
     end
 
