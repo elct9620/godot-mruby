@@ -42,8 +42,8 @@ jobs:
       - run: cargo clippy --manifest-path rust/Cargo.toml --all-targets -- -D warnings
       - run: cargo test --manifest-path rust/Cargo.toml
       - run: pipx install "gdtoolkit==4.*"
-      - run: gdformat --check godot
-      - run: gdlint godot
+      - run: gdformat --check godot tasks/bench
+      - run: gdlint godot tasks/bench
 
   # Needs neither Ruby nor Rust, so it stands apart from the build setup.
   spec:

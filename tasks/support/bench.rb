@@ -50,6 +50,9 @@ module Bench
   # inside Ruby.
   def play(project)
     output, = Godot.run_scene(project, SCENE, "--quit-after", "10")
+    errors = output.lines.grep(Godot::FAILED)
+    raise "The bench scene failed:\n#{output}" unless errors.empty?
+
     measures = output.scan(MEASURED).to_h { |name, usec| [name, Integer(usec)] }
     raise "The bench scene measured nothing:\n#{output}" if measures.empty?
 
