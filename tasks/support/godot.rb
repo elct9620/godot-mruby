@@ -110,11 +110,6 @@ module Godot
     Open3.capture2e(EXECUTABLE, "--headless", "--editor", "--quit", "--path", project)
   end
 
-  # Starts Godot on the project and quits once it has loaded.
-  def run_project(project)
-    Open3.capture2e(EXECUTABLE, "--headless", "--path", project, "--quit")
-  end
-
   def run_scene(project, scene, *)
     Open3.capture2e(EXECUTABLE, "--headless", "--path", project, scene, *)
   end

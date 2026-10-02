@@ -94,9 +94,14 @@ module Bench
   end
 
   # The build of the library the addon of `source` holds, and the Godot it
-  # runs in, so numbers from a debug build are not read as a release's.
+  # runs in, so numbers from a debug build are not read as a release's. They
+  # are read as a battle project opens, which loads the library and nothing
+  # that fails.
   def describe_library(source = Godot::PROJECT)
-    output, = Godot.run_project(source)
+    output = Dir.mktmpdir do |project|
+      Battle.generate(project, Battle::STYLES.first, source)
+      Godot.run_editor(project).first
+    end
     runtime, safeguards = output.match(LIBRARY)&.captures
     raise "godot-rust did not name its build:\n#{output}" unless safeguards
 
