@@ -31,6 +31,7 @@ bundle exec rake editor                  # build, then open the editor on godot/
 godot --headless --path godot res://addons/godot_mruby/runner.tscn -- --dir res://test   # the Ruby tests alone
 bundle exec rake extension:dist          # the library this platform ships (PROFILE=release|debug; macOS: lipo universal)
 bundle exec rake addon:package           # zip the addon with every platform's library and third-party licenses
+bundle exec rake bench                   # time a generated project's Ruby as it grows
 bundle exec rake addon:verify            # install the zip into a copy of godot/ and run godot:verify's checks on it
 bundle exec rake                         # rubocop + extension:build + godot:verify
 bundle exec rake beni:clean beni:build   # rebuild mruby after editing build_config/mruby.rb
