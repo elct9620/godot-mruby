@@ -6,6 +6,7 @@ require "tmpdir"
 require_relative "bench/battle"
 require_relative "bench/operations"
 require_relative "bench/project"
+require_relative "bench/table"
 require_relative "godot"
 
 # Measures what a game's Ruby costs: as its project grows, in a generated
@@ -26,14 +27,30 @@ module Bench
   module_function
 
   # Measures the sizes `BENCH_SIZES` lists in `env`, the battle and the
-  # calls, prints their tables, and writes the measures as JSON where
-  # `BENCH_JSON` names a file.
+  # calls, prints their tables beside the results `BENCH_BASELINE` names, and
+  # writes the measures as JSON where `BENCH_JSON` names a file.
   def report!(env)
     sizes = env.fetch("BENCH_SIZES", SIZES.join(",")).split(",").map { |size| Integer(size) }
-    results = { "library" => describe_library, "growth" => measure(sizes), "battle" => Battle.measure,
-                "operations" => Operations.measure }
-    puts tabulate_results(results)
+    results = measure_all(sizes)
+    puts Table.tabulate(results, read_baseline(env["BENCH_BASELINE"], results["library"]))
     File.write(env.fetch("BENCH_JSON"), JSON.pretty_generate(results)) if env.key?("BENCH_JSON")
+  end
+
+  # Every part's measures: the library's build, growth at `sizes`, the
+  # battle and the calls.
+  def measure_all(sizes)
+    { "library" => describe_library, "growth" => measure(sizes), "battle" => Battle.measure,
+      "operations" => Operations.measure }
+  end
+
+  # The results an earlier bench wrote at `path`, when they were measured with
+  # `library`'s build in its Godot; a ratio from another build compares
+  # nothing.
+  def read_baseline(path, library)
+    return unless path && File.exist?(path)
+
+    baseline = JSON.parse(File.read(path))
+    baseline if baseline["library"] == library
   end
 
   # The measures of each size, keyed by its number of library files, in
@@ -76,14 +93,6 @@ module Bench
     Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond) - started
   end
 
-  # The measures as a Markdown table in milliseconds, a column for each size.
-  def tabulate(results)
-    sizes = results.keys
-    header = ["| ms |", *sizes.map { |size| " #{size} files |" }].join
-    rows = results.values.first.keys.map { |name| format_row(name, results.values.map { |measures| measures[name] }) }
-    [header, "|---|#{"---|" * sizes.size}", *rows].join("\n")
-  end
-
   # The build of the library the addon of `source` holds, and the Godot it
   # runs in, so numbers from a debug build are not read as a release's.
   def describe_library(source = Godot::PROJECT)
@@ -92,45 +101,5 @@ module Bench
     raise "godot-rust did not name its build:\n#{output}" unless safeguards
 
     { "build" => BUILDS.fetch(safeguards, safeguards), "godot" => runtime }
-  end
-
-  # Each part of the results as its Markdown table, after the library they
-  # were measured with.
-  def tabulate_results(results)
-    library = results["library"]
-    ["Measured with a #{library["build"]} build in Godot #{library["godot"]}.",
-     tabulate(results["growth"]), tabulate_battle(results["battle"]),
-     tabulate_operations(results["operations"])].join("\n\n")
-  end
-
-  # The battle's styles as a Markdown table: a round's milliseconds in each
-  # language and the ratio.
-  def tabulate_battle(styles)
-    [tabulate_spreads("battle, ms a round", styles, "%.1f"), "",
-     "The call-cost gate is to judge the recommended style's ratio."].join("\n")
-  end
-
-  # The calls as a Markdown table: one call's nanoseconds in each language
-  # and the ratio.
-  def tabulate_operations(calls)
-    tabulate_spreads("call, ns", calls, "%.0f")
-  end
-
-  # Rows of each language's measure and the ratio, each the median with the
-  # range of the pairs.
-  def tabulate_spreads(heading, rows, unit)
-    lines = rows.map do |name, measures|
-      cells = measures.map { |measure, spread| format_spread(spread, measure == "ratio" ? "%.1f×" : unit) }
-      "| #{name} | #{cells.join(" | ")} |"
-    end
-    ["| #{heading} | Ruby | GDScript | Ruby ÷ GDScript |", "|---|---|---|---|", *lines].join("\n")
-  end
-
-  def format_spread(spread, unit)
-    "#{format(unit, spread["median"])} (#{format(unit, spread["min"])}–#{format(unit, spread["max"])})"
-  end
-
-  def format_row(name, usecs)
-    ["| #{name} |", *usecs.map { |usec| format(" %.1f |", usec / 1000.0) }].join
   end
 end

@@ -2,7 +2,7 @@
 
 require_relative "support/bench"
 
-desc "Time a generated project's Ruby as it grows (BENCH_SIZES, BENCH_JSON)"
+desc "Time a game's Ruby beside GDScript (BENCH_SIZES, BENCH_JSON, BENCH_BASELINE)"
 task :bench do
   Bench.report!(ENV)
 end

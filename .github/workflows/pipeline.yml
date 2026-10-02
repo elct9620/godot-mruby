@@ -165,8 +165,9 @@ jobs:
           path: pkg
       - run: bundle exec rake addon:verify
 
-  # Reports what a game's Ruby costs as its project grows, on one platform so
-  # the numbers compare between runs; it judges nothing, so nothing waits on it.
+  # Reports what a game's Ruby costs on one platform, beside the bench of
+  # main's last run, so the numbers compare between runs; it judges nothing,
+  # so nothing waits on it.
   bench:
     name: Bench
     needs: build
@@ -188,14 +189,30 @@ jobs:
         with:
           name: bin-linux-x86_64
           path: godot/addons/godot_mruby/bin
+      # The bench main's last successful CI run kept; a run before any kept
+      # one, or long enough ago that it expired, leaves none to compare.
+      - name: Fetch main's bench
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=1" \
+            --jq '.workflow_runs[0].id') || true
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name bench --dir "$RUNNER_TEMP/main" \
+            || echo "main's last run kept no bench"
       - env:
-          PROFILE: ${{ inputs.profile }}
+          BENCH_BASELINE: ${{ runner.temp }}/main/bench.json
+          BENCH_JSON: ${{ runner.temp }}/bench.json
         run: |
           {
-            echo "### Bench ($PROFILE build, Godot $GODOT_VERSION)"
+            echo "### Bench"
             echo
             bundle exec rake bench
           } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bench
+          path: ${{ runner.temp }}/bench.json
+          if-no-files-found: error
 
   publish:
     name: Publish
