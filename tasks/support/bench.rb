@@ -17,6 +17,11 @@ module Bench
   SCENE = "res://bench.tscn"
   # What the bench scene prints: a measure's name and its microseconds.
   MEASURE = /^bench (\w+) (\d+)$/
+  # What godot-rust prints as the library loads: the Godot running it, and
+  # its safeguards, whose default is strict in a debug build and balanced in
+  # a release one.
+  LIBRARY = /^Initialize godot-rust \(API [^,]+, runtime ([^,]+), safeguards (\w+)\)$/
+  BUILDS = { "strict" => "debug", "balanced" => "release" }.freeze
 
   module_function
 
@@ -25,7 +30,8 @@ module Bench
   # `BENCH_JSON` names a file.
   def report!(env)
     sizes = env.fetch("BENCH_SIZES", SIZES.join(",")).split(",").map { |size| Integer(size) }
-    results = { "growth" => measure(sizes), "battle" => Battle.measure, "operations" => Operations.measure }
+    results = { "library" => describe_library, "growth" => measure(sizes), "battle" => Battle.measure,
+                "operations" => Operations.measure }
     puts tabulate_results(results)
     File.write(env.fetch("BENCH_JSON"), JSON.pretty_generate(results)) if env.key?("BENCH_JSON")
   end
@@ -78,9 +84,22 @@ module Bench
     [header, "|---|#{"---|" * sizes.size}", *rows].join("\n")
   end
 
-  # Each part of the results as its Markdown table.
+  # The build of the library the addon of `source` holds, and the Godot it
+  # runs in, so numbers from a debug build are not read as a release's.
+  def describe_library(source = Godot::PROJECT)
+    output, = Godot.run_project(source)
+    runtime, safeguards = output.match(LIBRARY)&.captures
+    raise "godot-rust did not name its build:\n#{output}" unless safeguards
+
+    { "build" => BUILDS.fetch(safeguards, safeguards), "godot" => runtime }
+  end
+
+  # Each part of the results as its Markdown table, after the library they
+  # were measured with.
   def tabulate_results(results)
-    [tabulate(results["growth"]), tabulate_battle(results["battle"]),
+    library = results["library"]
+    ["Measured with a #{library["build"]} build in Godot #{library["godot"]}.",
+     tabulate(results["growth"]), tabulate_battle(results["battle"]),
      tabulate_operations(results["operations"])].join("\n\n")
   end
 
