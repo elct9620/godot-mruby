@@ -96,16 +96,44 @@ A constant's name as the class index matches it against a path's segment: withou
 pub fn normalize(segment: &str) -> String {}
 ```
 
-## `file_by_name`
+## `ClassIndex`
 
-The file a constant path written inside namespaces names, looked up among paths named from their root directories as the realm's loader looks it up: from the innermost namespace outward, with a name two files spell naming none. What reads files outside the realm finds the file the realm would run.
+The class index of a set of files, read outside any realm, so what reads files without running them finds the file the realm would run.
 
 | Attribute | Value |
 | --- | --- |
 | internal | yes |
 
 ```rust
-pub fn file_by_name(paths: Vec<String>, roots: Roots, scope: &[String], names: &[String]) -> Option<String> {}
+pub struct ClassIndex {}
+```
+
+## `ClassIndex::with_files`
+
+The class index of files at paths named from their root directories, warning of nothing: the realm gives its own warnings.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl ClassIndex {
+    pub fn with_files(paths: Vec<String>, roots: Roots) -> Self {}
+}
+```
+
+## `ClassIndex::file_by_name`
+
+The file a constant path written inside namespaces names, looked up as the realm's loader looks it up: from the innermost namespace outward, with a name two files spell naming none.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl ClassIndex {
+    pub fn file_by_name(&self, scope: &[String], names: &[String]) -> Option<String> {}
+}
 ```
 
 ## `is_inside`
@@ -472,6 +500,20 @@ What the file at a path declares before it runs, which the realm keeps as it run
 ```rust
 pub trait Files {
     fn declarations(&self, path: &str) -> Declarations;
+}
+```
+
+## `Files::file_by_name`
+
+The file a constant path written inside namespaces names among these files, as `ClassIndex::file_by_name` finds it; files kept between questions keep their index too.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub trait Files {
+    fn file_by_name(&self, scope: &[String], names: &[String]) -> Option<String> {}
 }
 ```
 

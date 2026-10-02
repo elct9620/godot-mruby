@@ -17,8 +17,7 @@ mod reentrant;
 mod registry;
 
 use executor::Declaration;
-use index::ClassIndex;
-pub use index::{Roots, camelize, file_by_name, normalize};
+pub use index::{ClassIndex, Roots, camelize, normalize};
 use reentrant::ReentrantLock;
 pub use registry::Key;
 use registry::Registry;
@@ -63,6 +62,11 @@ pub trait Files: Send {
     fn source(&self, path: &str) -> Result<String, String>;
     /// What the file at `path` declares before it runs.
     fn declarations(&self, path: &str) -> Declarations;
+    /// The file the constant path `names`, written inside the namespaces
+    /// `scope`, names among these files.
+    fn file_by_name(&self, scope: &[String], names: &[String]) -> Option<String> {
+        ClassIndex::with_files(self.paths(), self.roots()).file_by_name(scope, names)
+    }
 }
 
 /// What a file declares before it runs.

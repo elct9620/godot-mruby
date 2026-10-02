@@ -3,11 +3,11 @@
 //! the editor scans a project without running any of it.
 
 use std::collections::BTreeSet;
-use std::sync::{Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use crate::ancestry::{self, Ancestry};
 use crate::header::Header;
-use crate::realm::{self, Declarations, Files, Roots};
+use crate::realm::{self, ClassIndex, Declarations, Files, Roots};
 use crate::settings;
 
 /// What the editor lists a node script by.
@@ -132,11 +132,13 @@ impl<'a, F: Files> Project<'a, F> {
 /// A project's files as last listed, for what the editor asks while it
 /// scans: listing walks every directory, which the editor would otherwise
 /// wait on for each file it asks about. A file asked about joins the listing,
-/// and a removed one leaves it once the project is listed again.
+/// and a removed one leaves it once the project is listed again. The class
+/// index of the listing is kept until the listing changes.
 pub struct Listing<F: Files> {
     files: F,
     is_listed: fn(&str) -> bool,
     paths: Mutex<Option<Vec<String>>>,
+    index: Mutex<Option<Arc<ClassIndex>>>,
 }
 
 impl<F: Files> Listing<F> {
@@ -147,6 +149,7 @@ impl<F: Files> Listing<F> {
             files,
             is_listed,
             paths: Mutex::new(None),
+            index: Mutex::new(None),
         }
     }
 
@@ -160,6 +163,7 @@ impl<F: Files> Listing<F> {
             && let Err(at) = paths.binary_search_by(|other| other.as_str().cmp(path))
         {
             paths.insert(at, path.to_owned());
+            self.lock_index().take();
         }
     }
 
@@ -168,10 +172,25 @@ impl<F: Files> Listing<F> {
     pub fn relist(&self) {
         let paths = self.files.paths();
         *self.lock_paths() = Some(paths);
+        self.lock_index().take();
+    }
+
+    // The class index of the listing, built outside the lock once the
+    // listing changed.
+    fn index(&self) -> Arc<ClassIndex> {
+        if let Some(index) = &*self.lock_index() {
+            return Arc::clone(index);
+        }
+        let index = Arc::new(ClassIndex::with_files(self.paths(), self.roots()));
+        Arc::clone(self.lock_index().get_or_insert(index))
     }
 
     fn lock_paths(&self) -> MutexGuard<'_, Option<Vec<String>>> {
         self.paths.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn lock_index(&self) -> MutexGuard<'_, Option<Arc<ClassIndex>>> {
+        self.index.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }
 
@@ -194,6 +213,10 @@ impl<F: Files> Files for Listing<F> {
 
     fn declarations(&self, path: &str) -> Declarations {
         self.files.declarations(path)
+    }
+
+    fn file_by_name(&self, scope: &[String], names: &[String]) -> Option<String> {
+        self.index().file_by_name(scope, names)
     }
 }
 
@@ -479,6 +502,20 @@ mod tests {
 
         assert!(matches!(added, Err(Omission::SharedName { .. })));
         assert!(matches!(earlier, Err(Omission::SharedName { .. })));
+    }
+
+    // @behavior RN-013
+    #[test]
+    fn a_file_added_since_the_project_was_listed_is_found_as_a_superclass() {
+        let disk = Disk::new(&[("res://boss.rb", "class Boss < Enemy\nend\n")]);
+        let listing = Listing::new(&disk, |_| true);
+        announce(&listing, "res://boss.rb").unwrap_err();
+        disk.write(ENEMY.0, ENEMY.1);
+        announce(&listing, ENEMY.0).unwrap();
+
+        let announcement = announce(&listing, "res://boss.rb").unwrap();
+
+        assert_eq!(announcement.base, "Enemy");
     }
 
     // @behavior RN-014

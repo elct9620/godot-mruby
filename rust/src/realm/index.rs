@@ -106,6 +106,14 @@ impl ClassIndex {
         }
     }
 
+    /// The index of the files at `paths` named from `roots`, read outside a
+    /// realm, which gives its own warnings.
+    pub fn with_files(paths: Vec<String>, roots: Roots) -> Self {
+        let mut index = Self::new(roots);
+        index.add(paths, |_| false, &Silence);
+        index
+    }
+
     /// The constant path the file at `path` spells, as the index matches it.
     pub fn key_by_path(&self, path: &str) -> Key {
         self.roots.key_by_path(path)
@@ -185,6 +193,24 @@ impl ClassIndex {
         })
     }
 
+    /// The file a constant path written inside the namespaces `scope` spells
+    /// names, found as a realm's loader finds it: each name from the
+    /// innermost namespace outward, and a name two files spell naming none.
+    pub fn file_by_name(&self, scope: &[String], names: &[String]) -> Option<String> {
+        let mut scope = scope.to_vec();
+        let mut named = None;
+        for name in names {
+            let (depth, found) = self.entry_by_name(&scope, name)?;
+            scope.truncate(depth);
+            scope.push(name.clone());
+            named = Some(found);
+        }
+        match named? {
+            Entry::File(path) => Some(path),
+            Entry::Namespace(_) => None,
+        }
+    }
+
     /// What the index names directly inside the namespace `key` spells: its
     /// files, and its directories' modules.
     pub fn members(&self, key: &[String]) -> Vec<Key> {
@@ -240,32 +266,6 @@ impl ClassIndex {
                 self.roots.name_by_path(path)
             ),
         );
-    }
-}
-
-/// The file a constant path written inside the namespaces `scope` spells
-/// names among `paths` named from `roots`, found as a realm's loader finds
-/// it: each name from the innermost namespace outward, and a name two files
-/// spell naming none.
-pub fn file_by_name(
-    paths: Vec<String>,
-    roots: Roots,
-    scope: &[String],
-    names: &[String],
-) -> Option<String> {
-    let mut index = ClassIndex::new(roots);
-    index.add(paths, |_| false, &Silence);
-    let mut scope = scope.to_vec();
-    let mut named = None;
-    for name in names {
-        let (depth, found) = index.entry_by_name(&scope, name)?;
-        scope.truncate(depth);
-        scope.push(name.clone());
-        named = Some(found);
-    }
-    match named? {
-        Entry::File(path) => Some(path),
-        Entry::Namespace(_) => None,
     }
 }
 

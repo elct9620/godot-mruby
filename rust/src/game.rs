@@ -18,20 +18,15 @@ const ROOT: &str = "res://";
 pub struct GameFiles;
 
 impl Files for GameFiles {
-    /// Every `.rb` file under `res://` outside the directories the game
-    /// leaves out, as Godot lists its resources: by the names they had before
-    /// an export remapped them. Sorted, since Godot promises no order and the
-    /// first directory to spell a namespace names it.
+    /// The game's files as last listed: a file runs and a script answers
+    /// its ancestry once per file, and walking every directory for each
+    /// would cost the game time in the square of its files.
     fn paths(&self) -> Vec<String> {
-        let left_out = left_out_directories();
-        let left_out: Vec<&str> = left_out
-            .iter()
-            .map(|dir| dir.trim_end_matches('/'))
-            .collect();
-        let mut paths = Vec::new();
-        collect(ROOT, &left_out, &mut paths);
-        paths.sort();
-        paths
+        LISTING.paths()
+    }
+
+    fn file_by_name(&self, scope: &[String], names: &[String]) -> Option<String> {
+        LISTING.file_by_name(scope, names)
     }
 
     // A test directory is a root directory whether the project lists it as
@@ -137,8 +132,8 @@ pub fn announcement_by_path(path: &str) -> Result<Announcement, Omission> {
     .announcement(path)
 }
 
-/// Lists the game's files on disk again, as the editor found the project's
-/// files changed.
+/// Lists the game's files again, as the editor found the project's files
+/// changed.
 pub fn relist_files() {
     LISTING.relist();
 }
@@ -155,8 +150,20 @@ fn is_listed(path: &str) -> bool {
 pub struct FilesOnDisk;
 
 impl Files for FilesOnDisk {
+    /// Every `.rb` file under `res://` outside the directories the game
+    /// leaves out, as Godot lists its resources: by the names they had before
+    /// an export remapped them. Sorted, since Godot promises no order and the
+    /// first directory to spell a namespace names it.
     fn paths(&self) -> Vec<String> {
-        GameFiles.paths()
+        let left_out = left_out_directories();
+        let left_out: Vec<&str> = left_out
+            .iter()
+            .map(|dir| dir.trim_end_matches('/'))
+            .collect();
+        let mut paths = Vec::new();
+        collect(ROOT, &left_out, &mut paths);
+        paths.sort();
+        paths
     }
 
     fn roots(&self) -> Roots {

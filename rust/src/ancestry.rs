@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use crate::header::Header;
-use crate::realm::{self, Files};
+use crate::realm::Files;
 use crate::snapshot::{Member, Property, Signal, Snapshot, Source};
 
 /// The files a class inherits from, nearest first, and the engine class the
@@ -197,7 +197,6 @@ impl fmt::Display for Break {
 /// The ancestry of the file at `path`, whose header is `header`, among
 /// `files`, each superclass found as the realm's loader would find it.
 pub fn trace_ancestry(path: &str, header: &Header, files: &impl Files) -> Result<Ancestry, Break> {
-    let paths = files.paths();
     let roots = files.roots();
     let mut passed = vec![path.to_owned()];
     let mut ancestors = Vec::new();
@@ -212,13 +211,9 @@ pub fn trace_ancestry(path: &str, header: &Header, files: &impl Files) -> Result
                 engine_class: engine_class.clone(),
             });
         }
-        let file = realm::file_by_name(
-            paths.clone(),
-            roots.clone(),
-            written.scope(),
-            written.names(),
-        )
-        .ok_or_else(|| Break::NoFile(written.names().join("::")))?;
+        let file = files
+            .file_by_name(written.scope(), written.names())
+            .ok_or_else(|| Break::NoFile(written.names().join("::")))?;
         if passed.contains(&file) {
             return Err(Break::Cycle(file));
         }

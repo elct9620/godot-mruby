@@ -201,7 +201,7 @@ lib.rs    registers Scripting and settings, prepares the realm
 
 Each layer uses only the layers below it. The realm uses no other module but `compiler`: what it needs from Godot, `game` and `log` implement, and it neither parses a file nor knows the engine. `language` checks typed source through `validation`, which compiles it by `compiler` in a state no realm holds and reads the other files as `announcement` does, so the editor never waits for the realm.
 
-`header` and `ancestry` read what a file declares without running it, naming files from the root directories `Files::roots` gives, by `realm::Roots`, `realm::normalize` and `realm::file_by_name`. Scripting answers Godot from them; `game` hands the realm, through `Files::declarations`, what each file opens and the superclass a node script's class is held to, asking `bridge` which engine classes are nodes. `language` and `script` refer to each other, as GDExtension script languages do; `minitest` uses the realm only for a failure's `Location`.
+`header` and `ancestry` read what a file declares without running it, naming files from the root directories `Files::roots` gives, by `realm::Roots`, `realm::normalize` and the `ClassIndex` behind `Files::file_by_name`. Scripting answers Godot from them; `game` hands the realm, through `Files::declarations`, what each file opens and the superclass a node script's class is held to, asking `bridge` which engine classes are nodes. `language` and `script` refer to each other, as GDExtension script languages do; `minitest` uses the realm only for a failure's `Location`.
 
 ### 2.4 Node scripts
 
@@ -245,7 +245,7 @@ the editor's class list, saved for exported games
 
 A node script is listed like a GDScript's `class_name`. The list is flat, as it is for C#, so a name drops its namespaces, and node scripts sharing one are none of them listed; the scan order never picks one.
 
-Godot asks every language for its stack as it prints, so the language never prints while it answers: it reads the files from disk, as GDScript does, and writes the warning by a deferred call, once while the clash lasts. Other threads wait while one holds the language, so it keeps the project's listing rather than walking every directory per file: a file asked about joins it, and the editor plugin lists the files again when the editor finds them changed. The rules are in `.spec/behavior/announcement.md`, and what the editor shows in `.spec/behavior/script.md`.
+Godot asks every language for its stack as it prints, so the language never prints while it answers: it reads the files from disk, as GDScript does, and writes the warning by a deferred call, once while the clash lasts. Other threads wait while one holds the language, and the game runs and traces a file at a time, so `game` keeps one listing of the project and its class index rather than walking every directory per file: a file asked about joins it, and the editor plugin lists the files again when the editor finds them changed. The rules are in `.spec/behavior/announcement.md`, and what the editor shows in `.spec/behavior/script.md`.
 
 ### 2.6 Bridge
 
