@@ -6,6 +6,7 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 
 - `rust/src/realm.rs`
 - `tasks/support/loader.rb`
+- `tasks/support/loader/*.rb`
 - `godot/test/unit/loader/**/*_test.rb`
 
 ## `RL-001` Two files naming one constant are warned about
@@ -297,3 +298,19 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 | Given | a `.rb` file under the directory the editor reads the project's script templates from |
 | When | Ruby uses the constant its path would spell |
 | Then | it raises `NameError`, since a template is no file of the game |
+
+## `RL-037` Reaching every file by name takes time in proportion to the files
+
+| Step | Statement |
+| --- | --- |
+| Given | a project of library files spread over directories, and one twenty times its size |
+| When | Ruby reaches each file's constant by name in each project |
+| Then | the larger project takes at most twice twenty times as long |
+
+## `RL-038` Giving nodes their scripts takes time in proportion to the files
+
+| Step | Statement |
+| --- | --- |
+| Given | a project of library files and node scripts extending one base, and one twenty times its size |
+| When | a node is given each node script in each project |
+| Then | the larger project takes at most twice twenty times as long |

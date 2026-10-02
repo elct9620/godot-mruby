@@ -7,10 +7,9 @@ require_relative "../godot"
 module Bench
   # Writes a project of generated library files, spread over directories, and
   # node scripts extending one base, beside the addon and the scene in
-  # tasks/bench that times them. Part of Bench.measure.
+  # tasks/bench that times them, for Bench and Godot::Loader::Scaling.
   module Project
     TEMPLATE = File.expand_path("../../bench", __dir__)
-    ADDON = File.join(Godot::PROJECT, "addons", "godot_mruby")
     # Library files are spread over this many directories, and a node script
     # is written for every this many library files.
     DIRECTORIES = 10
@@ -18,21 +17,23 @@ module Bench
 
     module_function
 
-    def generate(project, files)
-      install(project)
+    # Writes the project at `project`, taking the addon from the project at
+    # `source`.
+    def generate(project, files, source = Godot::PROJECT)
+      install(project, source)
       names = Array.new(files) { |index| write_item(project, index) }
       scripts = Array.new(files / FILES_PER_SCRIPT) { |index| write_unit(project, index) }
       write(project, "manifest.rb",
             "module Manifest\n  NAMES = #{names.inspect}\n  SCRIPTS = #{scripts.inspect}\nend\n")
     end
 
-    # Copies the scene that times the project, and the addon with the
-    # extension list that loads it.
-    def install(project)
+    # Copies the scene that times the project, and the addon of `source` with
+    # the extension list that loads it.
+    def install(project, source)
       FileUtils.cp_r(File.join(TEMPLATE, "."), project)
       FileUtils.mkdir_p([File.join(project, ".godot"), File.join(project, "addons")])
-      FileUtils.cp_r(ADDON, File.join(project, "addons", "godot_mruby"))
-      FileUtils.cp(File.join(Godot::PROJECT, Godot::EXTENSION_LIST), File.join(project, Godot::EXTENSION_LIST))
+      FileUtils.cp_r(File.join(source, "addons", "godot_mruby"), File.join(project, "addons"))
+      FileUtils.cp(File.join(source, Godot::EXTENSION_LIST), File.join(project, Godot::EXTENSION_LIST))
     end
 
     # Writes the library file at `index`, answering the names it is reached by.

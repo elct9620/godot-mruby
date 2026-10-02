@@ -41,12 +41,19 @@ module Bench
   # a whole, beside what the scene timed inside Ruby.
   def measure_project(project)
     editor_scan = time { Godot.run_editor(project) }
-    output = nil
-    play = time { output, = Godot.run_scene(project, SCENE, "--quit-after", "10") }
+    measures = nil
+    play = time { measures = play(project) }
+    measures.merge("play" => play, "editor_scan" => editor_scan)
+  end
+
+  # Plays the bench scene of a generated project, answering what it timed
+  # inside Ruby.
+  def play(project)
+    output, = Godot.run_scene(project, SCENE, "--quit-after", "10")
     measures = output.scan(MEASURED).to_h { |name, usec| [name, Integer(usec)] }
     raise "The bench scene measured nothing:\n#{output}" if measures.empty?
 
-    measures.merge("play" => play, "editor_scan" => editor_scan)
+    measures
   end
 
   # The microseconds the block took.

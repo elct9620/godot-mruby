@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "loader/scaling"
 require_relative "runner"
 
 module Godot
@@ -51,6 +52,7 @@ module Godot
       verify_hidden_raised!(output)
       verify_raised!(project)
       verify_late!(project)
+      Scaling.verify!(project)
     end
 
     # The project's Ruby tests have to warn about every name the class index
