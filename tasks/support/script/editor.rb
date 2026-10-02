@@ -31,7 +31,7 @@ module Godot
       # is given frames enough to get there and quits by itself. A run told to
       # quit sooner ends during that scan and opens no scene at all.
       REACHED = "Loading resource: %s"
-      FRAMES = "3000"
+      FRAMES = "300"
       # What Godot says of a connection to a signal the node has not got, which
       # is every scene connection while a node script has no script instance.
       REFUSED = "Attempt to connect nonexistent signal"
