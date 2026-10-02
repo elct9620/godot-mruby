@@ -1,0 +1,9 @@
+config_version=5
+
+[application]
+
+config/name="godot-mruby battle bench"
+
+[mruby]
+
+loader/root_directories=PackedStringArray("res://src")

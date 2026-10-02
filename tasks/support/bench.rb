@@ -3,11 +3,13 @@
 require "json"
 require "tmpdir"
 
+require_relative "bench/battle"
 require_relative "bench/project"
 require_relative "godot"
 
-# Measures what a game's Ruby costs as its project grows: a generated project,
-# played and scanned headless, at each size. Reports the numbers and judges
+# Measures what a game's Ruby costs: as its project grows, in a generated
+# project played and scanned headless at each size, and per round of the
+# game's battle against its GDScript twin. Reports the numbers and judges
 # nothing. Backs tasks/bench.rake.
 module Bench
   SIZES = [100, 1000].freeze
@@ -17,12 +19,13 @@ module Bench
 
   module_function
 
-  # Measures the sizes `BENCH_SIZES` lists in `env`, prints the table, and
-  # writes the measures as JSON where `BENCH_JSON` names a file.
+  # Measures the sizes `BENCH_SIZES` lists in `env` and the battle, prints
+  # their tables, and writes the measures as JSON where `BENCH_JSON` names a
+  # file.
   def report!(env)
     sizes = env.fetch("BENCH_SIZES", SIZES.join(",")).split(",").map { |size| Integer(size) }
-    results = measure(sizes)
-    puts tabulate(results)
+    results = { "growth" => measure(sizes), "battle" => Battle.measure }
+    puts tabulate(results["growth"]), "", tabulate_battle(results["battle"])
     File.write(env.fetch("BENCH_JSON"), JSON.pretty_generate(results)) if env.key?("BENCH_JSON")
   end
 
@@ -72,6 +75,21 @@ module Bench
     header = ["| ms |", *sizes.map { |size| " #{size} files |" }].join
     rows = results.values.first.keys.map { |name| format_row(name, results.values.map { |measures| measures[name] }) }
     [header, "|---|#{"---|" * sizes.size}", *rows].join("\n")
+  end
+
+  # The battle's styles as a Markdown table: a round's milliseconds in each
+  # language and the ratio, each the median with the range of the pairs.
+  def tabulate_battle(styles)
+    rows = styles.map do |style, measures|
+      cells = measures.map { |name, spread| format_spread(spread, name == "ratio" ? "%.1f×" : "%.1f") }
+      "| #{style} | #{cells.join(" | ")} |"
+    end
+    ["| battle, ms a round | Ruby | GDScript | Ruby ÷ GDScript |", "|---|---|---|---|", *rows, "",
+     "The call-cost gate is to judge the recommended style's ratio."].join("\n")
+  end
+
+  def format_spread(spread, unit)
+    "#{format(unit, spread["median"])} (#{format(unit, spread["min"])}–#{format(unit, spread["max"])})"
   end
 
   def format_row(name, usecs)

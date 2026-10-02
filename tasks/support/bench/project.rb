@@ -7,9 +7,9 @@ require_relative "../godot"
 module Bench
   # Writes a project of generated library files, spread over directories, and
   # node scripts extending one base, beside the addon and the scene in
-  # tasks/bench that times them, for Bench and Godot::Loader::Scaling.
+  # tasks/bench/growth that times them, for Bench and Godot::Loader::Scaling.
   module Project
-    TEMPLATE = File.expand_path("../../bench", __dir__)
+    TEMPLATE = File.expand_path("../../bench/growth", __dir__)
     # Library files are spread over this many directories, and a node script
     # is written for every this many library files.
     DIRECTORIES = 10
@@ -27,10 +27,10 @@ module Bench
             "module Manifest\n  NAMES = #{names.inspect}\n  SCRIPTS = #{scripts.inspect}\nend\n")
     end
 
-    # Copies the scene that times the project, and the addon of `source` with
-    # the extension list that loads it.
-    def install(project, source)
-      FileUtils.cp_r(File.join(TEMPLATE, "."), project)
+    # Copies `template`, which holds the scene that times the project, and the
+    # addon of `source` with the extension list that loads it.
+    def install(project, source, template = TEMPLATE)
+      FileUtils.cp_r(File.join(template, "."), project)
       FileUtils.mkdir_p([File.join(project, ".godot"), File.join(project, "addons")])
       FileUtils.cp_r(File.join(source, "addons", "godot_mruby"), File.join(project, "addons"))
       FileUtils.cp(File.join(source, Godot::EXTENSION_LIST), File.join(project, Godot::EXTENSION_LIST))
