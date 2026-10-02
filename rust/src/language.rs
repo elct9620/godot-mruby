@@ -90,11 +90,11 @@ impl IScriptLanguageExtension for RubyLanguage {
     fn finish(&mut self) {}
 
     fn get_reserved_words(&self) -> PackedStringArray {
-        PackedStringArray::new()
+        KEYWORDS.iter().map(|word| GString::from(*word)).collect()
     }
 
-    fn is_control_flow_keyword(&self, _keyword: GString) -> bool {
-        false
+    fn is_control_flow_keyword(&self, keyword: GString) -> bool {
+        is_control_flow(&keyword.to_string())
     }
 
     // The editor comments lines out with it, and reads a project template's
@@ -103,8 +103,11 @@ impl IScriptLanguageExtension for RubyLanguage {
         PackedStringArray::from(&[GString::from("#")])
     }
 
+    // A start and an end apart from each other by a space. The editor colours
+    // what lies between, honours a backslash escape there, and closes the
+    // quote as it is typed.
     fn get_string_delimiters(&self) -> PackedStringArray {
-        PackedStringArray::new()
+        PackedStringArray::from(&[GString::from("\" \""), GString::from("' '")])
     }
 
     // The file's name comes without its directory; the class is named after
@@ -538,5 +541,78 @@ pub fn indentation() -> String {
         " ".repeat(size.map_or(4, usize::from))
     } else {
         "\t".to_owned()
+    }
+}
+
+// Ruby's keywords, as the parser spells them.
+const KEYWORDS: &[&str] = &[
+    "__ENCODING__",
+    "__FILE__",
+    "__LINE__",
+    "BEGIN",
+    "END",
+    "alias",
+    "and",
+    "begin",
+    "break",
+    "case",
+    "class",
+    "def",
+    "defined?",
+    "do",
+    "else",
+    "elsif",
+    "end",
+    "ensure",
+    "false",
+    "for",
+    "if",
+    "in",
+    "module",
+    "next",
+    "nil",
+    "not",
+    "or",
+    "redo",
+    "rescue",
+    "retry",
+    "return",
+    "self",
+    "super",
+    "then",
+    "true",
+    "undef",
+    "unless",
+    "until",
+    "when",
+    "while",
+    "yield",
+];
+
+// The keywords that branch, loop or leave a block, which the editor colours
+// apart from the rest.
+const CONTROL_FLOW: &[&str] = &[
+    "begin", "break", "case", "else", "elsif", "ensure", "for", "if", "in", "next", "redo",
+    "rescue", "retry", "return", "then", "unless", "until", "when", "while", "yield",
+];
+
+fn is_control_flow(word: &str) -> bool {
+    CONTROL_FLOW.contains(&word)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CONTROL_FLOW, KEYWORDS};
+
+    // The editor colours a control-flow keyword only when it is reserved.
+    // @behavior RU-001
+    #[test]
+    fn a_control_flow_keyword_is_a_reserved_word() {
+        let unreserved: Vec<_> = CONTROL_FLOW
+            .iter()
+            .filter(|word| !KEYWORDS.contains(word))
+            .collect();
+
+        assert!(unreserved.is_empty(), "not reserved: {unreserved:?}");
     }
 }
