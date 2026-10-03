@@ -6,9 +6,9 @@
 //! about to run, and touches nothing of it afterwards, as GDScript, C# and
 //! other languages' instances do.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::ffi::c_void;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, LazyLock, Mutex, PoisonError};
 
 use godot::classes::{ClassDb, Object, Script, ScriptLanguage};
 use godot::meta::conv::RawPtr;
@@ -18,12 +18,12 @@ use godot::register::info::{PropertyHint, PropertyUsageFlags};
 use godot::sys;
 
 use crate::ancestry::{Ancestry, Lineage};
-use crate::bridge::{self, Owner, ToEngine, ToRuby};
+use crate::bridge::{self, NameKey, Owner, ToEngine, ToRuby};
 use crate::error;
 use crate::header::Header;
 use crate::log::GodotLog;
 use crate::realm::{self, Build, Key, RubyError};
-use crate::snapshot::{self, Heading, Member, Property};
+use crate::snapshot::{self, Heading, Member, Property, Snapshot};
 
 /// A node's instance of a `RubyScript`. It holds no Ruby value: the node's
 /// Ruby object is built in the game's realm the first time Godot calls a
@@ -38,6 +38,9 @@ pub struct RubyInstance {
     // answer which methods the node's class has without entering the realm.
     header: Arc<Header>,
     ancestry: Arc<Ancestry>,
+    // What that header and ancestry define, shared with every instance made
+    // from them.
+    methods: Arc<Methods>,
     // The engine class of the node itself, which is the script's engine
     // class or one descending from it, and whose properties are the
     // engine's to answer.
@@ -52,6 +55,48 @@ pub struct RubyInstance {
     // What Godot wrote to the node's properties before it had a Ruby object,
     // waiting for the object to be built.
     stash: Arc<Mutex<Stash>>,
+}
+
+/// The methods a node's class has, by the StringName Godot calls each with,
+/// for every instance of one header and ancestry: worked out again whenever
+/// another snapshot is published, so a call finds its method's name without
+/// formatting it or walking the lineage.
+#[derive(Default)]
+pub struct Methods(Mutex<Option<MethodTable>>);
+
+// The methods a lineage had in a snapshot, and each one's name.
+struct MethodTable {
+    snapshot: Arc<Snapshot>,
+    names: HashMap<NameKey, Arc<str>>,
+}
+
+impl Methods {
+    // The name of `method` when the class has it, read from the latest
+    // snapshot and the lineage `lineage` gives.
+    fn name_by_key<'l>(
+        &self,
+        method: &StringName,
+        lineage: impl FnOnce() -> Lineage<'l>,
+    ) -> Option<Arc<str>> {
+        let latest = snapshot::latest();
+        let mut table = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+        let table = match &mut *table {
+            Some(table) if Arc::ptr_eq(&table.snapshot, &latest) => table,
+            stale => stale.insert(MethodTable::new(&lineage(), latest)),
+        };
+        table.names.get(&bridge::read_identity(method)).cloned()
+    }
+}
+
+impl MethodTable {
+    fn new(lineage: &Lineage, snapshot: Arc<Snapshot>) -> Self {
+        let names = lineage
+            .collect_methods(&snapshot)
+            .into_iter()
+            .map(|name| (NameKey::new(StringName::from(name)), Arc::from(name)))
+            .collect();
+        Self { snapshot, names }
+    }
 }
 
 /// What Godot wrote to a node's properties before it had a Ruby object, in
@@ -98,6 +143,7 @@ impl RubyInstance {
         script: Gd<Script>,
         header: Arc<Header>,
         ancestry: Arc<Ancestry>,
+        methods: Arc<Methods>,
         language: Gd<ScriptLanguage>,
         owner: &Gd<Object>,
     ) -> Self {
@@ -107,6 +153,7 @@ impl RubyInstance {
             owner: owner.instance_id(),
             header,
             ancestry,
+            methods,
             class_name: StringName::from(&owner.get_class()),
             language,
             display: GString::from(&owner.to_string()),
@@ -132,6 +179,12 @@ impl RubyInstance {
     // whether its source writes it or its class defined it as it ran.
     fn has_method(&self, method: &str) -> bool {
         self.lineage().has_method(&snapshot::latest(), method)
+    }
+
+    // The name of `method`, which Godot calls by its StringName, when the
+    // node's class has it.
+    fn method_name_by_key(&self, method: &StringName) -> Option<Arc<str>> {
+        self.methods.name_by_key(method, || self.lineage())
     }
 
     fn lineage(&self) -> Lineage<'_> {
@@ -687,8 +740,9 @@ unsafe extern "C" fn has_method(
     data: sys::GDExtensionScriptInstanceDataPtr,
     method: sys::GDExtensionConstStringNamePtr,
 ) -> sys::GDExtensionBool {
-    // SAFETY: the instance lives for this call, which runs no Ruby.
-    let has = unsafe { instance(data).has_method(&name(method)) };
+    // SAFETY: the instance and the method name live for this call, which
+    // runs no Ruby.
+    let has = unsafe { instance(data).method_name_by_key(&*method.cast::<StringName>()) }.is_some();
     sys::GDExtensionBool::from(has)
 }
 
@@ -753,17 +807,17 @@ unsafe extern "C" fn call(
     answer: sys::GDExtensionVariantPtr,
     error: *mut sys::GDExtensionCallError,
 ) {
-    // SAFETY: the method name lives for the call.
-    let method = unsafe { name(method) };
-    // SAFETY: the instance lives until Ruby runs, and is not used after.
-    let caller = {
+    // SAFETY: the instance lives until Ruby runs, and is not used after;
+    // the method name lives for the call.
+    let (method, caller) = {
         let instance = unsafe { instance(data) };
-        if !instance.has_method(&method) {
+        let Some(method) = instance.method_name_by_key(unsafe { &*method.cast::<StringName>() })
+        else {
             // SAFETY: Godot hands an error to fill.
             unsafe { (*error).error = sys::GDEXTENSION_CALL_ERROR_INVALID_METHOD };
             return;
-        }
-        instance.caller()
+        };
+        (method, instance.caller())
     };
     let args: &[&Variant] = if args.is_null() {
         &[]
@@ -781,6 +835,9 @@ unsafe extern "C" fn call(
     }
 }
 
+// The name Godot forwards every notification to a script by.
+static NOTIFICATION: LazyLock<StringName> = LazyLock::new(|| StringName::from("_notification"));
+
 unsafe extern "C" fn notification(
     data: sys::GDExtensionScriptInstanceDataPtr,
     what: i32,
@@ -789,7 +846,7 @@ unsafe extern "C" fn notification(
     // SAFETY: the instance lives until Ruby runs, and is not used after.
     let caller = {
         let instance = unsafe { instance(data) };
-        if !instance.has_method("_notification") {
+        if instance.method_name_by_key(&NOTIFICATION).is_none() {
             return;
         }
         instance.caller()

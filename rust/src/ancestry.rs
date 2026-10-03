@@ -155,6 +155,18 @@ impl<'a> Lineage<'a> {
         })
     }
 
+    /// The names of the methods the lineage's files define, as their sources
+    /// write them or as their classes defined them while they ran, a name
+    /// more than one defines listed for each.
+    pub fn collect_methods<'s>(&'s self, snapshot: &'s Snapshot) -> Vec<&'s str> {
+        self.files()
+            .flat_map(|(path, header)| {
+                let ran = snapshot.methods_by_path(path).iter().map(String::as_str);
+                header.methods().chain(ran)
+            })
+            .collect()
+    }
+
     /// Whether a file of the lineage defines the method `name`, as its source
     /// writes it or as its class defined it while it ran.
     pub fn has_method(&self, snapshot: &Snapshot, name: &str) -> bool {

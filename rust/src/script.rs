@@ -17,7 +17,7 @@ use godot::sys::{self, GodotFfi};
 use crate::ancestry::{self, Ancestry, Break, Cache, Lineage};
 use crate::game::{self, FilesOnDisk, GameFiles};
 use crate::header::Header;
-use crate::instance::RubyInstance;
+use crate::instance::{Methods, RubyInstance};
 use crate::language;
 use crate::log::GodotLog;
 use crate::realm::{self, Files};
@@ -43,6 +43,9 @@ pub struct RubyScript {
     // since loading a script must not load the scripts it inherits from, and
     // again once any source changes.
     ancestry: Cache,
+    // What the header and ancestry its instances were last made from define,
+    // shared by every instance made from the same two.
+    methods: Mutex<Option<KeptMethods>>,
     // The placeholders Godot made of the script in the editor and has not
     // erased, told again what the class exports whenever that changes.
     placeholders: Mutex<Vec<Placeholder>>,
@@ -55,6 +58,9 @@ pub struct RubyScript {
     // mutably, since another thread may be reading it then.
     is_from_template: AtomicBool,
 }
+
+// What a header and ancestry define, kept with the two.
+type KeptMethods = (Arc<Header>, Arc<Ancestry>, Arc<Methods>);
 
 /// What a placeholder is told of the class: what it exports, and the value
 /// each was declared with.
@@ -150,6 +156,7 @@ impl RubyScript {
             base,
             header: Arc::new(header),
             ancestry: Cache::default(),
+            methods: Mutex::default(),
             placeholders: Mutex::default(),
             last_exports_digest: Mutex::default(),
             is_from_template: AtomicBool::new(false),
@@ -213,6 +220,28 @@ impl RubyScript {
             let path = self.base().get_path().to_string();
             ancestry::trace_ancestry(&path, &self.header, &GameFiles)
         })
+    }
+
+    // What the script's header and `ancestry` define, shared with the
+    // instances already made from the same two.
+    fn methods_by_ancestry(&self, ancestry: &Arc<Ancestry>) -> Arc<Methods> {
+        let mut kept = self.methods.lock().unwrap_or_else(PoisonError::into_inner);
+        match &*kept {
+            Some((header, kept_ancestry, methods))
+                if Arc::ptr_eq(header, &self.header) && Arc::ptr_eq(kept_ancestry, ancestry) =>
+            {
+                Arc::clone(methods)
+            }
+            _ => {
+                let methods = Arc::new(Methods::default());
+                *kept = Some((
+                    Arc::clone(&self.header),
+                    Arc::clone(ancestry),
+                    Arc::clone(&methods),
+                ));
+                methods
+            }
+        }
     }
 
     fn lineage(&self) -> Lineage<'_> {
@@ -358,10 +387,13 @@ impl IScriptExtension for RubyScript {
         let language = self
             .get_language()
             .expect("the Ruby language outlives every Ruby script instance");
+        let ancestry = self.ancestry().expect("a node script has an ancestry");
+        let methods = self.methods_by_ancestry(&ancestry);
         let instance = RubyInstance::new(
             self.to_gd().upcast(),
             Arc::clone(&self.header),
-            self.ancestry().expect("a node script has an ancestry"),
+            ancestry,
+            methods,
             language,
             &for_object,
         );

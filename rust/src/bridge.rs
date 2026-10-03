@@ -16,6 +16,7 @@ mod utility;
 mod value;
 mod value_type;
 
+pub use name_key::{NameKey, read_identity};
 pub use object::{Owner, node_key};
 pub use value::{ToEngine, ToRuby};
 
