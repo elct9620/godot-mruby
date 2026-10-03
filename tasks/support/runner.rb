@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "fileutils"
 require "json"
 require "tmpdir"
 
@@ -137,14 +138,25 @@ module Godot
     end
 
     # Runs with these options and tells GitHub Actions what the run's
-    # results hold, when it runs there.
+    # results hold, when it runs there. The directory TEST_REPORT_DIR names
+    # keeps the run's log and results, for a failed job to upload.
     def run_reported(project, *options)
       Dir.mktmpdir do |dir|
         results = File.join(dir, "results.json")
-        run(project, *options, "--results", results).tap do
+        run(project, *options, "--results", results).tap do |output, _status|
           Workflow.report(JSON.parse(File.read(results))) if File.exist?(results)
+          keep_report(output, results, ENV.fetch("TEST_REPORT_DIR", nil))
         end
       end
+    end
+
+    # Copies a run's log and its results file into `dir`, when one is named.
+    def keep_report(output, results, dir)
+      return unless dir
+
+      FileUtils.mkdir_p(dir)
+      File.write(File.join(dir, "output.log"), output)
+      FileUtils.cp(results, dir) if File.exist?(results)
     end
 
     def run(project, *options)

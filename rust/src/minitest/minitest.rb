@@ -326,7 +326,7 @@ module Minitest
     end
 
     attr_accessor :assertions
-    attr_reader :name, :failures
+    attr_reader :name, :failures, :time
 
     def initialize(name)
       @name = name
@@ -385,13 +385,16 @@ module Minitest
       public_instance_methods(true).map(&:to_s).select { |name| name[0, 5] == "test_" }.sort.shuffle
     end
 
-    # Each teardown step runs whatever the steps before it raised.
+    # Each teardown step runs whatever the steps before it raised. The test
+    # keeps the seconds it took, the frames it waited included.
     def run
+      started = Godot::Time.get_ticks_usec
       capture_exceptions do
         SETUP_METHODS.each { |hook| __send__(hook) }
         __send__(name)
       end
       TEARDOWN_METHODS.each { |hook| capture_exceptions { __send__(hook) } }
+      @time = (Godot::Time.get_ticks_usec - started) / 1_000_000.0
       self
     end
 

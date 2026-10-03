@@ -248,3 +248,11 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 | Given | a test directory whose test fails |
 | When | the runner scene runs headless on it |
 | Then | the failure is followed by the run's `--seed` and the `--include` naming that test, which run it again |
+
+## `RT-040` A run's results name what it ran on and in what order
+
+| Step | Statement |
+| --- | --- |
+| Given | a test directory whose tests a seed runs out of name order |
+| When | the runner scene runs headless on it with that `--seed` and `--results` naming a file |
+| Then | the file names the seed, the Godot version and the platform, and lists the tests in the order they ran, each with the seconds it took |

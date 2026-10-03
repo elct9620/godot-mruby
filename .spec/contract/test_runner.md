@@ -34,4 +34,4 @@ The seed that orders the run's tests; `-s` for short, and a random one when it i
 
 ## `--results`
 
-The file the run writes its results to as JSON: `tests`, each with its `class`, `name`, `result` (`pass`, `skip`, `failure` or `error`), `message`, and the `file` and `line` it went wrong at; and `errors`, each test file that did not load, with its `message`, `file` and `line`. A place Ruby does not know is `null`.
+The file the run writes its results to as JSON: the `seed` that ordered the run, the `godot` version and `platform` it ran on; `tests` in the order they ran, each with its `class`, `name`, `result` (`pass`, `skip`, `failure` or `error`), the seconds it took as `time`, `message`, and the `file` and `line` it went wrong at; and `errors`, each test file that did not load, with its `message`, `file` and `line`. A place Ruby does not know is `null`.

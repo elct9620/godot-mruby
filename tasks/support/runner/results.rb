@@ -31,6 +31,7 @@ module Godot
 
       def verify!(project)
         verify_listed!(project)
+        verify_ordered!(project)
         verify_load_failure!(project)
         verify_run_file!(project)
       end
@@ -86,13 +87,46 @@ module Godot
       end
 
       # What a run with these options wrote to --results.
+      # A run with a seed that shuffles the order directory names the seed,
+      # the Godot and platform it ran on, and its tests in the order the log
+      # shows them running, each with the seconds it took.
+      # @behavior RT-040
+      def verify_ordered!(project)
+        seed, output, results = find_shuffled_run(project)
+        ran = results["tests"].map { |test| "#{test["class"]}##{test["name"]}" }
+        return if ordered?(results, seed, ran, Runner.scan_order(output))
+
+        raise "The results of #{Runner::ORDER} with --seed #{seed} do not name its run and order:\n#{results}"
+      end
+
+      # The first seed that runs the order directory out of name order, with
+      # the run's log and results.
+      def find_shuffled_run(project)
+        Runner::SEEDS.each do |seed|
+          output, results = read_run(project, "--dir", Runner::ORDER, "--seed", seed)
+          order = Runner.scan_order(output)
+          return [seed, output, results] if order != order.sort
+        end
+        raise "No seed of #{Runner::SEEDS.join(", ")} ran #{Runner::ORDER} out of name order"
+      end
+
+      def ordered?(results, seed, ran, logged)
+        results["seed"] == Integer(seed) && results.values_at("godot", "platform").all? { |name| !name.to_s.empty? } &&
+          ran == logged && results["tests"].all? { |test| test["time"].is_a?(Numeric) && test["time"] >= 0 }
+      end
+
       def read_results(project, *options)
+        read_run(project, *options).last
+      end
+
+      # The log and the results of a run with these options.
+      def read_run(project, *options)
         Dir.mktmpdir do |dir|
           path = File.join(dir, "results.json")
           output, = Runner.run(project, *options, "--results", path)
           raise "A run with #{options.join(" ")} wrote no results:\n#{output}" unless File.exist?(path)
 
-          JSON.parse(File.read(path))
+          [output, JSON.parse(File.read(path))]
         end
       end
 

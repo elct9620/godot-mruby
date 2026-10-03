@@ -164,6 +164,16 @@ jobs:
           name: godot-mruby
           path: pkg
       - run: bundle exec rake addon:verify
+        env:
+          TEST_REPORT_DIR: ${{ runner.temp }}/test-report
+      # The Ruby tests' log and results, with the seed and order a flaky
+      # failure needs to be run again.
+      - if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-report-${{ matrix.os }}-godot-${{ matrix.godot }}
+          path: ${{ runner.temp }}/test-report
+          if-no-files-found: ignore
 
   # Reports what a game's Ruby costs on one platform, beside the bench of
   # main's last run, so the numbers compare between runs; it judges nothing,

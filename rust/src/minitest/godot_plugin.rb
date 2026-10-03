@@ -37,8 +37,9 @@ module Minitest
     end
   end
 
-  # Writes each test's result, and each test file that did not load, as JSON
-  # to the file `--results` names, for the editor's test panel to list. The
+  # Writes each test's result in the order it ran, and each test file that did
+  # not load, as JSON to the file `--results` names, for the editor's test
+  # panel to list, under what names the run. The
   # file and its directory are written through the engine, so `user://`
   # names one too.
   class ResultReporter < AbstractReporter
@@ -57,6 +58,7 @@ module Minitest
         "class" => result.class.to_s,
         "name" => result.name,
         "result" => RESULTS[result.result_code],
+        "time" => result.time,
         "message" => failure && failure.message,
         "file" => file,
         "line" => line
@@ -68,8 +70,16 @@ module Minitest
       file = Godot::FileAccess.open(@path, Godot::FileAccess::WRITE)
       return Godot.push_error("The test results were not written to #{@path}") unless file
 
-      file.store_string(Godot::JSON.stringify({ "tests" => @tests, "errors" => @errors }, "  "))
+      file.store_string(Godot::JSON.stringify(run_header.merge("tests" => @tests, "errors" => @errors), "  "))
       file.close
+    end
+
+    private
+
+    # The seed that ordered the run, and the Godot and platform it ran on.
+    def run_header
+      { "seed" => Minitest.seed, "godot" => Godot::Engine.get_version_info["string"],
+        "platform" => "#{Godot::OS.get_name} #{Godot::Engine.get_architecture_name}" }
     end
   end
 
