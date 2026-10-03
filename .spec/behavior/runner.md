@@ -240,3 +240,11 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 | Given | `user://godot_mruby/run.json` holding a `--dir` and a `--results` |
 | When | the runner scene runs headless with no options |
 | Then | it runs only that directory, writes its results there, and the run file is gone |
+
+## `RT-039` A test that did not pass is reported with the options that run it again
+
+| Step | Statement |
+| --- | --- |
+| Given | a test directory whose test fails |
+| When | the runner scene runs headless on it |
+| Then | the failure is followed by the run's `--seed` and the `--include` naming that test, which run it again |

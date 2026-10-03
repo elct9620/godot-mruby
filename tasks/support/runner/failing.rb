@@ -20,6 +20,10 @@ module Godot
           "ERROR: FailedAssertionTest#test_one_equals_two: Expected: 1",
           "(#{RUNNER_TESTS}/failing/assertion/failed_assertion_test.rb:9)"
         ],
+        %W[--dir #{RUNNER_TESTS}/failing/assertion --seed 7] => [
+          "ERROR: FailedAssertionTest#test_one_equals_two: Expected: 1",
+          "Run it again with --seed 7 --include FailedAssertionTest#test_one_equals_two"
+        ],
         %W[--dir #{RUNNER_TESTS}/failing/error] => [
           "RaisedErrorTest#test_raises_an_argument_error [#{RUNNER_TESTS}/failing/error/raised_error_test.rb:10]:",
           "ArgumentError: not an assertion",
@@ -53,7 +57,7 @@ module Godot
       # Makes each run that has to fail and requires it to fail with what it has
       # to print, in order, and without the framework's own frames.
       # @behavior RT-002 RT-003 RT-004 RT-005 RT-006 RT-007 RT-008 RT-010
-      # @behavior RT-020 RT-021 RT-022 RT-023 RT-026 RT-029 RT-030 RT-034
+      # @behavior RT-020 RT-021 RT-022 RT-023 RT-026 RT-029 RT-030 RT-034 RT-039
       def verify!(project)
         FAILING.each do |options, expected|
           output, status = Runner.run(project, *options)
