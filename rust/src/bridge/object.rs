@@ -2,6 +2,9 @@
 //! `Godot` carries the engine object it stands for, and Ruby reaches its
 //! methods by their names.
 
+use std::cell::RefCell;
+use std::collections::HashMap;
+
 use beni::{
     Array, DataType, Error, ExceptionClass, FromValue, IntoValue, Module, Mrb, Object as _, RClass,
     RModule, ReprValue, Symbol, TryConvert, TypedData, Value, method,
@@ -14,7 +17,9 @@ use godot::meta::ToGodot;
 use godot::meta::error::CallError;
 use godot::obj::{EngineEnum, Gd, InstanceId, Singleton};
 use godot::register::info::PropertyHint;
+use godot::sys;
 
+use super::name_key::NameKey;
 use super::value::{self, ToRuby};
 use crate::game;
 use crate::hint::{Hint, type_name};
@@ -147,8 +152,9 @@ impl IntoValue for Owner {
 
 // Godot::Object#__resolve__(name): the engine method a call of `name`
 // reaches, and whether the object's engine class declares it, so every
-// object of the Ruby class answers it; nil when it reaches none, as for an
-// object carrying no engine object. A name ending in `=` reaches the
+// object of the Ruby class answers it, which no class the engine keeps
+// hidden does, since its objects reach Ruby as its exposed ancestor's; nil
+// when it reaches none, as for an object carrying no engine object. A name ending in `=` reaches the
 // property's setter, and a name no method has reaches its getter.
 fn resolve(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
     let Ok(held) = <&EngineObject>::try_convert(receiver, mrb) else {
@@ -179,6 +185,7 @@ fn resolve(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
     if target.is_empty() {
         return Ok(Value::nil());
     }
+    let declared = declared && exposed_class(&object) == class;
     let target = Symbol::from(mrb.intern(target.as_bytes())?).as_value();
     Ok(mrb
         .ary_new_from_values(&[target, declared.into_value(mrb)])
@@ -251,19 +258,54 @@ pub fn ruby_object(mrb: &Mrb, object: Gd<Object>) -> Value {
     if let Some(held) = realm::object(mrb, node_key(object.instance_id())) {
         return held;
     }
-    let class = mrb
-        .module_get(c"Godot")
-        .and_then(|godot| {
-            let name = object.get_class().to_string();
-            godot.as_value().const_get(mrb, name.as_str())
-        })
-        .ok()
-        .and_then(RClass::from_value)
-        .or_else(|| root(mrb).ok());
+    let class = class_by_name(mrb, exposed_class(&object)).or_else(|| root(mrb).ok());
     match class {
         Some(class) => mrb.wrap_as(EngineObject(object), class).as_value(),
         None => Value::nil(),
     }
+}
+
+// The class under Godot of each engine class a realm has handed Ruby an
+// object of, by the engine's name for it, so an object finds its class
+// without spelling that name.
+#[derive(Default)]
+struct EngineClasses(RefCell<HashMap<NameKey, RClass>>);
+
+// The class under Godot of the engine class `name`, found once for a realm
+// and kept for it, rooted for the collector so the class lives while it is
+// kept.
+fn class_by_name(mrb: &Mrb, name: StringName) -> Option<RClass> {
+    let classes = &realm::extension_data::<EngineClasses>(mrb).0;
+    let key = NameKey::new(name);
+    if let Some(class) = classes.borrow().get(&key).copied() {
+        return Some(class);
+    }
+    let class = mrb
+        .module_get(c"Godot")
+        .and_then(|godot| godot.as_value().const_get(mrb, key.to_string().as_str()))
+        .ok()
+        .and_then(RClass::from_value)?;
+    mrb.gc_register_forever(class.as_value());
+    classes.borrow_mut().insert(key, class);
+    Some(class)
+}
+
+// The name of the nearest class of `object` the engine exposes to
+// extensions, which is the object's own class unless the engine keeps that
+// one hidden.
+fn exposed_class(object: &Gd<Object>) -> StringName {
+    let mut name = StringName::default();
+    // SAFETY: the interface is initialized while the extension runs and
+    // `object` is alive; the name it writes over is empty, so it holds
+    // nothing to release.
+    unsafe {
+        sys::interface_fn!(object_get_class_name)(
+            object.obj_sys().cast_const(),
+            sys::get_library(),
+            name.string_sys_mut().cast(),
+        );
+    }
+    name
 }
 
 // Godot::Object.__declare_signal__(name, parameters): takes the signal the

@@ -68,15 +68,39 @@ class ValuesTest < Minitest::Test
   # @behavior RV-007
   def test_an_engine_object_crosses_as_the_same_object
     child = Godot::Node.new
+    timer = Godot::Timer.new
     beacon = Unit::Script::Beacon.new(1)
     @node.add_child(child)
+    @node.add_child(timer)
     @node.add_child(beacon)
 
     assert_equal child, @node.get_child(0)
-    assert_same beacon, @node.get_child(1)
+    assert_instance_of Godot::Node, @node.get_child(0)
+    assert_instance_of Godot::Timer, @node.get_child(1)
+    assert_same beacon, @node.get_child(2)
+  end
+
+  # @behavior RV-021
+  def test_an_engine_object_of_a_hidden_class_crosses_as_its_nearest_exposed_class
+    waiter = coroutine_script.new
+
+    suspended = waiter.wait
+
+    assert_instance_of Godot::RefCounted, suspended
+    assert suspended.is_valid
+    refute_respond_to Godot::RefCounted.new, :is_valid
   end
 
   private
+
+  # A GDScript whose `wait` suspends, so calling it without `await` answers
+  # the GDScriptFunctionState the engine keeps hidden from extensions.
+  def coroutine_script
+    script = Godot::GDScript.new
+    script.source_code = "extends RefCounted\nsignal done\nfunc wait():\n\tawait done\n"
+    script.reload
+    script
+  end
 
   # What the engine hands back for `value`, given as the default of a
   # metadata entry the node does not have.

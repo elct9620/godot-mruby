@@ -61,7 +61,7 @@ How a value crosses between Ruby and the engine, either way: data is copied and 
 | --- | --- |
 | Given | an engine object Ruby holds, and a node whose script's Ruby object Ruby holds |
 | When | the engine hands each back to Ruby |
-| Then | Ruby gets an object equal to the engine object, and the script's own Ruby object |
+| Then | Ruby gets an object of its engine class under `Godot` equal to the engine object, and the script's own Ruby object |
 
 ## `RV-008` An answer the engine cannot take reaches it as null
 
@@ -166,3 +166,11 @@ How a value crosses between Ruby and the engine, either way: data is copied and 
 | Given | a Callable the engine hands Ruby |
 | When | Ruby calls `call` on it with arguments |
 | Then | the engine calls it with those arguments, and Ruby gets what it answered |
+
+## `RV-021` An engine object of a class the engine keeps hidden crosses as an object of its nearest exposed class
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine object whose class the engine exposes to no extension |
+| When | the engine hands it to Ruby |
+| Then | Ruby gets an object of the class under `Godot` of the nearest ancestor the engine exposes, which reaches the hidden class's methods while other objects of that class do not |
