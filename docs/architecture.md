@@ -82,7 +82,7 @@ Build output stays out of the repository: `vendor/` holds mruby's source and arc
 | Battle | `battle/` | a round of `godot/src`'s battle, in two styles |
 | Calls | `battle/base/` | one call of each kind a game makes |
 
-Battle and calls run Ruby and a GDScript twin in turns and report the ratio. The bench names the build and Godot it measured, and times the library the addon holds, so a release build measures what ships. In CI it shows each ratio beside main's last bench of the same build.
+Battle and calls run Ruby and a GDScript twin in turns and report the ratio. The bench names the build, Godot and CPU it measured, and times the library the addon holds, so a release build measures what ships. In CI it shows each ratio beside main's last bench of the same build. A ratio moves with the CPU too, so it names that bench's CPU when it differs.
 
 ### 1.4 Tests
 

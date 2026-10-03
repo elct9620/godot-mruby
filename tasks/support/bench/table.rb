@@ -12,14 +12,28 @@ module Bench
     # measured with, and compared with `baseline` when it is given. Growth
     # measured at no size has no table.
     def tabulate(results, baseline = nil)
-      library = results["library"]
       growth = results["growth"]
-      ["Measured with a #{library["build"]} build in Godot #{library["godot"]}.",
-       baseline ? "Ratios are compared with main's last bench." : "No bench from main with this build to compare.",
+      [describe_measured(results), describe_baseline(baseline, results["cpu"]),
        (tabulate_growth(growth) unless growth.empty?),
        tabulate_battle(results["battle"], baseline&.fetch("battle", nil)),
        tabulate_spreads("call, ns", results["operations"], "%.0f", baseline&.fetch("operations", nil))]
         .compact.join("\n\n")
+    end
+
+    # The build, the Godot and the CPU the results were measured with.
+    def describe_measured(results)
+      library = results["library"]
+      "Measured with a #{library["build"]} build in Godot #{library["godot"]} on #{results["cpu"]}."
+    end
+
+    # Which bench of main's the ratios are compared with, and its CPU where it
+    # ran on another, since the ratios move with the CPU too.
+    def describe_baseline(baseline, cpu)
+      return "No bench from main with this build to compare." unless baseline
+      return "Ratios are compared with main's last bench." if baseline["cpu"] == cpu
+
+      ran_on = baseline.key?("cpu") ? "ran on #{baseline["cpu"]}" : "named no CPU"
+      "Ratios are compared with main's last bench, which #{ran_on}, so they may differ by the CPU too."
     end
 
     # The growth measures in milliseconds, a column for each size.

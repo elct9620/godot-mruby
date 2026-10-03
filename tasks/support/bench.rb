@@ -40,7 +40,7 @@ module Bench
   # Every part's measures: the library's build, growth at `sizes`, the
   # battle and the calls.
   def measure_all(sizes)
-    { "library" => describe_library, "growth" => measure(sizes), "battle" => Battle.measure,
+    { "library" => describe_library, "cpu" => describe_cpu, "growth" => measure(sizes), "battle" => Battle.measure,
       "operations" => Operations.measure }
   end
 
@@ -107,5 +107,18 @@ module Bench
     raise "godot-rust did not name its build:\n#{output}" unless safeguards
 
     { "build" => BUILDS.fetch(safeguards, safeguards), "godot" => runtime }
+  end
+
+  # The CPU the bench ran on, as the system names it: a ratio moves with the
+  # CPU as well, so two benches on different runners may differ by it.
+  def describe_cpu
+    model = if File.exist?("/proc/cpuinfo")
+              File.read("/proc/cpuinfo")[/^model name\s*:\s*(.+)$/, 1]
+            elsif RUBY_PLATFORM.include?("darwin")
+              IO.popen(%w[sysctl -n machdep.cpu.brand_string], &:read).strip
+            else
+              ENV.fetch("PROCESSOR_IDENTIFIER", nil)
+            end
+    model.to_s.empty? ? "an unnamed CPU" : model
   end
 end
