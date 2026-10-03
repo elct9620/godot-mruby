@@ -278,8 +278,9 @@ module Godot
 
     private :__write_variable__, :__read_variable__
 
-    # An engine method the engine class declares is defined on the Ruby class
-    # at its first call, so later calls skip method_missing.
+    # An engine method the engine class this Ruby class extends declares is
+    # defined on the Ruby class at its first call, so later calls skip
+    # method_missing.
     def method_missing(name, *args, &block)
       target, declared = __resolve__(name)
       return super if target.nil?

@@ -167,3 +167,11 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | an engine class the engine keeps no singleton of |
 | When | Ruby calls one of its static methods |
 | Then | the log carries nothing about a singleton, as a GDScript call's does not |
+
+## `RG-021` A method only some of a node class's engine objects have stays theirs
+
+| Step | Statement |
+| --- | --- |
+| Given | a node class extending an engine class, made the script of a node of that class and of a node of a class extending it |
+| When | the second node's Ruby object calls an engine method only its engine class has, and the first node's then calls it |
+| Then | the second reaches the engine's method, and the first raises `NoMethodError` |

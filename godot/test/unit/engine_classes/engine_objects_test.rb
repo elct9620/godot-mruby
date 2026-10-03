@@ -93,4 +93,15 @@ class EngineObjectsTest < Minitest::Test
     assert_equal Godot::WebSocketPeer, peer.send(:class)
     assert_kind_of Integer, peer.call(:send, [104, 105])
   end
+
+  # @behavior RG-021
+  def test_a_method_only_some_of_a_node_classs_engine_objects_have_stays_theirs
+    sprite = autofree(Godot::Sprite2D.new)
+    plain = autofree(Godot::Node2D.new)
+    [sprite, plain].each { |node| node.set_script(Godot::ResourceLoader.load("res://test/unit/engine_classes/scout.rb")) }
+
+    reached = [sprite, plain].map { |node| node.call(:reaches_rect) }
+
+    assert_equal [true, false], reached
+  end
 end

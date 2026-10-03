@@ -159,11 +159,12 @@ impl IntoValue for Owner {
 }
 
 // Godot::Object#__resolve__(name): the engine method a call of `name`
-// reaches, and whether the object's engine class declares it, so every
-// object of the Ruby class answers it, which no class the engine keeps
-// hidden does, since its objects reach Ruby as its exposed ancestor's; nil
-// when it reaches none, as for an object carrying no engine object. A name ending in `=` reaches the
-// property's setter, and a name no method has reaches its getter.
+// reaches, and whether the engine class the receiver's Ruby class extends
+// declares it, so every object of the Ruby class answers it, an object of
+// a class extending that one or of a class the engine keeps hidden
+// included; nil when it reaches none, as for an object carrying no engine
+// object. A name ending in `=` reaches the property's setter, and a name no
+// method has reaches its getter.
 fn resolve(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
     let Ok(held) = <&EngineObject>::try_convert(receiver, mrb) else {
         return Ok(qnil().as_value());
@@ -172,28 +173,26 @@ fn resolve(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
     let object = held.live_object(mrb, &name)?;
     let class = StringName::from(&object.get_class());
     let mut class_db = ClassDb::singleton();
-    let (target, declared) = if let Some(property) = name.strip_suffix('=') {
-        (
-            class_db
-                .class_get_property_setter(&class, property)
-                .to_string(),
-            true,
-        )
+    let target = if let Some(property) = name.strip_suffix('=') {
+        class_db
+            .class_get_property_setter(&class, property)
+            .to_string()
     } else if object.has_method(name.as_str()) {
-        let declared = class_db.class_has_method(&class, name.as_str());
-        (name, declared)
+        name
     } else {
-        (
-            class_db
-                .class_get_property_getter(&class, name.as_str())
-                .to_string(),
-            true,
-        )
+        class_db
+            .class_get_property_getter(&class, name.as_str())
+            .to_string()
     };
     if target.is_empty() {
         return Ok(qnil().as_value());
     }
-    let declared = declared && exposed_class(&object) == class;
+    let declared = receiver
+        .funcall(mrb, c"class", &[])
+        .ok()
+        .and_then(RClass::from_value)
+        .and_then(|ruby_class| engine_ancestor(mrb, ruby_class))
+        .is_some_and(|extended| class_db.class_has_method(extended.as_str(), target.as_str()));
     let target = Symbol::from(mrb.intern(target.as_bytes())?).as_value();
     Ok(mrb
         .ary_new_from_values(&[target, declared.into_value(mrb)])
