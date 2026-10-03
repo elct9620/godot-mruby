@@ -18,6 +18,7 @@ use godot::meta::error::CallError;
 use godot::obj::{EngineEnum, Gd, InstanceId, Singleton};
 use godot::register::info::PropertyHint;
 use godot::sys;
+use smallvec::SmallVec;
 
 use super::name_key::NameKey;
 use super::value::{self, ToRuby};
@@ -204,7 +205,7 @@ fn resolve(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
 fn call(mrb: &Mrb, held: &EngineObject, name: Symbol, args: RArray) -> Result<Value, Error> {
     let name = name.name(mrb).unwrap_or_default();
     let mut object = held.live_object(mrb, &name)?;
-    let args = variants(mrb, args)?;
+    let args = to_arguments(mrb, args)?;
     let answer = object
         .try_call(name.as_str(), &args)
         .map_err(|error| call_refusal(mrb, &error, &object.get_class().to_string(), &name))?;
@@ -244,7 +245,7 @@ fn has_static_method(mrb: &Mrb, class: RClass, name: Symbol) -> bool {
 fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<Value, Error> {
     let name = name.name(mrb).unwrap_or_default();
     let class = engine_name(mrb, class);
-    let args = variants(mrb, args)?;
+    let args = to_arguments(mrb, args)?;
     let answer = ClassDb::singleton()
         .try_class_call_static(&class, name.as_str(), &args)
         .map_err(|error| call_refusal(mrb, &error, &class, &name))?;
@@ -569,9 +570,13 @@ fn engine_name(mrb: &Mrb, class: RClass) -> String {
     path.strip_prefix("Godot::").unwrap_or(&path).to_owned()
 }
 
-// `args` as the engine takes them, or the Godot::CallError one that cannot
-// reach it raises, before the engine is given any.
-fn variants(mrb: &Mrb, args: RArray) -> Result<Vec<Variant>, Error> {
+/// The arguments of one engine call, which a game passes few of, so they stay
+/// off the heap.
+pub(super) type Arguments = SmallVec<[Variant; 4]>;
+
+/// `args` as the engine takes them, or the Godot::CallError one that cannot
+/// reach it raises, before the engine is given any.
+pub(super) fn to_arguments(mrb: &Mrb, args: RArray) -> Result<Arguments, Error> {
     args.entries(mrb)
         .map(|arg| value::to_engine(mrb, arg, 1).map_err(|reason| call_error(mrb, &reason)))
         .collect()

@@ -24,6 +24,8 @@ ruby-prism = "1.9.0"
 # The tokens Prism lexes, which only its C API hands out; it moves with
 # ruby-prism, whose own parser it is.
 ruby-prism-sys = "1.9.0"
+# Keeps the few arguments of an engine call off the heap.
+smallvec = "1.16.2"
 
 [dev-dependencies]
 # The cell gdext holds objects in, for the orderings Godot's threads rely on.

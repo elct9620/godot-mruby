@@ -14,7 +14,9 @@ use beni::{
 use godot::builtin::{GString, StringName, Variant, VariantOperator, VariantType};
 use godot::obj::EngineEnum;
 use godot::sys;
+use smallvec::SmallVec;
 
+use super::object::to_arguments;
 use super::value::{self, ToRuby};
 use crate::hint::type_name;
 use crate::realm;
@@ -156,8 +158,8 @@ fn kind_by_class(mrb: &Mrb, class: RClass) -> Result<VariantType, Error> {
 // the receiver's type that takes `args` builds.
 fn construct(mrb: &Mrb, class: RClass, args: RArray) -> Result<Value, Error> {
     let kind = kind_by_class(mrb, class)?;
-    let args = variants(mrb, args)?;
-    let pointers: Vec<_> = args.iter().map(Variant::var_sys).collect();
+    let args = to_arguments(mrb, args)?;
+    let pointers: SmallVec<[_; 4]> = args.iter().map(Variant::var_sys).collect();
     let kind_sys = kind.ord as sys::GDExtensionVariantType;
     // SAFETY: the argument pointers live as long as `args`.
     let built = engine_call(|built, error| unsafe {
@@ -216,8 +218,8 @@ fn member(mrb: &Mrb, held: &EngineValue, name: Symbol) -> Value {
 // such method.
 fn call(mrb: &Mrb, held: &EngineValue, name: Symbol, args: RArray) -> Result<Value, Error> {
     let method = name.name(mrb).unwrap_or_default();
-    let args = variants(mrb, args)?;
-    let pointers: Vec<_> = args.iter().map(Variant::var_sys).collect();
+    let args = to_arguments(mrb, args)?;
+    let pointers: SmallVec<[_; 4]> = args.iter().map(Variant::var_sys).collect();
     let name = StringName::from(method.as_str());
     let mut receiver = held.0.clone();
     // SAFETY: the name and argument pointers live for the call, which runs on
@@ -241,8 +243,8 @@ fn call(mrb: &Mrb, held: &EngineValue, name: Symbol, args: RArray) -> Result<Val
 fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<Value, Error> {
     let kind = kind_by_class(mrb, class)?;
     let method = name.name(mrb).unwrap_or_default();
-    let args = variants(mrb, args)?;
-    let pointers: Vec<_> = args.iter().map(Variant::var_sys).collect();
+    let args = to_arguments(mrb, args)?;
+    let pointers: SmallVec<[_; 4]> = args.iter().map(Variant::var_sys).collect();
     let name = StringName::from(method.as_str());
     let kind_sys = kind.ord as sys::GDExtensionVariantType;
     // SAFETY: the name and argument pointers live for the call.
@@ -387,14 +389,6 @@ fn to_s(mrb: &Mrb, held: &EngineValue) -> Value {
 // answers hold no container Ruby could not take.
 fn to_ruby(mrb: &Mrb, answer: &Variant) -> Value {
     ToRuby::try_new(answer).map_or_else(|_| qnil().as_value(), |answer| answer.into_value(mrb))
-}
-
-fn variants(mrb: &Mrb, args: RArray) -> Result<Vec<Variant>, Error> {
-    args.entries(mrb)
-        .map(|arg| {
-            value::to_engine(mrb, arg, 1).map_err(|reason| super::object::call_error(mrb, &reason))
-        })
-        .collect()
 }
 
 fn type_error(mrb: &Mrb, message: &str) -> Error {
