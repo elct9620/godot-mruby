@@ -162,7 +162,7 @@ fn construct(mrb: &Mrb, class: RClass, args: RArray) -> Result<Value, Error> {
     let pointers: SmallVec<[_; 4]> = args.iter().map(Variant::var_sys).collect();
     let kind_sys = kind.ord as sys::GDExtensionVariantType;
     // SAFETY: the argument pointers live as long as `args`.
-    let built = engine_call(|built, error| unsafe {
+    let built = super::run_engine_call(|built, error| unsafe {
         sys::interface_fn!(variant_construct)(
             kind_sys,
             built,
@@ -224,7 +224,7 @@ fn call(mrb: &Mrb, held: &EngineValue, name: Symbol, args: RArray) -> Result<Val
     let mut receiver = held.0.clone();
     // SAFETY: the name and argument pointers live for the call, which runs on
     // a copy of the value, so the Ruby value never changes.
-    let outcome = engine_call(|answer, error| unsafe {
+    let outcome = super::run_engine_call(|answer, error| unsafe {
         sys::interface_fn!(variant_call)(
             receiver.var_sys_mut(),
             name.string_sys(),
@@ -248,7 +248,7 @@ fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<V
     let name = StringName::from(method.as_str());
     let kind_sys = kind.ord as sys::GDExtensionVariantType;
     // SAFETY: the name and argument pointers live for the call.
-    let outcome = engine_call(|answer, error| unsafe {
+    let outcome = super::run_engine_call(|answer, error| unsafe {
         sys::interface_fn!(variant_call_static)(
             kind_sys,
             name.string_sys(),
@@ -259,26 +259,6 @@ fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<V
         )
     });
     wrap_answer(mrb, outcome, &type_name(kind), &method, &args)
-}
-
-// Runs an engine call that writes its answer into an uninitialized variant
-// and reports failure through a call error, and answers either.
-fn engine_call(
-    call: impl FnOnce(sys::GDExtensionUninitializedVariantPtr, *mut sys::GDExtensionCallError),
-) -> Result<Variant, sys::GDExtensionCallError> {
-    // SAFETY: the interface is initialized while the extension runs, and an
-    // engine call writes the answer whenever it leaves the error at CALL_OK.
-    unsafe {
-        Variant::new_with_var_uninit_result(|answer| {
-            let mut error = sys::default_call_error();
-            call(answer, ptr::addr_of_mut!(error));
-            if error.error == sys::GDEXTENSION_CALL_OK {
-                Ok(())
-            } else {
-                Err(error)
-            }
-        })
-    }
 }
 
 // What a call answered, in a one-element array; nil for a method the type
@@ -297,17 +277,7 @@ fn wrap_answer(
             Ok(qnil().as_value())
         }
         Err(error) => {
-            let message = match error.error {
-                sys::GDEXTENSION_CALL_ERROR_INVALID_ARGUMENT => {
-                    let index = error.argument as usize;
-                    let from = args
-                        .get(index)
-                        .map_or_else(String::new, |arg| type_name(arg.get_type()));
-                    let to = type_name(<VariantType as EngineEnum>::from_ord(error.expected));
-                    super::object::type_message(method, base, &(index + 1).to_string(), &from, &to)
-                }
-                _ => super::object::count_message(method, base, &error.expected.to_string()),
-            };
+            let message = super::object::describe_refusal(&error, method, base, args);
             Err(super::object::call_error(mrb, &message))
         }
     }

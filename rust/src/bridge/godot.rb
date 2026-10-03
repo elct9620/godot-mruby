@@ -280,13 +280,18 @@ module Godot
 
     # An engine method the engine class this Ruby class extends declares is
     # defined on the Ruby class at its first call, so later calls skip
-    # method_missing.
+    # method_missing, and call the method's bind when the engine gives one.
     def method_missing(name, *args, &block)
-      target, declared = __resolve__(name)
+      target, declared, bound = __resolve__(name)
       return super if target.nil?
 
-      self.class.__send__(:define_method, name) { |*arguments| __call__(target, arguments) } if declared
-      __call__(target, args)
+      if bound
+        self.class.__send__(:define_method, name) { |*arguments| __call_bound__(bound, arguments) }
+        __call_bound__(bound, args)
+      else
+        self.class.__send__(:define_method, name) { |*arguments| __call__(target, arguments) } if declared
+        __call__(target, args)
+      end
     end
 
     def respond_to_missing?(name, include_private = false)

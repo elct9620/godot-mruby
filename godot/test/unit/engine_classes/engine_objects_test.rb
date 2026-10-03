@@ -86,6 +86,15 @@ class EngineObjectsTest < Minitest::Test
                  "Cannot convert argument 1 from Nil to int.", wrong_type.message
   end
 
+  # @behavior RG-018
+  def test_a_call_of_a_method_only_the_objects_own_engine_class_has_is_refused_as_gdscript_reports_it
+    sprite = autofree(Godot::Sprite2D.new)
+    sprite.set_script(Godot::ResourceLoader.load("res://test/unit/engine_classes/scout.rb"))
+
+    assert_equal "Invalid call to function 'get_rect' in base 'Sprite2D'. Expected 0 argument(s).",
+                 sprite.call(:refusal)
+  end
+
   # @behavior RG-019
   def test_an_engine_method_named_like_a_ruby_method_is_reached_through_call
     peer = Godot::WebSocketPeer.new

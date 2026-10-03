@@ -20,6 +20,7 @@ use godot::register::info::PropertyHint;
 use godot::sys;
 use smallvec::SmallVec;
 
+use super::bound_method::BoundMethod;
 use super::name_key::NameKey;
 use super::value::{self, ToRuby};
 use crate::game;
@@ -73,6 +74,7 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     object.define_singleton_method(mrb, c"__declare_heading__", method!(declare_heading, 3))?;
     object.define_private_method(mrb, c"__resolve__", method!(resolve, 1))?;
     object.define_private_method(mrb, c"__call__", method!(call, 2))?;
+    object.define_private_method(mrb, c"__call_bound__", method!(call_bound, 2))?;
     object.define_private_method(mrb, c"__instance_id__", method!(instance_id, 0))?;
     Ok(())
 }
@@ -159,10 +161,11 @@ impl IntoValue for Owner {
 }
 
 // Godot::Object#__resolve__(name): the engine method a call of `name`
-// reaches, and whether the engine class the receiver's Ruby class extends
+// reaches, whether the engine class the receiver's Ruby class extends
 // declares it, so every object of the Ruby class answers it, an object of
 // a class extending that one or of a class the engine keeps hidden
-// included; nil when it reaches none, as for an object carrying no engine
+// included, and the method bound for that class when the engine registered
+// it, or nil; nil when it reaches none, as for an object carrying no engine
 // object. A name ending in `=` reaches the property's setter, and a name no
 // method has reaches its getter.
 fn resolve(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
@@ -187,16 +190,39 @@ fn resolve(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
     if target.is_empty() {
         return Ok(qnil().as_value());
     }
-    let declared = receiver
+    let extended = receiver
         .funcall(mrb, c"class", &[])
         .ok()
         .and_then(RClass::from_value)
         .and_then(|ruby_class| engine_ancestor(mrb, ruby_class))
-        .is_some_and(|extended| class_db.class_has_method(extended.as_str(), target.as_str()));
+        .filter(|extended| class_db.class_has_method(extended.as_str(), target.as_str()));
+    let declared = extended.is_some();
+    let bound = extended
+        .and_then(|extended| BoundMethod::find(&extended, &target))
+        .map_or_else(|| qnil().as_value(), |bound| mrb.wrap(bound).as_value());
     let target = Symbol::from(mrb.intern(target.as_bytes())?).as_value();
     Ok(mrb
-        .ary_new_from_values(&[target, declared.into_value(mrb)])
+        .ary_new_from_values(&[target, declared.into_value(mrb), bound])
         .as_value())
+}
+
+// Godot::Object#__call_bound__(bound, args): calls the engine method
+// `bound` with `args` and answers what it returns. The receiver's Ruby class
+// was given `bound` for the engine class it extends, so the receiver's
+// engine object is of that class or one extending it.
+fn call_bound(
+    mrb: &Mrb,
+    held: &EngineObject,
+    bound: &BoundMethod,
+    args: RArray,
+) -> Result<Value, Error> {
+    let object = held.live_object(mrb, bound.name())?;
+    let args = to_arguments(mrb, args)?;
+    let answer = bound.call(&object, &args).map_err(|error| {
+        let base = object.get_class().to_string();
+        call_error(mrb, &describe_refusal(&error, bound.name(), &base, &args))
+    })?;
+    ruby_answer(mrb, &answer)
 }
 
 // Godot::Object#__call__(name, args): calls the engine method `name` with
@@ -626,21 +652,35 @@ fn call_refusal(mrb: &Mrb, error: &CallError, base: &str, method: &str) -> Error
     call_error(mrb, &message)
 }
 
-/// GDScript's words for a call given the wrong number of arguments.
-pub(super) fn count_message(method: &str, base: &str, expected: &str) -> String {
+/// GDScript's words for a call of `method` on `base` with `args` the engine
+/// refused with `error`.
+pub(super) fn describe_refusal(
+    error: &sys::GDExtensionCallError,
+    method: &str,
+    base: &str,
+    args: &[Variant],
+) -> String {
+    if error.error == sys::GDEXTENSION_CALL_ERROR_INVALID_ARGUMENT {
+        let index = error.argument as usize;
+        let from = args
+            .get(index)
+            .map_or_else(String::new, |arg| type_name(arg.get_type()));
+        let to = type_name(<VariantType as EngineEnum>::from_ord(error.expected));
+        type_message(method, base, &(index + 1).to_string(), &from, &to)
+    } else {
+        count_message(method, base, &error.expected.to_string())
+    }
+}
+
+// GDScript's words for a call given the wrong number of arguments.
+fn count_message(method: &str, base: &str, expected: &str) -> String {
     format!(
         "Invalid call to function '{method}' in base '{base}'. Expected {expected} argument(s)."
     )
 }
 
-/// GDScript's words for a call given an argument of a type it cannot take.
-pub(super) fn type_message(
-    method: &str,
-    base: &str,
-    argument: &str,
-    from: &str,
-    to: &str,
-) -> String {
+// GDScript's words for a call given an argument of a type it cannot take.
+fn type_message(method: &str, base: &str, argument: &str, from: &str, to: &str) -> String {
     format!(
         "Invalid type in function '{method}' in base '{base}'. \
          Cannot convert argument {argument} from {from} to {to}."

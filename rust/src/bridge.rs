@@ -2,13 +2,17 @@
 //! opens with, and the values that cross between the engine and Ruby.
 
 use std::cell::Cell;
+use std::ptr;
 
 use beni::{Error, Gem, Mrb, Object, RClass, ReprValue, Symbol, Value, method, value::qnil};
+use godot::builtin::Variant;
 use godot::classes::ClassDb;
 use godot::obj::Singleton;
+use godot::sys;
 
 use crate::{compiler, log};
 
+mod bound_method;
 mod name_key;
 mod object;
 mod ruby_object;
@@ -58,6 +62,26 @@ fn find_class_once(
         kept.set(Some(class));
         class
     })
+}
+
+// Runs an engine call that writes its answer into an uninitialized variant
+// and reports failure through a call error, and answers either.
+fn run_engine_call(
+    call: impl FnOnce(sys::GDExtensionUninitializedVariantPtr, *mut sys::GDExtensionCallError),
+) -> Result<Variant, sys::GDExtensionCallError> {
+    // SAFETY: the interface is initialized while the extension runs, and an
+    // engine call writes the answer whenever it leaves the error at CALL_OK.
+    unsafe {
+        Variant::new_with_var_uninit_result(|answer| {
+            let mut error = sys::default_call_error();
+            call(answer, ptr::addr_of_mut!(error));
+            if error.error == sys::GDEXTENSION_CALL_OK {
+                Ok(())
+            } else {
+                Err(error)
+            }
+        })
+    }
 }
 
 /// Whether the engine class named `class` is a node class, the only kind a

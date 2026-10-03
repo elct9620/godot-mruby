@@ -9,6 +9,13 @@ module Unit
       rescue NoMethodError
         false
       end
+
+      # What a call of such a method with too many arguments raises.
+      def refusal
+        get_rect(1)
+      rescue Godot::CallError => e
+        e.message
+      end
     end
   end
 end
