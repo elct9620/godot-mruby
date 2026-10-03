@@ -16,7 +16,7 @@ use godot::obj::EngineEnum;
 use godot::sys;
 use smallvec::SmallVec;
 
-use super::object::{to_arguments, type_error};
+use super::object::{name_by_symbol, to_arguments, type_error};
 use super::value::{self, ToRuby};
 use crate::hint::type_name;
 use crate::realm;
@@ -181,7 +181,7 @@ fn construct(mrb: &Mrb, class: RClass, args: RArray) -> Result<Value, Error> {
 // Godot::Value#__member__(name): the member of that name in a one-element
 // array, or nil when the value has no such member.
 fn member(mrb: &Mrb, held: &EngineValue, name: Symbol) -> Value {
-    let name = StringName::from(name.name(mrb).unwrap_or_default().as_str());
+    let name = name_by_symbol(mrb, name);
     let kind = held.0.get_type().ord as sys::GDExtensionVariantType;
     // SAFETY: the interface is initialized while the extension runs, and the
     // name lives for the call.
@@ -212,10 +212,9 @@ fn member(mrb: &Mrb, held: &EngineValue, name: Symbol) -> Value {
 // called with `args`, in a one-element array, or nil when the type has no
 // such method.
 fn call(mrb: &Mrb, held: &EngineValue, name: Symbol, args: RArray) -> Result<Value, Error> {
-    let method = name.name(mrb).unwrap_or_default();
+    let name = name_by_symbol(mrb, name);
     let args = to_arguments(mrb, args)?;
     let pointers: SmallVec<[_; 4]> = args.iter().map(Variant::var_sys).collect();
-    let name = StringName::from(method.as_str());
     let mut receiver = held.0.clone();
     // SAFETY: the name and argument pointers live for the call, which runs on
     // a copy of the value, so the Ruby value never changes.
@@ -229,7 +228,7 @@ fn call(mrb: &Mrb, held: &EngineValue, name: Symbol, args: RArray) -> Result<Val
             error,
         )
     });
-    wrap_answer(mrb, outcome, &type_name(held.0.get_type()), &method, &args)
+    wrap_answer(mrb, outcome, held.0.get_type(), &name, &args)
 }
 
 // Godot::Value.__call_static__(name, args): the static method `name` of the
@@ -237,10 +236,9 @@ fn call(mrb: &Mrb, held: &EngineValue, name: Symbol, args: RArray) -> Result<Val
 // the type has no such method.
 fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<Value, Error> {
     let kind = kind_by_class(mrb, class)?;
-    let method = name.name(mrb).unwrap_or_default();
+    let name = name_by_symbol(mrb, name);
     let args = to_arguments(mrb, args)?;
     let pointers: SmallVec<[_; 4]> = args.iter().map(Variant::var_sys).collect();
-    let name = StringName::from(method.as_str());
     let kind_sys = kind.ord as sys::GDExtensionVariantType;
     // SAFETY: the name and argument pointers live for the call.
     let outcome = super::run_engine_call(|answer, error| unsafe {
@@ -253,17 +251,17 @@ fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<V
             error,
         )
     });
-    wrap_answer(mrb, outcome, &type_name(kind), &method, &args)
+    wrap_answer(mrb, outcome, kind, &name, &args)
 }
 
-// What a call answered, in a one-element array; nil for a method the type
-// lacks, and the Godot::CallError GDScript's wording gives any other
-// failure.
+// What a call of `method` on a value of type `kind` answered, in a
+// one-element array; nil for a method the type lacks, and the
+// Godot::CallError GDScript's wording gives any other failure.
 fn wrap_answer(
     mrb: &Mrb,
     outcome: Result<Variant, sys::GDExtensionCallError>,
-    base: &str,
-    method: &str,
+    kind: VariantType,
+    method: &StringName,
     args: &[Variant],
 ) -> Result<Value, Error> {
     match outcome {
@@ -272,7 +270,12 @@ fn wrap_answer(
             Ok(qnil().as_value())
         }
         Err(error) => {
-            let message = super::object::describe_refusal(&error, method, base, args);
+            let message = super::object::describe_refusal(
+                &error,
+                &method.to_string(),
+                &type_name(kind),
+                args,
+            );
             Err(super::object::call_error(mrb, &message))
         }
     }
@@ -282,7 +285,7 @@ fn wrap_answer(
 // name, or nil when it has none.
 fn constant(mrb: &Mrb, class: RClass, name: Symbol) -> Result<Value, Error> {
     let kind = kind_by_class(mrb, class)?;
-    let name = StringName::from(name.name(mrb).unwrap_or_default().as_str());
+    let name = name_by_symbol(mrb, name);
     // SAFETY: the interface is initialized while the extension runs, and the
     // engine writes Nil for a name the type has no constant of.
     let found = unsafe {

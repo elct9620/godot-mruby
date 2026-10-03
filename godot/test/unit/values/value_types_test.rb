@@ -57,4 +57,12 @@ class ValueTypesTest < Minitest::Test
   def test_a_value_prints_as_the_engine_prints_it
     assert_equal "(1.0, 2.0)", Godot::Vector2.new(1, 2).to_s
   end
+
+  # @behavior RV-022
+  def test_a_values_method_the_engine_refuses_raises_call_error_as_gdscript_reports_it
+    error = assert_raises(Godot::CallError) { Godot::Vector2.new(1, 2).distance_to("x") }
+
+    assert_equal "Invalid type in function 'distance_to' in base 'Vector2'. " \
+                 "Cannot convert argument 1 from String to Vector2.", error.message
+  end
 end

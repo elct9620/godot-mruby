@@ -174,3 +174,11 @@ How a value crosses between Ruby and the engine, either way: data is copied and 
 | Given | an engine object whose class the engine exposes to no extension |
 | When | the engine hands it to Ruby |
 | Then | Ruby gets an object of the class under `Godot` of the nearest ancestor the engine exposes, which reaches the hidden class's methods while other objects of that class do not |
+
+## `RV-022` A value's method the engine refuses raises Godot::CallError as GDScript reports it
+
+| Step | Statement |
+| --- | --- |
+| Given | a value of a type under `Godot` |
+| When | Ruby calls one of its engine methods with an argument the method cannot take |
+| Then | it raises `Godot::CallError` with the message GDScript reports for the same call |

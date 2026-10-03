@@ -249,10 +249,10 @@ fn call(mrb: &Mrb, held: &EngineObject, name: Symbol, args: RArray) -> Result<Va
     ruby_answer(mrb, &answer)
 }
 
-// The engine's name for the method `symbol` names, made once for a realm,
-// since making one looks the name up in the engine's table of names.
-fn name_by_symbol(mrb: &Mrb, symbol: Symbol) -> StringName {
-    let names = &realm::extension_data::<MethodNames>(mrb).0;
+/// The engine's name `symbol` spells, made once for a realm, since making
+/// one looks the name up in the engine's table of names.
+pub(super) fn name_by_symbol(mrb: &Mrb, symbol: Symbol) -> StringName {
+    let names = &realm::extension_data::<EngineNames>(mrb).0;
     let id = Id::from(symbol);
     if let Some(name) = names.borrow().get(&id) {
         return name.clone();
@@ -262,9 +262,9 @@ fn name_by_symbol(mrb: &Mrb, symbol: Symbol) -> StringName {
     name
 }
 
-// The engine's name for each method a realm has called by name.
+// The engine's name for each symbol a realm has asked the engine about.
 #[derive(Default)]
-struct MethodNames(RefCell<HashMap<Id, StringName>>);
+struct EngineNames(RefCell<HashMap<Id, StringName>>);
 
 // Godot::Object#__instance_id__: the engine object's instance id, which
 // two Ruby objects for one engine object share.
