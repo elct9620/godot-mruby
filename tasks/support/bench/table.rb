@@ -9,14 +9,17 @@ module Bench
     module_function
 
     # Every part of `results` as its table, after the library they were
-    # measured with, and compared with `baseline` when it is given.
+    # measured with, and compared with `baseline` when it is given. Growth
+    # measured at no size has no table.
     def tabulate(results, baseline = nil)
       library = results["library"]
+      growth = results["growth"]
       ["Measured with a #{library["build"]} build in Godot #{library["godot"]}.",
        baseline ? "Ratios are compared with main's last bench." : "No bench from main with this build to compare.",
-       tabulate_growth(results["growth"]),
+       (tabulate_growth(growth) unless growth.empty?),
        tabulate_battle(results["battle"], baseline&.fetch("battle", nil)),
-       tabulate_spreads("call, ns", results["operations"], "%.0f", baseline&.fetch("operations", nil))].join("\n\n")
+       tabulate_spreads("call, ns", results["operations"], "%.0f", baseline&.fetch("operations", nil))]
+        .compact.join("\n\n")
     end
 
     # The growth measures in milliseconds, a column for each size.

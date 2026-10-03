@@ -26,9 +26,10 @@ module Bench
 
   module_function
 
-  # Measures the sizes `BENCH_SIZES` lists in `env`, the battle and the
-  # calls, prints their tables beside the results `BENCH_BASELINE` names, and
-  # writes the measures as JSON where `BENCH_JSON` names a file.
+  # Measures the sizes `BENCH_SIZES` lists in `env`, none when it lists none,
+  # the battle and the calls, prints their tables beside the results
+  # `BENCH_BASELINE` names, and writes the measures as JSON where
+  # `BENCH_JSON` names a file.
   def report!(env)
     sizes = env.fetch("BENCH_SIZES", SIZES.join(",")).split(",").map { |size| Integer(size) }
     results = measure_all(sizes)
