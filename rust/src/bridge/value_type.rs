@@ -16,7 +16,7 @@ use godot::obj::EngineEnum;
 use godot::sys;
 use smallvec::SmallVec;
 
-use super::object::to_arguments;
+use super::object::{to_arguments, type_error};
 use super::value::{self, ToRuby};
 use crate::hint::type_name;
 use crate::realm;
@@ -145,13 +145,8 @@ fn kind_by_name(name: &str) -> Option<VariantType> {
 fn kind_by_class(mrb: &Mrb, class: RClass) -> Result<VariantType, Error> {
     let path = class.path(mrb).unwrap_or_default();
     let name = path.strip_prefix("Godot::").unwrap_or(&path);
-    kind_by_name(name).ok_or_else(|| {
-        let message = format!("{path} is no value type of the engine");
-        match mrb.exc_get(c"TypeError") {
-            Ok(type_error) => Error::new(mrb, type_error, &message),
-            Err(error) => error,
-        }
-    })
+    kind_by_name(name)
+        .ok_or_else(|| type_error(mrb, &format!("{path} is no value type of the engine")))
 }
 
 // Godot::Value.__construct__(args): the value the engine's constructor of
@@ -359,11 +354,4 @@ fn to_s(mrb: &Mrb, held: &EngineValue) -> Value {
 // answers hold no container Ruby could not take.
 fn to_ruby(mrb: &Mrb, answer: &Variant) -> Value {
     ToRuby::try_new(answer).map_or_else(|_| qnil().as_value(), |answer| answer.into_value(mrb))
-}
-
-fn type_error(mrb: &Mrb, message: &str) -> Error {
-    match mrb.exc_get(c"TypeError") {
-        Ok(class) => Error::new(mrb, class, message),
-        Err(error) => error,
-    }
 }

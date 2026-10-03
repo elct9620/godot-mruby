@@ -113,4 +113,14 @@ class EngineObjectsTest < Minitest::Test
 
     assert_equal [true, false], reached
   end
+
+  # @behavior RG-022
+  def test_a_node_classs_object_stands_only_for_an_engine_object_of_the_class_it_extends
+    node = autofree(Godot::Node.new)
+    freed = Godot::Node2D.new
+    freed.free
+
+    assert_raises(TypeError) { Unit::EngineClasses::Scout.send(:__allocate__, node) }
+    assert_raises(TypeError) { Unit::EngineClasses::Scout.send(:__allocate__, freed) }
+  end
 end

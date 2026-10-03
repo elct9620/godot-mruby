@@ -138,9 +138,19 @@ fn make_node(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
 }
 
 // Godot::Object.__allocate__(owner): the receiver's object for the engine
-// object `owner` stands for, uninitialized.
-fn allocate(mrb: &Mrb, class: RClass, owner: &EngineObject) -> Value {
-    mrb.wrap_as(EngineObject(owner.0.clone()), class).as_value()
+// object `owner` stands for, uninitialized, or the TypeError raised when
+// that object is not of the engine class the receiver extends, whose
+// methods the receiver calls on it.
+fn allocate(mrb: &Mrb, class: RClass, owner: &EngineObject) -> Result<Value, Error> {
+    let extended = engine_ancestor(mrb, class).unwrap_or_default();
+    if !owner.0.is_instance_valid() || !owner.0.is_class(extended.as_str()) {
+        let message = format!(
+            "{} stands only for a live {extended}",
+            class.path(mrb).unwrap_or_default()
+        );
+        return Err(type_error(mrb, &message));
+    }
+    Ok(mrb.wrap_as(EngineObject(owner.0.clone()), class).as_value())
 }
 
 /// The key a realm holds a node's Ruby object under.
@@ -734,6 +744,13 @@ fn type_name_by_debug(debug: &str) -> Option<String> {
         .map(<VariantType as EngineEnum>::from_ord)
         .find(|kind| format!("{kind:?}") == debug)
         .map(|kind| type_string(i64::from(kind.ord)).to_string())
+}
+
+pub(super) fn type_error(mrb: &Mrb, message: &str) -> Error {
+    match mrb.exc_get(c"TypeError") {
+        Ok(class) => Error::new(mrb, class, message),
+        Err(error) => error,
+    }
 }
 
 fn argument_error(mrb: &Mrb, message: &str) -> Error {
