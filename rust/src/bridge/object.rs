@@ -4,9 +4,10 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
+use std::fmt;
 
 use beni::{
-    DataType, Error, ExceptionClass, FromValue, IntoValue, Module, Mrb, Object as _, RArray,
+    DataType, Error, ExceptionClass, FromValue, Id, IntoValue, Module, Mrb, Object as _, RArray,
     RClass, RModule, ReprValue, Symbol, TryConvert, TypedData, Value, method, value::qnil,
 };
 use godot::builtin::StringName;
@@ -228,14 +229,32 @@ fn call_bound(
 // Godot::Object#__call__(name, args): calls the engine method `name` with
 // `args` and answers what it returns.
 fn call(mrb: &Mrb, held: &EngineObject, name: Symbol, args: RArray) -> Result<Value, Error> {
-    let name = name.name(mrb).unwrap_or_default();
+    let name = name_by_symbol(mrb, name);
     let mut object = held.live_object(mrb, &name)?;
     let args = to_arguments(mrb, args)?;
-    let answer = object
-        .try_call(name.as_str(), &args)
-        .map_err(|error| call_refusal(mrb, &error, &object.get_class().to_string(), &name))?;
+    let answer = object.try_call(&name, &args).map_err(|error| {
+        let base = object.get_class().to_string();
+        call_refusal(mrb, &error, &base, &name.to_string())
+    })?;
     ruby_answer(mrb, &answer)
 }
+
+// The engine's name for the method `symbol` names, made once for a realm,
+// since making one looks the name up in the engine's table of names.
+fn name_by_symbol(mrb: &Mrb, symbol: Symbol) -> StringName {
+    let names = &realm::extension_data::<MethodNames>(mrb).0;
+    let id = Id::from(symbol);
+    if let Some(name) = names.borrow().get(&id) {
+        return name.clone();
+    }
+    let name = StringName::from(symbol.name(mrb).unwrap_or_default().as_str());
+    names.borrow_mut().insert(id, name.clone());
+    name
+}
+
+// The engine's name for each method a realm has called by name.
+#[derive(Default)]
+struct MethodNames(RefCell<HashMap<Id, StringName>>);
 
 // Godot::Object#__instance_id__: the engine object's instance id, which
 // two Ruby objects for one engine object share.
@@ -268,12 +287,12 @@ fn has_static_method(mrb: &Mrb, class: RClass, name: Symbol) -> bool {
 // Godot::Object.__call_static__(name, args): calls the static method `name`
 // of the receiver's engine class with `args`.
 fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<Value, Error> {
-    let name = name.name(mrb).unwrap_or_default();
+    let name = name_by_symbol(mrb, name);
     let class = engine_name(mrb, class);
     let args = to_arguments(mrb, args)?;
     let answer = ClassDb::singleton()
-        .try_class_call_static(&class, name.as_str(), &args)
-        .map_err(|error| call_refusal(mrb, &error, &class, &name))?;
+        .try_class_call_static(&class, &name, &args)
+        .map_err(|error| call_refusal(mrb, &error, &class, &name.to_string()))?;
     ruby_answer(mrb, &answer)
 }
 
@@ -619,7 +638,11 @@ impl EngineObject {
 
     // The engine object, or the Godot::CallError calling `method` on a freed
     // one raises, worded as GDScript words it.
-    fn live_object(&self, mrb: &Mrb, method: &str) -> Result<Gd<Object>, Error> {
+    fn live_object(
+        &self,
+        mrb: &Mrb,
+        method: &(impl fmt::Display + ?Sized),
+    ) -> Result<Gd<Object>, Error> {
         if self.0.is_instance_valid() {
             Ok(self.0.clone())
         } else {
