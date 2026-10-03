@@ -57,7 +57,7 @@ module Godot
     # static calls asked the engine for no singleton it lacks.
     # @behavior RT-001 RG-020
     def verify_tests!(project)
-      output, status = run_reported(project, "--dir", TESTS)
+      output, status = run_tests_once(project)
       return if status.success? && output[PASSED, 1].to_i.positive? && !output.include?(LEAKED) &&
                 !output.include?(NO_SINGLETON)
 
@@ -123,6 +123,17 @@ module Godot
         position = found + line.size if found
         found
       end
+    end
+
+    # The run of the project's Ruby tests under TESTS, run once for each
+    # project and kept for every check that reads it, until forget_runs.
+    def run_tests_once(project)
+      (@test_runs ||= {})[project] ||= run_reported(project, "--dir", TESTS)
+    end
+
+    # Drops the kept runs, so a verify runs the tests it reads again.
+    def forget_runs
+      @test_runs = {}
     end
 
     # Runs with these options and tells GitHub Actions what the run's

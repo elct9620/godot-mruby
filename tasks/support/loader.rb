@@ -45,9 +45,7 @@ module Godot
     module_function
 
     def verify!(project)
-      output, status = Runner.run(project, "--dir", Runner::TESTS)
-      raise "A run of #{Runner::TESTS} did not pass:\n#{output}" unless status.success?
-
+      output, = Runner.run_tests_once(project)
       verify_warnings!(output)
       verify_hidden_raised!(output)
       verify_raised!(project)

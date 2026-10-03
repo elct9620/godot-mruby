@@ -65,8 +65,10 @@ module Godot
   # Starts from no editor layout: one a person or an earlier run left names
   # the scenes and scripts to open, and restoring them runs their tool
   # scripts, such as the probes' fixtures that do not parse, before any check.
+  # Nor does it keep an earlier verify's run of the Ruby tests.
   def verify!(project = PROJECT)
     FileUtils.rm_rf(File.join(project, ".godot", "editor"))
+    Runner.forget_runs
     verify_loaded!(project)
     CHECKS.each { |check| check.verify!(project) }
   end
