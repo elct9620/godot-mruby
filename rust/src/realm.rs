@@ -132,6 +132,8 @@ struct Bookkeeping {
     // How each constant defined since the realm opened is spelled, by the
     // key the class index matches it with.
     spellings: RefCell<HashMap<Vec<String>, Symbol>>,
+    // The symbol of each method name Rust has sent, interned once.
+    method_symbols: RefCell<HashMap<String, Symbol>>,
     // What each extension keeps for the realm, by its type.
     extension_data: RefCell<HashMap<TypeId, Box<dyn Any + Send>>>,
 }
@@ -211,6 +213,18 @@ fn methods_by_path(mrb: &Mrb, path: &str) -> Vec<String> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+// The symbol `name` interns to in `mrb`'s realm, interned once, since
+// interning searches every name the realm has.
+fn symbol_by_name(mrb: &Mrb, name: &str) -> Result<Symbol, Error> {
+    let symbols = &bookkeeping(mrb).method_symbols;
+    if let Some(symbol) = symbols.borrow().get(name) {
+        return Ok(*symbol);
+    }
+    let symbol = Symbol::from(mrb.intern(name.as_bytes())?);
+    symbols.borrow_mut().insert(name.to_owned(), symbol);
+    Ok(symbol)
 }
 
 // The constant path the file at `path` spells in `mrb`'s realm.
@@ -504,6 +518,7 @@ impl Realm {
             is_defining_namespace: Cell::default(),
             outermost: Cell::default(),
             spellings: RefCell::default(),
+            method_symbols: RefCell::default(),
             extension_data: RefCell::default(),
         };
         if mrb.set_user_data(bookkeeping).is_err() {
@@ -717,7 +732,10 @@ impl Realm {
             bookkeeping(&self.mrb)
                 .registry
                 .object(&self.mrb, key)
-                .and_then(|object| object.funcall(&self.mrb, method, &args))
+                .and_then(|object| {
+                    let method = symbol_by_name(&self.mrb, method)?;
+                    object.funcall(&self.mrb, method, &args)
+                })
                 .map_err(|error| RubyError::from_error(&self.mrb, None, &error))
         })?;
         self.to_rust(answer, || format!("#{method}"))
