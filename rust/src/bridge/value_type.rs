@@ -4,6 +4,7 @@
 //! change. gdext answers only a statically typed side of these types, so the
 //! engine's own variant calls do the work, by name, for every type alike.
 
+use std::cell::RefCell;
 use std::ptr;
 
 use beni::{
@@ -16,6 +17,7 @@ use godot::sys;
 
 use super::value::{self, ToRuby};
 use crate::hint::type_name;
+use crate::realm;
 
 /// A value of one of the engine's value types, as Ruby holds it.
 pub struct EngineValue(Variant);
@@ -79,13 +81,37 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
 /// The Ruby value for a value of a value type: a value of its class under
 /// Godot.
 pub fn ruby_value(mrb: &Mrb, variant: &Variant) -> Value {
+    match class_by_kind(mrb, variant.get_type()) {
+        Some(class) => mrb.wrap_as(EngineValue(variant.clone()), class).as_value(),
+        None => Value::nil(),
+    }
+}
+
+// The class under Godot of each value type a realm has handed Ruby a value
+// of, by the type's ordinal, so a value finds its class without spelling the
+// type's name.
+#[derive(Default)]
+struct ValueClasses(RefCell<Vec<Option<RClass>>>);
+
+// The class under Godot of the value type `kind`, found once for a realm and
+// kept for it, rooted for the collector so the class lives while it is kept.
+fn class_by_kind(mrb: &Mrb, kind: VariantType) -> Option<RClass> {
+    let classes = &realm::extension_data::<ValueClasses>(mrb).0;
+    let index = kind.ord as usize;
+    if let Some(class) = classes.borrow().get(index).copied().flatten() {
+        return Some(class);
+    }
     let class = mrb
         .module_get(c"Godot")
-        .and_then(|godot| godot.class_get(mrb, type_name(variant.get_type()).as_str()));
-    match class {
-        Ok(class) => mrb.wrap_as(EngineValue(variant.clone()), class).as_value(),
-        Err(_) => Value::nil(),
+        .and_then(|godot| godot.class_get(mrb, type_name(kind).as_str()))
+        .ok()?;
+    mrb.gc_register_forever(class.as_value());
+    let mut classes = classes.borrow_mut();
+    if classes.len() <= index {
+        classes.resize(index + 1, None);
     }
+    classes[index] = Some(class);
+    Some(class)
 }
 
 impl EngineValue {

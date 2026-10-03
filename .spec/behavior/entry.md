@@ -55,3 +55,11 @@ How a thread goes into the game's realm: one thread at a time is inside, and a t
 | Given | a thread inside the game's realm 24 entries deep |
 | When | it enters the realm once more |
 | Then | the entry fails with `SystemStackError`, and the entries around it go on |
+
+## `RE-007` A realm opened again gives each extension its data afresh
+
+| Step | Statement |
+| --- | --- |
+| Given | an extension's data, kept in the game's realm |
+| When | the realm closes and opens again |
+| Then | the extension is given new data, and nothing it kept in the closed realm |

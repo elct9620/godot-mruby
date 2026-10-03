@@ -1,3 +1,4 @@
+use std::any::{Any, TypeId};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::ffi::CStr;
@@ -131,6 +132,8 @@ struct Bookkeeping {
     // How each constant defined since the realm opened is spelled, by the
     // key the class index matches it with.
     spellings: RefCell<HashMap<Vec<String>, Symbol>>,
+    // What each extension keeps for the realm, by its type.
+    extension_data: RefCell<HashMap<TypeId, Box<dyn Any + Send>>>,
 }
 
 // The realm's outermost Ruby while it runs, forgotten once it returns or
@@ -380,6 +383,22 @@ pub fn object(mrb: &Mrb, key: Key) -> Option<Value> {
     bookkeeping(mrb).registry.object(mrb, key).ok()
 }
 
+/// What an extension keeps for the realm `mrb` belongs to, one value of each
+/// type, made the first time it is asked for, so nothing an extension
+/// remembers of a realm outlives it.
+pub fn extension_data<T: Default + Send + 'static>(mrb: &Mrb) -> &T {
+    let mut data = bookkeeping(mrb).extension_data.borrow_mut();
+    let kept: *const T = data
+        .entry(TypeId::of::<T>())
+        .or_insert_with(|| Box::new(T::default()))
+        .downcast_ref::<T>()
+        .expect("a type's data is kept under its own type");
+    // SAFETY: no entry is replaced or removed while the realm is open, and a
+    // Box keeps what it holds in place as the map grows, so the value lives
+    // as long as the bookkeeping `mrb` lends.
+    unsafe { &*kept }
+}
+
 /// The file the class index of the realm `mrb` belongs to names for the
 /// constant `names` spells from Object.
 pub fn file_by_constant(mrb: &Mrb, names: &[String]) -> Option<String> {
@@ -485,6 +504,7 @@ impl Realm {
             is_defining_namespace: Cell::default(),
             outermost: Cell::default(),
             spellings: RefCell::default(),
+            extension_data: RefCell::default(),
         };
         if mrb.set_user_data(bookkeeping).is_err() {
             return Err(RubyError::from_message(
@@ -1144,6 +1164,24 @@ mod tests {
         waiter.join().unwrap();
         assert!(!entered_early);
         assert!(entered_after);
+    }
+
+    // @behavior RE-007
+    #[test]
+    fn a_realm_opened_again_gives_each_extension_its_data_afresh() {
+        let (_turn, _key) = held_thing();
+        #[derive(Default)]
+        struct Remembered(Cell<u32>);
+        enter(|realm| {
+            extension_data::<Remembered>(&realm.mrb).0.set(7);
+            Ok(())
+        })
+        .ok();
+
+        close();
+        let remembered = enter(|realm| Ok(extension_data::<Remembered>(&realm.mrb).0.get()));
+
+        assert_eq!(remembered.ok(), Some(0));
     }
 
     // @behavior RE-003

@@ -196,6 +196,18 @@ The file the class index of the realm an extension's method runs in names for a 
 pub fn file_by_constant(mrb: &Mrb, names: &[String]) -> Option<String> {}
 ```
 
+## `extension_data`
+
+What an extension keeps for the realm its method runs in, one value of each type, made the first time it is asked for, so what an extension remembers of a realm, such as a class it found, lives no longer than the realm.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub fn extension_data<T: Default + Send + 'static>(mrb: &Mrb) -> &T {}
+```
+
 ## `declare_signal`
 
 Takes a signal as declared by the class of the file running now in the realm an extension's method runs in, which the realm publishes once that file has run; a name a class or one of its ancestors declared already is refused, and a declaration made while no file runs belongs to no class and is not taken.

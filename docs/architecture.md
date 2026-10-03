@@ -322,7 +322,8 @@ realm.rs              Realm, prepare, enter, Files, Log, RubyError
 │  └─ user data       the bookkeeping, private to realm/
 │     ├─ files, log   what the realm was given as it opened
 │     ├─ index, runs  the class index and each file's run
-│     └─ registry     the objects held for keys outside
+│     ├─ registry     the objects held for keys outside
+│     └─ extension data  what each gem keeps, by its type
 │
 ├─ reentrant.rs       the lock a thread inside takes again
 ├─ print.rs           puts, print and p write to the log
@@ -354,6 +355,12 @@ Ruby in the realm sees Godot, and Minitest in a test run
 
 A gem is an extension: beni's `Gem`, mruby's gem init convention. What every realm of a kind has is installed by its opener's `extend`, before the class index takes the files in, so a file naming one of its constants is warned about; what only one use needs is installed by whoever needs it, and the install warns of an indexed file naming what it added. Only the test runner installs `Minitest`, so a shipped game never has it.
 
-A gem's methods run with the state, and reach the realm's bookkeeping only through the functions that take it: holding an object under a key, finding it again, and asking the class index for a file.
+A gem's methods run with the state, and reach the realm's bookkeeping only through the functions that take it.
+
+| Function | What a gem gets |
+| --- | --- |
+| `hold`, `hold_new`, `object` | an object held under a key, found again |
+| `file_by_constant` | the file the class index names |
+| `extension_data` | its own data, such as a class it found, closed with the realm |
 
 The line: what every realm is, output and hooks included, belongs to the realm; what only some need is a gem. The framework is specified in `.spec/contract/minitest.md` and `.spec/behavior/minitest.md`.
