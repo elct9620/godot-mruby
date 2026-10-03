@@ -2,7 +2,7 @@
 //! `Godot` carries the engine object it stands for, and Ruby reaches its
 //! methods by their names.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
 use beni::{
@@ -41,13 +41,20 @@ static ENGINE_OBJECT: DataType<EngineObject> = DataType::new(c"Godot::Object");
 // Godot descends from it.
 unsafe impl TypedData for EngineObject {
     fn class(mrb: &Mrb) -> RClass {
-        root(mrb).expect("the Godot gem defines Godot::Object")
+        let kept = &realm::extension_data::<ObjectClass>(mrb).0;
+        super::find_class_once(mrb, kept, || {
+            root(mrb).expect("the Godot gem defines Godot::Object")
+        })
     }
 
     fn data_type() -> &'static DataType<Self> {
         &ENGINE_OBJECT
     }
 }
+
+// Godot::Object, found once for a realm and kept for it.
+#[derive(Default)]
+struct ObjectClass(Cell<Option<RClass>>);
 
 /// Defines Godot::Object, the class every engine class descends from.
 pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {

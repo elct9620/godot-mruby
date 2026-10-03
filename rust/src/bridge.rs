@@ -1,7 +1,9 @@
 //! What Ruby sees of the engine: the `Godot` module, a gem every game realm
 //! opens with, and the values that cross between the engine and Ruby.
 
-use beni::{Error, Gem, Mrb, Object, ReprValue, Symbol, Value, method};
+use std::cell::Cell;
+
+use beni::{Error, Gem, Mrb, Object, RClass, ReprValue, Symbol, Value, method};
 use godot::classes::ClassDb;
 use godot::obj::Singleton;
 
@@ -40,6 +42,21 @@ impl Gem for Godot {
             log::compiler_warnings(FILE),
         )
     }
+}
+
+// The class `kept` holds, or the one `find` finds, kept there for the realm
+// and rooted for the collector so it lives while it is kept.
+fn find_class_once(
+    mrb: &Mrb,
+    kept: &Cell<Option<RClass>>,
+    find: impl FnOnce() -> RClass,
+) -> RClass {
+    kept.get().unwrap_or_else(|| {
+        let class = find();
+        mrb.gc_register_forever(class.as_value());
+        kept.set(Some(class));
+        class
+    })
 }
 
 /// Whether the engine class named `class` is a node class, the only kind a

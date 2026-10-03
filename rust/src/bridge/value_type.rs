@@ -4,7 +4,7 @@
 //! change. gdext answers only a statically typed side of these types, so the
 //! engine's own variant calls do the work, by name, for every type alike.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::ptr;
 
 use beni::{
@@ -33,15 +33,22 @@ static ENGINE_VALUE: DataType<EngineValue> = DataType::new(c"Godot::Value");
 // Godot descends from it.
 unsafe impl TypedData for EngineValue {
     fn class(mrb: &Mrb) -> RClass {
-        mrb.module_get(c"Godot")
-            .and_then(|godot| godot.class_get(mrb, c"Value"))
-            .expect("the Godot gem defines Godot::Value")
+        let kept = &realm::extension_data::<ValueClass>(mrb).0;
+        super::find_class_once(mrb, kept, || {
+            mrb.module_get(c"Godot")
+                .and_then(|godot| godot.class_get(mrb, c"Value"))
+                .expect("the Godot gem defines Godot::Value")
+        })
     }
 
     fn data_type() -> &'static DataType<Self> {
         &ENGINE_VALUE
     }
 }
+
+// Godot::Value, found once for a realm and kept for it.
+#[derive(Default)]
+struct ValueClass(Cell<Option<RClass>>);
 
 /// The engine's value types Ruby holds as `Godot::Value`s: every type that
 /// is neither Ruby's own (nil, booleans, numbers, strings, names,

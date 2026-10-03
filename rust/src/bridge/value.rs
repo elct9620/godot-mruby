@@ -5,7 +5,7 @@
 
 use beni::{
     Array, Error, FromValue, Hash, IntoValue, Mrb, Proc, RString, ReprValue, Symbol, TryConvert,
-    Value,
+    TypedData, Value,
 };
 use godot::builtin::{
     AnyArray, AnyDictionary, Color, GString, PackedArray, StringName, VarArray, VarDictionary,
@@ -162,10 +162,17 @@ pub fn to_engine(mrb: &Mrb, value: Value, level: usize) -> Result<Variant, Strin
         let name = symbol.name(mrb).unwrap_or_default();
         return Ok(StringName::from(&name).to_variant());
     }
-    if let Ok(held) = <&EngineObject>::try_convert(value, mrb) {
+    // Only a value of their class can carry either, and asking that first
+    // keeps every other value from raising the TypeError a failed
+    // conversion builds.
+    if value.is_kind_of(mrb, EngineObject::class(mrb))
+        && let Ok(held) = <&EngineObject>::try_convert(value, mrb)
+    {
         return held.variant();
     }
-    if let Ok(held) = <&EngineValue>::try_convert(value, mrb) {
+    if value.is_kind_of(mrb, EngineValue::class(mrb))
+        && let Ok(held) = <&EngineValue>::try_convert(value, mrb)
+    {
         return Ok(held.variant());
     }
     let too_deep = || {
