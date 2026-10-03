@@ -10,8 +10,16 @@ module Godot
     # Runs a copy of the integration-test project whose test settings it
     # rewrites, and reads what the runner makes of them. Part of Godot.verify!.
     module Settings
+      # The one test file the copy's res://test keeps, so a run of it shows
+      # what ran without running every test again, and the summary of a run of
+      # its two tests.
+      KEPT = "test/kept_test.rb"
+      KEPT_SOURCE = "class KeptTest < Minitest::Test\n  def test_runs\n    pass\n  end\n\n  " \
+                    "def test_runs_too\n    pass\n  end\nend\n"
+      KEPT_SUMMARY = /^2 runs, \d+ assertions, 0 failures, 0 errors, 0 skips$/
       # A test file the check writes under the copy's res://test, the pattern
-      # that matches it and no other file there, and the summary of a run of it.
+      # that matches it and no other file there, and the summary of a run of
+      # its one test.
       PICKED = "test/picked_by_pattern.rb"
       PICKED_SOURCE = "class PickedByPatternTest < Minitest::Test\n  def test_runs\n    pass\n  end\nend\n"
       PATTERN = "picked_*.rb"
@@ -26,6 +34,7 @@ module Godot
           copy = File.join(dir, "project")
           FileUtils.cp_r(project, copy)
           unset_test_settings(copy)
+          keep_one_test(copy)
           verify_defaults!(copy)
           verify_pattern!(copy)
         end
@@ -36,7 +45,7 @@ module Godot
       # @behavior RT-027
       def verify_defaults!(project)
         output, status = Runner.run(project)
-        return if status.success? && output[Runner::PASSED, 1].to_i.positive?
+        return if status.success? && output.match?(KEPT_SUMMARY)
 
         raise "A project without test settings did not run #{Runner::TESTS}:\n#{output}"
       end
@@ -50,6 +59,14 @@ module Godot
         return if status.success? && output.match?(PATTERN_SUMMARY)
 
         raise "The test pattern #{PATTERN} did not narrow the run:\n#{output}"
+      end
+
+      # Replaces the tests under the project's res://test with the one KEPT.
+      def keep_one_test(project)
+        tests = File.join(project, "test")
+        FileUtils.rm_rf(tests)
+        FileUtils.mkdir_p(tests)
+        File.write(File.join(project, KEPT), KEPT_SOURCE)
       end
 
       # Removes the test settings from the project's settings, keeping the
