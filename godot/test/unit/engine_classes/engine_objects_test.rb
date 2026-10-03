@@ -123,4 +123,22 @@ class EngineObjectsTest < Minitest::Test
     assert_raises(TypeError) { Unit::EngineClasses::Scout.send(:__allocate__, node) }
     assert_raises(TypeError) { Unit::EngineClasses::Scout.send(:__allocate__, freed) }
   end
+
+  # @behavior RG-023
+  def test_an_engine_object_inspects_as_godot_prints_it
+    node = autofree(Godot::Node.new)
+    held = autofree(Godot::Node.new)
+    held.instance_variable_set(:@hp, 3)
+    looped = autofree(Godot::Node.new)
+    looped.instance_variable_set(:@me, looped)
+    freed = Godot::Node.new
+    freed.free
+
+    inspected = [node, held, looped, freed].map(&:inspect)
+
+    assert_equal ["#<Godot::Node <Node##{node.get_instance_id}>>",
+                  "#<Godot::Node <Node##{held.get_instance_id}> @hp=3>",
+                  "#<Godot::Node <Node##{looped.get_instance_id}> @me=#<Godot::Node <Node##{looped.get_instance_id}> ...>>",
+                  "#<Godot::Node <Freed Object>>"], inspected
+  end
 end

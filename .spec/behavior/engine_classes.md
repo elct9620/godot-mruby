@@ -183,3 +183,11 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | a node class extending an engine class |
 | When | Ruby makes the class's object for an engine object of a class that does not extend that one |
 | Then | it raises `TypeError`, so no engine method of the class is called on that object |
+
+## `RG-023` An engine object inspects as Godot prints it
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine object, one holding instance variables, and one that has been freed |
+| When | Ruby inspects each |
+| Then | each names its Ruby class and the engine object as Godot prints it, `<Class#id>` or `<Freed Object>`, after which the instance variables follow as Ruby inspects them |

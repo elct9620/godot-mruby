@@ -145,6 +145,12 @@ module Godot
 
       private
 
+      # The objects being inspected, so an instance variable leading back to
+      # one of them is not inspected again.
+      def __inspected__
+        @__inspected__ ||= []
+      end
+
       # The class's object for a node the engine made, ready to initialize.
       def __build__(owner)
         __write_defaults__(__allocate__(owner))
@@ -306,6 +312,20 @@ module Godot
 
     def hash
       __instance_id__.hash
+    end
+
+    # The Ruby class, the engine object as Godot prints it, and the instance
+    # variables as Ruby inspects them.
+    def inspect
+      inspected = Godot::Object.__send__(:__inspected__)
+      head = "#<#{self.class} #{__label__}"
+      return "#{head} ...>" if inspected.any? { |object| object.equal?(self) }
+
+      inspected.push(self)
+      variables = instance_variables.map { |name| "#{name}=#{instance_variable_get(name).inspect}" }
+      variables.empty? ? "#{head}>" : "#{head} #{variables.join(", ")}>"
+    ensure
+      inspected.pop if inspected.last.equal?(self)
     end
   end
 

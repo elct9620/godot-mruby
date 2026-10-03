@@ -77,6 +77,7 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     object.define_private_method(mrb, c"__call__", method!(call, 2))?;
     object.define_private_method(mrb, c"__call_bound__", method!(call_bound, 2))?;
     object.define_private_method(mrb, c"__instance_id__", method!(instance_id, 0))?;
+    object.define_private_method(mrb, c"__label__", method!(label, 0))?;
     Ok(())
 }
 
@@ -265,6 +266,18 @@ pub(super) fn name_by_symbol(mrb: &Mrb, symbol: Symbol) -> StringName {
 // The engine's name for each symbol a realm has asked the engine about.
 #[derive(Default)]
 struct EngineNames(RefCell<HashMap<Id, StringName>>);
+
+// Godot::Object#__label__: the engine object as Godot prints it,
+// `<Class#id>`, or `<Freed Object>` once it is freed.
+fn label(mrb: &Mrb, held: &EngineObject) -> Value {
+    let label = if held.0.is_instance_valid() {
+        let id = held.0.instance_id_unchecked().to_i64();
+        format!("<{}#{id}>", held.0.get_class())
+    } else {
+        "<Freed Object>".to_owned()
+    };
+    mrb.str_new(label.as_bytes()).as_value()
+}
 
 // Godot::Object#__instance_id__: the engine object's instance id, which
 // two Ruby objects for one engine object share.
