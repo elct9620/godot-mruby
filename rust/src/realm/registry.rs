@@ -4,7 +4,7 @@
 
 use std::cell::Cell;
 
-use beni::{Error, Hash, IntoValue, Mrb, ReprValue, Value};
+use beni::{Error, IntoValue, Mrb, RHash, ReprValue, Value};
 
 /// What something outside a realm keeps for the Ruby object the realm holds
 /// for it; the outside names it, as a node by its instance id.
@@ -18,7 +18,7 @@ impl From<i64> for Key {
 }
 
 pub(super) struct Registry {
-    objects: Hash,
+    objects: RHash,
     // The last key the registry named itself. It counts down from -1, since
     // a node's key is its instance id, which is positive.
     last: Cell<i64>,

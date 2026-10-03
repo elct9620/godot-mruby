@@ -8,8 +8,8 @@ use std::cell::{Cell, RefCell};
 use std::ptr;
 
 use beni::{
-    Array, DataType, Error, IntoValue, Module, Mrb, Object as _, RClass, RModule, ReprValue,
-    Symbol, TypedData, Value, method,
+    DataType, Error, IntoValue, Module, Mrb, Object as _, RArray, RClass, RModule, ReprValue,
+    Symbol, TypedData, Value, method, value::qnil,
 };
 use godot::builtin::{GString, StringName, Variant, VariantOperator, VariantType};
 use godot::obj::EngineEnum;
@@ -90,7 +90,7 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
 pub fn ruby_value(mrb: &Mrb, variant: &Variant) -> Value {
     match class_by_kind(mrb, variant.get_type()) {
         Some(class) => mrb.wrap_as(EngineValue(variant.clone()), class).as_value(),
-        None => Value::nil(),
+        None => qnil().as_value(),
     }
 }
 
@@ -154,7 +154,7 @@ fn kind_by_class(mrb: &Mrb, class: RClass) -> Result<VariantType, Error> {
 
 // Godot::Value.__construct__(args): the value the engine's constructor of
 // the receiver's type that takes `args` builds.
-fn construct(mrb: &Mrb, class: RClass, args: Array) -> Result<Value, Error> {
+fn construct(mrb: &Mrb, class: RClass, args: RArray) -> Result<Value, Error> {
     let kind = kind_by_class(mrb, class)?;
     let args = variants(mrb, args)?;
     let pointers: Vec<_> = args.iter().map(Variant::var_sys).collect();
@@ -189,7 +189,7 @@ fn member(mrb: &Mrb, held: &EngineValue, name: Symbol) -> Value {
     // SAFETY: the interface is initialized while the extension runs, and the
     // name lives for the call.
     if unsafe { sys::interface_fn!(variant_has_member)(kind, name.string_sys()) } == 0 {
-        return Value::nil();
+        return qnil().as_value();
     }
     // SAFETY: the interface is initialized while the extension runs, and the
     // type has the member, which `variant_get_named` writes.
@@ -207,14 +207,14 @@ fn member(mrb: &Mrb, held: &EngineValue, name: Symbol) -> Value {
     };
     match found {
         Ok(found) => mrb.ary_new_from_values(&[to_ruby(mrb, &found)]).as_value(),
-        Err(()) => Value::nil(),
+        Err(()) => qnil().as_value(),
     }
 }
 
 // Godot::Value#__call__(name, args): the engine method `name` of the value
 // called with `args`, in a one-element array, or nil when the type has no
 // such method.
-fn call(mrb: &Mrb, held: &EngineValue, name: Symbol, args: Array) -> Result<Value, Error> {
+fn call(mrb: &Mrb, held: &EngineValue, name: Symbol, args: RArray) -> Result<Value, Error> {
     let method = name.name(mrb).unwrap_or_default();
     let args = variants(mrb, args)?;
     let pointers: Vec<_> = args.iter().map(Variant::var_sys).collect();
@@ -238,7 +238,7 @@ fn call(mrb: &Mrb, held: &EngineValue, name: Symbol, args: Array) -> Result<Valu
 // Godot::Value.__call_static__(name, args): the static method `name` of the
 // receiver's type called with `args`, in a one-element array, or nil when
 // the type has no such method.
-fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: Array) -> Result<Value, Error> {
+fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<Value, Error> {
     let kind = kind_by_class(mrb, class)?;
     let method = name.name(mrb).unwrap_or_default();
     let args = variants(mrb, args)?;
@@ -291,7 +291,9 @@ fn wrap_answer(
 ) -> Result<Value, Error> {
     match outcome {
         Ok(answer) => Ok(mrb.ary_new_from_values(&[to_ruby(mrb, &answer)]).as_value()),
-        Err(error) if error.error == sys::GDEXTENSION_CALL_ERROR_INVALID_METHOD => Ok(Value::nil()),
+        Err(error) if error.error == sys::GDEXTENSION_CALL_ERROR_INVALID_METHOD => {
+            Ok(qnil().as_value())
+        }
         Err(error) => {
             let message = match error.error {
                 sys::GDEXTENSION_CALL_ERROR_INVALID_ARGUMENT => {
@@ -328,7 +330,7 @@ fn constant(mrb: &Mrb, class: RClass, name: Symbol) -> Result<Value, Error> {
     };
     Ok(match found {
         Ok(found) if !found.is_nil() => to_ruby(mrb, &found),
-        _ => Value::nil(),
+        _ => qnil().as_value(),
     })
 }
 
@@ -384,10 +386,10 @@ fn to_s(mrb: &Mrb, held: &EngineValue) -> Value {
 // What the engine answered for a value, as Ruby is given it; a value type's
 // answers hold no container Ruby could not take.
 fn to_ruby(mrb: &Mrb, answer: &Variant) -> Value {
-    ToRuby::try_new(answer).map_or_else(|_| Value::nil(), |answer| answer.into_value(mrb))
+    ToRuby::try_new(answer).map_or_else(|_| qnil().as_value(), |answer| answer.into_value(mrb))
 }
 
-fn variants(mrb: &Mrb, args: Array) -> Result<Vec<Variant>, Error> {
+fn variants(mrb: &Mrb, args: RArray) -> Result<Vec<Variant>, Error> {
     args.entries(mrb)
         .map(|arg| {
             value::to_engine(mrb, arg, 1).map_err(|reason| super::object::call_error(mrb, &reason))

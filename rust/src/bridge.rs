@@ -3,7 +3,7 @@
 
 use std::cell::Cell;
 
-use beni::{Error, Gem, Mrb, Object, RClass, ReprValue, Symbol, Value, method};
+use beni::{Error, Gem, Mrb, Object, RClass, ReprValue, Symbol, Value, method, value::qnil};
 use godot::classes::ClassDb;
 use godot::obj::Singleton;
 
@@ -71,7 +71,7 @@ pub fn is_node_class(class: &str) -> bool {
 fn engine_superclass(mrb: &Mrb, _godot: Value, name: Symbol) -> Value {
     let class_db = ClassDb::singleton();
     let Some(name) = name.name(mrb).filter(|name| class_db.class_exists(name)) else {
-        return Value::nil();
+        return qnil().as_value();
     };
     let parent = class_db.get_parent_class(&name).to_string();
     mrb.str_new(parent.as_bytes()).as_value()

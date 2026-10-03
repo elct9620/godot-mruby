@@ -3,7 +3,7 @@
 
 use std::ffi::CStr;
 
-use beni::{Error, Gem, IntoValue, Module, Mrb, ReprValue, Symbol, Value, method};
+use beni::{Error, Gem, IntoValue, Module, Mrb, ReprValue, Symbol, Value, method, value::qnil};
 
 use crate::realm::Location;
 use crate::{compiler, error, log};
@@ -65,7 +65,7 @@ fn log_error(
         function: String::new(),
     });
     error!(at: at.as_ref(), "{message}");
-    Value::nil()
+    qnil().as_value()
 }
 
 /// What narrows a run, as `Minitest.run` takes it.
@@ -98,11 +98,14 @@ impl IntoValue for &LoadFailure {
             ("message", mrb.str_new(self.message.as_bytes()).as_value()),
             (
                 "file",
-                file.map_or_else(Value::nil, |file| mrb.str_new(file.as_bytes()).as_value()),
+                file.map_or_else(
+                    || qnil().as_value(),
+                    |file| mrb.str_new(file.as_bytes()).as_value(),
+                ),
             ),
             (
                 "line",
-                line.map_or_else(Value::nil, |line| line.into_value(mrb)),
+                line.map_or_else(|| qnil().as_value(), |line| line.into_value(mrb)),
             ),
         ];
         for (key, value) in entries {

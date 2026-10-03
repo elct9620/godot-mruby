@@ -3,7 +3,7 @@
 //! and every realm prints.
 
 use beni::scan_args::scan_args;
-use beni::{Error, Module, Mrb, ReprValue, Value, method};
+use beni::{Error, Module, Mrb, ReprValue, Value, method, value::qnil};
 
 use super::bookkeeping;
 
@@ -29,14 +29,14 @@ fn puts(mrb: &Mrb, _receiver: Value) -> Result<Value, Error> {
         let text = arg.to_string(mrb);
         log.print_line(text.strip_suffix('\n').unwrap_or(&text));
     }
-    Ok(Value::nil())
+    Ok(qnil().as_value())
 }
 
 fn print(mrb: &Mrb, _receiver: Value) -> Result<Value, Error> {
     let args = arguments(mrb)?;
     let text: String = args.iter().map(|arg| arg.to_string(mrb)).collect();
     bookkeeping(mrb).log.print(&text);
-    Ok(Value::nil())
+    Ok(qnil().as_value())
 }
 
 fn p(mrb: &Mrb, _receiver: Value) -> Result<Value, Error> {
@@ -46,7 +46,7 @@ fn p(mrb: &Mrb, _receiver: Value) -> Result<Value, Error> {
         log.print_line(&arg.inspect(mrb));
     }
     Ok(match args.as_slice() {
-        [] => Value::nil(),
+        [] => qnil().as_value(),
         [arg] => *arg,
         args => mrb.ary_new_from_values(args).as_value(),
     })

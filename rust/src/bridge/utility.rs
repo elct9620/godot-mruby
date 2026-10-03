@@ -3,7 +3,7 @@
 //! Each is one row of a table, so a function is added or left out in one
 //! place; Ruby's own `Math`, `rand` and `srand` stay as Ruby's.
 
-use beni::{Array, Error, IntoValue, Mrb, ReprValue, Symbol, Value};
+use beni::{Error, IntoValue, Mrb, RArray, ReprValue, Symbol, Value, value::qnil};
 use godot::builtin::{Variant, VariantType};
 use godot::global;
 use godot::meta::ToGodot;
@@ -152,10 +152,10 @@ pub fn utilities(mrb: &Mrb, _godot: Value) -> Value {
 
 /// Godot.__utility__(name, args): the utility function `name` called with
 /// `args`.
-pub fn utility(mrb: &Mrb, _godot: Value, name: Symbol, args: Array) -> Result<Value, Error> {
+pub fn utility(mrb: &Mrb, _godot: Value, name: Symbol, args: RArray) -> Result<Value, Error> {
     let name = name.name(mrb).unwrap_or_default();
     let Some((_, arity, utility)) = UTILITIES.iter().find(|(row, _, _)| *row == name) else {
-        return Ok(Value::nil());
+        return Ok(qnil().as_value());
     };
     if *arity != ANY && args.len() != *arity {
         let message = format!(

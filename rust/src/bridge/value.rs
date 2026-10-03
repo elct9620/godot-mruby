@@ -4,8 +4,8 @@
 //! crosses as nothing.
 
 use beni::{
-    Array, Error, FromValue, Hash, IntoValue, Mrb, Proc, RString, ReprValue, Symbol, TryConvert,
-    TypedData, Value,
+    Error, FromValue, IntoValue, Mrb, Proc, Qfalse, Qtrue, RArray, RHash, RString, ReprValue,
+    Symbol, TryConvert, TypedData, Value, value::qnil,
 };
 use godot::builtin::{
     AnyArray, AnyDictionary, Color, GString, PackedArray, StringName, VarArray, VarDictionary,
@@ -90,10 +90,15 @@ fn to_ruby(mrb: &Mrb, variant: &Variant) -> Value {
             .try_to::<Gd<Object>>()
             .ok()
             .filter(Gd::is_instance_valid)
-            .map_or_else(Value::nil, |object| match object.try_cast::<RubyObject>() {
-                Ok(held) => realm::object(mrb, held.bind().key()).unwrap_or_else(Value::nil),
-                Err(object) => object::ruby_object(mrb, object),
-            }),
+            .map_or_else(
+                || qnil().as_value(),
+                |object| match object.try_cast::<RubyObject>() {
+                    Ok(held) => {
+                        realm::object(mrb, held.bind().key()).unwrap_or_else(|| qnil().as_value())
+                    }
+                    Err(object) => object::ruby_object(mrb, object),
+                },
+            ),
         kind if value_type::is_value_type(kind) => value_type::ruby_value(mrb, variant),
         VariantType::PACKED_BYTE_ARRAY => from_packed::<u8>(mrb, variant),
         VariantType::PACKED_INT32_ARRAY => from_packed::<i32>(mrb, variant),
@@ -105,13 +110,13 @@ fn to_ruby(mrb: &Mrb, variant: &Variant) -> Value {
         VariantType::PACKED_VECTOR3_ARRAY => from_packed::<Vector3>(mrb, variant),
         VariantType::PACKED_COLOR_ARRAY => from_packed::<Color>(mrb, variant),
         VariantType::PACKED_VECTOR4_ARRAY => from_packed::<Vector4>(mrb, variant),
-        _ => Value::nil(),
+        _ => qnil().as_value(),
     }
 }
 
 fn symbol(mrb: &Mrb, name: &str) -> Value {
     mrb.intern(name.as_bytes())
-        .map_or_else(|_| Value::nil(), |id| Symbol::from(id).as_value())
+        .map_or_else(|_| qnil().as_value(), |id| Symbol::from(id).as_value())
 }
 
 fn array(mrb: &Mrb, elements: impl Iterator<Item = Variant>) -> Value {
@@ -145,8 +150,11 @@ pub fn to_engine(mrb: &Mrb, value: Value, level: usize) -> Result<Variant, Strin
     if value.is_nil() {
         return Ok(Variant::nil());
     }
-    if value.is_true() || value.is_false() {
-        return Ok(value.is_true().to_variant());
+    if Qtrue::from_value(value).is_some() {
+        return Ok(true.to_variant());
+    }
+    if Qfalse::from_value(value).is_some() {
+        return Ok(false.to_variant());
     }
     if let Some(integer) = i64::from_value(value) {
         return Ok(integer.to_variant());
@@ -179,7 +187,7 @@ pub fn to_engine(mrb: &Mrb, value: Value, level: usize) -> Result<Variant, Strin
         let class = value.classname(mrb);
         format!("an {class} nested more than {DEPTH} deep cannot reach the engine")
     };
-    if let Some(array) = Array::from_value(value) {
+    if let Some(array) = RArray::from_value(value) {
         if level > DEPTH {
             return Err(too_deep());
         }
@@ -189,7 +197,7 @@ pub fn to_engine(mrb: &Mrb, value: Value, level: usize) -> Result<Variant, Strin
         }
         return Ok(copied.to_variant());
     }
-    if let Some(hash) = Hash::from_value(value) {
+    if let Some(hash) = RHash::from_value(value) {
         if level > DEPTH {
             return Err(too_deep());
         }

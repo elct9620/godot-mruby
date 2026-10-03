@@ -5,7 +5,8 @@ use std::ffi::CStr;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use beni::{
-    Array, Error, FromValue, Gem, IntoValue, Mrb, RClass, ReprValue, Symbol, TryConvert, Value,
+    Error, FromValue, Gem, IntoValue, Module as _, Mrb, Qtrue, RArray, RClass, ReprValue, Symbol,
+    TryConvert, Value,
 };
 
 use crate::compiler;
@@ -203,7 +204,7 @@ fn methods_by_path(mrb: &Mrb, path: &str) -> Vec<String> {
     let methods = class
         .funcall(mrb, c"instance_methods", &own)
         .ok()
-        .and_then(Array::from_value);
+        .and_then(RArray::from_value);
     methods
         .map(|methods| {
             methods
@@ -611,8 +612,9 @@ impl Realm {
                 for object in bookkeeping(&self.mrb).registry.objects(&self.mrb) {
                     if object
                         .funcall(&self.mrb, c"is_a?", &[class])
-                        .map_err(read)?
-                        .is_true()
+                        .map_err(read)
+                        .map(Qtrue::from_value)?
+                        .is_some()
                     {
                         class
                             .funcall(&self.mrb, rerun.adopt, &[object])
@@ -637,7 +639,7 @@ impl Realm {
             c"respond_to?",
             &[name, true.into_value(&self.mrb)],
         )?;
-        Ok(answers.is_true().then_some(class))
+        Ok(Qtrue::from_value(answers).map(|_| class))
     }
 
     /// Calls `method` on the constant `receiver` names with `args`, and
@@ -657,8 +659,7 @@ impl Realm {
         let answer = self.run_as(Origin::Call, || {
             self.mrb
                 .object_class()
-                .as_value()
-                .const_get(&self.mrb, receiver)
+                .const_get::<_, Value>(&self.mrb, receiver)
                 .and_then(|receiver| receiver.funcall(&self.mrb, method, &args))
                 .map_err(|error| RubyError::from_error(&self.mrb, None, &error))
         })?;

@@ -4,7 +4,8 @@
 //! hide; every other miss and addition is left to Ruby through `super`.
 
 use beni::{
-    Error, FromValue, IntoValue, Module, Mrb, RClass, RModule, ReprValue, Symbol, Value, method,
+    Error, FromValue, IntoId, IntoValue, Module, Mrb, Qtrue, RArray, RClass, RModule, ReprValue,
+    Symbol, TryConvert, Value, method, value::qnil,
 };
 
 use super::index::{self, Entry, Namespace};
@@ -25,11 +26,11 @@ pub(super) fn define(mrb: &Mrb) -> Result<(), Error> {
 // when the class index names no file for it.
 fn load_by_name(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
     let Some(name) = name.name(mrb) else {
-        return Ok(Value::nil());
+        return Ok(qnil().as_value());
     };
     Ok(match resolve(mrb, receiver, &name)? {
         Some(constant) => mrb.ary_new_from_values(&[constant]).as_value(),
-        None => Value::nil(),
+        None => qnil().as_value(),
     })
 }
 
@@ -37,7 +38,7 @@ fn load_by_name(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error
 // A directory's module the realm defines is no file's to take away.
 fn record_constant(mrb: &Mrb, receiver: Value, symbol: Symbol) -> Value {
     let (Some(scope), Some(name)) = (split_path(mrb, receiver), symbol.name(mrb)) else {
-        return Value::nil();
+        return qnil().as_value();
     };
     if !bookkeeping(mrb).is_defining_namespace.get() {
         executor::record(mrb, scope.clone(), name.clone());
@@ -49,7 +50,7 @@ fn record_constant(mrb: &Mrb, receiver: Value, symbol: Symbol) -> Value {
         .collect();
     bookkeeping(mrb).spellings.borrow_mut().insert(key, symbol);
     load_hidden(mrb, &scope, &name);
-    Value::nil()
+    qnil().as_value()
 }
 
 // Ruby looks through the namespaces around it before asking const_missing,
@@ -101,7 +102,9 @@ fn load_inner(mrb: &Mrb, inner: &[String]) {
             let Some(scope) = constant_by_key(mrb, &inner[..inner.len() - 1]) else {
                 return;
             };
-            (None, define_module(mrb, scope, &namespace.name).map(|_| ()))
+            let defined = Scope::try_convert(scope, mrb)
+                .and_then(|scope| define_module(mrb, scope, &namespace.name));
+            (None, defined.map(|_| ()))
         }
         _ => return,
     };
@@ -206,7 +209,7 @@ fn ensure_namespaces(mrb: &Mrb, path: &str) -> Result<(), Error> {
                 let Some(scope) = constant_by_key(mrb, &key[..depth - 1]) else {
                     return Ok(());
                 };
-                define_module(mrb, scope, &namespace.name)?;
+                define_module(mrb, Scope::try_convert(scope, mrb)?, &namespace.name)?;
             }
             None => {}
         }
@@ -228,6 +231,68 @@ fn object(mrb: &Mrb) -> Value {
     mrb.object_class().as_value()
 }
 
+/// A class or a module: what holds constants.
+#[derive(Clone, Copy)]
+pub(super) enum Scope {
+    Class(RClass),
+    Module(RModule),
+}
+
+impl Scope {
+    pub(super) fn const_defined_at(self, mrb: &Mrb, name: impl IntoId) -> bool {
+        match self {
+            Scope::Class(class) => class.const_defined_at(mrb, name),
+            Scope::Module(module) => module.const_defined_at(mrb, name),
+        }
+    }
+
+    pub(super) fn const_get(self, mrb: &Mrb, name: impl IntoId) -> Result<Value, Error> {
+        match self {
+            Scope::Class(class) => class.const_get(mrb, name),
+            Scope::Module(module) => module.const_get(mrb, name),
+        }
+    }
+
+    fn const_set(self, mrb: &Mrb, name: &str, value: Value) -> Result<(), Error> {
+        match self {
+            Scope::Class(class) => class.const_set(mrb, name, value),
+            Scope::Module(module) => module.const_set(mrb, name, value),
+        }
+    }
+
+    pub(super) fn const_remove(self, mrb: &Mrb, name: &str) -> Result<(), Error> {
+        match self {
+            Scope::Class(class) => class.const_remove(mrb, name),
+            Scope::Module(module) => module.const_remove(mrb, name),
+        }
+    }
+
+    fn path(self, mrb: &Mrb) -> Option<String> {
+        match self {
+            Scope::Class(class) => class.path(mrb),
+            Scope::Module(module) => module.path(mrb),
+        }
+    }
+}
+
+impl FromValue for Scope {
+    fn from_value(value: Value) -> Option<Self> {
+        RClass::from_value(value)
+            .map(Scope::Class)
+            .or_else(|| RModule::from_value(value).map(Scope::Module))
+    }
+}
+
+// A value that holds no constants raises what mruby's own constant look-up
+// raises.
+impl TryConvert for Scope {
+    fn try_convert(value: Value, mrb: &Mrb) -> Result<Self, Error> {
+        Scope::from_value(value).ok_or_else(|| {
+            executor::ruby_error(mrb, c"TypeError", "constant look-up for non class/module")
+        })
+    }
+}
+
 // How the constant the class index matches to `key` was last defined, which
 // spares reading every constant of the namespace it sits in.
 fn spelling_by_key(mrb: &Mrb, key: &[String]) -> Option<Symbol> {
@@ -240,8 +305,8 @@ fn constant_by_name(mrb: &Mrb, scope: Value, name: Symbol) -> Option<Value> {
     scope
         .funcall(mrb, c"const_defined?", &[name.into_value(mrb), inherit])
         .ok()
-        .filter(|defined| defined.is_true())?;
-    scope.const_get(mrb, name).ok()
+        .and_then(Qtrue::from_value)?;
+    Scope::from_value(scope)?.const_get(mrb, name).ok()
 }
 
 // The constant `scope` holds whose name the class index matches to
@@ -249,12 +314,14 @@ fn constant_by_name(mrb: &Mrb, scope: Value, name: Symbol) -> Option<Value> {
 fn constant_by_segment(mrb: &Mrb, scope: Value, segment: &str) -> Option<Value> {
     let constants = scope
         .funcall(mrb, c"constants", &[])
-        .and_then(|constants| constants.ensure_array(mrb))
-        .ok()?;
+        .ok()
+        .and_then(RArray::from_value)?;
     let name = (0..constants.len())
         .map(|index| constants.entry(mrb, index as isize))
         .find(|name| index::normalize(&name.to_string(mrb)) == segment)?;
-    scope.const_get(mrb, name.to_sym(mrb).ok()?).ok()
+    Scope::from_value(scope)?
+        .const_get(mrb, name.to_sym(mrb).ok()?)
+        .ok()
 }
 
 // What `name` names from inside `receiver`: mruby hands const_missing the
@@ -277,9 +344,7 @@ fn resolve(mrb: &Mrb, receiver: Value, name: &str) -> Result<Option<Value>, Erro
 // own; none for Object, and nothing for a module without a name, since no
 // name leads back to it.
 fn split_path(mrb: &Mrb, receiver: Value) -> Option<Vec<String>> {
-    let path = RClass::from_value(receiver)
-        .and_then(|class| class.path(mrb))
-        .or_else(|| RModule::from_value(receiver).and_then(|module| module.path(mrb)))?;
+    let path = Scope::from_value(receiver)?.path(mrb)?;
     Some(match path.as_str() {
         "Object" => Vec::new(),
         path => path.split("::").map(str::to_owned).collect(),
@@ -338,13 +403,15 @@ fn namespace_module(
 }
 
 // The module the names in `outer` spell exactly, from Object.
-fn scope_by_names(mrb: &Mrb, outer: &[String]) -> Result<Value, Error> {
-    outer.iter().try_fold(object(mrb), |scope, name| {
-        scope.const_get(mrb, name.as_str())
-    })
+fn scope_by_names(mrb: &Mrb, outer: &[String]) -> Result<Scope, Error> {
+    outer
+        .iter()
+        .try_fold(Scope::Class(mrb.object_class()), |scope, name| {
+            Scope::try_convert(scope.const_get(mrb, name.as_str())?, mrb)
+        })
 }
 
-fn define_module(mrb: &Mrb, scope: Value, name: &str) -> Result<Value, Error> {
+fn define_module(mrb: &Mrb, scope: Scope, name: &str) -> Result<Value, Error> {
     let module = mrb.module_new().as_value();
     let defining = &bookkeeping(mrb).is_defining_namespace;
     defining.set(true);

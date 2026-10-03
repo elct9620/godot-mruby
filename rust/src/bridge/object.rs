@@ -6,8 +6,8 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
 use beni::{
-    Array, DataType, Error, ExceptionClass, FromValue, IntoValue, Module, Mrb, Object as _, RClass,
-    RModule, ReprValue, Symbol, TryConvert, TypedData, Value, method,
+    DataType, Error, ExceptionClass, FromValue, IntoValue, Module, Mrb, Object as _, RArray,
+    RClass, RModule, ReprValue, Symbol, TryConvert, TypedData, Value, method, value::qnil,
 };
 use godot::builtin::StringName;
 use godot::builtin::{Variant, VariantType};
@@ -152,7 +152,7 @@ impl IntoValue for Owner {
     fn into_value(self, mrb: &Mrb) -> Value {
         match Gd::<Object>::try_from_instance_id(self.0) {
             Ok(owner) => mrb.wrap(EngineObject(owner)).as_value(),
-            Err(_) => Value::nil(),
+            Err(_) => qnil().as_value(),
         }
     }
 }
@@ -165,7 +165,7 @@ impl IntoValue for Owner {
 // property's setter, and a name no method has reaches its getter.
 fn resolve(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
     let Ok(held) = <&EngineObject>::try_convert(receiver, mrb) else {
-        return Ok(Value::nil());
+        return Ok(qnil().as_value());
     };
     let name = name.name(mrb).unwrap_or_default();
     let object = held.live_object(mrb, &name)?;
@@ -190,7 +190,7 @@ fn resolve(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
         )
     };
     if target.is_empty() {
-        return Ok(Value::nil());
+        return Ok(qnil().as_value());
     }
     let declared = declared && exposed_class(&object) == class;
     let target = Symbol::from(mrb.intern(target.as_bytes())?).as_value();
@@ -201,7 +201,7 @@ fn resolve(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
 
 // Godot::Object#__call__(name, args): calls the engine method `name` with
 // `args` and answers what it returns.
-fn call(mrb: &Mrb, held: &EngineObject, name: Symbol, args: Array) -> Result<Value, Error> {
+fn call(mrb: &Mrb, held: &EngineObject, name: Symbol, args: RArray) -> Result<Value, Error> {
     let name = name.name(mrb).unwrap_or_default();
     let mut object = held.live_object(mrb, &name)?;
     let args = variants(mrb, args)?;
@@ -224,12 +224,12 @@ fn singleton(mrb: &Mrb, class: RClass) -> Value {
     let name = engine_name(mrb, class);
     let engine = Engine::singleton();
     if !engine.has_singleton(&name) {
-        return Value::nil();
+        return qnil().as_value();
     }
     engine
         .get_singleton(&name)
         .map(|object| mrb.wrap_as(EngineObject(object), class).as_value())
-        .unwrap_or_else(Value::nil)
+        .unwrap_or_else(|| qnil().as_value())
 }
 
 // Godot::Object.__has_static_method__(name): whether the receiver's engine class
@@ -241,7 +241,7 @@ fn has_static_method(mrb: &Mrb, class: RClass, name: Symbol) -> bool {
 
 // Godot::Object.__call_static__(name, args): calls the static method `name`
 // of the receiver's engine class with `args`.
-fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: Array) -> Result<Value, Error> {
+fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<Value, Error> {
     let name = name.name(mrb).unwrap_or_default();
     let class = engine_name(mrb, class);
     let args = variants(mrb, args)?;
@@ -268,7 +268,7 @@ pub fn ruby_object(mrb: &Mrb, object: Gd<Object>) -> Value {
     let class = class_by_name(mrb, exposed_class(&object)).or_else(|| root(mrb).ok());
     match class {
         Some(class) => mrb.wrap_as(EngineObject(object), class).as_value(),
-        None => Value::nil(),
+        None => qnil().as_value(),
     }
 }
 
@@ -289,9 +289,8 @@ fn class_by_name(mrb: &Mrb, name: StringName) -> Option<RClass> {
     }
     let class = mrb
         .module_get(c"Godot")
-        .and_then(|godot| godot.as_value().const_get(mrb, key.to_string().as_str()))
-        .ok()
-        .and_then(RClass::from_value)?;
+        .and_then(|godot| godot.const_get::<_, RClass>(mrb, key.to_string().as_str()))
+        .ok()?;
     mrb.gc_register_forever(class.as_value());
     classes.borrow_mut().insert(key, class);
     Some(class)
@@ -322,14 +321,14 @@ fn declare_signal(
     mrb: &Mrb,
     class: RClass,
     name: String,
-    parameters: Array,
+    parameters: RArray,
 ) -> Result<Value, Error> {
     let parameters = parameters
         .entries(mrb)
         .filter_map(String::from_value)
         .collect();
     realm::declare_signal(mrb, class, Signal { name, parameters })?;
-    Ok(Value::nil())
+    Ok(qnil().as_value())
 }
 
 // Godot::Object.__declare_export__(name, default, hint, written): takes the
@@ -368,7 +367,7 @@ fn declare_export(
     }
     .map_err(|reason| argument_error(mrb, &reason))?;
     realm::declare_export(mrb, class, property)?;
-    Ok(Value::nil())
+    Ok(qnil().as_value())
 }
 
 // Godot::Object.__declare_heading__(name, prefix, kind): takes the heading
@@ -385,7 +384,7 @@ fn declare_heading(mrb: &Mrb, _class: RClass, name: String, prefix: String, kind
         _ => Heading::Group { name, prefix },
     };
     realm::declare_heading(mrb, heading);
-    Value::nil()
+    qnil().as_value()
 }
 
 // The property an export naming its type declares: an object of the class
@@ -557,7 +556,7 @@ fn engine_constant(mrb: &Mrb, class: RClass, name: Symbol) -> Value {
     let class = engine_name(mrb, class);
     let class_db = ClassDb::singleton();
     if !class_db.class_has_integer_constant(&class, name.as_str()) {
-        return Value::nil();
+        return qnil().as_value();
     }
     class_db
         .class_get_integer_constant(&class, name.as_str())
@@ -572,7 +571,7 @@ fn engine_name(mrb: &Mrb, class: RClass) -> String {
 
 // `args` as the engine takes them, or the Godot::CallError one that cannot
 // reach it raises, before the engine is given any.
-fn variants(mrb: &Mrb, args: Array) -> Result<Vec<Variant>, Error> {
+fn variants(mrb: &Mrb, args: RArray) -> Result<Vec<Variant>, Error> {
     args.entries(mrb)
         .map(|arg| value::to_engine(mrb, arg, 1).map_err(|reason| call_error(mrb, &reason)))
         .collect()

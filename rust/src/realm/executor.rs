@@ -8,9 +8,10 @@ use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
 
+use super::constants::Scope;
 use super::{bookkeeping, compile, file_by_constant, publish_class};
 use crate::snapshot::{self, Heading, Member, Property, Signal};
-use beni::{Error, FromValue, Module, Mrb, RClass, ReprValue, Value};
+use beni::{Error, FromValue, Module, Mrb, RClass, ReprValue};
 
 /// How far a file has run in a realm.
 #[derive(Clone, Copy)]
@@ -328,13 +329,13 @@ fn take_away(mrb: &Mrb, frame: &Frame) {
 
 // The module the names in `scope` spell exactly, if each is still defined;
 // asking for a missing one would load it by name.
-fn scope_by_names(mrb: &Mrb, scope: &[String]) -> Option<Value> {
+fn scope_by_names(mrb: &Mrb, scope: &[String]) -> Option<Scope> {
     scope
         .iter()
-        .try_fold(mrb.object_class().as_value(), |outer, name| {
+        .try_fold(Scope::Class(mrb.object_class()), |outer, name| {
             let name = mrb.intern(name.as_bytes()).ok()?;
             if outer.const_defined_at(mrb, name) {
-                outer.const_get(mrb, name).ok()
+                outer.const_get(mrb, name).ok().and_then(Scope::from_value)
             } else {
                 None
             }
@@ -345,7 +346,7 @@ fn runtime_error(mrb: &Mrb, message: &str) -> Error {
     ruby_error(mrb, c"RuntimeError", message)
 }
 
-fn ruby_error(mrb: &Mrb, class: &CStr, message: &str) -> Error {
+pub(super) fn ruby_error(mrb: &Mrb, class: &CStr, message: &str) -> Error {
     match mrb.exc_get(class) {
         Ok(class) => Error::new(mrb, class, message),
         Err(error) => error,
