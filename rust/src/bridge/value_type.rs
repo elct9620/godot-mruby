@@ -1,12 +1,14 @@
 //! The engine's value types in Ruby: `Vector2`, `Color`, `NodePath` and the
 //! rest are classes under `Godot` descending from `Godot::Value`, whose
 //! values are built, read and computed with by the engine itself, and never
-//! change. gdext answers only a statically typed side of these types, so the
-//! engine's own variant calls do the work, by name, for every type alike.
+//! change. A Vector2, held as its components, goes to the engine's typed
+//! operators, which take it as it is; every other type, and whatever those
+//! do not answer, goes to the engine's variant calls, by name.
 
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::ptr;
+use std::sync::OnceLock;
 
 use beni::{
     DataType, Error, FromValue, IntoValue, Module, Mrb, Object as _, RArray, RClass, RModule,
@@ -428,25 +430,35 @@ fn constant(mrb: &Mrb, class: RClass, name: Symbol) -> Result<Value, Error> {
 // of that operator's Ruby name: what the operator answers for the value and
 // the other operand.
 macro_rules! operators {
-    ($($method:ident: $op:ident, $shown:literal;)*) => {$(
+    ($($method:ident: $op:ident, $shown:literal, $typed:literal;)*) => {$(
         fn $method(mrb: &Mrb, held: &EngineValue, other: Value) -> Result<Value, Error> {
+            if $typed
+                && let EngineValue::Vector2(vector) = held
+                && let Some(answer) = read_operand(mrb, other)
+                    .and_then(|operand| operate_typed(mrb, *vector, VariantOperator::$op, operand))
+            {
+                return Ok(answer);
+            }
             let other = value::to_engine(mrb, other, 1).map_err(|reason| type_error(mrb, &reason))?;
             operate(mrb, held, VariantOperator::$op, $shown, &other)
         }
     )*};
 }
 
+// Division, modulo and power stay with the variant call, where the engine
+// refuses a division by zero for the types that forbid it; a typed function
+// never checks.
 operators! {
-    add: ADD, "+";
-    subtract: SUBTRACT, "-";
-    multiply: MULTIPLY, "*";
-    divide: DIVIDE, "/";
-    modulo: MODULO, "%";
-    power: POWER, "**";
-    less: LESS, "<";
-    less_equal: LESS_EQUAL, "<=";
-    greater: GREATER, ">";
-    greater_equal: GREATER_EQUAL, ">=";
+    add: ADD, "+", true;
+    subtract: SUBTRACT, "-", true;
+    multiply: MULTIPLY, "*", true;
+    divide: DIVIDE, "/", false;
+    modulo: MODULO, "%", false;
+    power: POWER, "**", false;
+    less: LESS, "<", true;
+    less_equal: LESS_EQUAL, "<=", true;
+    greater: GREATER, ">", true;
+    greater_equal: GREATER_EQUAL, ">=", true;
 }
 
 // Godot::Value#==: whether `other` is a value the engine's equality finds
@@ -456,29 +468,144 @@ fn is_equal(mrb: &Mrb, held: &EngineValue, other: Value) -> Result<Value, Error>
         return Ok(false.into_value(mrb));
     }
     let other = <&EngineValue>::try_convert(other, mrb)?;
+    if let (EngineValue::Vector2(vector), EngineValue::Vector2(right)) = (held, other)
+        && let Some(answer) = operate_typed(
+            mrb,
+            *vector,
+            VariantOperator::EQUAL,
+            Operand::Vector2(*right),
+        )
+    {
+        return Ok(answer);
+    }
     operate(mrb, held, VariantOperator::EQUAL, "==", &other.as_variant())
 }
 
 // Godot::Value#-@: the engine's negation of the value.
 fn negate(mrb: &Mrb, held: &EngineValue) -> Result<Value, Error> {
-    operate(
-        mrb,
-        held,
-        VariantOperator::NEGATE,
-        "unary-",
-        &Variant::nil(),
-    )
+    operate_unary(mrb, held, VariantOperator::NEGATE, "unary-")
 }
 
 // Godot::Value#+@: the engine's unary plus of the value.
 fn keep_sign(mrb: &Mrb, held: &EngineValue) -> Result<Value, Error> {
-    operate(
-        mrb,
-        held,
-        VariantOperator::POSITIVE,
-        "unary+",
-        &Variant::nil(),
-    )
+    operate_unary(mrb, held, VariantOperator::POSITIVE, "unary+")
+}
+
+// What the engine's unary operator `op` answers for the value.
+fn operate_unary(
+    mrb: &Mrb,
+    held: &EngineValue,
+    op: VariantOperator,
+    shown: &str,
+) -> Result<Value, Error> {
+    if let EngineValue::Vector2(vector) = held
+        && let Some(answer) = operate_typed(mrb, *vector, op, Operand::None)
+    {
+        return Ok(answer);
+    }
+    operate(mrb, held, op, shown, &Variant::nil())
+}
+
+// The right operand of a typed operator on a Vector2: one the engine's typed
+// functions take as Ruby holds it, or none for a unary operator.
+#[derive(Clone, Copy)]
+enum Operand {
+    Vector2(Vector2),
+    Int(i64),
+    Float(f64),
+    None,
+}
+
+impl Operand {
+    fn kind(&self) -> VariantType {
+        match self {
+            Self::Vector2(_) => VariantType::VECTOR2,
+            Self::Int(_) => VariantType::INT,
+            Self::Float(_) => VariantType::FLOAT,
+            Self::None => VariantType::NIL,
+        }
+    }
+
+    // The operand where a typed function reads it; a unary operator reads none.
+    fn as_ptr(&self) -> sys::GDExtensionConstTypePtr {
+        match self {
+            Self::Vector2(vector) => ptr::from_ref(vector).cast(),
+            Self::Int(integer) => ptr::from_ref(integer).cast(),
+            Self::Float(float) => ptr::from_ref(float).cast(),
+            Self::None => ptr::null(),
+        }
+    }
+}
+
+// `other` as the right operand of a typed operator, when it is one.
+fn read_operand(mrb: &Mrb, other: Value) -> Option<Operand> {
+    if let Some(integer) = i64::from_value(other) {
+        return Some(Operand::Int(integer));
+    }
+    if let Some(float) = f64::from_value(other) {
+        return Some(Operand::Float(float));
+    }
+    if other.is_kind_of(mrb, EngineValue::class(mrb))
+        && let Ok(EngineValue::Vector2(vector)) = <&EngineValue>::try_convert(other, mrb)
+    {
+        return Some(Operand::Vector2(*vector));
+    }
+    None
+}
+
+type Evaluator = unsafe extern "C" fn(
+    sys::GDExtensionConstTypePtr,
+    sys::GDExtensionConstTypePtr,
+    sys::GDExtensionTypePtr,
+);
+
+const OPERATORS: usize = sys::GDEXTENSION_VARIANT_OP_MAX as usize;
+const OPERAND_KINDS: usize = VariantType::VECTOR2.ord as usize + 1;
+
+// The engine's typed function for `op` on a Vector2 and an operand of
+// `right`, found once: the engine's functions stay put while it runs.
+fn evaluator_by_operands(op: VariantOperator, right: VariantType) -> Option<Evaluator> {
+    static EVALUATORS: [[OnceLock<Option<Evaluator>>; OPERAND_KINDS]; OPERATORS] =
+        [const { [const { OnceLock::new() }; OPERAND_KINDS] }; OPERATORS];
+    *EVALUATORS[op.ord() as usize][right.ord as usize].get_or_init(|| {
+        // SAFETY: the interface is initialized while the extension runs.
+        unsafe {
+            sys::interface_fn!(variant_get_ptr_operator_evaluator)(
+                op.ord() as sys::GDExtensionVariantOperator,
+                sys::GDEXTENSION_VARIANT_TYPE_VECTOR2,
+                right.ord as sys::GDExtensionVariantType,
+            )
+        }
+    })
+}
+
+// What the engine's typed operator `op` answers for `vector` and `right`, or
+// none when the engine has no typed function for the two.
+fn operate_typed(mrb: &Mrb, vector: Vector2, op: VariantOperator, right: Operand) -> Option<Value> {
+    let evaluate = evaluator_by_operands(op, right.kind())?;
+    let left = ptr::from_ref(&vector).cast();
+    let compares = matches!(
+        op,
+        VariantOperator::EQUAL
+            | VariantOperator::LESS
+            | VariantOperator::LESS_EQUAL
+            | VariantOperator::GREATER
+            | VariantOperator::GREATER_EQUAL
+    );
+    // SAFETY: each operand is of the type the function was found for, and
+    // the answer is of the type it writes: a bool for a comparison, else a
+    // Vector2, the only answer the engine's arithmetic on one gives.
+    unsafe {
+        if compares {
+            let mut answer = false;
+            evaluate(left, right.as_ptr(), ptr::from_mut(&mut answer).cast());
+            Some(answer.into_value(mrb))
+        } else {
+            let mut answer = Vector2::ZERO;
+            evaluate(left, right.as_ptr(), ptr::from_mut(&mut answer).cast());
+            Some(wrap(mrb, EngineValue::Vector2(answer)))
+        }
+    }
 }
 
 // What the engine's operator `op` answers for the value and `other`. A
