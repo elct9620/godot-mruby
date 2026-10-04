@@ -113,7 +113,7 @@ pub fn ruby_value(mrb: &Mrb, variant: &Variant) -> Value {
 
 // The class under Godot of each value type a realm has handed Ruby a value
 // of, by the type's ordinal, so a value finds its class without spelling the
-// type's name.
+// type's name, and a class finds its type without spelling its own.
 #[derive(Default)]
 struct ValueClasses(RefCell<Vec<Option<RClass>>>);
 
@@ -156,12 +156,23 @@ fn kind_by_name(name: &str) -> Option<VariantType> {
     value_types().find(|kind| type_name(*kind) == name)
 }
 
-// The value type a class under Godot stands for.
+// The value type a class under Godot stands for: found among the kept
+// classes by identity, and by the class's name only before it is kept.
 fn kind_by_class(mrb: &Mrb, class: RClass) -> Result<VariantType, Error> {
+    let kept = realm::extension_data::<ValueClasses>(mrb)
+        .0
+        .borrow()
+        .iter()
+        .position(|kept| kept.is_some_and(|kept| kept.as_value().is_equal(mrb, class.as_value())));
+    if let Some(ord) = kept {
+        return Ok(<VariantType as EngineEnum>::from_ord(ord as i32));
+    }
     let path = class.path(mrb).unwrap_or_default();
     let name = path.strip_prefix("Godot::").unwrap_or(&path);
-    kind_by_name(name)
-        .ok_or_else(|| type_error(mrb, &format!("{path} is no value type of the engine")))
+    let kind = kind_by_name(name)
+        .ok_or_else(|| type_error(mrb, &format!("{path} is no value type of the engine")))?;
+    class_by_kind(mrb, kind);
+    Ok(kind)
 }
 
 // Godot::Value.__construct__(args): the value the engine's constructor of
