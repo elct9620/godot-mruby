@@ -2,13 +2,14 @@
 //! a later read skips the engine's lookup by name. The engine still reads
 //! every member: its getter runs the same code its variant call does, and
 //! the member's type is the one the engine gave the first time, which the
-//! value's type fixes.
+//! value's type fixes. A Vector2 Ruby holds as its components answers its
+//! `x` and `y` from them, the memory the engine's getter reads.
 
 use std::cell::Cell;
 use std::ptr;
 
 use beni::{DataType, Mrb, RClass, TypedData};
-use godot::builtin::{StringName, Variant, VariantType};
+use godot::builtin::{StringName, Variant, VariantType, Vector2, Vector2Axis, real};
 use godot::sys;
 
 use crate::realm;
@@ -20,6 +21,7 @@ pub struct BoundMember {
     getter: Getter,
     kind: VariantType,
     answer: VariantType,
+    axis: Option<Vector2Axis>,
 }
 
 // SAFETY: the getter is the engine's, unchanged while the engine runs, and a
@@ -64,11 +66,23 @@ impl BoundMember {
         let getter = unsafe {
             sys::interface_fn!(variant_get_ptr_getter)(kind_sys(kind), name.string_sys())
         }?;
+        let axis = match (kind, name.to_string().as_str()) {
+            (VariantType::VECTOR2, "x") => Some(Vector2Axis::X),
+            (VariantType::VECTOR2, "y") => Some(Vector2Axis::Y),
+            _ => None,
+        };
         Some(Self {
             getter,
             kind,
             answer: read.get_type(),
+            axis,
         })
+    }
+
+    /// The component of `vector` the member is, or none when it is a member
+    /// of another type.
+    pub fn read_component(&self, vector: Vector2) -> Option<real> {
+        self.axis.map(|axis| vector[axis])
     }
 
     /// The member of `value`, which is of the type the member was found

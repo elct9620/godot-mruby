@@ -295,8 +295,13 @@ fn member(mrb: &Mrb, held: &EngineValue, name: Symbol) -> Value {
 }
 
 // Godot::Value#__get__(bound): the member `bound` reads, through the
-// engine's getter.
+// engine's getter, or from the components a Vector2 is held as.
 fn get(mrb: &Mrb, held: &EngineValue, bound: &BoundMember) -> Value {
+    if let EngineValue::Vector2(vector) = held
+        && let Some(component) = bound.read_component(*vector)
+    {
+        return f64::from(component).into_value(mrb);
+    }
     bound
         .read(&held.as_variant())
         .map_or_else(|| qnil().as_value(), |found| to_ruby(mrb, &found))
