@@ -4,14 +4,16 @@
 //! change. gdext answers only a statically typed side of these types, so the
 //! engine's own variant calls do the work, by name, for every type alike.
 
+use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::ptr;
 
 use beni::{
-    DataType, Error, IntoValue, Module, Mrb, Object as _, RArray, RClass, RModule, ReprValue,
-    Symbol, TryConvert, TypedData, Value, method, value::qnil,
+    DataType, Error, FromValue, IntoValue, Module, Mrb, Object as _, RArray, RClass, RModule,
+    ReprValue, Symbol, TryConvert, TypedData, Value, method, value::qnil,
 };
-use godot::builtin::{GString, StringName, Variant, VariantOperator, VariantType};
+use godot::builtin::{GString, StringName, Variant, VariantOperator, VariantType, Vector2, real};
+use godot::meta::ToGodot;
 use godot::obj::EngineEnum;
 use godot::sys;
 use smallvec::SmallVec;
@@ -22,8 +24,14 @@ use super::value::{self, ToRuby};
 use crate::hint::type_name;
 use crate::realm;
 
-/// A value of one of the engine's value types, as Ruby holds it.
-pub struct EngineValue(Variant);
+/// A value of one of the engine's value types, as Ruby holds it: a Vector2,
+/// which games build and compute with most, as its components, so it
+/// reaches the engine without a variant, and any other in the engine's
+/// variant.
+pub enum EngineValue {
+    Held(Variant),
+    Vector2(Vector2),
+}
 
 // SAFETY: a value type holds no object and no reference into the engine
 // that another thread could change, and the realm holding it is entered by
@@ -105,8 +113,17 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
 /// The Ruby value for a value of a value type: a value of its class under
 /// Godot.
 pub fn ruby_value(mrb: &Mrb, variant: &Variant) -> Value {
-    match class_by_kind(mrb, variant.get_type()) {
-        Some(class) => mrb.wrap_as(EngineValue(variant.clone()), class).as_value(),
+    let held = match variant.get_type() {
+        VariantType::VECTOR2 => EngineValue::Vector2(variant.to()),
+        _ => EngineValue::Held(variant.clone()),
+    };
+    wrap(mrb, held)
+}
+
+// The Ruby value holding `held`: a value of its type's class under Godot.
+fn wrap(mrb: &Mrb, held: EngineValue) -> Value {
+    match class_by_kind(mrb, held.kind()) {
+        Some(class) => mrb.wrap_as(held, class).as_value(),
         None => qnil().as_value(),
     }
 }
@@ -141,7 +158,22 @@ fn class_by_kind(mrb: &Mrb, kind: VariantType) -> Option<RClass> {
 impl EngineValue {
     /// The value as the engine takes it.
     pub fn variant(&self) -> Variant {
-        self.0.clone()
+        self.as_variant().into_owned()
+    }
+
+    // The value in a variant, borrowed when the engine's variant holds it.
+    fn as_variant(&self) -> Cow<'_, Variant> {
+        match self {
+            Self::Held(variant) => Cow::Borrowed(variant),
+            Self::Vector2(vector) => Cow::Owned(vector.to_variant()),
+        }
+    }
+
+    fn kind(&self) -> VariantType {
+        match self {
+            Self::Held(variant) => variant.get_type(),
+            Self::Vector2(_) => VariantType::VECTOR2,
+        }
     }
 }
 
@@ -179,6 +211,11 @@ fn kind_by_class(mrb: &Mrb, class: RClass) -> Result<VariantType, Error> {
 // the receiver's type that takes `args` builds.
 fn construct(mrb: &Mrb, class: RClass, args: RArray) -> Result<Value, Error> {
     let kind = kind_by_class(mrb, class)?;
+    if kind == VariantType::VECTOR2
+        && let Some(vector) = read_vector2(mrb, args)
+    {
+        return Ok(wrap(mrb, EngineValue::Vector2(vector)));
+    }
     let args = to_arguments(mrb, args)?;
     let pointers: SmallVec<[_; 4]> = args.iter().map(Variant::var_sys).collect();
     let kind_sys = kind.ord as sys::GDExtensionVariantType;
@@ -204,25 +241,46 @@ fn construct(mrb: &Mrb, class: RClass, args: RArray) -> Result<Value, Error> {
     }
 }
 
+// The Vector2 the engine's constructor taking two numbers builds from
+// `args`, when they are two numbers: each read as the engine reads a float
+// argument, then narrowed to the engine's real.
+fn read_vector2(mrb: &Mrb, args: RArray) -> Option<Vector2> {
+    let component = |arg: Value| {
+        i64::from_value(arg)
+            .map(|integer| integer as f64)
+            .or_else(|| f64::from_value(arg))
+            .map(|float| float as real)
+    };
+    match args
+        .entries(mrb)
+        .collect::<SmallVec<[Value; 2]>>()
+        .as_slice()
+    {
+        [x, y] => Some(Vector2::new(component(*x)?, component(*y)?)),
+        _ => None,
+    }
+}
+
 // Godot::Value#__resolve__(name): [:member, bound] when the value's type
 // has a member of that name, with the member bound through the engine's
 // getter, or nil in its place when there is none; :method when the type
 // has a method of that name; or nil.
 fn resolve(mrb: &Mrb, held: &EngineValue, name: Symbol) -> Result<Value, Error> {
     let name = name_by_symbol(mrb, name);
-    let kind = held.0.get_type().ord as sys::GDExtensionVariantType;
+    let value = held.as_variant();
+    let kind = value.get_type().ord as sys::GDExtensionVariantType;
     // SAFETY: the interface is initialized while the extension runs, and the
     // name lives for the call.
     if unsafe { sys::interface_fn!(variant_has_member)(kind, name.string_sys()) } != 0 {
         let member = Symbol::from(mrb.intern(b"member")?).as_value();
-        let bound = read_named(&held.0, &name)
-            .and_then(|read| BoundMember::find(&held.0, &name, &read))
+        let bound = read_named(&value, &name)
+            .and_then(|read| BoundMember::find(&value, &name, &read))
             .map_or_else(|| qnil().as_value(), |bound| mrb.wrap(bound).as_value());
         return Ok(mrb.ary_new_from_values(&[member, bound]).as_value());
     }
     // SAFETY: the interface is initialized while the extension runs, and the
     // value and the name live for the call.
-    if unsafe { sys::interface_fn!(variant_has_method)(held.0.var_sys(), name.string_sys()) } != 0 {
+    if unsafe { sys::interface_fn!(variant_has_method)(value.var_sys(), name.string_sys()) } != 0 {
         return Ok(Symbol::from(mrb.intern(b"method")?).as_value());
     }
     Ok(qnil().as_value())
@@ -232,14 +290,15 @@ fn resolve(mrb: &Mrb, held: &EngineValue, name: Symbol) -> Result<Value, Error> 
 // type has.
 fn member(mrb: &Mrb, held: &EngineValue, name: Symbol) -> Value {
     let name = name_by_symbol(mrb, name);
-    read_named(&held.0, &name).map_or_else(|| qnil().as_value(), |found| to_ruby(mrb, &found))
+    read_named(&held.as_variant(), &name)
+        .map_or_else(|| qnil().as_value(), |found| to_ruby(mrb, &found))
 }
 
 // Godot::Value#__get__(bound): the member `bound` reads, through the
 // engine's getter.
 fn get(mrb: &Mrb, held: &EngineValue, bound: &BoundMember) -> Value {
     bound
-        .read(&held.0)
+        .read(&held.as_variant())
         .map_or_else(|| qnil().as_value(), |found| to_ruby(mrb, &found))
 }
 
@@ -268,7 +327,7 @@ fn call(mrb: &Mrb, held: &EngineValue, name: Symbol, args: RArray) -> Result<Val
     let name = name_by_symbol(mrb, name);
     let args = to_arguments(mrb, args)?;
     let pointers: SmallVec<[_; 4]> = args.iter().map(Variant::var_sys).collect();
-    let mut receiver = held.0.clone();
+    let mut receiver = held.variant();
     // SAFETY: the name and argument pointers live for the call, which runs on
     // a copy of the value, so the Ruby value never changes.
     let outcome = super::run_engine_call(|answer, error| unsafe {
@@ -281,7 +340,7 @@ fn call(mrb: &Mrb, held: &EngineValue, name: Symbol, args: RArray) -> Result<Val
             error,
         )
     });
-    take_answer(mrb, outcome, held.0.get_type(), &name, &args)
+    take_answer(mrb, outcome, held.kind(), &name, &args)
 }
 
 // Godot::Value.__call_static__(name, args): the static method `name` of the
@@ -392,7 +451,7 @@ fn is_equal(mrb: &Mrb, held: &EngineValue, other: Value) -> Result<Value, Error>
         return Ok(false.into_value(mrb));
     }
     let other = <&EngineValue>::try_convert(other, mrb)?;
-    operate(mrb, held, VariantOperator::EQUAL, "==", &other.0)
+    operate(mrb, held, VariantOperator::EQUAL, "==", &other.as_variant())
 }
 
 // Godot::Value#-@: the engine's negation of the value.
@@ -428,6 +487,7 @@ fn operate(
     shown: &str,
     other: &Variant,
 ) -> Result<Value, Error> {
+    let value = held.as_variant();
     let mut valid = false as sys::GDExtensionBool;
     // SAFETY: the operands live for the call, and the engine initializes the
     // answer before writing either it or its reason for refusing.
@@ -435,7 +495,7 @@ fn operate(
         Variant::new_with_var_uninit(|answer| {
             sys::interface_fn!(variant_evaluate)(
                 op.ord() as sys::GDExtensionVariantOperator,
-                held.0.var_sys(),
+                value.var_sys(),
                 other.var_sys(),
                 answer,
                 ptr::addr_of_mut!(valid),
@@ -451,7 +511,7 @@ fn operate(
     }
     let message = format!(
         "Invalid operands '{}' and '{}' in operator '{shown}'.",
-        type_name(held.0.get_type()),
+        type_name(held.kind()),
         type_name(other.get_type())
     );
     Err(type_error(mrb, &message))
@@ -462,12 +522,12 @@ fn operate(
 fn hash(_mrb: &Mrb, held: &EngineValue) -> i64 {
     // SAFETY: the interface is initialized while the extension runs, and
     // the value lives for the call.
-    unsafe { sys::interface_fn!(variant_hash)(held.0.var_sys()) }
+    unsafe { sys::interface_fn!(variant_hash)(held.as_variant().var_sys()) }
 }
 
 // Godot::Value#to_s: the value as the engine prints it.
 fn to_s(mrb: &Mrb, held: &EngineValue) -> Value {
-    let printed = GString::from(&held.0.to_string()).to_string();
+    let printed = GString::from(&held.as_variant().to_string()).to_string();
     mrb.str_new(printed.as_bytes()).as_value()
 }
 
