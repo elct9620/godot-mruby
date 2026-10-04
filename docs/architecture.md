@@ -264,14 +264,25 @@ Godot asks every language for its stack as it prints, so the language never prin
 ```
 Ruby                          bridge                                engine
 node.position = v    ─►  EngineObject(Gd) ─► setter's bind ──►  the node
-Godot::Vector2.new   ─►  EngineValue ─► the engine's variant calls
+Godot::Vector2.new   ─►  EngineValue ─► typed operators or variant calls
 Godot.lerp(a, b, t)  ─►  one row of the utility table ─► godot::global
 method(:hurt)        ─►  Callable holding a realm key ─────►  kept by the engine
 any other object     ─►  RubyObject holding a realm key ───►  kept by the engine
 ◄── answers: data copied, objects shared; a script's node comes back as its Ruby object
 ```
 
-The `Godot` gem is all Ruby sees of the engine. An engine object carries the engine's object itself, so a reference-counted one lives while Ruby holds it; a value type carries a copy and never changes. What Ruby hands the engine that the engine keeps, it keeps as a key, released when the engine lets go. A Ruby class binds an engine method at its first call, by the hash the engine gives its signature. Later calls skip the engine's lookup by name. Only the engine's own classes are bound, since an extension's binds are freed when it unloads. A value type's member binds the engine's getter at its first read; the engine computes every value as GDScript does. What crosses, and how a refused call fails, is in `.spec/behavior/engine_classes.md`, `.spec/behavior/values.md` and `.spec/behavior/math.md`; what the instance relies on is in `.spec/contract/bridge.md`.
+The `Godot` gem is all Ruby sees of the engine. An engine object carries the engine's object itself, so a reference-counted one lives while Ruby holds it; a value type carries a copy and never changes. What Ruby hands the engine that the engine keeps, it keeps as a key, released when the engine lets go. A Ruby class binds an engine method at its first call, by the hash the engine gives its signature. Later calls skip the engine's lookup by name. Only the engine's own classes are bound, since an extension's binds are freed when it unloads. What crosses, and how a refused call fails, is in `.spec/behavior/engine_classes.md`, `.spec/behavior/values.md` and `.spec/behavior/math.md`; what the instance relies on is in `.spec/contract/bridge.md`.
+
+#### 2.6.1 Values
+
+A value type's value is held in one of two ways. Either way the engine computes it as GDScript does, so every supported Godot answers alike.
+
+| Value | Held as | Computed by |
+| --- | --- | --- |
+| `Vector2` | its components | the engine's typed operators; `x`, `y` in place |
+| any other | the engine's variant | variant calls; a member binds the getter |
+
+Vector2 is what games build and compute with most. Its division, modulo, power and methods still go through variant calls.
 
 ### 2.7 Snapshot
 
