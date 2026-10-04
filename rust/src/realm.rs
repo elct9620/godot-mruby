@@ -1203,6 +1203,23 @@ mod tests {
         assert_eq!(remembered.ok(), Some(0));
     }
 
+    // @behavior RE-008
+    #[test]
+    fn an_extensions_data_lasts_from_one_entry_to_the_next() {
+        let (_turn, _key) = held_thing();
+        #[derive(Default)]
+        struct Remembered(Cell<u32>);
+        enter(|realm| {
+            extension_data::<Remembered>(&realm.mrb).0.set(7);
+            Ok(())
+        })
+        .ok();
+
+        let remembered = enter(|realm| Ok(extension_data::<Remembered>(&realm.mrb).0.get()));
+
+        assert_eq!(remembered.ok(), Some(7));
+    }
+
     // @behavior RE-003
     #[test]
     fn an_entry_made_while_the_realm_opens_fails() {

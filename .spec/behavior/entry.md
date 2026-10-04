@@ -63,3 +63,11 @@ How a thread goes into the game's realm: one thread at a time is inside, and a t
 | Given | an extension's data, kept in the game's realm |
 | When | the realm closes and opens again |
 | Then | the extension is given new data, and nothing it kept in the closed realm |
+
+## `RE-008` An extension's data lasts from one entry to the next
+
+| Step | Statement |
+| --- | --- |
+| Given | an extension's data, kept in the game's realm |
+| When | a later entry into the same realm asks for data of the same type |
+| Then | the extension is given what it kept, so each type's data is made once for the realm |
