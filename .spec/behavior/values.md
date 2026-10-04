@@ -182,3 +182,11 @@ How a value crosses between Ruby and the engine, either way: data is copied and 
 | Given | a value of a type under `Godot` |
 | When | Ruby calls one of its engine methods with an argument the method cannot take |
 | Then | it raises `Godot::CallError` with the message GDScript reports for the same call |
+
+## `RV-023` A value responds to its members and methods
+
+| Step | Statement |
+| --- | --- |
+| Given | a value of a value type |
+| When | Ruby asks whether it responds to one of its members, one of its engine methods, and a name the type has neither of |
+| Then | it answers true for the member and the method, and false for the other name |

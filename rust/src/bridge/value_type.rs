@@ -9,7 +9,7 @@ use std::ptr;
 
 use beni::{
     DataType, Error, IntoValue, Module, Mrb, Object as _, RArray, RClass, RModule, ReprValue,
-    Symbol, TypedData, Value, method, value::qnil,
+    Symbol, TryConvert, TypedData, Value, method, value::qnil,
 };
 use godot::builtin::{GString, StringName, Variant, VariantOperator, VariantType};
 use godot::obj::EngineEnum;
@@ -79,10 +79,23 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     class.define_singleton_method(mrb, c"__construct__", method!(construct, 1))?;
     class.define_singleton_method(mrb, c"__call_static__", method!(call_static, 2))?;
     class.define_singleton_method(mrb, c"__constant__", method!(constant, 1))?;
+    class.define_private_method(mrb, c"__resolve__", method!(resolve, 1))?;
     class.define_private_method(mrb, c"__member__", method!(member, 1))?;
     class.define_private_method(mrb, c"__call__", method!(call, 2))?;
-    class.define_private_method(mrb, c"__operate__", method!(operate, 2))?;
     class.define_private_method(mrb, c"__hash__", method!(hash, 0))?;
+    class.define_method(mrb, c"+", method!(add, 1))?;
+    class.define_method(mrb, c"-", method!(subtract, 1))?;
+    class.define_method(mrb, c"*", method!(multiply, 1))?;
+    class.define_method(mrb, c"/", method!(divide, 1))?;
+    class.define_method(mrb, c"%", method!(modulo, 1))?;
+    class.define_method(mrb, c"**", method!(power, 1))?;
+    class.define_method(mrb, c"<", method!(less, 1))?;
+    class.define_method(mrb, c"<=", method!(less_equal, 1))?;
+    class.define_method(mrb, c">", method!(greater, 1))?;
+    class.define_method(mrb, c">=", method!(greater_equal, 1))?;
+    class.define_method(mrb, c"==", method!(is_equal, 1))?;
+    class.define_method(mrb, c"-@", method!(negate, 0))?;
+    class.define_method(mrb, c"+@", method!(keep_sign, 0))?;
     class.define_method(mrb, c"to_s", method!(to_s, 0))?;
     Ok(())
 }
@@ -178,16 +191,29 @@ fn construct(mrb: &Mrb, class: RClass, args: RArray) -> Result<Value, Error> {
     }
 }
 
-// Godot::Value#__member__(name): the member of that name in a one-element
-// array, or nil when the value has no such member.
-fn member(mrb: &Mrb, held: &EngineValue, name: Symbol) -> Value {
+// Godot::Value#__resolve__(name): :member when the value's type has a
+// member of that name, :method when it has a method of it, or nil.
+fn resolve(mrb: &Mrb, held: &EngineValue, name: Symbol) -> Result<Value, Error> {
     let name = name_by_symbol(mrb, name);
     let kind = held.0.get_type().ord as sys::GDExtensionVariantType;
     // SAFETY: the interface is initialized while the extension runs, and the
-    // name lives for the call.
-    if unsafe { sys::interface_fn!(variant_has_member)(kind, name.string_sys()) } == 0 {
-        return qnil().as_value();
-    }
+    // value and the name live for the calls.
+    let resolved = unsafe {
+        if sys::interface_fn!(variant_has_member)(kind, name.string_sys()) != 0 {
+            "member"
+        } else if sys::interface_fn!(variant_has_method)(held.0.var_sys(), name.string_sys()) != 0 {
+            "method"
+        } else {
+            return Ok(qnil().as_value());
+        }
+    };
+    Ok(Symbol::from(mrb.intern(resolved.as_bytes())?).as_value())
+}
+
+// Godot::Value#__member__(name): the member of that name, which the value's
+// type has.
+fn member(mrb: &Mrb, held: &EngineValue, name: Symbol) -> Value {
+    let name = name_by_symbol(mrb, name);
     // SAFETY: the interface is initialized while the extension runs, and the
     // type has the member, which `variant_get_named` writes.
     let found = unsafe {
@@ -202,15 +228,11 @@ fn member(mrb: &Mrb, held: &EngineValue, name: Symbol) -> Value {
             if valid == 0 { Err(()) } else { Ok(()) }
         })
     };
-    match found {
-        Ok(found) => mrb.ary_new_from_values(&[to_ruby(mrb, &found)]).as_value(),
-        Err(()) => qnil().as_value(),
-    }
+    found.map_or_else(|()| qnil().as_value(), |found| to_ruby(mrb, &found))
 }
 
-// Godot::Value#__call__(name, args): the engine method `name` of the value
-// called with `args`, in a one-element array, or nil when the type has no
-// such method.
+// Godot::Value#__call__(name, args): what the engine method `name`, which
+// the value's type has, answers for `args`.
 fn call(mrb: &Mrb, held: &EngineValue, name: Symbol, args: RArray) -> Result<Value, Error> {
     let name = name_by_symbol(mrb, name);
     let args = to_arguments(mrb, args)?;
@@ -228,7 +250,7 @@ fn call(mrb: &Mrb, held: &EngineValue, name: Symbol, args: RArray) -> Result<Val
             error,
         )
     });
-    wrap_answer(mrb, outcome, held.0.get_type(), &name, &args)
+    take_answer(mrb, outcome, held.0.get_type(), &name, &args)
 }
 
 // Godot::Value.__call_static__(name, args): the static method `name` of the
@@ -251,34 +273,37 @@ fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<V
             error,
         )
     });
-    wrap_answer(mrb, outcome, kind, &name, &args)
+    match outcome {
+        Err(error) if error.error == sys::GDEXTENSION_CALL_ERROR_INVALID_METHOD => {
+            Ok(qnil().as_value())
+        }
+        outcome => {
+            let answer = take_answer(mrb, outcome, kind, &name, &args)?;
+            Ok(mrb.ary_new_from_values(&[answer]).as_value())
+        }
+    }
 }
 
-// What a call of `method` on a value of type `kind` answered, in a
-// one-element array; nil for a method the type lacks, and the
-// Godot::CallError GDScript's wording gives any other failure.
-fn wrap_answer(
+// What a call of `method` on a value of type `kind` answered, or the
+// Godot::CallError GDScript's wording gives its failure.
+fn take_answer(
     mrb: &Mrb,
     outcome: Result<Variant, sys::GDExtensionCallError>,
     kind: VariantType,
     method: &StringName,
     args: &[Variant],
 ) -> Result<Value, Error> {
-    match outcome {
-        Ok(answer) => Ok(mrb.ary_new_from_values(&[to_ruby(mrb, &answer)]).as_value()),
-        Err(error) if error.error == sys::GDEXTENSION_CALL_ERROR_INVALID_METHOD => {
-            Ok(qnil().as_value())
-        }
-        Err(error) => {
+    outcome
+        .map(|answer| to_ruby(mrb, &answer))
+        .map_err(|error| {
             let message = super::object::describe_refusal(
                 &error,
                 &method.to_string(),
                 &type_name(kind),
                 args,
             );
-            Err(super::object::call_error(mrb, &message))
-        }
-    }
+            super::object::call_error(mrb, &message)
+        })
 }
 
 // Godot::Value.__constant__(name): the receiver's type's constant of that
@@ -304,31 +329,75 @@ fn constant(mrb: &Mrb, class: RClass, name: Symbol) -> Result<Value, Error> {
     })
 }
 
-// Godot::Value#__operate__(operator, other): what the engine's operator
-// answers for the value and `other`, or the TypeError GDScript's wording
-// gives an operator the engine lacks for them.
-fn operate(mrb: &Mrb, held: &EngineValue, operator: Symbol, other: Value) -> Result<Value, Error> {
-    let symbol = operator.name(mrb).unwrap_or_default();
-    let (op, shown) = match symbol.as_str() {
-        "+" => (VariantOperator::ADD, "+"),
-        "-" => (VariantOperator::SUBTRACT, "-"),
-        "*" => (VariantOperator::MULTIPLY, "*"),
-        "/" => (VariantOperator::DIVIDE, "/"),
-        "%" => (VariantOperator::MODULO, "%"),
-        "**" => (VariantOperator::POWER, "**"),
-        "==" => (VariantOperator::EQUAL, "=="),
-        "<" => (VariantOperator::LESS, "<"),
-        "<=" => (VariantOperator::LESS_EQUAL, "<="),
-        ">" => (VariantOperator::GREATER, ">"),
-        ">=" => (VariantOperator::GREATER_EQUAL, ">="),
-        "-@" => (VariantOperator::NEGATE, "unary-"),
-        "+@" => (VariantOperator::POSITIVE, "unary+"),
-        _ => (VariantOperator::MAX, symbol.as_str()),
-    };
-    let other = value::to_engine(mrb, other, 1).map_err(|reason| type_error(mrb, &reason))?;
-    match Variant::evaluate(&held.0, &other, op) {
-        Some(answer) if op != VariantOperator::MAX => Ok(to_ruby(mrb, &answer)),
-        _ => {
+// Each of the engine's operators a value answers, as Godot::Value's method
+// of that operator's Ruby name: what the operator answers for the value and
+// the other operand.
+macro_rules! operators {
+    ($($method:ident: $op:ident, $shown:literal;)*) => {$(
+        fn $method(mrb: &Mrb, held: &EngineValue, other: Value) -> Result<Value, Error> {
+            let other = value::to_engine(mrb, other, 1).map_err(|reason| type_error(mrb, &reason))?;
+            operate(mrb, held, VariantOperator::$op, $shown, &other)
+        }
+    )*};
+}
+
+operators! {
+    add: ADD, "+";
+    subtract: SUBTRACT, "-";
+    multiply: MULTIPLY, "*";
+    divide: DIVIDE, "/";
+    modulo: MODULO, "%";
+    power: POWER, "**";
+    less: LESS, "<";
+    less_equal: LESS_EQUAL, "<=";
+    greater: GREATER, ">";
+    greater_equal: GREATER_EQUAL, ">=";
+}
+
+// Godot::Value#==: whether `other` is a value the engine's equality finds
+// equal to this one; any other object is not.
+fn is_equal(mrb: &Mrb, held: &EngineValue, other: Value) -> Result<Value, Error> {
+    if !other.is_kind_of(mrb, EngineValue::class(mrb)) {
+        return Ok(false.into_value(mrb));
+    }
+    let other = <&EngineValue>::try_convert(other, mrb)?;
+    operate(mrb, held, VariantOperator::EQUAL, "==", &other.0)
+}
+
+// Godot::Value#-@: the engine's negation of the value.
+fn negate(mrb: &Mrb, held: &EngineValue) -> Result<Value, Error> {
+    operate(
+        mrb,
+        held,
+        VariantOperator::NEGATE,
+        "unary-",
+        &Variant::nil(),
+    )
+}
+
+// Godot::Value#+@: the engine's unary plus of the value.
+fn keep_sign(mrb: &Mrb, held: &EngineValue) -> Result<Value, Error> {
+    operate(
+        mrb,
+        held,
+        VariantOperator::POSITIVE,
+        "unary+",
+        &Variant::nil(),
+    )
+}
+
+// What the engine's operator `op` answers for the value and `other`, or the
+// TypeError GDScript's wording gives an operator the engine lacks for them.
+fn operate(
+    mrb: &Mrb,
+    held: &EngineValue,
+    op: VariantOperator,
+    shown: &str,
+    other: &Variant,
+) -> Result<Value, Error> {
+    match Variant::evaluate(&held.0, other, op) {
+        Some(answer) => Ok(to_ruby(mrb, &answer)),
+        None => {
             let message = format!(
                 "Invalid operands '{}' and '{}' in operator '{shown}'.",
                 type_name(held.0.get_type()),

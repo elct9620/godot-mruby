@@ -58,6 +58,15 @@ class ValueTypesTest < Minitest::Test
     assert_equal "(1.0, 2.0)", Godot::Vector2.new(1, 2).to_s
   end
 
+  # @behavior RV-023
+  def test_a_value_responds_to_its_members_and_methods
+    vector = Godot::Vector3.new(1, 2, 3)
+
+    assert_respond_to vector, :z
+    assert_respond_to vector, :cross
+    refute_respond_to vector, :fly
+  end
+
   # @behavior RV-022
   def test_a_values_method_the_engine_refuses_raises_call_error_as_gdscript_reports_it
     error = assert_raises(Godot::CallError) { Godot::Vector2.new(1, 2).distance_to("x") }

@@ -361,13 +361,6 @@ module Godot
       def const_added(name); end
     end
 
-    %i[+ - * / % ** < <= > >= -@ +@].each do |operator|
-      define_method(operator) { |*other| __operate__(operator, other.first) }
-    end
-
-    def ==(other)
-      other.is_a?(Value) && __operate__(:==, other)
-    end
     alias eql? ==
 
     def hash
@@ -378,20 +371,21 @@ module Godot
       "#<#{self.class} #{self}>"
     end
 
+    # A member or engine method of the value's type is defined on its class
+    # at the first call, so later calls skip method_missing.
     def method_missing(name, *args, &block)
       raise FrozenError, "can't modify #{self.class}: build a new one instead" if name.to_s[-1] == "="
 
-      found = __member__(name) if args.empty?
-      return found.first if found
-
-      answered = __call__(name, args)
-      return super if answered.nil?
-
-      answered.first
+      case __resolve__(name)
+      when :member then self.class.__send__(:define_method, name) { __member__(name) }
+      when :method then self.class.__send__(:define_method, name) { |*arguments| __call__(name, arguments) }
+      else return super
+      end
+      __send__(name, *args, &block)
     end
 
     def respond_to_missing?(name, include_private = false)
-      !__member__(name).nil? || super
+      !__resolve__(name).nil? || super
     end
   end
 end
