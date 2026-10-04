@@ -190,3 +190,11 @@ How a value crosses between Ruby and the engine, either way: data is copied and 
 | Given | a value of a value type |
 | When | Ruby asks whether it responds to one of its members, one of its engine methods, and a name the type has neither of |
 | Then | it answers true for the member and the method, and false for the other name |
+
+## `RV-024` A division or modulo by zero the engine refuses raises ZeroDivisionError as GDScript reports it
+
+| Step | Statement |
+| --- | --- |
+| Given | an integer vector, and one with a zero component |
+| When | Ruby divides the first by the second, or takes its modulo |
+| Then | it raises `ZeroDivisionError` with the message GDScript reports for the same operator |

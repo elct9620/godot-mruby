@@ -766,6 +766,13 @@ pub(super) fn type_error(mrb: &Mrb, message: &str) -> Error {
     }
 }
 
+pub(super) fn zero_division_error(mrb: &Mrb, message: &str) -> Error {
+    match mrb.exc_get(c"ZeroDivisionError") {
+        Ok(class) => Error::new(mrb, class, message),
+        Err(error) => error,
+    }
+}
+
 fn argument_error(mrb: &Mrb, message: &str) -> Error {
     match mrb.exc_get(c"ArgumentError") {
         Ok(class) => Error::new(mrb, class, message),

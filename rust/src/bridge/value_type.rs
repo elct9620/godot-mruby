@@ -16,7 +16,7 @@ use godot::obj::EngineEnum;
 use godot::sys;
 use smallvec::SmallVec;
 
-use super::object::{name_by_symbol, to_arguments, type_error};
+use super::object::{name_by_symbol, to_arguments, type_error, zero_division_error};
 use super::value::{self, ToRuby};
 use crate::hint::type_name;
 use crate::realm;
@@ -386,8 +386,10 @@ fn keep_sign(mrb: &Mrb, held: &EngineValue) -> Result<Value, Error> {
     )
 }
 
-// What the engine's operator `op` answers for the value and `other`, or the
-// TypeError GDScript's wording gives an operator the engine lacks for them.
+// What the engine's operator `op` answers for the value and `other`. A
+// refusal raises as GDScript words it: with the reason the engine gives,
+// which for a value's operator is a division or modulo by zero, or else as
+// the TypeError of an operator the engine lacks for them.
 fn operate(
     mrb: &Mrb,
     held: &EngineValue,
@@ -395,17 +397,33 @@ fn operate(
     shown: &str,
     other: &Variant,
 ) -> Result<Value, Error> {
-    match Variant::evaluate(&held.0, other, op) {
-        Some(answer) => Ok(to_ruby(mrb, &answer)),
-        None => {
-            let message = format!(
-                "Invalid operands '{}' and '{}' in operator '{shown}'.",
-                type_name(held.0.get_type()),
-                type_name(other.get_type())
-            );
-            Err(type_error(mrb, &message))
-        }
+    let mut valid = false as sys::GDExtensionBool;
+    // SAFETY: the operands live for the call, and the engine initializes the
+    // answer before writing either it or its reason for refusing.
+    let answer = unsafe {
+        Variant::new_with_var_uninit(|answer| {
+            sys::interface_fn!(variant_evaluate)(
+                op.ord() as sys::GDExtensionVariantOperator,
+                held.0.var_sys(),
+                other.var_sys(),
+                answer,
+                ptr::addr_of_mut!(valid),
+            )
+        })
+    };
+    if valid != 0 {
+        return Ok(to_ruby(mrb, &answer));
     }
+    if answer.get_type() == VariantType::STRING {
+        let message = format!("{answer} in operator '{shown}'.");
+        return Err(zero_division_error(mrb, &message));
+    }
+    let message = format!(
+        "Invalid operands '{}' and '{}' in operator '{shown}'.",
+        type_name(held.0.get_type()),
+        type_name(other.get_type())
+    );
+    Err(type_error(mrb, &message))
 }
 
 // Godot::Value#__hash__: the engine's hash of the value, which equal values

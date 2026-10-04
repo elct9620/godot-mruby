@@ -45,6 +45,33 @@ class ValueTypesTest < Minitest::Test
     assert_equal "Invalid operands 'Vector2' and 'String' in operator '+'.", error.message
   end
 
+  # @behavior RV-013
+  def test_a_value_answers_a_member_the_same_each_time_it_is_read
+    vector = Godot::Vector2.new(3, 4)
+
+    assert_equal [4.0, 4.0], [vector.y, vector.y]
+  end
+
+  # @behavior RV-014
+  def test_a_value_answers_an_operator_the_same_each_time_it_is_applied
+    vector = Godot::Vector2.new(3, 4)
+    other = Godot::Vector2.new(1, 2)
+
+    assert_equal [Godot::Vector2.new(2, 2), Godot::Vector2.new(2, 2)], [vector - other, vector - other]
+  end
+
+  # @behavior RV-024
+  def test_a_division_or_modulo_by_zero_raises_zero_division_error_as_gdscript_reports_it
+    vector = Godot::Vector2i.new(4, 6)
+    zero = Godot::Vector2i.new(0, 1)
+
+    divided = assert_raises(ZeroDivisionError) { vector / zero }
+    remainder = assert_raises(ZeroDivisionError) { vector % zero }
+
+    assert_equal "Division by zero error in operator '/'.", divided.message
+    assert_equal "Modulo by zero error in operator '%'.", remainder.message
+  end
+
   # @behavior RV-015
   def test_a_value_cannot_be_changed
     vector = Godot::Vector2.new(1, 2)
