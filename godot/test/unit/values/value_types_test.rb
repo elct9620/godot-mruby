@@ -129,6 +129,15 @@ class ValueTypesTest < Minitest::Test
     assert_respond_to Godot::Vector2.new(1, 2), :length
   end
 
+  # @behavior RV-025
+  def test_equal_values_are_one_hash_key
+    table = { Godot::Vector2.new(1, 2) => :vector, Godot::Color.new(1, 0, 0) => :color }
+
+    assert_equal :vector, table[Godot::Vector2.new(1, 2)]
+    assert_equal :color, table[Godot::Color.new(1, 0, 0)]
+    assert_nil table[Godot::Vector2i.new(1, 2)]
+  end
+
   # @behavior RV-022
   def test_a_values_method_the_engine_refuses_raises_call_error_as_gdscript_reports_it
     error = assert_raises(Godot::CallError) { Godot::Vector2.new(1, 2).distance_to("x") }

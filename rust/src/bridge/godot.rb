@@ -361,7 +361,11 @@ module Godot
       def const_added(name); end
     end
 
-    alias eql? ==
+    # A Hash key matches only a value of its own type, as 4 never matches
+    # 4.0, so keys of two types meet without the engine refusing to compare.
+    def eql?(other)
+      other.instance_of?(self.class) && self == other
+    end
 
     def hash
       __hash__

@@ -198,3 +198,11 @@ How a value crosses between Ruby and the engine, either way: data is copied and 
 | Given | an integer vector, and one with a zero component |
 | When | Ruby divides the first by the second, or takes its modulo |
 | Then | it raises `ZeroDivisionError` with the message GDScript reports for the same operator |
+
+## `RV-025` Equal values are one Hash key
+
+| Step | Statement |
+| --- | --- |
+| Given | a Hash keyed by a value of a value type |
+| When | Ruby looks it up by an equal value built apart, and by a value of another type |
+| Then | the equal value finds the entry, since it answers `eql?` and the same `hash`, and the other type finds none |
