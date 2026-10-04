@@ -55,6 +55,10 @@ class ValueTypesTest < Minitest::Test
     assert_equal Godot::Vector2.new(4, 6), vector + Godot::Vector2.new(3, 4)
     assert_equal Godot::Vector2.new(2, 4), vector * 2
     assert_equal Godot::Vector2.new(-1, -2), -vector
+    assert_equal vector, +vector
+    assert_equal Godot::Vector2.new(0.5, 1), vector * 0.5
+    assert_operator vector, :<, Godot::Vector2.new(1, 3)
+    assert_operator vector, :>=, Godot::Vector2.new(0, 9)
     refute_equal vector, Godot::Vector2.new(2, 1)
     error = assert_raises(TypeError) { vector + "x" }
     assert_equal "Invalid operands 'Vector2' and 'String' in operator '+'.", error.message
