@@ -28,6 +28,7 @@ class ValueTypesTest < Minitest::Test
 
     assert_equal 3.0, vector.x
     assert_equal vector, Godot::Rect2.new(1, 2, 3, 4).size
+    assert_equal vector, Godot::Transform2D.new(0.0, vector).origin
     assert_equal 5.0, vector.length
     assert_equal Godot::Vector2.new(0.6, 0.8), vector.normalized
     assert_equal Godot::Vector2.new(0, 0), Godot::Vector2::ZERO
