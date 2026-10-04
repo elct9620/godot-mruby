@@ -27,6 +27,7 @@ class ValueTypesTest < Minitest::Test
     vector = Godot::Vector2.new(3, 4)
 
     assert_equal 3.0, vector.x
+    assert_equal vector, Godot::Rect2.new(1, 2, 3, 4).size
     assert_equal 5.0, vector.length
     assert_equal Godot::Vector2.new(0.6, 0.8), vector.normalized
     assert_equal Godot::Vector2.new(0, 0), Godot::Vector2::ZERO
@@ -64,6 +65,8 @@ class ValueTypesTest < Minitest::Test
   def test_a_division_or_modulo_by_zero_raises_zero_division_error_as_gdscript_reports_it
     vector = Godot::Vector2i.new(4, 6)
     zero = Godot::Vector2i.new(0, 1)
+    assert_equal Godot::Vector2i.new(2, 3), vector / Godot::Vector2i.new(2, 2)
+    assert_equal Godot::Vector2i.new(0, 0), vector % Godot::Vector2i.new(2, 2)
 
     divided = assert_raises(ZeroDivisionError) { vector / zero }
     remainder = assert_raises(ZeroDivisionError) { vector % zero }

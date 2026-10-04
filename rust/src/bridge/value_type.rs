@@ -16,6 +16,7 @@ use godot::obj::EngineEnum;
 use godot::sys;
 use smallvec::SmallVec;
 
+use super::bound_member::BoundMember;
 use super::object::{name_by_symbol, to_arguments, type_error, zero_division_error};
 use super::value::{self, ToRuby};
 use crate::hint::type_name;
@@ -81,6 +82,7 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     class.define_singleton_method(mrb, c"__constant__", method!(constant, 1))?;
     class.define_private_method(mrb, c"__resolve__", method!(resolve, 1))?;
     class.define_private_method(mrb, c"__member__", method!(member, 1))?;
+    class.define_private_method(mrb, c"__get__", method!(get, 1))?;
     class.define_private_method(mrb, c"__call__", method!(call, 2))?;
     class.define_private_method(mrb, c"__hash__", method!(hash, 0))?;
     class.define_method(mrb, c"+", method!(add, 1))?;
@@ -191,44 +193,62 @@ fn construct(mrb: &Mrb, class: RClass, args: RArray) -> Result<Value, Error> {
     }
 }
 
-// Godot::Value#__resolve__(name): :member when the value's type has a
-// member of that name, :method when it has a method of it, or nil.
+// Godot::Value#__resolve__(name): [:member, bound] when the value's type
+// has a member of that name, with the member bound through the engine's
+// getter, or nil in its place when there is none; :method when the type
+// has a method of that name; or nil.
 fn resolve(mrb: &Mrb, held: &EngineValue, name: Symbol) -> Result<Value, Error> {
     let name = name_by_symbol(mrb, name);
     let kind = held.0.get_type().ord as sys::GDExtensionVariantType;
     // SAFETY: the interface is initialized while the extension runs, and the
-    // value and the name live for the calls.
-    let resolved = unsafe {
-        if sys::interface_fn!(variant_has_member)(kind, name.string_sys()) != 0 {
-            "member"
-        } else if sys::interface_fn!(variant_has_method)(held.0.var_sys(), name.string_sys()) != 0 {
-            "method"
-        } else {
-            return Ok(qnil().as_value());
-        }
-    };
-    Ok(Symbol::from(mrb.intern(resolved.as_bytes())?).as_value())
+    // name lives for the call.
+    if unsafe { sys::interface_fn!(variant_has_member)(kind, name.string_sys()) } != 0 {
+        let member = Symbol::from(mrb.intern(b"member")?).as_value();
+        let bound = read_named(&held.0, &name)
+            .and_then(|read| BoundMember::find(&held.0, &name, &read))
+            .map_or_else(|| qnil().as_value(), |bound| mrb.wrap(bound).as_value());
+        return Ok(mrb.ary_new_from_values(&[member, bound]).as_value());
+    }
+    // SAFETY: the interface is initialized while the extension runs, and the
+    // value and the name live for the call.
+    if unsafe { sys::interface_fn!(variant_has_method)(held.0.var_sys(), name.string_sys()) } != 0 {
+        return Ok(Symbol::from(mrb.intern(b"method")?).as_value());
+    }
+    Ok(qnil().as_value())
 }
 
 // Godot::Value#__member__(name): the member of that name, which the value's
 // type has.
 fn member(mrb: &Mrb, held: &EngineValue, name: Symbol) -> Value {
     let name = name_by_symbol(mrb, name);
-    // SAFETY: the interface is initialized while the extension runs, and the
-    // type has the member, which `variant_get_named` writes.
-    let found = unsafe {
+    read_named(&held.0, &name).map_or_else(|| qnil().as_value(), |found| to_ruby(mrb, &found))
+}
+
+// Godot::Value#__get__(bound): the member `bound` reads, through the
+// engine's getter.
+fn get(mrb: &Mrb, held: &EngineValue, bound: &BoundMember) -> Value {
+    bound
+        .read(&held.0)
+        .map_or_else(|| qnil().as_value(), |found| to_ruby(mrb, &found))
+}
+
+// The member `name` of `value`, as the engine reads it by name.
+fn read_named(value: &Variant, name: &StringName) -> Option<Variant> {
+    // SAFETY: the interface is initialized while the extension runs, and
+    // `variant_get_named` writes the member when it reports it valid.
+    unsafe {
         Variant::new_with_var_uninit_result(|found| {
             let mut valid = false as sys::GDExtensionBool;
             sys::interface_fn!(variant_get_named)(
-                held.0.var_sys(),
+                value.var_sys(),
                 name.string_sys(),
                 found,
                 ptr::addr_of_mut!(valid),
             );
             if valid == 0 { Err(()) } else { Ok(()) }
         })
-    };
-    found.map_or_else(|()| qnil().as_value(), |found| to_ruby(mrb, &found))
+    }
+    .ok()
 }
 
 // Godot::Value#__call__(name, args): what the engine method `name`, which

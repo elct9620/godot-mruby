@@ -12,6 +12,7 @@ use godot::sys;
 
 use crate::{compiler, log};
 
+mod bound_member;
 mod bound_method;
 mod name_key;
 mod object;

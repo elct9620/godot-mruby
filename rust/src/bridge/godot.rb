@@ -376,8 +376,14 @@ module Godot
     def method_missing(name, *args, &block)
       raise FrozenError, "can't modify #{self.class}: build a new one instead" if name.to_s[-1] == "="
 
-      case __resolve__(name)
-      when :member then self.class.__send__(:define_method, name) { __member__(name) }
+      kind, bound = __resolve__(name)
+      case kind
+      when :member
+        if bound
+          self.class.__send__(:define_method, name) { __get__(bound) }
+        else
+          self.class.__send__(:define_method, name) { __member__(name) }
+        end
       when :method then self.class.__send__(:define_method, name) { |*arguments| __call__(name, arguments) }
       else return super
       end
