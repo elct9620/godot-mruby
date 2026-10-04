@@ -8,6 +8,15 @@ class ValueTypesTest < Minitest::Test
     assert_equal Godot::Vector2.new(1, 2), node.position
   end
 
+  # @behavior RV-010
+  def test_another_value_type_crosses_as_a_value_of_its_class
+    node = autofree(Godot::Node2D.new)
+    node.modulate = Godot::Color.new(1, 0, 0)
+
+    assert_instance_of Godot::Color, node.modulate
+    assert_equal Godot::Color.new(1, 0, 0), node.modulate
+  end
+
   # @behavior RV-011
   def test_ruby_builds_a_value_with_the_engines_constructors
     assert_equal Godot::Vector2.new(3, 4), Godot::Vector2.new(Godot::Vector2i.new(3, 4))
@@ -20,6 +29,8 @@ class ValueTypesTest < Minitest::Test
     error = assert_raises(Godot::CallError) { Godot::Vector2.new("x") }
 
     assert_equal "Invalid call. Nonexistent 'Vector2' constructor.", error.message
+    other = assert_raises(Godot::CallError) { Godot::Vector2i.new("x") }
+    assert_equal "Invalid call. Nonexistent 'Vector2i' constructor.", other.message
   end
 
   # @behavior RV-013
@@ -33,6 +44,8 @@ class ValueTypesTest < Minitest::Test
     assert_equal Godot::Vector2.new(0.6, 0.8), vector.normalized
     assert_equal Godot::Vector2.new(0, 0), Godot::Vector2::ZERO
     assert_equal Godot::Color.new(1, 0, 0), Godot::Color.from_rgba8(255, 0, 0)
+    assert_equal 3, Godot::Vector2i.new(3, 4).x
+    assert_equal 7.0, Godot::Vector3.new(2, 3, 6).length
   end
 
   # @behavior RV-014
@@ -45,6 +58,18 @@ class ValueTypesTest < Minitest::Test
     refute_equal vector, Godot::Vector2.new(2, 1)
     error = assert_raises(TypeError) { vector + "x" }
     assert_equal "Invalid operands 'Vector2' and 'String' in operator '+'.", error.message
+  end
+
+  # @behavior RV-014
+  def test_another_value_type_answers_the_engines_operators
+    vector = Godot::Vector3.new(1, 2, 3)
+
+    assert_equal Godot::Vector3.new(2, 4, 6), vector + vector
+    assert_equal Godot::Vector3.new(2, 4, 6), vector * 2
+    assert_equal Godot::Vector3.new(-1, -2, -3), -vector
+    refute_equal vector, Godot::Vector3.new(3, 2, 1)
+    error = assert_raises(TypeError) { vector + "x" }
+    assert_equal "Invalid operands 'Vector3' and 'String' in operator '+'.", error.message
   end
 
   # @behavior RV-013
@@ -82,11 +107,15 @@ class ValueTypesTest < Minitest::Test
 
     assert_raises(FrozenError) { vector.y = 0 }
     assert_equal 2.0, vector.y
+    other = Godot::Vector3.new(1, 2, 3)
+    assert_raises(FrozenError) { other.z = 0 }
+    assert_equal 3.0, other.z
   end
 
   # @behavior RV-016
   def test_a_value_prints_as_the_engine_prints_it
     assert_equal "(1.0, 2.0)", Godot::Vector2.new(1, 2).to_s
+    assert_equal "(1, 2)", Godot::Vector2i.new(1, 2).to_s
   end
 
   # @behavior RV-023
@@ -96,6 +125,8 @@ class ValueTypesTest < Minitest::Test
     assert_respond_to vector, :z
     assert_respond_to vector, :cross
     refute_respond_to vector, :fly
+    assert_respond_to Godot::Vector2.new(1, 2), :x
+    assert_respond_to Godot::Vector2.new(1, 2), :length
   end
 
   # @behavior RV-022

@@ -46,7 +46,7 @@ class ValuesTest < Minitest::Test
 
   # @behavior RV-005
   def test_an_array_and_a_hash_cross_as_copies_of_their_elements
-    list = [1, "two", [:three]]
+    list = [1, "two", [:three], Godot::Vector2.new(1, 2), Godot::Color.new(1, 0, 0)]
     table = { "one" => 1, two: [2.0] }
 
     assert_equal list, round_trip(list)
