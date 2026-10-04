@@ -135,8 +135,9 @@ struct Bookkeeping {
     spellings: RefCell<HashMap<Vec<String>, Symbol>>,
     // The symbol of each method name Rust has sent, interned once.
     method_symbols: RefCell<HashMap<String, Symbol>>,
-    // What each extension keeps for the realm, by its type.
-    extension_data: RefCell<HashMap<TypeId, Box<dyn Any + Send>>>,
+    // What each extension keeps for the realm, by its type: a handful of
+    // types, so comparing each one's id beats hashing it.
+    extension_data: RefCell<Vec<(TypeId, Box<dyn Any + Send>)>>,
 }
 
 // The realm's outermost Ruby while it runs, forgotten once it returns or
@@ -403,13 +404,20 @@ pub fn object(mrb: &Mrb, key: Key) -> Option<Value> {
 /// remembers of a realm outlives it.
 pub fn extension_data<T: Default + Send + 'static>(mrb: &Mrb) -> &T {
     let mut data = bookkeeping(mrb).extension_data.borrow_mut();
-    let kept: *const T = data
-        .entry(TypeId::of::<T>())
-        .or_insert_with(|| Box::new(T::default()))
+    let id = TypeId::of::<T>();
+    let index = match data.iter().position(|(kept, _)| *kept == id) {
+        Some(index) => index,
+        None => {
+            data.push((id, Box::new(T::default())));
+            data.len() - 1
+        }
+    };
+    let kept: *const T = data[index]
+        .1
         .downcast_ref::<T>()
         .expect("a type's data is kept under its own type");
     // SAFETY: no entry is replaced or removed while the realm is open, and a
-    // Box keeps what it holds in place as the map grows, so the value lives
+    // Box keeps what it holds in place as the list grows, so the value lives
     // as long as the bookkeeping `mrb` lends.
     unsafe { &*kept }
 }
