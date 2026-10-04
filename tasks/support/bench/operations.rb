@@ -16,7 +16,8 @@ module Bench
     TICKERS = { ruby: "res://src/ticker.rb", gdscript: "res://ops/ticker.gd" }.freeze
     CALLBACK = "res://ops/callback.tscn"
     # The calls the scenes time, as they print them.
-    CALLS = %w[loop ruby_call engine_call position_get position_set vector_new vector_add vector_x callback].freeze
+    CALLS = %w[loop ruby_call engine_call position_get position_set vector_new color_new vector_add vector_x
+               callback].freeze
     TIMING = /^op (\w+) ([\d.]+)$/
     # Frames past which a scene that never quits is stopped: the op scenes
     # time everything as they become ready, the callback scene in 100 frames.

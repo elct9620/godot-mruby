@@ -33,6 +33,10 @@ func _ready() -> void:
 	report("vector_new", started)
 	started = Time.get_ticks_usec()
 	for i in N:
+		var color := Color(1, 0, 0)
+	report("color_new", started)
+	started = Time.get_ticks_usec()
+	for i in N:
 		var sum := v + w
 	report("vector_add", started)
 	started = Time.get_ticks_usec()
