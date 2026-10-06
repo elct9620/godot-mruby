@@ -38,7 +38,12 @@ impl Gem for Godot {
             method!(engine_superclass, 1),
         )?;
         godot.define_singleton_method(mrb, c"__utilities__", method!(utility::utilities, 0))?;
-        godot.define_singleton_method(mrb, c"__utility__", method!(utility::utility, 2))?;
+        godot.define_singleton_method(mrb, c"__utility__", method!(utility::utility, -1))?;
+        godot.define_singleton_method(
+            mrb,
+            c"__apply_utility__",
+            method!(utility::apply_utility, 2),
+        )?;
         object::define(mrb, godot)?;
         value_type::define(mrb, godot)?;
         compiler::run(

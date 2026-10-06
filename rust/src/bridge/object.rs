@@ -21,7 +21,7 @@ use godot::register::info::PropertyHint;
 use godot::sys;
 use smallvec::SmallVec;
 
-use super::bound_method::BoundMethod;
+use super::bound_method::{Arity, BoundMethod};
 use super::name_key::NameKey;
 use super::value::{self, ToRuby};
 use crate::game;
@@ -55,6 +55,12 @@ unsafe impl TypedData for EngineObject {
     }
 }
 
+// Godot::Object::OMITTED, which an engine method's body passes for an
+// optional argument the call left out, so the engine applies its default;
+// the constant keeps it alive.
+#[derive(Default)]
+struct Omitted(Cell<Option<Value>>);
+
 // Godot::Object, found once for a realm and kept for it.
 #[derive(Default)]
 struct ObjectClass(Cell<Option<RClass>>);
@@ -76,9 +82,14 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     object.define_singleton_method(mrb, c"__declare_heading__", method!(declare_heading, 3))?;
     object.define_private_method(mrb, c"__resolve__", method!(resolve, 1))?;
     object.define_private_method(mrb, c"__call__", method!(call, 2))?;
-    object.define_private_method(mrb, c"__call_bound__", method!(call_bound, 2))?;
+    object.define_private_method(mrb, c"__call_bound__", method!(call_bound, -1))?;
+    object.define_private_method(mrb, c"__apply_bound__", method!(apply_bound, 2))?;
+    object.define_singleton_method(mrb, c"__shape__", method!(shape, 1))?;
     object.define_private_method(mrb, c"__instance_id__", method!(instance_id, 0))?;
     object.define_private_method(mrb, c"__label__", method!(label, 0))?;
+    let omitted = mrb.object_class().new_instance(mrb, &[])?;
+    object.const_set(mrb, c"OMITTED", omitted)?;
+    realm::extension_data::<Omitted>(mrb).0.set(Some(omitted));
     Ok(())
 }
 
@@ -219,23 +230,61 @@ fn resolve(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
         .as_value())
 }
 
-// Godot::Object#__call_bound__(bound, args): calls the engine method
-// `bound` with `args` and answers what it returns. The receiver's Ruby class
-// was given `bound` for the engine class it extends, so the receiver's
-// engine object is of that class or one extending it.
-fn call_bound(
+// Godot::Object#__call_bound__(bound, *args): calls the engine method
+// `bound` with the arguments given, those after the last one given left to
+// their defaults, and answers what it returns.
+fn call_bound(mrb: &Mrb, held: &EngineObject, args: &[Value]) -> Result<Value, Error> {
+    let Some((&bound, args)) = args.split_first() else {
+        return Err(argument_error(mrb, &count_message(0, 1)));
+    };
+    let bound = <&BoundMethod>::try_convert(bound, mrb)?;
+    let omitted = realm::extension_data::<Omitted>(mrb).0.get();
+    let given = args
+        .iter()
+        .rposition(|arg| omitted.is_none_or(|omitted| !arg.is_equal(mrb, omitted)))
+        .map_or(0, |last| last + 1);
+    call_bind(mrb, held, bound, args[..given].iter().copied())
+}
+
+// Godot::Object#__apply_bound__(bound, args): calls the engine method
+// `bound` with the arguments in `args`, for a method taking any number.
+fn apply_bound(
     mrb: &Mrb,
     held: &EngineObject,
     bound: &BoundMethod,
     args: RArray,
 ) -> Result<Value, Error> {
+    call_bind(mrb, held, bound, args.entries(mrb))
+}
+
+// Calls the engine method `bound` with `args`. The receiver's Ruby class was
+// given `bound` for the engine class it extends, so the receiver's engine
+// object is of that class or one extending it.
+fn call_bind(
+    mrb: &Mrb,
+    held: &EngineObject,
+    bound: &BoundMethod,
+    args: impl IntoIterator<Item = Value>,
+) -> Result<Value, Error> {
     let object = held.live_object(mrb, bound.name())?;
-    let args = to_arguments(mrb, args.entries(mrb))?;
+    let args = to_arguments(mrb, args)?;
     let answer = bound.call(&object, &args).map_err(|error| {
         let base = object.get_class().to_string();
-        refusal_error(mrb, &error, bound.name(), &base, &args)
+        refusal_error(mrb, &error, bound.name(), &base, &args, Some(bound.arity()))
     })?;
     ruby_answer(mrb, &answer)
+}
+
+// Godot::Object.__shape__(bound): how many arguments the engine method
+// `bound` requires and how many more it takes, or nil when it takes any
+// number.
+fn shape(mrb: &Mrb, _class: RClass, bound: &BoundMethod) -> Value {
+    let arity = bound.arity();
+    if arity.is_vararg {
+        return qnil().as_value();
+    }
+    let counts = [arity.required, arity.optional].map(|count| (count as i64).into_value(mrb));
+    mrb.ary_new_from_values(&counts).as_value()
 }
 
 // Godot::Object#__call__(name, args): calls the engine method `name` with
@@ -683,12 +732,17 @@ impl EngineObject {
 
 // The error a call the engine refused raises, as `refusal_error` sorts it.
 // gdext hands the engine's reason only as text, so the expected count, the
-// argument and the types are read back from it.
+// argument and the types are read back from it; the count names those the
+// method requires, as the class database lists them.
 fn call_refusal(mrb: &Mrb, error: &CallError, base: &str, method: &str, given: usize) -> Error {
     let reason = error.message(false);
     let reason = reason.rsplit("Reason: ").next().unwrap_or_default();
     if let Some(expected) = parse_parameter_count(reason) {
-        argument_error(mrb, &count_message(given, expected))
+        let message = Arity::find(base, method).map_or_else(
+            || count_message(given, expected),
+            |arity| count_message(given, arity.required),
+        );
+        argument_error(mrb, &message)
     } else if let Some((argument, from, to)) = conversion(reason) {
         type_error(mrb, &type_message(method, base, argument, &from, &to))
     } else {
@@ -701,7 +755,8 @@ fn call_refusal(mrb: &Mrb, error: &CallError, base: &str, method: &str, given: u
 
 /// The error a call of `method` on `base` with `args` the engine refused
 /// with `error` raises: ArgumentError for the number of arguments, worded as
-/// Ruby words it; TypeError for an argument's type, worded as GDScript's
+/// mruby words it, naming those the method's `arity` requires when it is
+/// known; TypeError for an argument's type, worded as GDScript's
 /// untyped call; Godot::CallError for what Ruby has no error for.
 pub(super) fn refusal_error(
     mrb: &Mrb,
@@ -709,6 +764,7 @@ pub(super) fn refusal_error(
     method: &str,
     base: &str,
     args: &[Variant],
+    arity: Option<Arity>,
 ) -> Error {
     match error.error {
         sys::GDEXTENSION_CALL_ERROR_INVALID_ARGUMENT => {
@@ -724,7 +780,8 @@ pub(super) fn refusal_error(
         }
         sys::GDEXTENSION_CALL_ERROR_TOO_MANY_ARGUMENTS
         | sys::GDEXTENSION_CALL_ERROR_TOO_FEW_ARGUMENTS => {
-            argument_error(mrb, &count_message(args.len(), error.expected))
+            let required = arity.map_or(error.expected as usize, |arity| arity.required);
+            argument_error(mrb, &count_message(args.len(), required))
         }
         _ => call_error(
             mrb,

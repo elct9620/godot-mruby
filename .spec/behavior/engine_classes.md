@@ -85,8 +85,8 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Step | Statement |
 | --- | --- |
 | Given | an engine object |
-| When | Ruby calls one of its engine methods with arguments |
-| Then | the engine runs the method with those arguments and Ruby gets what it answers |
+| When | Ruby calls one of its engine methods with arguments, leaving out any it has defaults for |
+| Then | the engine runs the method with those arguments and its defaults for those left out, and Ruby gets what it answers |
 
 ## `RG-011` A name the engine object has no method for raises NoMethodError
 
@@ -149,8 +149,8 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Step | Statement |
 | --- | --- |
 | Given | an engine object |
-| When | Ruby calls one of its engine methods with too few arguments, or too many |
-| Then | it raises `ArgumentError` saying, as Ruby does, how many arguments were given and how many the method takes |
+| When | Ruby calls one of its engine methods with too few arguments, or too many, whether or not the method has default arguments |
+| Then | it raises `ArgumentError` saying, as mruby does, how many arguments were given and how many the method requires |
 
 ## `RG-019` An engine method named like a Ruby method is reached through call
 

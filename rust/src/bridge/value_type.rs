@@ -392,7 +392,14 @@ fn take_answer(
     outcome
         .map(|answer| to_ruby(mrb, &answer))
         .map_err(|error| {
-            super::object::refusal_error(mrb, &error, &method.to_string(), &type_name(kind), args)
+            super::object::refusal_error(
+                mrb,
+                &error,
+                &method.to_string(),
+                &type_name(kind),
+                args,
+                None,
+            )
         })
 }
 

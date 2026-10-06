@@ -3,13 +3,13 @@
 //! Each is one row of a table, so a function is added or left out in one
 //! place; Ruby's own `Math`, `rand` and `srand` stay as Ruby's.
 
-use beni::{Error, IntoValue, Mrb, RArray, ReprValue, Symbol, Value, value::qnil};
+use beni::{Error, FromValue, IntoValue, Mrb, RArray, ReprValue, Symbol, Value, value::qnil};
 use godot::builtin::{Variant, VariantType};
 use godot::global;
 use godot::meta::ToGodot;
 
-use super::object::{argument_error, call_error, count_message, type_error};
-use super::value::{self, ToRuby};
+use super::object::{argument_error, call_error, count_message, to_arguments, type_error};
+use super::value::ToRuby;
 
 type Utility = fn(&[Variant]) -> Result<Variant, String>;
 
@@ -140,19 +140,48 @@ fn conversion_failure(arg: &Variant, index: usize, to: VariantType) -> String {
     )
 }
 
-/// The names of the utility functions, for `Godot` to define.
+/// Each utility function's name and how many arguments it takes, nil for
+/// any number, for `Godot` to define.
 pub fn utilities(mrb: &Mrb, _godot: Value) -> Value {
-    let names: Vec<Value> = UTILITIES
+    let rows: Vec<Value> = UTILITIES
         .iter()
-        .filter_map(|(name, _, _)| mrb.intern(name.as_bytes()).ok())
-        .map(|id| Symbol::from(id).as_value())
+        .filter_map(|(name, arity, _)| {
+            let name = Symbol::from(mrb.intern(name.as_bytes()).ok()?).as_value();
+            let arity = if *arity == ANY {
+                qnil().as_value()
+            } else {
+                (*arity as i64).into_value(mrb)
+            };
+            Some(mrb.ary_new_from_values(&[name, arity]).as_value())
+        })
         .collect();
-    mrb.ary_new_from_values(&names).as_value()
+    mrb.ary_new_from_values(&rows).as_value()
 }
 
-/// Godot.__utility__(name, args): the utility function `name` called with
-/// `args`.
-pub fn utility(mrb: &Mrb, _godot: Value, name: Symbol, args: RArray) -> Result<Value, Error> {
+/// Godot.__utility__(name, *args): the utility function `name` called with
+/// the arguments given.
+pub fn utility(mrb: &Mrb, _godot: Value, args: &[Value]) -> Result<Value, Error> {
+    let Some((&name, args)) = args.split_first() else {
+        return Err(argument_error(mrb, &count_message(0, 1)));
+    };
+    let Some(name) = Symbol::from_value(name) else {
+        return Ok(qnil().as_value());
+    };
+    call_utility(mrb, name, args.iter().copied())
+}
+
+/// Godot.__apply_utility__(name, args): the utility function `name` called
+/// with the arguments in `args`, for one taking any number.
+pub fn apply_utility(mrb: &Mrb, _godot: Value, name: Symbol, args: RArray) -> Result<Value, Error> {
+    call_utility(mrb, name, args.entries(mrb))
+}
+
+// The utility function `name` called with `args`.
+fn call_utility(
+    mrb: &Mrb,
+    name: Symbol,
+    args: impl ExactSizeIterator<Item = Value>,
+) -> Result<Value, Error> {
     let name = name.name(mrb).unwrap_or_default();
     let Some((_, arity, utility)) = UTILITIES.iter().find(|(row, _, _)| *row == name) else {
         return Ok(qnil().as_value());
@@ -160,11 +189,7 @@ pub fn utility(mrb: &Mrb, _godot: Value, name: Symbol, args: RArray) -> Result<V
     if *arity != ANY && args.len() != *arity {
         return Err(argument_error(mrb, &count_message(args.len(), arity)));
     }
-    let args = args
-        .entries(mrb)
-        .map(|arg| value::to_engine(mrb, arg, 1))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|reason| argument_error(mrb, &reason))?;
+    let args = to_arguments(mrb, args)?;
     let answer = utility(&args).map_err(|reason| {
         type_error(
             mrb,

@@ -7,9 +7,19 @@ module Godot
   # What a call to the engine raises when the engine cannot run it.
   class CallError < StandardError; end
 
-  # The engine's utility functions Ruby lacks, such as lerp and randf.
-  __utilities__.each do |name|
-    singleton_class.__send__(:define_method, name) { |*args| __utility__(name, args) }
+  # The engine's utility functions Ruby lacks, such as lerp and randf, each a
+  # strict block of the number of arguments it takes, so a call gathers none
+  # into an array; one taking any number gathers them.
+  __utilities__.each do |name, arity|
+    body = case arity
+           when 0 then proc { __utility__(name) }
+           when 1 then proc { |a| __utility__(name, a) }
+           when 2 then proc { |a, b| __utility__(name, a, b) }
+           when 3 then proc { |a, b, c| __utility__(name, a, b, c) }
+           when 5 then proc { |a, b, c, d, e| __utility__(name, a, b, c, d, e) }
+           else proc { |*args| __apply_utility__(name, args) }
+           end
+    singleton_class.__send__(:define_method, name, &body)
   end
 
   class << self
@@ -23,7 +33,7 @@ module Godot
       const_set(name, engine_class)
     end
 
-    private :__engine_superclass__, :__utilities__, :__utility__
+    private :__engine_superclass__, :__utilities__, :__utility__, :__apply_utility__
 
     private
 
@@ -141,9 +151,34 @@ module Godot
       end
 
       private :__make__, :__make_node__, :__allocate__, :__singleton__, :__has_static_method__, :__call_static__,
-              :__engine_constant__, :__declare_signal__, :__declare_export__, :__declare_heading__
+              :__engine_constant__, :__declare_signal__, :__declare_export__, :__declare_heading__, :__shape__
 
       private
+
+      # The body of the engine method `bound` binds: a strict block of the
+      # arguments it requires and takes, so a call gathers none into an array,
+      # an optional one left out standing as OMITTED for the engine's
+      # default; a method taking any number, or more than four, gathers them.
+      def __bound_body__(bound)
+        case __shape__(bound)
+        when [0, 0] then proc { __call_bound__(bound) }
+        when [1, 0] then proc { |a| __call_bound__(bound, a) }
+        when [2, 0] then proc { |a, b| __call_bound__(bound, a, b) }
+        when [3, 0] then proc { |a, b, c| __call_bound__(bound, a, b, c) }
+        when [4, 0] then proc { |a, b, c, d| __call_bound__(bound, a, b, c, d) }
+        when [0, 1] then proc { |a = OMITTED| __call_bound__(bound, a) }
+        when [1, 1] then proc { |a, b = OMITTED| __call_bound__(bound, a, b) }
+        when [2, 1] then proc { |a, b, c = OMITTED| __call_bound__(bound, a, b, c) }
+        when [3, 1] then proc { |a, b, c, d = OMITTED| __call_bound__(bound, a, b, c, d) }
+        when [0, 2] then proc { |a = OMITTED, b = OMITTED| __call_bound__(bound, a, b) }
+        when [1, 2] then proc { |a, b = OMITTED, c = OMITTED| __call_bound__(bound, a, b, c) }
+        when [2, 2] then proc { |a, b, c = OMITTED, d = OMITTED| __call_bound__(bound, a, b, c, d) }
+        when [0, 3] then proc { |a = OMITTED, b = OMITTED, c = OMITTED| __call_bound__(bound, a, b, c) }
+        when [1, 3] then proc { |a, b = OMITTED, c = OMITTED, d = OMITTED| __call_bound__(bound, a, b, c, d) }
+        when [0, 4] then proc { |a = OMITTED, b = OMITTED, c = OMITTED, d = OMITTED| __call_bound__(bound, a, b, c, d) }
+        else proc { |*arguments| __apply_bound__(bound, arguments) }
+        end
+      end
 
       # The objects being inspected, so an instance variable leading back to
       # one of them is not inspected again.
@@ -292,8 +327,8 @@ module Godot
       return super if target.nil?
 
       if bound
-        self.class.__send__(:define_method, name) { |*arguments| __call_bound__(bound, arguments) }
-        __call_bound__(bound, args)
+        self.class.__send__(:define_method, name, &self.class.__send__(:__bound_body__, bound))
+        __send__(name, *args)
       else
         self.class.__send__(:define_method, name) { |*arguments| __call__(target, arguments) } if declared
         __call__(target, args)

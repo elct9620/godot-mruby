@@ -21,6 +21,16 @@ use crate::realm;
 pub struct BoundMethod {
     bind: sys::GDExtensionMethodBindPtr,
     name: String,
+    arity: Arity,
+}
+
+/// How many arguments an engine method takes: those it requires, those
+/// with a default after them, and whether any number may follow.
+#[derive(Clone, Copy)]
+pub struct Arity {
+    pub required: usize,
+    pub optional: usize,
+    pub is_vararg: bool,
 }
 
 // SAFETY: the bind is the engine's, unchanged while the engine runs, and a
@@ -66,13 +76,9 @@ impl BoundMethod {
         if api != ApiType::CORE && api != ApiType::EDITOR {
             return None;
         }
-        let info = class_db
-            .class_get_method_list_ex(&declarer)
-            .no_inheritance(true)
-            .done()
-            .iter_shared()
-            .find(|info| info.get_or_nil("name").to_string() == method)?;
+        let info = find_info(&class_db, &declarer, method)?;
         let hash = hash_method(&info)?;
+        let arity = Arity::read(&info)?;
         let name = StringName::from(method);
         // SAFETY: the interface is initialized while the extension runs, and
         // the names live for the call.
@@ -86,11 +92,16 @@ impl BoundMethod {
         (!bind.is_null()).then(|| Self {
             bind,
             name: method.to_owned(),
+            arity,
         })
     }
 
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn arity(&self) -> Arity {
+        self.arity
     }
 
     /// Calls the method on `object`, which must be of the class the method
@@ -115,6 +126,46 @@ impl BoundMethod {
             );
         })
     }
+}
+
+impl Arity {
+    /// The arity of the engine method `method` of the engine class `class`,
+    /// or of the nearest of its ancestors declaring it.
+    pub fn find(class: &str, method: &str) -> Option<Self> {
+        let class_db = ClassDb::singleton();
+        let declarer = find_declarer(&class_db, class, method)?;
+        Self::read(&find_info(&class_db, &declarer, method)?)
+    }
+
+    // The arity a method's `info`, as ClassDB lists it, gives.
+    fn read(info: &VarDictionary) -> Option<Self> {
+        let taken = info
+            .get_or_nil("args")
+            .try_to::<Array<VarDictionary>>()
+            .ok()?
+            .len();
+        let optional = info
+            .get_or_nil("default_args")
+            .try_to::<VarArray>()
+            .ok()?
+            .len();
+        let flags = info.get_or_nil("flags").try_to::<i64>().ok()? as u64;
+        Some(Self {
+            required: taken.saturating_sub(optional),
+            optional,
+            is_vararg: flags & MethodFlags::VARARG.ord() != 0,
+        })
+    }
+}
+
+// The info ClassDB lists for `method` among the own methods of `declarer`.
+fn find_info(class_db: &Gd<ClassDb>, declarer: &StringName, method: &str) -> Option<VarDictionary> {
+    class_db
+        .class_get_method_list_ex(declarer)
+        .no_inheritance(true)
+        .done()
+        .iter_shared()
+        .find(|info| info.get_or_nil("name").to_string() == method)
 }
 
 // The nearest of the engine class `class` and its ancestors whose own

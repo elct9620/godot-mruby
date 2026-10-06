@@ -85,6 +85,34 @@ class EngineObjectsTest < Minitest::Test
   end
 
   # @behavior RG-018
+  def test_a_call_with_the_wrong_number_of_arguments_names_those_a_method_with_defaults_requires
+    node = autofree(Godot::Node.new)
+    child = autofree(Godot::Node.new)
+
+    too_few = assert_raises(ArgumentError) { node.add_child }
+    too_many = assert_raises(ArgumentError) { node.add_child(child, false, 0, :extra) }
+    any_number = assert_raises(ArgumentError) { node.emit_signal }
+    static = assert_raises(ArgumentError) { Godot::Image.create_empty(1) }
+
+    assert_equal "wrong number of arguments (given 0, expected 1)", too_few.message
+    assert_equal "wrong number of arguments (given 4, expected 1)", too_many.message
+    assert_equal "wrong number of arguments (given 0, expected 1)", any_number.message
+    assert_equal "wrong number of arguments (given 1, expected 4)", static.message
+  end
+
+  # @behavior RG-010
+  def test_an_optional_argument_left_out_takes_the_engines_default
+    node = autofree(Godot::Node.new)
+    child = Godot::Node.new
+
+    node.add_child(child)
+    node.add_child(Godot::Node.new, false, Godot::Node::INTERNAL_MODE_FRONT)
+
+    assert_equal [child], node.get_children
+    assert_equal 2, node.get_child_count(true)
+  end
+
+  # @behavior RG-018
   def test_a_call_of_a_method_only_the_objects_own_engine_class_has_raises_argument_error_as_ruby_reports_it
     sprite = autofree(Godot::Sprite2D.new)
     sprite.set_script(Godot::ResourceLoader.load("res://test/unit/engine_classes/scout.rb"))
