@@ -229,7 +229,7 @@ fn call_bound(
     args: RArray,
 ) -> Result<Value, Error> {
     let object = held.live_object(mrb, bound.name())?;
-    let args = to_arguments(mrb, args)?;
+    let args = to_arguments(mrb, args.entries(mrb))?;
     let answer = bound.call(&object, &args).map_err(|error| {
         let base = object.get_class().to_string();
         call_error(mrb, &describe_refusal(&error, bound.name(), &base, &args))
@@ -242,7 +242,7 @@ fn call_bound(
 fn call(mrb: &Mrb, held: &EngineObject, name: Symbol, args: RArray) -> Result<Value, Error> {
     let name = name_by_symbol(mrb, name);
     let mut object = held.live_object(mrb, &name)?;
-    let args = to_arguments(mrb, args)?;
+    let args = to_arguments(mrb, args.entries(mrb))?;
     let answer = object.try_call(&name, &args).map_err(|error| {
         let base = object.get_class().to_string();
         call_refusal(mrb, &error, &base, &name.to_string())
@@ -312,7 +312,7 @@ fn has_static_method(mrb: &Mrb, class: RClass, name: Symbol) -> bool {
 fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<Value, Error> {
     let name = name_by_symbol(mrb, name);
     let class = engine_name(mrb, class);
-    let args = to_arguments(mrb, args)?;
+    let args = to_arguments(mrb, args.entries(mrb))?;
     let answer = ClassDb::singleton()
         .try_class_call_static(&class, &name, &args)
         .map_err(|error| call_refusal(mrb, &error, &class, &name.to_string()))?;
@@ -643,8 +643,11 @@ pub(super) type Arguments = SmallVec<[Variant; 4]>;
 
 /// `args` as the engine takes them, or the Godot::CallError one that cannot
 /// reach it raises, before the engine is given any.
-pub(super) fn to_arguments(mrb: &Mrb, args: RArray) -> Result<Arguments, Error> {
-    args.entries(mrb)
+pub(super) fn to_arguments(
+    mrb: &Mrb,
+    args: impl IntoIterator<Item = Value>,
+) -> Result<Arguments, Error> {
+    args.into_iter()
         .map(|arg| value::to_engine(mrb, arg, 1).map_err(|reason| call_error(mrb, &reason)))
         .collect()
 }

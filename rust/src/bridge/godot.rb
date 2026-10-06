@@ -335,10 +335,6 @@ module Godot
   # copy.
   class Value
     class << self
-      def new(*args)
-        __construct__(args)
-      end
-
       def method_missing(name, *args, &block)
         answered = __call_static__(name, args)
         return super if answered.nil?
@@ -353,7 +349,7 @@ module Godot
         const_set(name, value)
       end
 
-      private :__has_value_type__, :__construct__, :__call_static__, :__constant__
+      private :__has_value_type__, :__call_static__, :__constant__
 
       private
 

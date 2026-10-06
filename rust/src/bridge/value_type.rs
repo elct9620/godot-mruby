@@ -87,7 +87,7 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     let class = godot.define_class(mrb, c"Value", mrb.object_class())?;
     class.set_instance_data_tt(mrb)?;
     class.define_singleton_method(mrb, c"__has_value_type__", method!(has_value_type, 1))?;
-    class.define_singleton_method(mrb, c"__construct__", method!(construct, 1))?;
+    class.define_singleton_method(mrb, c"new", method!(construct, -1))?;
     class.define_singleton_method(mrb, c"__call_static__", method!(call_static, 2))?;
     class.define_singleton_method(mrb, c"__constant__", method!(constant, 1))?;
     class.define_private_method(mrb, c"__resolve__", method!(resolve, 1))?;
@@ -209,16 +209,16 @@ fn kind_by_class(mrb: &Mrb, class: RClass) -> Result<VariantType, Error> {
     Ok(kind)
 }
 
-// Godot::Value.__construct__(args): the value the engine's constructor of
-// the receiver's type that takes `args` builds.
-fn construct(mrb: &Mrb, class: RClass, args: RArray) -> Result<Value, Error> {
+// Godot::Value.new(*args): the value the engine's constructor of the
+// receiver's type that takes `args` builds.
+fn construct(mrb: &Mrb, class: RClass, args: &[Value]) -> Result<Value, Error> {
     let kind = kind_by_class(mrb, class)?;
     if kind == VariantType::VECTOR2
-        && let Some(vector) = read_vector2(mrb, args)
+        && let Some(vector) = read_vector2(args)
     {
         return Ok(wrap(mrb, EngineValue::Vector2(vector)));
     }
-    let args = to_arguments(mrb, args)?;
+    let args = to_arguments(mrb, args.iter().copied())?;
     let pointers: SmallVec<[_; 4]> = args.iter().map(Variant::var_sys).collect();
     let kind_sys = kind.ord as sys::GDExtensionVariantType;
     // SAFETY: the argument pointers live as long as `args`.
@@ -246,18 +246,14 @@ fn construct(mrb: &Mrb, class: RClass, args: RArray) -> Result<Value, Error> {
 // The Vector2 the engine's constructor taking two numbers builds from
 // `args`, when they are two numbers: each read as the engine reads a float
 // argument, then narrowed to the engine's real.
-fn read_vector2(mrb: &Mrb, args: RArray) -> Option<Vector2> {
+fn read_vector2(args: &[Value]) -> Option<Vector2> {
     let component = |arg: Value| {
         i64::from_value(arg)
             .map(|integer| integer as f64)
             .or_else(|| f64::from_value(arg))
             .map(|float| float as real)
     };
-    match args
-        .entries(mrb)
-        .collect::<SmallVec<[Value; 2]>>()
-        .as_slice()
-    {
+    match args {
         [x, y] => Some(Vector2::new(component(*x)?, component(*y)?)),
         _ => None,
     }
@@ -332,7 +328,7 @@ fn read_named(value: &Variant, name: &StringName) -> Option<Variant> {
 // the value's type has, answers for `args`.
 fn call(mrb: &Mrb, held: &EngineValue, name: Symbol, args: RArray) -> Result<Value, Error> {
     let name = name_by_symbol(mrb, name);
-    let args = to_arguments(mrb, args)?;
+    let args = to_arguments(mrb, args.entries(mrb))?;
     let pointers: SmallVec<[_; 4]> = args.iter().map(Variant::var_sys).collect();
     let mut receiver = held.variant();
     // SAFETY: the name and argument pointers live for the call, which runs on
@@ -356,7 +352,7 @@ fn call(mrb: &Mrb, held: &EngineValue, name: Symbol, args: RArray) -> Result<Val
 fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<Value, Error> {
     let kind = kind_by_class(mrb, class)?;
     let name = name_by_symbol(mrb, name);
-    let args = to_arguments(mrb, args)?;
+    let args = to_arguments(mrb, args.entries(mrb))?;
     let pointers: SmallVec<[_; 4]> = args.iter().map(Variant::var_sys).collect();
     let kind_sys = kind.ord as sys::GDExtensionVariantType;
     // SAFETY: the name and argument pointers live for the call.
