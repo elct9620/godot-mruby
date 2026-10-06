@@ -314,6 +314,19 @@ module Godot
       __instance_id__.hash
     end
 
+    # A copy of an engine object stands for the same engine object and
+    # carries its instance variables; a node class's object is the only one
+    # its node has, so it refuses.
+    def dup
+      __make_copy__("dup")
+    end
+
+    def clone
+      copy = __make_copy__("clone")
+      copy.freeze if frozen?
+      copy
+    end
+
     # The Ruby class, the engine object as Godot prints it, and the instance
     # variables as Ruby inspects them.
     def inspect
@@ -326,6 +339,16 @@ module Godot
       variables.empty? ? "#{head}>" : "#{head} #{variables.join(", ")}>"
     ensure
       inspected.pop if inspected.last.equal?(self)
+    end
+
+    private
+
+    def __make_copy__(verb)
+      raise TypeError, "can't #{verb} #{self.class}" unless self.class.instance_variable_get(:@engine_class) == true
+
+      copy = self.class.__send__(:__allocate__, self)
+      instance_variables.each { |name| copy.instance_variable_set(name, instance_variable_get(name)) }
+      copy
     end
   end
 
@@ -365,6 +388,15 @@ module Godot
 
     def hash
       __hash__
+    end
+
+    # A value never changes, so its copy is the value itself.
+    def dup
+      self
+    end
+
+    def clone
+      self
     end
 
     def inspect

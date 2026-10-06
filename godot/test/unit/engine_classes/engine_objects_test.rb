@@ -141,4 +141,33 @@ class EngineObjectsTest < Minitest::Test
                   "#<Godot::Node <Node##{looped.get_instance_id}> @me=#<Godot::Node <Node##{looped.get_instance_id}> ...>>",
                   "#<Godot::Node <Freed Object>>"], inspected
   end
+
+  # @behavior RG-024
+  def test_an_engine_objects_copy_stands_for_the_same_engine_object
+    node = autofree(Godot::Node.new)
+    node.instance_variable_set(:@hp, 3)
+
+    copies = [node.dup, node.clone]
+
+    copies.each do |copy|
+      refute_same node, copy
+      assert_instance_of Godot::Node, copy
+      assert_equal node, copy
+      assert_equal 3, copy.instance_variable_get(:@hp)
+    end
+  end
+
+  # @behavior RG-025
+  def test_a_node_classs_object_refuses_to_be_copied
+    scout = autofree(Unit::EngineClasses::Scout.new)
+
+    assert_raises(TypeError) { scout.dup }
+    assert_raises(TypeError) { scout.clone }
+  end
+
+  # @behavior RG-026
+  def test_an_engine_class_allocates_no_empty_object
+    assert_raises(TypeError) { Godot::Node.allocate }
+    assert_raises(TypeError) { Unit::EngineClasses::Scout.allocate }
+  end
 end

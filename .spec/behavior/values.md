@@ -206,3 +206,19 @@ How a value crosses between Ruby and the engine, either way: data is copied and 
 | Given | a Hash keyed by a value of a value type |
 | When | Ruby looks it up by an equal value built apart, and by a value of another type |
 | Then | the equal value finds the entry, since it answers `eql?` and the same `hash`, and the other type finds none |
+
+## `RV-026` A value's copy is the value itself
+
+| Step | Statement |
+| --- | --- |
+| Given | a value of a value type |
+| When | Ruby calls `dup` or `clone` on it |
+| Then | it gets the same value back, as Ruby answers for an Integer, since a value never changes |
+
+## `RV-027` A value type's class allocates no empty value
+
+| Step | Statement |
+| --- | --- |
+| Given | a value type under `Godot` |
+| When | Ruby calls `allocate` on it |
+| Then | it raises `TypeError`, so every value is one an engine constructor built |

@@ -149,4 +149,19 @@ class ValueTypesTest < Minitest::Test
     assert_equal "Invalid type in function 'distance_to' in base 'Vector2'. " \
                  "Cannot convert argument 1 from String to Vector2.", error.message
   end
+
+  # @behavior RV-026
+  def test_a_values_copy_is_the_value_itself
+    vector = Godot::Vector2.new(1, 2)
+    color = Godot::Color.new(1, 0, 0)
+
+    assert_same vector, vector.dup
+    assert_same color, color.clone
+  end
+
+  # @behavior RV-027
+  def test_a_value_types_class_allocates_no_empty_value
+    assert_raises(TypeError) { Godot::Vector2.allocate }
+    assert_raises(TypeError) { Godot::Color.allocate }
+  end
 end

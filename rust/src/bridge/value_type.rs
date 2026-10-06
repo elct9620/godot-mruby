@@ -86,6 +86,7 @@ pub fn is_value_type(kind: VariantType) -> bool {
 pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     let class = godot.define_class(mrb, c"Value", mrb.object_class())?;
     class.set_instance_data_tt(mrb)?;
+    class.undef_default_alloc_func(mrb);
     class.define_singleton_method(mrb, c"__has_value_type__", method!(has_value_type, 1))?;
     class.define_singleton_method(mrb, c"new", method!(construct, -1))?;
     class.define_singleton_method(mrb, c"__call_static__", method!(call_static, 2))?;

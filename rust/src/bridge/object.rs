@@ -63,6 +63,7 @@ struct ObjectClass(Cell<Option<RClass>>);
 pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     let object = godot.define_class(mrb, c"Object", mrb.object_class())?;
     object.set_instance_data_tt(mrb)?;
+    object.undef_default_alloc_func(mrb);
     object.define_singleton_method(mrb, c"__make__", method!(make, 0))?;
     object.define_singleton_method(mrb, c"__make_node__", method!(make_node, 0))?;
     object.define_singleton_method(mrb, c"__allocate__", method!(allocate, 1))?;

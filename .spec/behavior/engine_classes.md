@@ -191,3 +191,27 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | an engine object, one holding instance variables, and one that has been freed |
 | When | Ruby inspects each |
 | Then | each names its Ruby class and the engine object as Godot prints it, `<Class#id>` or `<Freed Object>`, after which the instance variables follow as Ruby inspects them |
+
+## `RG-024` An engine object's copy stands for the same engine object
+
+| Step | Statement |
+| --- | --- |
+| Given | an object of an engine class |
+| When | Ruby calls `dup` or `clone` on it |
+| Then | it gets another object of the same class standing for the same engine object, equal to the first and carrying its instance variables |
+
+## `RG-025` A node class's object refuses to be copied
+
+| Step | Statement |
+| --- | --- |
+| Given | an object of a node class |
+| When | Ruby calls `dup` or `clone` on it |
+| Then | it raises `TypeError`, since a node has one Ruby object, and `duplicate` copies the node itself |
+
+## `RG-026` An engine class allocates no empty object
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine class or a node class |
+| When | Ruby calls `allocate` on it |
+| Then | it raises `TypeError`, so every object stands for an engine object |
