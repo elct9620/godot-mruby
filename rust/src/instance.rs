@@ -6,7 +6,7 @@
 //! about to run, and touches nothing of it afterwards, as GDScript, C# and
 //! other languages' instances do.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
 use std::ffi::c_void;
 use std::sync::{Arc, LazyLock, Mutex, PoisonError};
 
@@ -16,6 +16,8 @@ use godot::obj::{EngineBitfield, EngineEnum};
 use godot::prelude::*;
 use godot::register::info::{PropertyHint, PropertyUsageFlags};
 use godot::sys;
+use rustc_hash::FxHashMap;
+use smallvec::SmallVec;
 
 use crate::ancestry::{Ancestry, Lineage};
 use crate::bridge::{self, NameKey, Owner, ToEngine, ToRuby};
@@ -32,13 +34,10 @@ use crate::snapshot::{self, Heading, Member, Property, Snapshot};
 /// may ask it from any thread.
 pub struct RubyInstance {
     script: Gd<Script>,
-    path: String,
-    owner: InstanceId,
-    // The header and ancestry its script had as the instance was made, which
-    // answer which methods the node's class has without entering the realm.
-    header: Arc<Header>,
-    ancestry: Arc<Ancestry>,
-    // What that header and ancestry define, shared with every instance made
+    // Shared with the calls running Ruby, which outlive the instance when
+    // Ruby takes its node's script away.
+    caller: Arc<Caller>,
+    // What its header and ancestry define, shared with every instance made
     // from them.
     methods: Arc<Methods>,
     // The engine class of the node itself, which is the script's engine
@@ -49,12 +48,6 @@ pub struct RubyInstance {
     language: Gd<ScriptLanguage>,
     // What the node prints as while its script says nothing about it.
     display: GString,
-    // Shared with the calls running Ruby, which outlive the instance when
-    // Ruby takes its node's script away.
-    stage: Arc<Mutex<Stage>>,
-    // What Godot wrote to the node's properties before it had a Ruby object,
-    // waiting for the object to be built.
-    stash: Arc<Mutex<Stash>>,
 }
 
 /// The methods a node's class has, by the StringName Godot calls each with,
@@ -67,7 +60,7 @@ pub struct Methods(Mutex<Option<MethodTable>>);
 // The methods a lineage had in a snapshot, and each one's name.
 struct MethodTable {
     snapshot: Arc<Snapshot>,
-    names: HashMap<NameKey, Arc<str>>,
+    names: FxHashMap<NameKey, Arc<str>>,
 }
 
 impl Methods {
@@ -148,17 +141,19 @@ impl RubyInstance {
         owner: &Gd<Object>,
     ) -> Self {
         Self {
-            path: script.get_path().to_string(),
+            caller: Arc::new(Caller {
+                path: script.get_path().to_string(),
+                owner: owner.instance_id(),
+                header,
+                ancestry,
+                stage: Mutex::new(Stage::Recorded),
+                stash: Mutex::new(Stash::default()),
+            }),
             script,
-            owner: owner.instance_id(),
-            header,
-            ancestry,
             methods,
             class_name: StringName::from(&owner.get_class()),
             language,
             display: GString::from(&owner.to_string()),
-            stage: Arc::new(Mutex::new(Stage::Recorded)),
-            stash: Arc::new(Mutex::new(Stash::default())),
         }
     }
 
@@ -188,11 +183,7 @@ impl RubyInstance {
     }
 
     fn lineage(&self) -> Lineage<'_> {
-        Lineage::new(
-            self.path.clone(),
-            &self.header,
-            Some(Arc::clone(&self.ancestry)),
-        )
+        self.caller.lineage()
     }
 
     // What the node's class declared for the editor, its ancestors' included
@@ -220,10 +211,7 @@ impl RubyInstance {
     // Whether the node has no Ruby object yet, so what Godot writes has
     // nowhere to go but the instance.
     fn is_unbuilt(&self) -> bool {
-        matches!(
-            *self.stage.lock().unwrap_or_else(PoisonError::into_inner),
-            Stage::Recorded
-        )
+        matches!(self.caller.current_stage(), Stage::Recorded)
     }
 
     // Whether the node's class exported a property of that name.
@@ -248,15 +236,8 @@ impl RubyInstance {
     }
 
     // What a call into Ruby needs of the instance, taken before Ruby runs.
-    fn caller(&self) -> Caller {
-        Caller {
-            path: self.path.clone(),
-            owner: self.owner,
-            header: Arc::clone(&self.header),
-            ancestry: Arc::clone(&self.ancestry),
-            stage: Arc::clone(&self.stage),
-            stash: Arc::clone(&self.stash),
-        }
+    fn caller(&self) -> Arc<Caller> {
+        Arc::clone(&self.caller)
     }
 }
 
@@ -264,22 +245,26 @@ impl RubyInstance {
 // or when the node's script is set, even while a call into it runs.
 impl Drop for RubyInstance {
     fn drop(&mut self) {
-        if let Stage::Built(key) = *self.stage.lock().unwrap_or_else(PoisonError::into_inner) {
+        if let Stage::Built(key) = self.caller.current_stage() {
             realm::release(key);
         }
     }
 }
 
-/// What calls a method on a node's Ruby object, holding nothing of the
-/// instance itself, so the engine may call back into the instance or free it
-/// while Ruby runs.
+/// What calls a method on a node's Ruby object: the part of the instance a
+/// call into Ruby shares, so the engine may call back into the instance or
+/// free it while Ruby runs.
 struct Caller {
     path: String,
     owner: InstanceId,
+    // The header and ancestry its script had as the instance was made, which
+    // answer which methods the node's class has without entering the realm.
     header: Arc<Header>,
     ancestry: Arc<Ancestry>,
-    stage: Arc<Mutex<Stage>>,
-    stash: Arc<Mutex<Stash>>,
+    stage: Mutex<Stage>,
+    // What Godot wrote to the node's properties before it had a Ruby object,
+    // waiting for the object to be built.
+    stash: Mutex<Stash>,
 }
 
 impl Caller {
@@ -387,7 +372,7 @@ impl Caller {
             return Variant::nil();
         };
         let checked = args.iter().map(|arg| ToRuby::try_new(arg));
-        let args = match checked.collect::<Result<Vec<_>, _>>() {
+        let args = match checked.collect::<Result<SmallVec<[_; 4]>, _>>() {
             Ok(args) => args,
             Err(reason) => {
                 error!("#{method} was not called: {reason}");

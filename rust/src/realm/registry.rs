@@ -52,13 +52,15 @@ impl Registry {
         self.objects.contains_key(mrb, key.to_value(mrb))
     }
 
-    /// The object `key` holds; a key released already holds none.
+    /// The object `key` holds; a key released already holds none. A held
+    /// object is never nil, so nil means the key holds none.
     pub fn object(&self, mrb: &Mrb, key: Key) -> Result<Value, Error> {
-        if !self.has_object(mrb, key)? {
+        let object = self.objects.get(mrb, key.to_value(mrb))?;
+        if object.is_nil() {
             let class = mrb.exc_get(c"RuntimeError")?;
             return Err(Error::new(mrb, class, "the object was released"));
         }
-        self.objects.get(mrb, key.to_value(mrb))
+        Ok(object)
     }
 
     /// Every object held.

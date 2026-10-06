@@ -222,6 +222,7 @@ dependencies = [
  "godot-cell",
  "ruby-prism",
  "ruby-prism-sys",
+ "rustc-hash",
  "smallvec",
 ]
 

@@ -8,6 +8,8 @@ use beni::{
     Error, FromValue, Gem, IntoValue, Module as _, Mrb, Qtrue, RArray, RClass, ReprValue, Symbol,
     TryConvert, Value,
 };
+use rustc_hash::FxHashMap;
+use smallvec::SmallVec;
 
 use crate::compiler;
 use crate::snapshot::{self, Class, Heading, Member, Property, Signal, Snapshot};
@@ -134,7 +136,7 @@ struct Bookkeeping {
     // key the class index matches it with.
     spellings: RefCell<HashMap<Vec<String>, Symbol>>,
     // The symbol of each method name Rust has sent, interned once.
-    method_symbols: RefCell<HashMap<String, Symbol>>,
+    method_symbols: RefCell<FxHashMap<String, Symbol>>,
     // What each extension keeps for the realm, by its type: a handful of
     // types, so comparing each one's id beats hashing it.
     extension_data: RefCell<Vec<(TypeId, Box<dyn Any + Send>)>>,
@@ -733,7 +735,7 @@ impl Realm {
         args: impl IntoIterator<Item = A>,
     ) -> Result<R, RubyError> {
         let _scope = self.mrb.arena_scope();
-        let args: Vec<Value> = args
+        let args: SmallVec<[Value; 4]> = args
             .into_iter()
             .map(|arg| arg.into_value(&self.mrb))
             .collect();
@@ -1022,7 +1024,7 @@ mod tests {
         release(key);
         let sent = enter(|realm| realm.send::<_, i64>(key, "answer", no_args()));
 
-        assert!(sent.is_err());
+        assert!(sent.is_err_and(|error| error.message.contains("the object was released")));
     }
 
     // @behavior RO-004
