@@ -8,7 +8,7 @@ use godot::builtin::{Variant, VariantType};
 use godot::global;
 use godot::meta::ToGodot;
 
-use super::object::call_error;
+use super::object::{argument_error, call_error, count_message, type_error};
 use super::value::{self, ToRuby};
 
 type Utility = fn(&[Variant]) -> Result<Variant, String>;
@@ -158,22 +158,15 @@ pub fn utility(mrb: &Mrb, _godot: Value, name: Symbol, args: RArray) -> Result<V
         return Ok(qnil().as_value());
     };
     if *arity != ANY && args.len() != *arity {
-        let message = format!(
-            "wrong number of arguments (given {}, expected {arity})",
-            args.len()
-        );
-        return Err(match mrb.exc_get(c"ArgumentError") {
-            Ok(class) => Error::new(mrb, class, &message),
-            Err(error) => error,
-        });
+        return Err(argument_error(mrb, &count_message(args.len(), arity)));
     }
     let args = args
         .entries(mrb)
         .map(|arg| value::to_engine(mrb, arg, 1))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(|reason| call_error(mrb, &reason))?;
+        .map_err(|reason| argument_error(mrb, &reason))?;
     let answer = utility(&args).map_err(|reason| {
-        call_error(
+        type_error(
             mrb,
             &format!("Invalid type in utility function '{name}'. {reason}"),
         )

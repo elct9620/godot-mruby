@@ -233,7 +233,7 @@ fn call_bound(
     let args = to_arguments(mrb, args.entries(mrb))?;
     let answer = bound.call(&object, &args).map_err(|error| {
         let base = object.get_class().to_string();
-        call_error(mrb, &describe_refusal(&error, bound.name(), &base, &args))
+        refusal_error(mrb, &error, bound.name(), &base, &args)
     })?;
     ruby_answer(mrb, &answer)
 }
@@ -246,7 +246,7 @@ fn call(mrb: &Mrb, held: &EngineObject, name: Symbol, args: RArray) -> Result<Va
     let args = to_arguments(mrb, args.entries(mrb))?;
     let answer = object.try_call(&name, &args).map_err(|error| {
         let base = object.get_class().to_string();
-        call_refusal(mrb, &error, &base, &name.to_string())
+        call_refusal(mrb, &error, &base, &name.to_string(), args.len())
     })?;
     ruby_answer(mrb, &answer)
 }
@@ -316,7 +316,7 @@ fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<V
     let args = to_arguments(mrb, args.entries(mrb))?;
     let answer = ClassDb::singleton()
         .try_class_call_static(&class, &name, &args)
-        .map_err(|error| call_refusal(mrb, &error, &class, &name.to_string()))?;
+        .map_err(|error| call_refusal(mrb, &error, &class, &name.to_string(), args.len()))?;
     ruby_answer(mrb, &answer)
 }
 
@@ -642,14 +642,14 @@ fn engine_name(mrb: &Mrb, class: RClass) -> String {
 /// off the heap.
 pub(super) type Arguments = SmallVec<[Variant; 4]>;
 
-/// `args` as the engine takes them, or the Godot::CallError one that cannot
+/// `args` as the engine takes them, or the ArgumentError one that cannot
 /// reach it raises, before the engine is given any.
 pub(super) fn to_arguments(
     mrb: &Mrb,
     args: impl IntoIterator<Item = Value>,
 ) -> Result<Arguments, Error> {
     args.into_iter()
-        .map(|arg| value::to_engine(mrb, arg, 1).map_err(|reason| call_error(mrb, &reason)))
+        .map(|arg| value::to_engine(mrb, arg, 1).map_err(|reason| argument_error(mrb, &reason)))
         .collect()
 }
 
@@ -681,52 +681,61 @@ impl EngineObject {
     }
 }
 
-// The Godot::CallError a call the engine refused raises, worded as GDScript
-// words the same failure of an untyped call. gdext hands the engine's
-// reason only as text, so the argument and types are read back from it.
-fn call_refusal(mrb: &Mrb, error: &CallError, base: &str, method: &str) -> Error {
+// The error a call the engine refused raises, as `refusal_error` sorts it.
+// gdext hands the engine's reason only as text, so the expected count, the
+// argument and the types are read back from it.
+fn call_refusal(mrb: &Mrb, error: &CallError, base: &str, method: &str, given: usize) -> Error {
     let reason = error.message(false);
     let reason = reason.rsplit("Reason: ").next().unwrap_or_default();
-    let message = if let Some(expected) = parse_parameter_count(reason) {
-        format!(
-            "Invalid call to function '{method}' in base '{base}'. Expected {expected} argument(s)."
-        )
+    if let Some(expected) = parse_parameter_count(reason) {
+        argument_error(mrb, &count_message(given, expected))
     } else if let Some((argument, from, to)) = conversion(reason) {
-        format!(
-            "Invalid type in function '{method}' in base '{base}'. \
-             Cannot convert argument {argument} from {from} to {to}."
-        )
+        type_error(mrb, &type_message(method, base, argument, &from, &to))
     } else {
-        format!("Invalid call to function '{method}' in base '{base}': {reason}")
-    };
-    call_error(mrb, &message)
+        call_error(
+            mrb,
+            &format!("Invalid call to function '{method}' in base '{base}': {reason}"),
+        )
+    }
 }
 
-/// GDScript's words for a call of `method` on `base` with `args` the engine
-/// refused with `error`.
-pub(super) fn describe_refusal(
+/// The error a call of `method` on `base` with `args` the engine refused
+/// with `error` raises: ArgumentError for the number of arguments, worded as
+/// Ruby words it; TypeError for an argument's type, worded as GDScript's
+/// untyped call; Godot::CallError for what Ruby has no error for.
+pub(super) fn refusal_error(
+    mrb: &Mrb,
     error: &sys::GDExtensionCallError,
     method: &str,
     base: &str,
     args: &[Variant],
-) -> String {
-    if error.error == sys::GDEXTENSION_CALL_ERROR_INVALID_ARGUMENT {
-        let index = error.argument as usize;
-        let from = args
-            .get(index)
-            .map_or_else(String::new, |arg| type_name(arg.get_type()));
-        let to = type_name(<VariantType as EngineEnum>::from_ord(error.expected));
-        type_message(method, base, &(index + 1).to_string(), &from, &to)
-    } else {
-        count_message(method, base, &error.expected.to_string())
+) -> Error {
+    match error.error {
+        sys::GDEXTENSION_CALL_ERROR_INVALID_ARGUMENT => {
+            let index = error.argument as usize;
+            let from = args
+                .get(index)
+                .map_or_else(String::new, |arg| type_name(arg.get_type()));
+            let to = type_name(<VariantType as EngineEnum>::from_ord(error.expected));
+            type_error(
+                mrb,
+                &type_message(method, base, &(index + 1).to_string(), &from, &to),
+            )
+        }
+        sys::GDEXTENSION_CALL_ERROR_TOO_MANY_ARGUMENTS
+        | sys::GDEXTENSION_CALL_ERROR_TOO_FEW_ARGUMENTS => {
+            argument_error(mrb, &count_message(args.len(), error.expected))
+        }
+        _ => call_error(
+            mrb,
+            &format!("Invalid call to function '{method}' in base '{base}'."),
+        ),
     }
 }
 
-// GDScript's words for a call given the wrong number of arguments.
-fn count_message(method: &str, base: &str, expected: &str) -> String {
-    format!(
-        "Invalid call to function '{method}' in base '{base}'. Expected {expected} argument(s)."
-    )
+/// Ruby's words for a call given `given` arguments where `expected` are taken.
+pub(super) fn count_message(given: usize, expected: impl fmt::Display) -> String {
+    format!("wrong number of arguments (given {given}, expected {expected})")
 }
 
 // GDScript's words for a call given an argument of a type it cannot take.
@@ -777,7 +786,7 @@ pub(super) fn zero_division_error(mrb: &Mrb, message: &str) -> Error {
     }
 }
 
-fn argument_error(mrb: &Mrb, message: &str) -> Error {
+pub(super) fn argument_error(mrb: &Mrb, message: &str) -> Error {
     match mrb.exc_get(c"ArgumentError") {
         Ok(class) => Error::new(mrb, class, message),
         Err(error) => error,

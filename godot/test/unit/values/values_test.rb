@@ -26,7 +26,7 @@ class ValuesTest < Minitest::Test
   def test_a_symbol_crosses_as_a_string_name
     @node.set_meta(:name, :hero)
 
-    error = assert_raises(Godot::CallError) { @node.set_process_priority(:hero) }
+    error = assert_raises(TypeError) { @node.set_process_priority(:hero) }
 
     assert_equal :hero, @node.get_meta(:name)
     assert_includes error.message, "from StringName to int"
@@ -60,8 +60,8 @@ class ValuesTest < Minitest::Test
     looped = []
     looped << looped
 
-    assert_raises(Godot::CallError) { @node.set_meta(:deep, deep) }
-    assert_raises(Godot::CallError) { @node.set_meta(:looped, looped) }
+    assert_raises(ArgumentError) { @node.set_meta(:deep, deep) }
+    assert_raises(ArgumentError) { @node.set_meta(:looped, looped) }
     refute @node.has_meta(:deep)
   end
 

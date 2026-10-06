@@ -241,7 +241,7 @@ fn construct(mrb: &Mrb, class: RClass, args: &[Value]) -> Result<Value, Error> {
                 "Invalid call. Nonexistent '{}' constructor.",
                 type_name(kind)
             );
-            Err(super::object::call_error(mrb, &message))
+            Err(super::object::argument_error(mrb, &message))
         }
     }
 }
@@ -380,8 +380,8 @@ fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<V
     }
 }
 
-// What a call of `method` on a value of type `kind` answered, or the
-// Godot::CallError GDScript's wording gives its failure.
+// What a call of `method` on a value of type `kind` answered, or the error
+// its refusal raises.
 fn take_answer(
     mrb: &Mrb,
     outcome: Result<Variant, sys::GDExtensionCallError>,
@@ -392,13 +392,7 @@ fn take_answer(
     outcome
         .map(|answer| to_ruby(mrb, &answer))
         .map_err(|error| {
-            let message = super::object::describe_refusal(
-                &error,
-                &method.to_string(),
-                &type_name(kind),
-                args,
-            );
-            super::object::call_error(mrb, &message)
+            super::object::refusal_error(mrb, &error, &method.to_string(), &type_name(kind), args)
         })
 }
 

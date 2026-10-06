@@ -25,11 +25,11 @@ class ValueTypesTest < Minitest::Test
   end
 
   # @behavior RV-012
-  def test_a_constructor_no_arguments_fit_raises_call_error_as_gdscript_reports_it
-    error = assert_raises(Godot::CallError) { Godot::Vector2.new("x") }
+  def test_a_constructor_no_arguments_fit_raises_argument_error_as_gdscript_reports_it
+    error = assert_raises(ArgumentError) { Godot::Vector2.new("x") }
 
     assert_equal "Invalid call. Nonexistent 'Vector2' constructor.", error.message
-    other = assert_raises(Godot::CallError) { Godot::Vector2i.new("x") }
+    other = assert_raises(ArgumentError) { Godot::Vector2i.new("x") }
     assert_equal "Invalid call. Nonexistent 'Vector2i' constructor.", other.message
   end
 
@@ -143,8 +143,8 @@ class ValueTypesTest < Minitest::Test
   end
 
   # @behavior RV-022
-  def test_a_values_method_the_engine_refuses_raises_call_error_as_gdscript_reports_it
-    error = assert_raises(Godot::CallError) { Godot::Vector2.new(1, 2).distance_to("x") }
+  def test_a_values_method_given_an_argument_it_cannot_take_raises_type_error_as_gdscript_reports_it
+    error = assert_raises(TypeError) { Godot::Vector2.new(1, 2).distance_to("x") }
 
     assert_equal "Invalid type in function 'distance_to' in base 'Vector2'. " \
                  "Cannot convert argument 1 from String to Vector2.", error.message

@@ -13,7 +13,7 @@ module Unit
       # What a call of such a method with too many arguments raises.
       def refusal
         get_rect(1)
-      rescue Godot::CallError => e
+      rescue ArgumentError => e
         e.message
       end
     end

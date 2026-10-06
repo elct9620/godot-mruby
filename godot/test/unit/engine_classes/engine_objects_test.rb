@@ -74,25 +74,32 @@ class EngineObjectsTest < Minitest::Test
   end
 
   # @behavior RG-018
-  def test_a_call_the_engine_refuses_raises_call_error_as_gdscript_reports_it
+  def test_a_call_with_the_wrong_number_of_arguments_raises_argument_error_as_ruby_reports_it
     node = autofree(Godot::Node.new)
 
-    too_few = assert_raises(Godot::CallError) { node.set_process_priority }
-    wrong_type = assert_raises(Godot::CallError) { node.set_process_priority(nil) }
+    too_few = assert_raises(ArgumentError) { node.set_process_priority }
+    too_many = assert_raises(ArgumentError) { node.set_process_priority(1, 2) }
 
-    assert_equal "Invalid call to function 'set_process_priority' in base 'Node'. Expected 1 argument(s).",
-                 too_few.message
-    assert_equal "Invalid type in function 'set_process_priority' in base 'Node'. " \
-                 "Cannot convert argument 1 from Nil to int.", wrong_type.message
+    assert_equal "wrong number of arguments (given 0, expected 1)", too_few.message
+    assert_equal "wrong number of arguments (given 2, expected 1)", too_many.message
   end
 
   # @behavior RG-018
-  def test_a_call_of_a_method_only_the_objects_own_engine_class_has_is_refused_as_gdscript_reports_it
+  def test_a_call_of_a_method_only_the_objects_own_engine_class_has_raises_argument_error_as_ruby_reports_it
     sprite = autofree(Godot::Sprite2D.new)
     sprite.set_script(Godot::ResourceLoader.load("res://test/unit/engine_classes/scout.rb"))
 
-    assert_equal "Invalid call to function 'get_rect' in base 'Sprite2D'. Expected 0 argument(s).",
-                 sprite.call(:refusal)
+    assert_equal "wrong number of arguments (given 1, expected 0)", sprite.call(:refusal)
+  end
+
+  # @behavior RG-027
+  def test_a_call_with_an_argument_the_engine_cannot_take_raises_type_error_as_gdscript_reports_it
+    node = autofree(Godot::Node.new)
+
+    error = assert_raises(TypeError) { node.set_process_priority(nil) }
+
+    assert_equal "Invalid type in function 'set_process_priority' in base 'Node'. " \
+                 "Cannot convert argument 1 from Nil to int.", error.message
   end
 
   # @behavior RG-019

@@ -144,13 +144,13 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | When | Ruby calls the method on the class under `Godot` |
 | Then | it gets what the method answers |
 
-## `RG-018` A call the engine refuses raises Godot::CallError as GDScript reports it
+## `RG-018` A call with the wrong number of arguments raises ArgumentError as Ruby reports it
 
 | Step | Statement |
 | --- | --- |
 | Given | an engine object |
-| When | Ruby calls one of its engine methods with too few arguments, or with an argument of a type the method cannot take |
-| Then | it raises `Godot::CallError` with the message GDScript's untyped call reports for the same call |
+| When | Ruby calls one of its engine methods with too few arguments, or too many |
+| Then | it raises `ArgumentError` saying, as Ruby does, how many arguments were given and how many the method takes |
 
 ## `RG-019` An engine method named like a Ruby method is reached through call
 
@@ -215,3 +215,11 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | an engine class or a node class |
 | When | Ruby calls `allocate` on it |
 | Then | it raises `TypeError`, so every object stands for an engine object |
+
+## `RG-027` A call with an argument the engine cannot take raises TypeError as GDScript reports it
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine object |
+| When | Ruby calls one of its engine methods with an argument of a type the method cannot take |
+| Then | it raises `TypeError` with the message GDScript's untyped call reports for the same call |

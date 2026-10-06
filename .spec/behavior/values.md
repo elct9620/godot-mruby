@@ -53,7 +53,7 @@ How a value crosses between Ruby and the engine, either way: data is copied and 
 | --- | --- |
 | Given | an Array nested more than 100 deep, or holding itself |
 | When | Ruby hands it to the engine |
-| Then | it raises `Godot::CallError` and the engine is given nothing |
+| Then | it raises `ArgumentError` and the engine is given nothing |
 
 ## `RV-007` An engine object crosses as the same object
 
@@ -95,13 +95,13 @@ How a value crosses between Ruby and the engine, either way: data is copied and 
 | When | Ruby calls `new` with arguments one of the engine's constructors takes |
 | Then | it gets the value that constructor builds, which the engine takes where it wants the type |
 
-## `RV-012` A constructor no arguments fit raises Godot::CallError as GDScript reports it
+## `RV-012` A constructor no arguments fit raises ArgumentError as GDScript reports it
 
 | Step | Statement |
 | --- | --- |
 | Given | a value type under `Godot` |
 | When | Ruby calls `new` with arguments none of the engine's constructors takes |
-| Then | it raises `Godot::CallError` with the message GDScript reports for the same call |
+| Then | it raises `ArgumentError` with the message GDScript reports for the same call |
 
 ## `RV-013` A value answers its members, methods and constants
 
@@ -175,13 +175,13 @@ How a value crosses between Ruby and the engine, either way: data is copied and 
 | When | the engine hands it to Ruby |
 | Then | Ruby gets an object of the class under `Godot` of the nearest ancestor the engine exposes, which reaches the hidden class's methods while other objects of that class do not |
 
-## `RV-022` A value's method the engine refuses raises Godot::CallError as GDScript reports it
+## `RV-022` A value's method given an argument it cannot take raises TypeError as GDScript reports it
 
 | Step | Statement |
 | --- | --- |
 | Given | a value of a type under `Godot` |
 | When | Ruby calls one of its engine methods with an argument the method cannot take |
-| Then | it raises `Godot::CallError` with the message GDScript reports for the same call |
+| Then | it raises `TypeError` with the message GDScript reports for the same call |
 
 ## `RV-023` A value responds to its members and methods
 
