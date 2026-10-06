@@ -151,12 +151,19 @@ class ValueTypesTest < Minitest::Test
   end
 
   # @behavior RV-026
-  def test_a_values_copy_is_the_value_itself
+  def test_a_values_copy_is_another_value_equal_to_it
     vector = Godot::Vector2.new(1, 2)
     color = Godot::Color.new(1, 0, 0)
+    color.instance_variable_set(:@tag, :red)
 
-    assert_same vector, vector.dup
-    assert_same color, color.clone
+    copies = [vector.dup, color.clone, Godot::Transform3D.new.dup]
+
+    refute_same vector, copies[0]
+    assert_equal vector, copies[0]
+    refute_same color, copies[1]
+    assert_equal color, copies[1]
+    assert_equal :red, copies[1].instance_variable_get(:@tag)
+    assert_equal Godot::Transform3D.new, copies[2]
   end
 
   # @behavior RV-027

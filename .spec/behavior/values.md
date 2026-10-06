@@ -207,13 +207,13 @@ How a value crosses between Ruby and the engine, either way: data is copied and 
 | When | Ruby looks it up by an equal value built apart, and by a value of another type |
 | Then | the equal value finds the entry, since it answers `eql?` and the same `hash`, and the other type finds none |
 
-## `RV-026` A value's copy is the value itself
+## `RV-026` A value's copy is another value equal to it
 
 | Step | Statement |
 | --- | --- |
 | Given | a value of a value type |
 | When | Ruby calls `dup` or `clone` on it |
-| Then | it gets the same value back, as Ruby answers for an Integer, since a value never changes |
+| Then | it gets another value of the same class, equal to the first and carrying its instance variables, as the engine copies a value |
 
 ## `RV-027` A value type's class allocates no empty value
 
