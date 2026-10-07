@@ -1,7 +1,7 @@
 //! Reads a Ruby file's source with Prism and never runs it, so what the file
 //! says is known on any thread before its file has run.
 
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 
 use godot::builtin::{GString, StringName, VarArray, VarDictionary, Variant};
 use godot::meta::ToGodot;
@@ -21,7 +21,7 @@ pub struct Header {
     writes: Vec<Vec<String>>,
     name: String,
     superclass: Option<Superclass>,
-    methods: BTreeSet<String>,
+    methods: BTreeMap<String, usize>,
     signals: Vec<Signal>,
     signal_names: Vec<String>,
     exports: Vec<Export>,
@@ -93,13 +93,21 @@ impl Header {
     }
 
     pub fn has_method(&self, name: &str) -> bool {
-        self.methods.contains(name)
+        self.methods.contains_key(name)
     }
 
     /// The names of the methods the file's class defines, as its `def`
     /// statements write them.
     pub fn methods(&self) -> impl Iterator<Item = &str> {
-        self.methods.iter().map(String::as_str)
+        self.methods.keys().map(String::as_str)
+    }
+
+    /// Each method the file's class defines, with the byte offset of its
+    /// `def` in the source.
+    pub fn method_offsets(&self) -> impl Iterator<Item = (&str, usize)> {
+        self.methods
+            .iter()
+            .map(|(name, offset)| (name.as_str(), *offset))
     }
 
     /// The signals the class declares, in the order it declares them, as the
@@ -167,7 +175,10 @@ impl Header {
         for node in statements.iter() {
             if let Some(def) = node.as_def_node() {
                 if def.receiver().is_none() {
-                    self.methods.insert(text(def.name().as_slice()));
+                    let offset = def.location().start_offset();
+                    self.methods
+                        .entry(text(def.name().as_slice()))
+                        .or_insert(offset);
                 }
             } else if let Some(call) = node.as_call_node() {
                 self.read_call(&call);

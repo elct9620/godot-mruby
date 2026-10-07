@@ -279,3 +279,11 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | an engine object that has been freed |
 | When | Ruby asks whether it responds to a name, one its engine class has a method for and one it has none for |
 | Then | it answers true and false, as its engine class has them, rather than raising |
+
+## `RG-035` A node's engine object reaches the engine's method its node class also defines
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose node class defines a method of an engine method's name, and Ruby holding the node's engine object rather than the class's object |
+| When | Ruby calls that name on the engine object |
+| Then | the engine's method runs and the node class's does not, as GDScript's typed call reaches the engine's |

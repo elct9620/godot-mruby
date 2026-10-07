@@ -170,6 +170,12 @@ fn find_info(class_db: &Gd<ClassDb>, declarer: &StringName, method: &str) -> Opt
 
 // The nearest of the engine class `class` and its ancestors whose own
 // methods include `method`.
+/// The engine class that binds `method` among `class` and its ancestors,
+/// nearest first, as GDScript names the native class a method overrides.
+pub fn method_declarer(class: &str, method: &str) -> Option<String> {
+    find_declarer(&ClassDb::singleton(), class, method).map(|declarer| declarer.to_string())
+}
+
 fn find_declarer(class_db: &Gd<ClassDb>, class: &str, method: &str) -> Option<StringName> {
     let mut current = StringName::from(class);
     while !current.is_empty() {

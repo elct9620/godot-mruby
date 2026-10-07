@@ -170,7 +170,10 @@ impl IScriptLanguageExtension for RubyLanguage {
             game::listing(),
             &test_directories,
             &settings::template_directory(),
-            &bridge::is_node_class,
+            &validation::EngineClasses {
+                is_node: &bridge::is_node_class,
+                method_declarer: &bridge::method_declarer,
+            },
             &path.to_string(),
             &script.to_string(),
         );

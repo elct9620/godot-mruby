@@ -69,3 +69,11 @@ How the editor learns what is wrong with a Ruby file as it is typed: the source 
 | Given | source whose line does not parse after characters wider than a byte |
 | When | the source is checked |
 | Then | the error's column counts each of those characters once |
+
+## `RK-008` A node script defining a method its engine class binds is warned of
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class defines a method of a name its engine class binds, such as `get_name` |
+| When | the editor checks the file |
+| Then | a warning comes back at the method's line that the engine will not call it, as GDScript's `NATIVE_METHOD_OVERRIDE` says |

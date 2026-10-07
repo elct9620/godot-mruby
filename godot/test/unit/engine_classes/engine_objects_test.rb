@@ -285,4 +285,14 @@ class EngineObjectsTest < Minitest::Test
 
     assert_equal [true, false], answers
   end
+
+  # @behavior RG-035
+  def test_a_nodes_engine_object_reaches_the_engines_method_its_node_class_also_defines
+    node = autofree(Godot::Node2D.new)
+    node.set_script(Godot::ResourceLoader.load("res://test/unit/engine_classes/lookout.rb"))
+
+    node.set_visible(false)
+
+    assert_equal [nil, false], [node.call(:shown), node.is_visible]
+  end
 end
