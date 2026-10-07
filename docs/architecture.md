@@ -1,6 +1,6 @@
 # Architecture
 
-How the parts of godot-mruby fit together. The words it uses are defined in `.spec/glossary.md`, and what each part promises is specified under `.spec/`.
+How the parts of godot-mruby fit together, in the words [`.spec/glossary.md`](../.spec/glossary.md) defines, with each part's promises under [`.spec/`](../.spec/).
 
 ## 1. Overview
 
