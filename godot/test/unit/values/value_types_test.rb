@@ -194,4 +194,13 @@ class ValueTypesTest < Minitest::Test
   ensure
     Godot::Value.__send__(:remove_method, :length)
   end
+
+  # @behavior RV-030
+  def test_a_values_member_called_with_arguments_raises_argument_error
+    vector = Godot::Vector2.new(3, 4)
+
+    error = assert_raises(ArgumentError) { vector.x(1) }
+
+    assert_equal "wrong number of arguments (given 1, expected 0)", error.message
+  end
 end

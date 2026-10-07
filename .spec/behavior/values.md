@@ -238,3 +238,11 @@ How a value crosses between Ruby and the engine, either way: data is copied and 
 | Given | a value type whose member or method Ruby has called, then a method of that name added to `Godot::Value` |
 | When | Ruby calls that name on a value of the type |
 | Then | the type's member or method answers |
+
+## `RV-030` A value's member called with arguments raises ArgumentError
+
+| Step | Statement |
+| --- | --- |
+| Given | a value of a value type |
+| When | Ruby calls one of its members with an argument |
+| Then | it raises `ArgumentError` in mruby's wording, as calling a Ruby reader with an argument does |
