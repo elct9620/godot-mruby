@@ -555,3 +555,13 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a project enabling a plugin whose `plugin.cfg` names a node script whose class calls `tool` and extends `Godot::EditorPlugin` |
 | When | the editor opens the project |
 | Then | the class's object is given `_enter_tree` as the editor adds the plugin |
+
+## `RS-068` A call from another thread waits while a node initializes
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose first call from Godot builds its Ruby object and runs `initialize` |
+| Given | another thread calling a method of the node's script before `initialize` returns |
+| When | `initialize` returns |
+| Then | the other thread's call reaches the object only then |
+| unverifiable | no test can make another thread arrive between the object being built and initialized |

@@ -25,7 +25,7 @@ use crate::bridge::{self, Owner, ToEngine, ToRuby};
 use crate::error;
 use crate::header::Header;
 use crate::log::GodotLog;
-use crate::realm::{self, Build, Key, RubyError};
+use crate::realm::{self, Build, Key, Realm, RubyError};
 use crate::snapshot::{self, Heading, Member, Property, Snapshot};
 
 /// A node's instance of a `RubyScript`. It holds no Ruby value: the node's
@@ -330,8 +330,11 @@ impl Caller {
 
     // The node's Ruby object, built at the first call that needs it and
     // initialized once it is held, unless Ruby made the node and built it.
-    // A call arriving while it initializes finds it held; one arriving while
-    // its file runs, before the class exists, finds none and builds nothing.
+    // A call arriving on the same thread while it initializes finds it held;
+    // one from another thread waits for the realm until it is initialized
+    // or has failed.
+    // A call arriving while its file runs, before the class exists, finds
+    // none and builds nothing.
     fn object(&self) -> Option<Key> {
         match self.current_stage() {
             Stage::Built => return Some(self.key()),
@@ -339,27 +342,32 @@ impl Caller {
             Stage::Recorded => {}
         }
         let key = self.key();
-        let owner = [Owner(self.owner)];
-        let built = realm::enter(|realm| realm.build(&self.path, key, c"__build__", owner))
-            .and_then(|built| {
-                if built == Build::Pending {
-                    return Ok(None);
-                }
-                self.settle(Stage::Built);
-                if built == Build::New {
-                    realm::enter(|realm| realm.send::<ToRuby, ToEngine>(key, "initialize", []))?;
-                }
-                self.write_stash(key);
-                Ok(Some(key))
-            });
-        built
-            .inspect_err(|failed| {
-                failed.write(&GodotLog);
+        let built = realm::enter(|realm| {
+            self.build_object(realm, key).inspect_err(|_| {
                 realm::release(key);
                 self.settle(Stage::Failed);
             })
+        });
+        built
+            .inspect_err(|failed| failed.write(&GodotLog))
             .ok()
             .flatten()
+    }
+
+    // Builds the node's object in `realm` and initializes what it made,
+    // writing what Godot staged for it.
+    fn build_object(&self, realm: &Realm, key: Key) -> Result<Option<Key>, RubyError> {
+        let owner = [Owner(self.owner)];
+        let built = realm.build(&self.path, key, c"__build__", owner)?;
+        if built == Build::Pending {
+            return Ok(None);
+        }
+        self.settle(Stage::Built);
+        if built == Build::New {
+            realm.send::<ToRuby, ToEngine>(key, "initialize", [])?;
+        }
+        self.write_stash(key);
+        Ok(Some(key))
     }
 
     // Writes what Godot wrote to the node's properties before it had an
