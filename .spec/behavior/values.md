@@ -246,3 +246,11 @@ How a value crosses between Ruby and the engine, either way: data is copied and 
 | Given | a value of a value type |
 | When | Ruby calls one of its members with an argument |
 | Then | it raises `ArgumentError` in mruby's wording, as calling a Ruby reader with an argument does |
+
+## `RV-031` A value type's class named anew holds the type's values
+
+| Step | Statement |
+| --- | --- |
+| Given | a value type's class removed from `Godot` and named again, so Ruby makes a new class for it |
+| When | Ruby builds a value with the new class, and the engine hands Ruby a value of the type |
+| Then | both values are of the new class |

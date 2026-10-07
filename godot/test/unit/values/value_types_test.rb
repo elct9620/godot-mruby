@@ -203,4 +203,15 @@ class ValueTypesTest < Minitest::Test
 
     assert_equal "wrong number of arguments (given 1, expected 0)", error.message
   end
+
+  # @behavior RV-031
+  def test_a_value_types_class_named_anew_holds_the_types_values
+    control = autofree(Godot::Control.new)
+    control.get_rect
+    Godot.__send__(:remove_const, :Rect2)
+
+    values = [Godot::Rect2.new, control.get_rect]
+
+    assert_equal [true, true], values.map { |value| value.instance_of?(Godot::Rect2) }
+  end
 end

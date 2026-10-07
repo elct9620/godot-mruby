@@ -152,13 +152,20 @@ fn class_by_kind(mrb: &Mrb, kind: VariantType) -> Option<RClass> {
         .module_get(c"Godot")
         .and_then(|godot| godot.class_get(mrb, type_name(kind).as_str()))
         .ok()?;
+    keep_class(mrb, kind, class);
+    Some(class)
+}
+
+// Keeps `class` as the class of the value type `kind`, rooted for the
+// collector so it lives while it is kept.
+fn keep_class(mrb: &Mrb, kind: VariantType, class: RClass) {
     mrb.gc_register_forever(class.as_value());
-    let mut classes = classes.borrow_mut();
+    let mut classes = realm::extension_data::<ValueClasses>(mrb).0.borrow_mut();
+    let index = kind.ord as usize;
     if classes.len() <= index {
         classes.resize(index + 1, None);
     }
     classes[index] = Some(class);
-    Some(class)
 }
 
 impl EngineValue {
@@ -195,7 +202,9 @@ fn kind_by_name(name: &str) -> Option<VariantType> {
 }
 
 // The value type a class under Godot stands for: found among the kept
-// classes by identity, and by the class's name only before it is kept.
+// classes by identity, and by the class's name only before it is kept. A
+// class Godot names now is kept for its type in place of one it named
+// before, so the type's values are made of the class Ruby names.
 fn kind_by_class(mrb: &Mrb, class: RClass) -> Result<VariantType, Error> {
     let kept = realm::extension_data::<ValueClasses>(mrb)
         .0
@@ -209,8 +218,19 @@ fn kind_by_class(mrb: &Mrb, class: RClass) -> Result<VariantType, Error> {
     let name = path.strip_prefix("Godot::").unwrap_or(&path);
     let kind = kind_by_name(name)
         .ok_or_else(|| type_error(mrb, &format!("{path} is no value type of the engine")))?;
-    class_by_kind(mrb, kind);
+    if is_named_by_godot(mrb, class, name) {
+        keep_class(mrb, kind, class);
+    }
     Ok(kind)
+}
+
+// Whether `class` is what Godot's constant `name` holds now.
+fn is_named_by_godot(mrb: &Mrb, class: RClass, name: &str) -> bool {
+    mrb.module_get(c"Godot")
+        .ok()
+        .filter(|godot| godot.const_defined_at(mrb, name))
+        .and_then(|godot| godot.const_get::<_, RClass>(mrb, name).ok())
+        .is_some_and(|named| named.as_value().is_equal(mrb, class.as_value()))
 }
 
 // Godot::Value.new(*args): the value the engine's constructor of the
