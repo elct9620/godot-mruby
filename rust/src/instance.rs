@@ -21,7 +21,7 @@ use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 
 use crate::ancestry::{Ancestry, Lineage};
-use crate::bridge::{self, NameKey, Owner, ToEngine, ToRuby};
+use crate::bridge::{self, Owner, ToEngine, ToRuby};
 use crate::error;
 use crate::header::Header;
 use crate::log::GodotLog;
@@ -61,7 +61,7 @@ pub struct Methods(Mutex<Option<MethodTable>>);
 // The methods a lineage had in a snapshot, and each one's name.
 struct MethodTable {
     snapshot: Arc<Snapshot>,
-    names: FxHashMap<NameKey, Arc<str>>,
+    names: FxHashMap<StringName, Arc<str>>,
 }
 
 impl Methods {
@@ -78,7 +78,7 @@ impl Methods {
             Some(table) if Arc::ptr_eq(&table.snapshot, &latest) => table,
             stale => stale.insert(MethodTable::new(&lineage(), latest)),
         };
-        table.names.get(&bridge::read_identity(method)).cloned()
+        table.names.get(method).cloned()
     }
 }
 
@@ -87,7 +87,7 @@ impl MethodTable {
         let names = lineage
             .collect_methods(&snapshot)
             .into_iter()
-            .map(|name| (NameKey::new(StringName::from(name)), Arc::from(name)))
+            .map(|name| (StringName::from(name), Arc::from(name)))
             .collect();
         Self { snapshot, names }
     }

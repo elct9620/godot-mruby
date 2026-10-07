@@ -22,7 +22,6 @@ use smallvec::SmallVec;
 
 use super::BridgeData;
 use super::bound_method::{Arity, BoundMethod};
-use super::name_key::NameKey;
 use super::value::{self, ToRuby};
 use crate::game;
 use crate::hint::{Hint, type_name};
@@ -440,16 +439,15 @@ pub(super) fn ruby_object(mrb: &Mrb, data: &BridgeData, object: Gd<Object>) -> V
 // kept.
 fn class_by_name(mrb: &Mrb, data: &BridgeData, name: StringName) -> Option<RClass> {
     let classes = &data.engine_classes;
-    let key = NameKey::new(name);
-    if let Some(class) = classes.borrow().get(&key).copied() {
+    if let Some(class) = classes.borrow().get(&name).copied() {
         return Some(class);
     }
     let class = mrb
         .module_get(c"Godot")
-        .and_then(|godot| godot.const_get::<_, RClass>(mrb, key.to_string().as_str()))
+        .and_then(|godot| godot.const_get::<_, RClass>(mrb, name.to_string().as_str()))
         .ok()?;
     mrb.gc_register_forever(class.as_value());
-    classes.borrow_mut().insert(key, class);
+    classes.borrow_mut().insert(name, class);
     Some(class)
 }
 

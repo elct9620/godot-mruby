@@ -15,7 +15,6 @@ use crate::{compiler, log, realm};
 
 mod bound_member;
 mod bound_method;
-mod name_key;
 mod object;
 mod ruby_object;
 mod utility;
@@ -23,7 +22,6 @@ mod value;
 mod value_type;
 
 pub use bound_method::method_declarer;
-pub use name_key::{NameKey, read_identity};
 pub use object::{Owner, node_key};
 pub use value::{ToEngine, ToRuby};
 
@@ -67,7 +65,7 @@ struct BridgeData {
     engine_names: RefCell<HashMap<Id, StringName>>,
     // The class under Godot of each engine class the realm has handed Ruby an
     // object of, by the engine's name for it.
-    engine_classes: RefCell<HashMap<NameKey, RClass>>,
+    engine_classes: RefCell<HashMap<StringName, RClass>>,
     // Godot::Value.
     value_class: Cell<Option<RClass>>,
     // The class under Godot of each value type the realm has handed Ruby a
