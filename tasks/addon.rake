@@ -20,4 +20,9 @@ namespace :addon do
   task :verify do
     Addon.verify!(ENV.fetch("ZIP", Addon::PACKAGE))
   end
+
+  desc "Play the release checks with a package (ZIP=path) installed into a copy of the test project"
+  task :release do
+    Addon.verify_release!(ENV.fetch("ZIP", Addon::PACKAGE))
+  end
 end

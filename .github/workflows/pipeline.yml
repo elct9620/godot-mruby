@@ -148,6 +148,11 @@ jobs:
             release: "4.6"
           - godot: "4.7"
             release: "4.7.2"
+          # What the extension refuses where the engine's debug checks would;
+          # one platform shows it, on the latest minor.
+          - os: ubuntu-24.04
+            godot: "4.7"
+            release_check: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -166,6 +171,12 @@ jobs:
       - run: bundle exec rake addon:verify
         env:
           TEST_REPORT_DIR: ${{ runner.temp }}/test-report
+      - uses: ./.github/actions/setup-godot-template
+        if: matrix.release_check
+        with:
+          version: ${{ matrix.release }}
+      - run: bundle exec rake addon:release
+        if: matrix.release_check
       # The Ruby tests' log and results, with the seed and order a flaky
       # failure needs to be run again.
       - if: failure()

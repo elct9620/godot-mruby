@@ -1,0 +1,53 @@
+name: Set up a Godot export template
+description: Download the official Linux x86_64 release export template and expose its binary as GODOT_RELEASE_TEMPLATE.
+
+inputs:
+  version:
+    description: Godot version as tagged in godotengine/godot-builds, without "-stable" (e.g. "4.7.2"); the editor exporting the pack must be the same.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve where the template is kept
+      id: resolve
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+      run: |
+        if [ "$RUNNER_OS-$RUNNER_ARCH" != "Linux-X64" ]; then
+          echo "::error::The release template is set up only on Linux x86_64"
+          exit 1
+        fi
+        echo "dir=${RUNNER_TOOL_CACHE}/godot-template/${VERSION}" >> "$GITHUB_OUTPUT"
+
+    - name: Restore the template from cache
+      id: cache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.resolve.outputs.dir }}
+        key: godot-template-${{ inputs.version }}-${{ runner.os }}-${{ runner.arch }}
+
+    # Godot ships its templates for every platform in one archive of about
+    # 1.2 GB; only the one binary is kept.
+    - name: Download the template
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        DIR: ${{ steps.resolve.outputs.dir }}
+      run: |
+        url="https://github.com/godotengine/godot-builds/releases/download/${VERSION}-stable/Godot_v${VERSION}-stable_export_templates.tpz"
+        archive="${RUNNER_TEMP}/templates.tpz"
+        curl -fsSL --retry 3 --retry-all-errors --connect-timeout 10 -o "$archive" "$url"
+        mkdir -p "$DIR"
+        unzip -q -j "$archive" templates/linux_release.x86_64 -d "$DIR"
+        rm "$archive"
+
+    - name: Expose GODOT_RELEASE_TEMPLATE
+      shell: bash
+      env:
+        BINARY: ${{ steps.resolve.outputs.dir }}/linux_release.x86_64
+      run: |
+        chmod +x "$BINARY"
+        echo "GODOT_RELEASE_TEMPLATE=$BINARY" >> "$GITHUB_ENV"

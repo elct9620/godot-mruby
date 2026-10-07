@@ -8,6 +8,7 @@ require "tmpdir"
 require_relative "extension"
 require_relative "godot"
 require_relative "notices"
+require_relative "release"
 
 # Packages the addon as it is distributed and checks a package the way a
 # user would install it. Backs tasks/addon.rake.
@@ -57,13 +58,28 @@ module Addon
   # is the archive's content rather than the working tree.
   def verify!(package)
     Dir.mktmpdir do |dir|
-      project = File.join(dir, "project")
-      copy_project(project)
-      extract(package, File.join(dir, "package"))
-      verify_notices!(File.join(dir, "package", FOLDER, "addons", "godot_mruby", NOTICES))
-      FileUtils.mv(File.join(dir, "package", FOLDER, "addons", "godot_mruby"), File.join(project, "addons"))
+      project = install(package, dir)
       Godot.verify!(project)
     end
+  end
+
+  # Plays the release checks with the package installed, so what a shipped
+  # game runs is the archive's library.
+  def verify_release!(package)
+    Dir.mktmpdir do |dir|
+      Godot::Release.verify!(install(package, dir))
+    end
+  end
+
+  # A copy of the test project in `dir` with the package installed, once its
+  # notices are checked.
+  def install(package, dir)
+    project = File.join(dir, "project")
+    copy_project(project)
+    extract(package, File.join(dir, "package"))
+    verify_notices!(File.join(dir, "package", FOLDER, "addons", "godot_mruby", NOTICES))
+    FileUtils.mv(File.join(dir, "package", FOLDER, "addons", "godot_mruby"), File.join(project, "addons"))
+    project
   end
 
   # @behavior RA-003

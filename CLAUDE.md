@@ -34,6 +34,7 @@ bundle exec rake extension:dist          # the library this platform ships (PROF
 bundle exec rake addon:package           # zip the addon with every platform's library and third-party licenses
 bundle exec rake bench                   # time a game's Ruby beside GDScript; read it on a release build
 bundle exec rake addon:verify            # install the zip into a copy of godot/ and run godot:verify's checks on it
+bundle exec rake addon:release           # install the zip likewise and run godot:release's checks on it
 bundle exec rake                         # rubocop + extension:build + godot:verify
 bundle exec rake beni:clean beni:build   # rebuild mruby after editing build_config/mruby.rb
 sumi verify                              # check the source against .spec/
