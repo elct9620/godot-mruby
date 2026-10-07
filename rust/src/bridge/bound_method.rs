@@ -95,12 +95,15 @@ impl BoundMethod {
     }
 
     /// Calls the method on `object`, which must be of the class the method
-    /// was found for or a class extending it.
+    /// was found for or a class extending it. A count of arguments the
+    /// method does not take is refused here, since a game exported without
+    /// the engine's debug checks would read past the method's defaults.
     pub fn call(
         &self,
         object: &Gd<Object>,
         args: &[Variant],
     ) -> Result<Variant, sys::GDExtensionCallError> {
+        self.arity.check(args.len())?;
         let pointers: SmallVec<[_; 4]> = args.iter().map(Variant::var_sys).collect();
         // SAFETY: the bind is alive while the engine runs, `object` is a live
         // object of a class the bind's class is or extends, and the argument
@@ -125,6 +128,24 @@ impl Arity {
         let class_db = ClassDb::singleton();
         let declarer = find_declarer(&class_db, class, method)?;
         Self::read(&find_info(&class_db, &declarer, method)?)
+    }
+
+    /// Whether the method takes `given` arguments, or the error the engine's
+    /// debug checks answer when it does not.
+    pub fn check(&self, given: usize) -> Result<(), sys::GDExtensionCallError> {
+        let takes = self.required + self.optional;
+        let error = if given < self.required {
+            sys::GDEXTENSION_CALL_ERROR_TOO_FEW_ARGUMENTS
+        } else if given > takes && !self.is_vararg {
+            sys::GDEXTENSION_CALL_ERROR_TOO_MANY_ARGUMENTS
+        } else {
+            return Ok(());
+        };
+        Err(sys::GDExtensionCallError {
+            error,
+            argument: 0,
+            expected: takes as i32,
+        })
     }
 
     // The arity a method's `info`, as ClassDB lists it, gives.
@@ -242,6 +263,43 @@ fn hash_words(words: impl IntoIterator<Item = u32>) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // @behavior RG-037
+    #[test]
+    fn check_refuses_a_count_the_method_does_not_take() {
+        let with_defaults = Arity {
+            required: 1,
+            optional: 2,
+            is_vararg: false,
+        };
+        let any_number = Arity {
+            required: 1,
+            optional: 0,
+            is_vararg: true,
+        };
+
+        let refusals = [
+            (with_defaults, 0),
+            (with_defaults, 1),
+            (with_defaults, 3),
+            (with_defaults, 4),
+            (any_number, 0),
+            (any_number, 9),
+        ]
+        .map(|(arity, given)| arity.check(given).err().map(|error| error.error));
+
+        assert_eq!(
+            refusals,
+            [
+                Some(sys::GDEXTENSION_CALL_ERROR_TOO_FEW_ARGUMENTS),
+                None,
+                None,
+                Some(sys::GDEXTENSION_CALL_ERROR_TOO_MANY_ARGUMENTS),
+                Some(sys::GDEXTENSION_CALL_ERROR_TOO_FEW_ARGUMENTS),
+                None,
+            ]
+        );
+    }
 
     // Words a method's signature gives its hash, as hash_method collects
     // them, beside the hash Godot 4.6's extension API lists for the method.

@@ -6,6 +6,7 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 
 - `godot/test/unit/engine_classes/**/*_test.rb`
 - `tasks/support/runner.rb`
+- `rust/src/bridge/bound_method.rs`
 
 ## `RG-001` An engine class is a class under Godot
 
@@ -287,3 +288,11 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | a node whose node class defines a method of an engine method's name, and Ruby holding the node's engine object rather than the class's object |
 | When | Ruby calls that name on the engine object |
 | Then | the engine's method runs and the node class's does not, as GDScript's typed call reaches the engine's |
+
+## `RG-037` An engine method's bind is refused a wrong number of arguments before the engine runs it
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine method the engine gave a bind for, which a game exported without the engine's debug checks calls too |
+| When | Ruby calls it with fewer arguments than it requires, or more than it takes |
+| Then | the call is refused without reaching the engine |
