@@ -17,18 +17,6 @@ pub(super) struct ReentrantLock<T> {
 struct Holder {
     thread: Option<ThreadId>,
     depth: usize,
-    // Threads waiting for the lock, which its release wakes only if any.
-    waiters: usize,
-}
-
-thread_local! {
-    // This thread's id, read without the reference count `thread::current`
-    // takes and drops each time.
-    static CURRENT: ThreadId = thread::current().id();
-}
-
-fn current_thread() -> ThreadId {
-    CURRENT.with(|id| *id)
 }
 
 // SAFETY: only the thread holding the lock reaches `value`, and only through a
@@ -41,7 +29,6 @@ impl<T> ReentrantLock<T> {
             holder: Mutex::new(Holder {
                 thread: None,
                 depth: 0,
-                waiters: 0,
             }),
             release: Condvar::new(),
             value: UnsafeCell::new(value),
@@ -50,21 +37,18 @@ impl<T> ReentrantLock<T> {
 
     /// Takes the lock, waiting while another thread holds it.
     pub fn lock(&self) -> ReentrantLockGuard<'_, T> {
-        let current = current_thread();
+        let current = thread::current().id();
         let mut holder = self.holder();
         while holder.thread.is_some_and(|thread| thread != current) {
-            holder.waiters += 1;
             holder = self
                 .release
                 .wait(holder)
                 .unwrap_or_else(PoisonError::into_inner);
-            holder.waiters -= 1;
         }
         holder.thread = Some(current);
         holder.depth += 1;
         ReentrantLockGuard {
             lock: self,
-            depth: holder.depth,
             not_send: PhantomData,
         }
     }
@@ -72,7 +56,7 @@ impl<T> ReentrantLock<T> {
     /// Whether this thread holds the lock, which it answers without waiting
     /// for the thread that does.
     pub fn is_held_here(&self) -> bool {
-        self.holder().thread == Some(current_thread())
+        self.holder().thread == Some(thread::current().id())
     }
 
     // The holder is only ever changed whole, so a panic leaves it consistent.
@@ -83,10 +67,6 @@ impl<T> ReentrantLock<T> {
 
 pub(super) struct ReentrantLockGuard<'a, T> {
     lock: &'a ReentrantLock<T>,
-    // The guards this thread held the lock through once it took this one,
-    // this one included; guards go in the order they came, so it stays true
-    // while this guard is the one the thread uses.
-    depth: usize,
     not_send: PhantomData<*const ()>,
 }
 
@@ -98,7 +78,7 @@ impl<T> ReentrantLockGuard<'_, T> {
 
     /// How many guards this thread holds the lock through, this one included.
     pub fn depth(&self) -> usize {
-        self.depth
+        self.lock.holder().depth
     }
 }
 
@@ -117,9 +97,7 @@ impl<T> Drop for ReentrantLockGuard<'_, T> {
         holder.depth -= 1;
         if holder.depth == 0 {
             holder.thread = None;
-            if holder.waiters > 0 {
-                self.lock.release.notify_one();
-            }
+            self.lock.release.notify_one();
         }
     }
 }
