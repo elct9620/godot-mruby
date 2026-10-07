@@ -212,6 +212,19 @@ class ValueTypesTest < Minitest::Test
     assert_equal "wrong number of arguments (given 1, expected 0)", error.message
   end
 
+  # @behavior RV-033
+  def test_a_value_types_method_is_refused_fewer_arguments_than_it_requires
+    vector = Godot::Vector2.new(1, 2)
+
+    method = assert_raises(ArgumentError) { vector.lerp(Godot::Vector2.new(0, 0)) }
+    with_defaults = assert_raises(ArgumentError) { Godot::NodePath.new("a/b").slice }
+    static = assert_raises(ArgumentError) { Godot::Color.from_hsv(0.5) }
+
+    assert_equal "wrong number of arguments (given 1, expected 2)", method.message
+    assert_equal "wrong number of arguments (given 0, expected 1)", with_defaults.message
+    assert_equal "wrong number of arguments (given 1, expected 3)", static.message
+  end
+
   # @behavior RV-031
   def test_a_value_types_class_named_anew_holds_the_types_values
     control = autofree(Godot::Control.new)

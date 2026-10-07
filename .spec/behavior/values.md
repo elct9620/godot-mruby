@@ -262,3 +262,11 @@ How a value crosses between Ruby and the engine, either way: data is copied and 
 | Given | an engine call answering an Array nested more than 100 deep |
 | When | Ruby makes the call |
 | Then | it raises `Godot::CallError` naming the Array's depth, and Ruby is handed nothing |
+
+## `RV-033` A value type's method is refused fewer arguments than it requires before the engine runs it
+
+| Step | Statement |
+| --- | --- |
+| Given | a value type's method, or its static method, which a game exported without the engine's debug checks calls too |
+| When | Ruby calls it with fewer arguments than it requires |
+| Then | it raises `ArgumentError` naming the arguments given and those the method requires, without reaching the engine |

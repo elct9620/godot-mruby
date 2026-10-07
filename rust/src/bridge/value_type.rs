@@ -7,7 +7,7 @@
 
 use std::borrow::Cow;
 use std::ptr;
-use std::sync::OnceLock;
+use std::sync::{LazyLock, OnceLock};
 
 use beni::{
     DataType, Error, FromValue, IntoValue, Module, Mrb, Object as _, RArray, RClass, RModule,
@@ -17,11 +17,14 @@ use godot::builtin::{GString, StringName, Variant, VariantOperator, VariantType,
 use godot::meta::ToGodot;
 use godot::obj::EngineEnum;
 use godot::sys;
+use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 
 use super::BridgeData;
 use super::bound_member::BoundMember;
-use super::object::{name_by_symbol, to_arguments, type_error, zero_division_error};
+use super::object::{
+    argument_error, count_message, name_by_symbol, to_arguments, type_error, zero_division_error,
+};
 use super::value::{self, ToRuby};
 use crate::hint::type_name;
 
@@ -276,13 +279,16 @@ fn read_vector2(args: &[Value]) -> Option<Vector2> {
     }
 }
 
-// A value type's name, its members, and its methods with the hash of each
-// one's signature.
+// A value type's name, its members, and its methods.
 type ValueNames = (
     &'static str,
     &'static [&'static str],
-    &'static [(&'static str, i64)],
+    &'static [MethodNames],
 );
+
+// A value type's method: its name, the hash of its signature, how many
+// arguments it requires, and whether it is static.
+type MethodNames = (&'static str, i64, usize, bool);
 
 // Each value type's names, as the API the extension is built against lists
 // them.
@@ -318,8 +324,8 @@ fn engine_names(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
         .chain(
             methods
                 .iter()
-                .filter(|(name, hash)| has_method(name, *hash))
-                .map(|(name, _)| *name),
+                .filter(|(name, hash, _, is_static)| !is_static && has_method(name, *hash))
+                .map(|(name, ..)| *name),
         )
         .map(|name| {
             mrb.intern(name.as_bytes())
@@ -398,6 +404,7 @@ fn read_named(value: &Variant, name: &StringName) -> Option<Variant> {
 // the value's type has, answers for `args`.
 fn call(mrb: &Mrb, held: &EngineValue, name: Symbol, args: RArray) -> Result<Value, Error> {
     let name = name_by_symbol(mrb, name);
+    check_required(mrb, held.kind(), &name, args.len())?;
     let args = to_arguments(mrb, super::data(mrb), args.entries(mrb))?;
     let pointers: SmallVec<[_; 4]> = args.iter().map(Variant::var_sys).collect();
     let mut receiver = held.variant();
@@ -422,6 +429,7 @@ fn call(mrb: &Mrb, held: &EngineValue, name: Symbol, args: RArray) -> Result<Val
 fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<Value, Error> {
     let kind = kind_by_class(mrb, super::data(mrb), class)?;
     let name = name_by_symbol(mrb, name);
+    check_required(mrb, kind, &name, args.len())?;
     let args = to_arguments(mrb, super::data(mrb), args.entries(mrb))?;
     let pointers: SmallVec<[_; 4]> = args.iter().map(Variant::var_sys).collect();
     let kind_sys = kind.ord as sys::GDExtensionVariantType;
@@ -445,6 +453,46 @@ fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<V
             Ok(mrb.ary_new_from_values(&[answer]).as_value())
         }
     }
+}
+
+// Refuses a call of `method` on a value of type `kind` given fewer arguments
+// than it requires: the engine checks the count only in its debug builds,
+// and without that check it stops the game. Too many it ignores, so those are
+// left to it.
+fn check_required(
+    mrb: &Mrb,
+    kind: VariantType,
+    method: &StringName,
+    given: usize,
+) -> Result<(), Error> {
+    match required_count(kind, method) {
+        Some(required) if given < required => {
+            Err(argument_error(mrb, &count_message(given, required)))
+        }
+        _ => Ok(()),
+    }
+}
+
+// How many arguments the method `method` of type `kind` requires, as the API
+// the extension is built against lists it. A later engine that gives one of
+// those arguments a default still has it required here.
+fn required_count(kind: VariantType, method: &StringName) -> Option<usize> {
+    static REQUIRED: LazyLock<FxHashMap<(i32, StringName), usize>> = LazyLock::new(|| {
+        let kinds: Vec<VariantType> = (0..VariantType::MAX.ord)
+            .map(<VariantType as EngineEnum>::from_ord)
+            .collect();
+        VALUE_NAMES
+            .iter()
+            .filter_map(|(name, _, methods)| {
+                let kind = kinds.iter().find(|kind| type_name(**kind) == *name)?;
+                Some(methods.iter().map(move |(method, _, required, _)| {
+                    ((kind.ord, StringName::from(*method)), *required)
+                }))
+            })
+            .flatten()
+            .collect()
+    });
+    REQUIRED.get(&(kind.ord, method.clone())).copied()
 }
 
 // What a call of `method` on a value of type `kind` answered, or the error

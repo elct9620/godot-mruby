@@ -1,6 +1,7 @@
 //! Writes the names of each value type's members and methods, as the API
 //! the extension is built against lists them, so a value type's class can
-//! define them when it is made; the engine lists none at runtime.
+//! define them when it is made, with the number of arguments each method
+//! requires; the engine lists none of these at runtime.
 
 use std::fmt::Write as _;
 use std::path::Path;
@@ -15,8 +16,17 @@ fn main() {
     for class in entries(&api["builtin_classes"]) {
         let members: Vec<&str> = entries(&class["members"]).map(name).collect();
         let methods: Vec<String> = entries(&class["methods"])
-            .filter(|method| !method["is_static"].as_bool().unwrap_or(false))
-            .map(|method| format!("({:?}, {})", name(method), method["hash"]))
+            .map(|method| {
+                let required = entries(&method["arguments"])
+                    .filter(|argument| argument.get("default_value").is_none())
+                    .count();
+                let is_static = method["is_static"].as_bool().unwrap_or(false);
+                format!(
+                    "({:?}, {}, {required}, {is_static})",
+                    name(method),
+                    method["hash"]
+                )
+            })
             .collect();
         writeln!(
             table,
