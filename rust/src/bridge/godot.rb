@@ -155,8 +155,7 @@ module Godot
       end
 
       private :__make__, :__make_node__, :__allocate__, :__declares__, :__singleton__, :__has_static_method__, :__call_static__,
-              :__engine_constant__, :__declare_signal__, :__declare_export__, :__declare_heading__, :__shape__,
-              :__omitted__
+              :__engine_constant__, :__declare_signal__, :__declare_export__, :__declare_heading__, :__shape__
 
       private
 
@@ -167,28 +166,15 @@ module Godot
       end
 
       # The body of the engine method `bound` binds: a strict block of the
-      # arguments it requires and takes, so a call gathers none into an array,
-      # an optional one left out standing as the marker `__omitted__` gives
-      # for the engine's default; a method taking any number, or more than
-      # four, gathers them.
+      # arguments it requires, so a call gathers none into an array, when it
+      # takes no others and at most four; any other method gathers them.
       def __bound_body__(bound)
-        omitted = __omitted__
         case __shape__(bound)
         when [0, 0] then proc { __call_bound__(bound) }
         when [1, 0] then proc { |a| __call_bound__(bound, a) }
         when [2, 0] then proc { |a, b| __call_bound__(bound, a, b) }
         when [3, 0] then proc { |a, b, c| __call_bound__(bound, a, b, c) }
         when [4, 0] then proc { |a, b, c, d| __call_bound__(bound, a, b, c, d) }
-        when [0, 1] then proc { |a = omitted| __call_bound__(bound, a) }
-        when [1, 1] then proc { |a, b = omitted| __call_bound__(bound, a, b) }
-        when [2, 1] then proc { |a, b, c = omitted| __call_bound__(bound, a, b, c) }
-        when [3, 1] then proc { |a, b, c, d = omitted| __call_bound__(bound, a, b, c, d) }
-        when [0, 2] then proc { |a = omitted, b = omitted| __call_bound__(bound, a, b) }
-        when [1, 2] then proc { |a, b = omitted, c = omitted| __call_bound__(bound, a, b, c) }
-        when [2, 2] then proc { |a, b, c = omitted, d = omitted| __call_bound__(bound, a, b, c, d) }
-        when [0, 3] then proc { |a = omitted, b = omitted, c = omitted| __call_bound__(bound, a, b, c) }
-        when [1, 3] then proc { |a, b = omitted, c = omitted, d = omitted| __call_bound__(bound, a, b, c, d) }
-        when [0, 4] then proc { |a = omitted, b = omitted, c = omitted, d = omitted| __call_bound__(bound, a, b, c, d) }
         else proc { |*arguments| __apply_bound__(bound, arguments) }
         end
       end

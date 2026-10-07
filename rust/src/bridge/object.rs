@@ -84,21 +84,7 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     object.define_private_method(mrb, c"__instance_id__", method!(instance_id, 0))?;
     object.define_private_method(mrb, c"__label__", method!(label, 0))?;
     object.define_private_method(mrb, c"__clone__", method!(clone, -1))?;
-    object.define_singleton_method(mrb, c"__omitted__", method!(omitted, 0))?;
-    let omitted = mrb.object_class().new_instance(mrb, &[])?;
-    mrb.gc_register_forever(omitted);
-    super::data(mrb).omitted.set(Some(omitted));
     Ok(())
-}
-
-// Godot::Object.__omitted__: what an engine method's body passes for an
-// optional argument the call left out, so the engine applies its default;
-// no constant names it, so nothing Ruby passes is taken for it.
-fn omitted(mrb: &Mrb, _class: RClass) -> Value {
-    super::data(mrb)
-        .omitted
-        .get()
-        .unwrap_or_else(|| qnil().as_value())
 }
 
 fn root(mrb: &Mrb) -> Result<RClass, Error> {
@@ -292,20 +278,13 @@ fn indexed_property(mrb: &Mrb, accessor: &str, property: &str) -> Result<Value, 
 }
 
 // Godot::Object#__call_bound__(bound, *args): calls the engine method
-// `bound` with the arguments given, those after the last one given left to
-// their defaults, and answers what it returns.
+// `bound` with the arguments given and answers what it returns.
 fn call_bound(mrb: &Mrb, held: &EngineObject, args: &[Value]) -> Result<Value, Error> {
     let Some((&bound, args)) = args.split_first() else {
         return Err(argument_error(mrb, &count_message(0, 1)));
     };
     let bound = <&BoundMethod>::try_convert(bound, mrb)?;
-    let data = super::data(mrb);
-    let omitted = data.omitted.get();
-    let given = args
-        .iter()
-        .rposition(|arg| omitted.is_none_or(|omitted| !arg.is_equal(mrb, omitted)))
-        .map_or(0, |last| last + 1);
-    call_bind(mrb, data, held, bound, args[..given].iter().copied())
+    call_bind(mrb, super::data(mrb), held, bound, args.iter().copied())
 }
 
 // Godot::Object#__apply_bound__(bound, args): calls the engine method

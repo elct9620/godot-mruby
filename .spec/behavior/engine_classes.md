@@ -287,11 +287,3 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | a node whose node class defines a method of an engine method's name, and Ruby holding the node's engine object rather than the class's object |
 | When | Ruby calls that name on the engine object |
 | Then | the engine's method runs and the node class's does not, as GDScript's typed call reaches the engine's |
-
-## `RG-036` The marker for a left-out argument is not Ruby's to name
-
-| Step | Statement |
-| --- | --- |
-| Given | an engine class whose method takes an optional argument |
-| When | Ruby names `Godot::Object::OMITTED` |
-| Then | it raises `NameError`, so no argument Ruby passes is taken for one it left out |
