@@ -254,3 +254,11 @@ How a value crosses between Ruby and the engine, either way: data is copied and 
 | Given | a value type's class removed from `Godot` and named again, so Ruby makes a new class for it |
 | When | Ruby builds a value with the new class, and the engine hands Ruby a value of the type |
 | Then | both values are of the new class |
+
+## `RV-032` An engine answer nested too deep raises Godot::CallError
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine call answering an Array nested more than 100 deep |
+| When | Ruby makes the call |
+| Then | it raises `Godot::CallError` naming the Array's depth, and Ruby is handed nothing |

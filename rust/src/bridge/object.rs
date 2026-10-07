@@ -23,7 +23,7 @@ use smallvec::SmallVec;
 use super::BridgeData;
 use super::bound_method::{Arity, BoundMethod};
 use super::name_key::NameKey;
-use super::value::{self, ToRuby};
+use super::value;
 use crate::game;
 use crate::hint::{Hint, type_name};
 use crate::realm::{self, Key};
@@ -422,9 +422,7 @@ fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<V
 // What the engine answered, as Ruby is given it, or the Godot::CallError an
 // answer that cannot reach Ruby raises.
 fn ruby_answer(mrb: &Mrb, data: &BridgeData, answer: &Variant) -> Result<Value, Error> {
-    ToRuby::try_new(answer)
-        .map(|answer| answer.into_ruby(mrb, data))
-        .map_err(|reason| call_error(mrb, &reason))
+    value::ruby_value_of(mrb, data, answer).map_err(|reason| call_error(mrb, &reason))
 }
 
 /// The Ruby object for an engine object: the one the realm holds for the

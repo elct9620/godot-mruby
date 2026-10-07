@@ -91,6 +91,15 @@ class ValuesTest < Minitest::Test
     refute_respond_to Godot::RefCounted.new, :is_valid
   end
 
+  # @behavior RV-032
+  def test_an_engine_answer_nested_too_deep_raises_call_error
+    deep = ("[" * 101) + ("]" * 101)
+
+    error = assert_raises(Godot::CallError) { Godot::JSON.parse_string(deep) }
+
+    assert_equal "an Array nested more than 100 deep cannot reach Ruby", error.message
+  end
+
   private
 
   # A GDScript whose `wait` suspends, so calling it without `await` answers

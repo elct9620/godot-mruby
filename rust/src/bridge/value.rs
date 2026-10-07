@@ -72,14 +72,43 @@ fn unreachable_reason(variant: &Variant) -> Option<String> {
             _ => true,
         }
     }
-    (!is_shallow(variant, 1)).then(|| {
-        let kind = godot::global::type_string(i64::from(variant.get_type().ord));
-        format!("an {kind} nested more than {DEPTH} deep cannot reach Ruby")
-    })
+    (!is_shallow(variant, 1)).then(|| too_deep_reason(variant))
 }
 
+fn too_deep_reason(variant: &Variant) -> String {
+    let kind = godot::global::type_string(i64::from(variant.get_type().ord));
+    format!("an {kind} nested more than {DEPTH} deep cannot reach Ruby")
+}
+
+/// `variant` for Ruby, checked as it is made rather than walked first, or
+/// why it cannot reach Ruby; what was made of it is left to the collector.
+pub(super) fn ruby_value_of(
+    mrb: &Mrb,
+    data: &BridgeData,
+    variant: &Variant,
+) -> Result<Value, String> {
+    convert(mrb, data, variant, 1).map_err(|TooDeep| too_deep_reason(variant))
+}
+
+// A value already found shallow enough, for Ruby.
 fn to_ruby(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> Value {
-    match variant.get_type() {
+    convert(mrb, data, variant, 1).unwrap_or_else(|TooDeep| qnil().as_value())
+}
+
+// A container nested deeper than Ruby is handed.
+struct TooDeep;
+
+// `variant`, found `level` containers deep, for Ruby.
+fn convert(
+    mrb: &Mrb,
+    data: &BridgeData,
+    variant: &Variant,
+    level: usize,
+) -> Result<Value, TooDeep> {
+    if level > DEPTH {
+        return Err(TooDeep);
+    }
+    Ok(match variant.get_type() {
         VariantType::BOOL => variant.to::<bool>().into_value(mrb),
         VariantType::INT => variant.to::<i64>().into_value(mrb),
         VariantType::FLOAT => variant.to::<f64>().into_value(mrb),
@@ -87,12 +116,20 @@ fn to_ruby(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> Value {
             .str_new(variant.to::<GString>().to_string().as_bytes())
             .as_value(),
         VariantType::STRING_NAME => symbol(mrb, &variant.to::<StringName>().to_string()),
-        VariantType::ARRAY => array(mrb, data, variant.to::<AnyArray>().iter_shared()),
+        VariantType::ARRAY => {
+            let values = variant
+                .to::<AnyArray>()
+                .iter_shared()
+                .map(|element| convert(mrb, data, &element, level + 1))
+                .collect::<Result<Vec<_>, _>>()?;
+            mrb.ary_new_from_values(&values).as_value()
+        }
         VariantType::DICTIONARY => {
             let hash = mrb.hash_new();
             for (key, value) in variant.to::<AnyDictionary>().iter_shared() {
-                hash.set(mrb, to_ruby(mrb, data, &key), to_ruby(mrb, data, &value))
-                    .ok();
+                let key = convert(mrb, data, &key, level + 1)?;
+                let value = convert(mrb, data, &value, level + 1)?;
+                hash.set(mrb, key, value).ok();
             }
             hash.as_value()
         }
@@ -126,7 +163,7 @@ fn to_ruby(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> Value {
         VariantType::PACKED_COLOR_ARRAY => from_packed::<Color>(mrb, data, variant),
         VariantType::PACKED_VECTOR4_ARRAY => from_packed::<Vector4>(mrb, data, variant),
         _ => qnil().as_value(),
-    }
+    })
 }
 
 fn symbol(mrb: &Mrb, name: &str) -> Value {
