@@ -319,7 +319,7 @@ fn call_bind(
 ) -> Result<Value, Error> {
     let object = held.live_object(mrb, bound.name())?;
     let args = to_arguments(mrb, data, args)?;
-    let answer = bound.call(&object, &args).map_err(|error| {
+    let answer = bound.call(object, &args).map_err(|error| {
         let base = object.get_class().to_string();
         refusal_error(mrb, &error, bound.name(), &base, &args, Some(bound.arity()))
     })?;
@@ -343,7 +343,7 @@ fn shape(mrb: &Mrb, _class: RClass, bound: &BoundMethod) -> Value {
 fn call(mrb: &Mrb, held: &EngineObject, name: Symbol, args: RArray) -> Result<Value, Error> {
     let data = super::data(mrb);
     let name = name_by_symbol(mrb, name);
-    let mut object = held.live_object(mrb, &name)?;
+    let mut object = held.live_object(mrb, &name)?.clone();
     let args = to_arguments(mrb, data, args.entries(mrb))?;
     let answer = object.try_call(&name, &args).map_err(|error| {
         let base = object.get_class().to_string();
@@ -759,15 +759,16 @@ impl EngineObject {
         }
     }
 
-    // The engine object, or the Godot::CallError calling `method` on a freed
-    // one raises, worded as GDScript words it.
+    // The engine object, lent rather than copied since a copy checks it
+    // again, or the Godot::CallError calling `method` on a freed one raises,
+    // worded as GDScript words it.
     fn live_object(
         &self,
         mrb: &Mrb,
         method: &(impl fmt::Display + ?Sized),
-    ) -> Result<Gd<Object>, Error> {
+    ) -> Result<&Gd<Object>, Error> {
         if self.0.is_instance_valid() {
-            Ok(self.0.clone())
+            Ok(&self.0)
         } else {
             let message = format!(
                 "Attempt to call function '{method}' in base 'previously freed' on a null instance."
