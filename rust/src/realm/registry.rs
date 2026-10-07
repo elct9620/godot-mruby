@@ -20,7 +20,8 @@ impl From<i64> for Key {
 pub(super) struct Registry {
     objects: RHash,
     // The last key the registry named itself. It counts down from -1, since
-    // a node's key is its instance id, which is positive.
+    // a node's key is its instance id, which is positive: only a
+    // reference-counted object's id is negative, and no node is one.
     last: Cell<i64>,
 }
 

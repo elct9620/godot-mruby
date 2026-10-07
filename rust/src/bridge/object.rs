@@ -178,7 +178,8 @@ fn check_stands_for(mrb: &Mrb, class: RClass, owner: &EngineObject) -> Result<()
     Err(type_error(mrb, &message))
 }
 
-/// The key a realm holds a node's Ruby object under.
+/// The key a realm holds a node's Ruby object under: its instance id, which
+/// is positive, since only a reference-counted object's id is negative.
 pub fn node_key(node: InstanceId) -> Key {
     Key::from(node.to_i64())
 }
@@ -427,9 +428,14 @@ fn ruby_answer(mrb: &Mrb, data: &BridgeData, answer: &Variant) -> Result<Value, 
 }
 
 /// The Ruby object for an engine object: the one the realm holds for the
-/// node, or an object of its engine class under Godot.
+/// node, or an object of its engine class under Godot. Only a node is held
+/// under its instance id, and a reference-counted object, never a node, is
+/// not looked for: its id is negative, as the keys the realm names itself.
 pub(super) fn ruby_object(mrb: &Mrb, data: &BridgeData, object: Gd<Object>) -> Value {
-    if let Some(held) = realm::object(mrb, node_key(object.instance_id())) {
+    let id = object.instance_id();
+    if !id.is_ref_counted()
+        && let Some(held) = realm::object(mrb, node_key(id))
+    {
         return held;
     }
     let class = class_by_name(mrb, data, exposed_class(&object)).or_else(|| root(mrb).ok());

@@ -96,19 +96,24 @@ fn to_ruby(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> Value {
             }
             hash.as_value()
         }
-        VariantType::OBJECT => variant
+        VariantType::OBJECT => match variant
             .try_to::<Gd<Object>>()
             .ok()
             .filter(Gd::is_instance_valid)
-            .map_or_else(
-                || qnil().as_value(),
-                |object| match object.try_cast::<RubyObject>() {
+        {
+            None => qnil().as_value(),
+            // Only a reference-counted object can be a Ruby object handed to
+            // the engine; a node, the other kind the realm holds, never is.
+            Some(object) if object.instance_id().is_ref_counted() => {
+                match object.try_cast::<RubyObject>() {
                     Ok(held) => {
                         realm::object(mrb, held.bind().key()).unwrap_or_else(|| qnil().as_value())
                     }
                     Err(object) => object::ruby_object(mrb, data, object),
-                },
-            ),
+                }
+            }
+            Some(object) => object::ruby_object(mrb, data, object),
+        },
         kind if value_type::is_value_type(kind) => value_type::ruby_value(mrb, data, variant),
         VariantType::PACKED_BYTE_ARRAY => from_packed::<u8>(mrb, data, variant),
         VariantType::PACKED_INT32_ARRAY => from_packed::<i32>(mrb, data, variant),
