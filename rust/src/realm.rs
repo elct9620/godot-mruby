@@ -2,7 +2,6 @@ use std::any::{Any, TypeId};
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::ffi::CStr;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use beni::{
@@ -273,9 +272,6 @@ static GAME: ReentrantLock<RefCell<Game>> = ReentrantLock::new(RefCell::new(Game
 const DEEPEST_ENTRY: usize = 24;
 // Keys let go of on any thread, waiting for the game's realm to take them.
 static RELEASES: Mutex<Vec<Key>> = Mutex::new(Vec::new());
-// Whether RELEASES holds a key, so each entry tells there is none without
-// taking its lock. It is set and cleared only while the lock is held.
-static RELEASES_WAITING: AtomicBool = AtomicBool::new(false);
 // Paths of files whose source changed, waiting for the game's realm's next
 // frame to run them again.
 static SOURCE_CHANGES: Mutex<Vec<String>> = Mutex::new(Vec::new());
@@ -441,25 +437,13 @@ pub fn file_by_constant(mrb: &Mrb, names: &[String]) -> Option<String> {
 /// Lets go of the object `key` holds at the realm's next entry or frame,
 /// never waiting for the realm, so whatever frees a node never waits for Ruby.
 pub fn release(key: Key) {
-    let mut releases = RELEASES.lock().unwrap();
-    releases.push(key);
-    RELEASES_WAITING.store(true, Ordering::Release);
-}
-
-// The keys let go of since the last time they were taken.
-fn take_releases() -> Vec<Key> {
-    if !RELEASES_WAITING.load(Ordering::Acquire) {
-        return Vec::new();
-    }
-    let mut releases = RELEASES.lock().unwrap();
-    RELEASES_WAITING.store(false, Ordering::Release);
-    std::mem::take(&mut *releases)
+    RELEASES.lock().unwrap().push(key);
 }
 
 /// Lets go of the objects released keys hold, entering the game's realm only
 /// when a key is waiting; the extension calls it every frame.
 pub fn release_queued() {
-    if !RELEASES_WAITING.load(Ordering::Acquire) {
+    if RELEASES.lock().unwrap().is_empty() {
         return;
     }
     let game = GAME.lock();
@@ -517,7 +501,7 @@ pub fn close() {
         return;
     }
     *game.borrow_mut() = Game::Closed;
-    take_releases();
+    RELEASES.lock().unwrap().clear();
     SOURCE_CHANGES.lock().unwrap().clear();
     snapshot::publish(Arc::default());
 }
@@ -695,7 +679,7 @@ impl Realm {
     }
 
     fn release_queued(&self) {
-        let keys = take_releases();
+        let keys = std::mem::take(&mut *RELEASES.lock().unwrap());
         let registry = &bookkeeping(&self.mrb).registry;
         for key in keys {
             registry.release(&self.mrb, key);
