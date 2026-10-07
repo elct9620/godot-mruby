@@ -570,14 +570,51 @@ static INFO: sys::GDExtensionScriptInstanceInfo3 = sys::GDExtensionScriptInstanc
     free_func: Some(free),
 };
 
-// The instance Godot hands a callback, shared by callbacks on several
-// threads: its stage is an atomic and its stash behind a mutex.
+// Lends `body` the instance Godot hands a callback, which callbacks on
+// several threads share: its stage is an atomic and its stash behind a
+// mutex. Ruby may have Godot free the instance, so `body` runs no Ruby, and
+// what it answers cannot borrow the instance past it.
 //
-// SAFETY: `data` is what `into_godot` handed Godot, alive until `free`; the
-// reference must not be used once Ruby runs, since Ruby may have Godot free
-// the instance.
-unsafe fn instance<'a>(data: sys::GDExtensionScriptInstanceDataPtr) -> &'a RubyInstance {
-    unsafe { &*data.cast::<RubyInstance>() }
+// SAFETY: `data` is what `into_godot` handed Godot and not yet freed.
+unsafe fn with_instance<R>(
+    data: sys::GDExtensionScriptInstanceDataPtr,
+    body: impl FnOnce(&RubyInstance) -> R,
+) -> R {
+    body(unsafe { &*data.cast::<RubyInstance>() })
+}
+
+// What a callback reading or writing a property of the node's class takes
+// from the instance before Ruby runs.
+struct PropertyReach {
+    caller: Arc<Caller>,
+    // Whether the class exported the property.
+    exported: bool,
+    // Whether the value waits with the instance for the object to be built.
+    is_deferred: bool,
+}
+
+// What reaching the property `name` of the instance `data` stands for takes,
+// or none when the engine's own property answers it.
+//
+// SAFETY: as `with_instance` requires.
+unsafe fn reach_property(
+    data: sys::GDExtensionScriptInstanceDataPtr,
+    name: &str,
+) -> Option<PropertyReach> {
+    // SAFETY: as the caller promises.
+    unsafe {
+        with_instance(data, |instance| {
+            let exported = instance.has_export(name);
+            if !exported && is_engines_own(instance, name) {
+                return None;
+            }
+            Some(PropertyReach {
+                caller: instance.caller(),
+                exported,
+                is_deferred: instance.is_unbuilt() && !realm::is_inside(),
+            })
+        })
+    }
 }
 
 // SAFETY: `method` is a StringName Godot hands for the call, which
@@ -601,17 +638,15 @@ unsafe extern "C" fn set(
     let name = unsafe { name(property) };
     // SAFETY: Godot hands a live variant for the call.
     let value = unsafe { &*value.cast::<Variant>() };
-    // SAFETY: the instance lives until Ruby runs, and is not used after.
-    let reached = {
-        let instance = unsafe { instance(data) };
-        let exported = instance.has_export(&name);
-        if !exported && is_engines_own(instance, &name) {
-            return sys::GDExtensionBool::from(false);
-        }
-        let is_deferred = instance.is_unbuilt() && !realm::is_inside();
-        (instance.caller(), exported, is_deferred)
+    // SAFETY: Godot hands a live instance.
+    let Some(PropertyReach {
+        caller,
+        exported,
+        is_deferred,
+    }) = (unsafe { reach_property(data, &name) })
+    else {
+        return sys::GDExtensionBool::from(false);
     };
-    let (caller, exported, is_deferred) = reached;
     let key = if is_deferred { None } else { caller.object() };
     let is_written = match key {
         Some(key) => write(key, &name, exported, value),
@@ -631,17 +666,15 @@ unsafe extern "C" fn get(
 ) -> sys::GDExtensionBool {
     // SAFETY: the property name lives for the call.
     let name = unsafe { name(property) };
-    // SAFETY: the instance lives until Ruby runs, and is not used after.
-    let reached = {
-        let instance = unsafe { instance(data) };
-        let exported = instance.has_export(&name);
-        if !exported && is_engines_own(instance, &name) {
-            return sys::GDExtensionBool::from(false);
-        }
-        let is_deferred = instance.is_unbuilt() && !realm::is_inside();
-        (instance.caller(), exported, is_deferred)
+    // SAFETY: Godot hands a live instance.
+    let Some(PropertyReach {
+        caller,
+        exported,
+        is_deferred,
+    }) = (unsafe { reach_property(data, &name) })
+    else {
+        return sys::GDExtensionBool::from(false);
     };
-    let (caller, exported, is_deferred) = reached;
     let key = if is_deferred { None } else { caller.object() };
     let value = match key {
         Some(key) => read(key, &name, exported),
@@ -673,8 +706,8 @@ unsafe extern "C" fn get_property_list(
     data: sys::GDExtensionScriptInstanceDataPtr,
     count: *mut u32,
 ) -> *const sys::GDExtensionPropertyInfo {
-    // SAFETY: the instance lives for this call, which runs no Ruby.
-    let members = unsafe { instance(data) }.members();
+    // SAFETY: Godot hands a live instance.
+    let members = unsafe { with_instance(data, RubyInstance::members) };
     let infos: Box<[sys::GDExtensionPropertyInfo]> = members.iter().map(member_info).collect();
     // SAFETY: Godot hands a count to fill.
     unsafe { *count = infos.len() as u32 };
@@ -708,8 +741,8 @@ unsafe extern "C" fn get_method_list(
     data: sys::GDExtensionScriptInstanceDataPtr,
     count: *mut u32,
 ) -> *const sys::GDExtensionMethodInfo {
-    // SAFETY: the instance lives for this call, which runs no Ruby.
-    let methods = unsafe { instance(data) }.methods();
+    // SAFETY: Godot hands a live instance.
+    let methods = unsafe { with_instance(data, RubyInstance::methods) };
     let infos: Box<[sys::GDExtensionMethodInfo]> = methods
         .iter()
         .map(|method| method_info(method.as_str()))
@@ -747,9 +780,11 @@ unsafe extern "C" fn has_method(
     data: sys::GDExtensionScriptInstanceDataPtr,
     method: sys::GDExtensionConstStringNamePtr,
 ) -> sys::GDExtensionBool {
-    // SAFETY: the instance and the method name live for this call, which
-    // runs no Ruby.
-    let has = unsafe { instance(data).method_name_by_key(&*method.cast::<StringName>()) }.is_some();
+    // SAFETY: Godot hands a method name living for the call.
+    let method = unsafe { &*method.cast::<StringName>() };
+    // SAFETY: Godot hands a live instance.
+    let has =
+        unsafe { with_instance(data, |instance| instance.method_name_by_key(method)) }.is_some();
     sys::GDExtensionBool::from(has)
 }
 
@@ -795,15 +830,15 @@ unsafe fn revert_answer(
 ) -> Variant {
     // SAFETY: as the caller promises.
     let property = StringName::from(&unsafe { name(property) });
-    let caller = {
-        // SAFETY: as the caller promises.
-        let instance = unsafe { instance(data) };
-        if !instance.has_method(method) {
-            return Variant::nil();
-        }
-        instance.caller()
+    // SAFETY: as the caller promises.
+    let caller = unsafe {
+        with_instance(data, |instance| {
+            instance.has_method(method).then(|| instance.caller())
+        })
     };
-    caller.send(method, &[&property.to_variant()])
+    caller.map_or_else(Variant::nil, |caller| {
+        caller.send(method, &[&property.to_variant()])
+    })
 }
 
 unsafe extern "C" fn call(
@@ -814,17 +849,19 @@ unsafe extern "C" fn call(
     answer: sys::GDExtensionVariantPtr,
     error: *mut sys::GDExtensionCallError,
 ) {
-    // SAFETY: the instance lives until Ruby runs, and is not used after;
-    // the method name lives for the call.
-    let (method, caller) = {
-        let instance = unsafe { instance(data) };
-        let Some(method) = instance.method_name_by_key(unsafe { &*method.cast::<StringName>() })
-        else {
-            // SAFETY: Godot hands an error to fill.
-            unsafe { (*error).error = sys::GDEXTENSION_CALL_ERROR_INVALID_METHOD };
-            return;
-        };
-        (method, instance.caller())
+    // SAFETY: Godot hands a method name living for the call.
+    let method = unsafe { &*method.cast::<StringName>() };
+    // SAFETY: Godot hands a live instance.
+    let found = unsafe {
+        with_instance(data, |instance| {
+            let method = instance.method_name_by_key(method)?;
+            Some((method, instance.caller()))
+        })
+    };
+    let Some((method, caller)) = found else {
+        // SAFETY: Godot hands an error to fill.
+        unsafe { (*error).error = sys::GDEXTENSION_CALL_ERROR_INVALID_METHOD };
+        return;
     };
     let args: &[&Variant] = if args.is_null() {
         &[]
@@ -850,15 +887,17 @@ unsafe extern "C" fn notification(
     what: i32,
     _reversed: sys::GDExtensionBool,
 ) {
-    // SAFETY: the instance lives until Ruby runs, and is not used after.
-    let caller = {
-        let instance = unsafe { instance(data) };
-        if instance.method_name_by_key(&NOTIFICATION).is_none() {
-            return;
-        }
-        instance.caller()
+    // SAFETY: Godot hands a live instance.
+    let caller = unsafe {
+        with_instance(data, |instance| {
+            instance
+                .method_name_by_key(&NOTIFICATION)
+                .map(|_| instance.caller())
+        })
     };
-    caller.send("_notification", &[&what.to_variant()]);
+    if let Some(caller) = caller {
+        caller.send("_notification", &[&what.to_variant()]);
+    }
 }
 
 unsafe extern "C" fn to_string(
@@ -866,10 +905,10 @@ unsafe extern "C" fn to_string(
     valid: *mut sys::GDExtensionBool,
     out: sys::GDExtensionStringPtr,
 ) {
-    // SAFETY: the instance lives for this call, which runs no Ruby; Godot
-    // hands an initialized String, which `GString` lays out as, and a flag.
+    // SAFETY: Godot hands a live instance, an initialized String, which
+    // `GString` lays out as, and a flag.
     unsafe {
-        *out.cast::<GString>() = instance(data).display.clone();
+        *out.cast::<GString>() = with_instance(data, |instance| instance.display.clone());
         *valid = sys::GDExtensionBool::from(true);
     }
 }
@@ -885,15 +924,15 @@ unsafe extern "C" fn refcount_decremented(
 unsafe extern "C" fn get_script(
     data: sys::GDExtensionScriptInstanceDataPtr,
 ) -> sys::GDExtensionObjectPtr {
-    // SAFETY: the instance lives for this call; Godot takes its own reference.
-    unsafe { instance(data).script.obj_sys() }
+    // SAFETY: Godot hands a live instance, and takes its own reference.
+    unsafe { with_instance(data, |instance| instance.script.obj_sys()) }
 }
 
 unsafe extern "C" fn get_language(
     data: sys::GDExtensionScriptInstanceDataPtr,
 ) -> sys::GDExtensionScriptLanguagePtr {
-    // SAFETY: the instance lives for this call.
-    unsafe { instance(data).language.obj_sys().cast() }
+    // SAFETY: Godot hands a live instance.
+    unsafe { with_instance(data, |instance| instance.language.obj_sys().cast()) }
 }
 
 unsafe extern "C" fn free(data: sys::GDExtensionScriptInstanceDataPtr) {
