@@ -343,6 +343,7 @@ realm.rs              Realm, prepare, enter, Files, Log, RubyError
 ├─ constants.rs, .rb  const_missing and const_added hooks
 ├─ index.rs           the class index: constant path to file
 ├─ executor.rs        runs a file once, all or nothing, or again
+├─ extensions.rs      each gem's data, added and never removed
 └─ registry.rs        keys to objects, rooted for the collector
 ```
 
