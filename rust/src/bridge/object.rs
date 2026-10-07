@@ -76,6 +76,7 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     object.define_singleton_method(mrb, c"__make_node__", method!(make_node, 0))?;
     object.define_singleton_method(mrb, c"__allocate__", method!(allocate, 1))?;
     object.define_singleton_method(mrb, c"__singleton__", method!(singleton, 0))?;
+    object.define_singleton_method(mrb, c"__declares__", method!(declares, 1))?;
     object.define_singleton_method(mrb, c"__has_static_method__", method!(has_static_method, 1))?;
     object.define_singleton_method(mrb, c"__call_static__", method!(call_static, 2))?;
     object.define_singleton_method(mrb, c"__engine_constant__", method!(engine_constant, 1))?;
@@ -251,6 +252,27 @@ fn resolve(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
     Ok(mrb
         .ary_new_from_values(&[target, declared.into_value(mrb), bound])
         .as_value())
+}
+
+// Godot::Object.__declares__(name): whether the engine class the receiver
+// extends has a method or property a call of `name` reaches, for an object
+// that has no live engine object to ask.
+fn declares(mrb: &Mrb, class: RClass, name: Symbol) -> bool {
+    let Some(extended) = engine_ancestor(mrb, class) else {
+        return false;
+    };
+    let name = name.name(mrb).unwrap_or_default();
+    let extended = StringName::from(extended.as_str());
+    let mut class_db = ClassDb::singleton();
+    if let Some(property) = name.strip_suffix('=') {
+        return !class_db
+            .class_get_property_setter(&extended, property)
+            .is_empty();
+    }
+    class_db.class_has_method(&extended, name.as_str())
+        || !class_db
+            .class_get_property_getter(&extended, name.as_str())
+            .is_empty()
 }
 
 // What `__resolve__` answers for a property whose getter and setter take an

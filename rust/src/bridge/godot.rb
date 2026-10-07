@@ -154,7 +154,7 @@ module Godot
         engine_class.const_set(name, value)
       end
 
-      private :__make__, :__make_node__, :__allocate__, :__singleton__, :__has_static_method__, :__call_static__,
+      private :__make__, :__make_node__, :__allocate__, :__declares__, :__singleton__, :__has_static_method__, :__call_static__,
               :__engine_constant__, :__declare_signal__, :__declare_export__, :__declare_heading__, :__shape__
 
       private
@@ -351,8 +351,12 @@ module Godot
       end
     end
 
+    # A freed engine object, or one not yet given its engine object, answers
+    # by the engine class its Ruby class extends.
     def respond_to_missing?(name, include_private = false)
       !__resolve__(name).nil? || super
+    rescue Godot::CallError, TypeError
+      self.class.__send__(:__declares__, name) || super
     end
 
     # Two Ruby objects for one engine object are equal.

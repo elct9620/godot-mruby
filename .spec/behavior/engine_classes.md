@@ -271,3 +271,11 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | an engine object whose class has a property its getter and setter reach by an index, such as a Control's `offset_left` |
 | When | Ruby writes the property by its name, then reads it |
 | Then | it reads what was written, as GDScript's `control.offset_left` does |
+
+## `RG-034` A freed engine object answers respond_to? by its engine class
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine object that has been freed |
+| When | Ruby asks whether it responds to a name, one its engine class has a method for and one it has none for |
+| Then | it answers true and false, as its engine class has them, rather than raising |

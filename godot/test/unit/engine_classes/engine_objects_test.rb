@@ -275,4 +275,14 @@ class EngineObjectsTest < Minitest::Test
 
     assert_in_delta 5.0, control.offset_left
   end
+
+  # @behavior RG-034
+  def test_a_freed_engine_object_answers_respond_to_by_its_engine_class
+    node = Godot::Node.new
+    node.free
+
+    answers = %i[get_tree_string_pretty queue_redraw].map { |name| node.respond_to?(name) }
+
+    assert_equal [true, false], answers
+  end
 end
