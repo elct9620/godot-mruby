@@ -296,3 +296,11 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | an engine method the engine gave a bind for, which a game exported without the engine's debug checks calls too |
 | When | Ruby calls it with fewer arguments than it requires, or more than it takes |
 | Then | the call is refused without reaching the engine |
+
+## `RG-038` An engine method's bind is refused a receiver of a class not declaring it
+
+| Step | Statement |
+| --- | --- |
+| Given | the bind of an engine method one engine class declares, and an engine object of a class neither that one nor extending it |
+| When | Ruby calls the bind on that object |
+| Then | it raises `Godot::CallError` without reaching the engine |

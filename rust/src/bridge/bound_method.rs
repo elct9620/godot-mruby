@@ -2,6 +2,8 @@
 //! so a call reaches the method's bind without the engine looking up its
 //! name.
 
+use std::ffi::c_void;
+
 use beni::{DataType, Mrb, RClass, TypedData};
 use godot::builtin::{Array, GString, StringName, VarArray, VarDictionary, Variant, VariantType};
 use godot::classes::class_db::ApiType;
@@ -16,6 +18,9 @@ use smallvec::SmallVec;
 /// are freed when it unloads, so none is held.
 pub struct BoundMethod {
     bind: sys::GDExtensionMethodBindPtr,
+    // The tag of the class declaring the method, which its receiver must be
+    // of or extend, since the bind takes the receiver as that class.
+    declarer_tag: *mut c_void,
     name: String,
     arity: Arity,
 }
@@ -29,8 +34,8 @@ pub struct Arity {
     pub is_vararg: bool,
 }
 
-// SAFETY: the bind is the engine's, unchanged while the engine runs, and a
-// realm is entered by one thread at a time.
+// SAFETY: the bind and the class tag are the engine's, unchanged while the
+// engine runs, and a realm is entered by one thread at a time.
 unsafe impl Send for BoundMethod {}
 
 static BOUND_METHOD: DataType<BoundMethod> = DataType::new(c"Godot::BoundMethod");
@@ -72,15 +77,19 @@ impl BoundMethod {
         let name = StringName::from(method);
         // SAFETY: the interface is initialized while the extension runs, and
         // the names live for the call.
-        let bind = unsafe {
-            sys::interface_fn!(classdb_get_method_bind)(
-                declarer.string_sys(),
-                name.string_sys(),
-                i64::from(hash),
+        let (bind, tag) = unsafe {
+            (
+                sys::interface_fn!(classdb_get_method_bind)(
+                    declarer.string_sys(),
+                    name.string_sys(),
+                    i64::from(hash),
+                ),
+                sys::interface_fn!(classdb_get_class_tag)(declarer.string_sys()),
             )
         };
-        (!bind.is_null()).then(|| Self {
+        (!bind.is_null() && !tag.is_null()).then(|| Self {
             bind,
+            declarer_tag: tag,
             name: method.to_owned(),
             arity,
         })
@@ -94,20 +103,21 @@ impl BoundMethod {
         self.arity
     }
 
-    /// Calls the method on `object`, which must be of the class the method
-    /// was found for or a class extending it. A count of arguments the
-    /// method does not take is refused here, since a game exported without
-    /// the engine's debug checks would read past the method's defaults.
+    /// Calls the method on `object`. A receiver of a class neither declaring
+    /// the method nor extending one that does, and a count of arguments the
+    /// method does not take, are refused here: the bind trusts both, and a
+    /// game exported without the engine's debug checks checks neither.
     pub fn call(
         &self,
         object: &Gd<Object>,
         args: &[Variant],
     ) -> Result<Variant, sys::GDExtensionCallError> {
+        self.check_receiver(object)?;
         self.arity.check(args.len())?;
         let pointers: SmallVec<[_; 4]> = args.iter().map(Variant::var_sys).collect();
         // SAFETY: the bind is alive while the engine runs, `object` is a live
-        // object of a class the bind's class is or extends, and the argument
-        // pointers live for the call.
+        // object of the bind's class or one extending it, as checked, and the
+        // argument pointers live for the call.
         super::run_engine_call(|answer, error| unsafe {
             sys::interface_fn!(object_method_bind_call)(
                 self.bind,
@@ -118,6 +128,23 @@ impl BoundMethod {
                 error,
             );
         })
+    }
+
+    // Whether `object` is of the class declaring the method or one extending
+    // it, or the error the engine answers for a method its class lacks.
+    fn check_receiver(&self, object: &Gd<Object>) -> Result<(), sys::GDExtensionCallError> {
+        // SAFETY: the interface is initialized while the extension runs, and
+        // `object` is live.
+        let cast =
+            unsafe { sys::interface_fn!(object_cast_to)(object.obj_sys(), self.declarer_tag) };
+        if cast.is_null() {
+            return Err(sys::GDExtensionCallError {
+                error: sys::GDEXTENSION_CALL_ERROR_INVALID_METHOD,
+                argument: 0,
+                expected: 0,
+            });
+        }
+        Ok(())
     }
 }
 

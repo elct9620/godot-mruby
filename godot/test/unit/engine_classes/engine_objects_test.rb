@@ -295,4 +295,14 @@ class EngineObjectsTest < Minitest::Test
 
     assert_equal [nil, false], [node.call(:shown), node.is_visible]
   end
+
+  # @behavior RG-038
+  def test_an_engine_methods_bind_is_refused_a_receiver_of_a_class_not_declaring_it
+    node = autofree(Godot::Node.new)
+    bound = node.__send__(:__resolve__, :get_child_count)[2]
+
+    error = assert_raises(Godot::CallError) { Godot::RefCounted.new.__send__(:__call_bound__, bound) }
+
+    assert_equal "Invalid call to function 'get_child_count' in base 'RefCounted'.", error.message
+  end
 end

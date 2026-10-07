@@ -297,9 +297,8 @@ fn apply_bound(
     call_bind(mrb, super::data(mrb), held, bound, args.entries(mrb))
 }
 
-// Calls the engine method `bound` with `args`. The receiver's Ruby class was
-// given `bound` for the engine class it extends, so the receiver's engine
-// object is of that class or one extending it.
+// Calls the engine method `bound` with `args` on the receiver's engine
+// object.
 fn call_bind(
     mrb: &Mrb,
     data: &BridgeData,
