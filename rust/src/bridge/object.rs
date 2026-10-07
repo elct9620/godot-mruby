@@ -6,6 +6,7 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::fmt;
 
+use beni::typed_data::{Dup, Obj};
 use beni::{
     DataType, Error, ExceptionClass, FromValue, Id, IntoValue, Module, Mrb, Object as _, RArray,
     RClass, RModule, ReprValue, Symbol, TryConvert, TypedData, Value, method, value::qnil,
@@ -31,6 +32,7 @@ use crate::snapshot::{Heading, Property, Signal};
 
 /// The engine object a Ruby object of an engine class stands for. Holding
 /// it keeps a reference-counted object alive until Ruby lets go of it.
+#[derive(Clone)]
 pub struct EngineObject(Gd<Object>);
 
 // SAFETY: a realm is entered by one thread at a time, so no two threads
@@ -87,6 +89,7 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     object.define_singleton_method(mrb, c"__shape__", method!(shape, 1))?;
     object.define_private_method(mrb, c"__instance_id__", method!(instance_id, 0))?;
     object.define_private_method(mrb, c"__label__", method!(label, 0))?;
+    object.define_private_method(mrb, c"__clone__", method!(clone, -1))?;
     let omitted = mrb.object_class().new_instance(mrb, &[])?;
     object.const_set(mrb, c"OMITTED", omitted)?;
     realm::extension_data::<Omitted>(mrb).0.set(Some(omitted));
@@ -155,15 +158,30 @@ fn make_node(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
 // that object is not of the engine class the receiver extends, whose
 // methods the receiver calls on it.
 fn allocate(mrb: &Mrb, class: RClass, owner: &EngineObject) -> Result<Value, Error> {
+    check_stands_for(mrb, class, owner)?;
+    Ok(mrb.wrap_as(owner.clone(), class).as_value())
+}
+
+// Godot::Object#__clone__: a copy made as Ruby's clone makes one, standing
+// for the receiver's engine object, or the TypeError a freed one raises.
+fn clone(mrb: &Mrb, held: Obj<EngineObject>, args: &[Value]) -> Result<Obj<EngineObject>, Error> {
+    check_stands_for(mrb, held.as_value().class(mrb), &held)?;
+    <EngineObject as Dup>::clone(mrb, held, args)
+}
+
+// The TypeError raised when an object of `class` would stand for `owner`'s
+// engine object although that object is freed or not of the engine class
+// `class` extends, whose methods `class` calls on it.
+fn check_stands_for(mrb: &Mrb, class: RClass, owner: &EngineObject) -> Result<(), Error> {
     let extended = engine_ancestor(mrb, class).unwrap_or_default();
-    if !owner.0.is_instance_valid() || !owner.0.is_class(extended.as_str()) {
-        let message = format!(
-            "{} stands only for a live {extended}",
-            class.path(mrb).unwrap_or_default()
-        );
-        return Err(type_error(mrb, &message));
+    if owner.0.is_instance_valid() && owner.0.is_class(extended.as_str()) {
+        return Ok(());
     }
-    Ok(mrb.wrap_as(EngineObject(owner.0.clone()), class).as_value())
+    let message = format!(
+        "{} stands only for a live {extended}",
+        class.path(mrb).unwrap_or_default()
+    );
+    Err(type_error(mrb, &message))
 }
 
 /// The key a realm holds a node's Ruby object under.
@@ -189,13 +207,11 @@ impl IntoValue for Owner {
 // declares it, so every object of the Ruby class answers it, an object of
 // a class extending that one or of a class the engine keeps hidden
 // included, and the method bound for that class when the engine registered
-// it, or nil; nil when it reaches none, as for an object carrying no engine
-// object. A name ending in `=` reaches the property's setter, and a name no
-// method has reaches its getter.
+// it, or nil when it reaches none; a receiver carrying no engine object
+// raises TypeError. A name ending in `=` reaches the property's setter, and
+// a name no method has reaches its getter.
 fn resolve(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
-    let Ok(held) = <&EngineObject>::try_convert(receiver, mrb) else {
-        return Ok(qnil().as_value());
-    };
+    let held = <&EngineObject>::try_convert(receiver, mrb)?;
     let name = name.name(mrb).unwrap_or_default();
     let object = held.live_object(mrb, &name)?;
     let class = StringName::from(&object.get_class());

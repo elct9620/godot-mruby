@@ -223,4 +223,47 @@ class EngineObjectsTest < Minitest::Test
 
     assert_equal [:set_visible, :shown].sort, Unit::EngineClasses::Lookout.instance_methods(false).sort
   end
+
+  # @behavior RG-030
+  def test_an_engine_objects_clone_keeps_its_singleton_methods_and_frozen_state
+    object = Godot::RefCounted.new
+    object.define_singleton_method(:tag) { :tagged }
+    object.freeze
+
+    copy = object.clone
+
+    assert_equal [:tagged, true], [copy.tag, copy.frozen?]
+  end
+
+  # @behavior RG-031
+  def test_an_engine_objects_copy_runs_initialize_copy_with_the_original
+    received = []
+    Godot::RefCounted.define_method(:initialize_copy) { |original| received << original }
+    object = Godot::RefCounted.new
+
+    object.dup
+    object.clone
+
+    assert_equal [true, true], received.map { |original| original.equal?(object) }
+  ensure
+    Godot::RefCounted.__send__(:remove_method, :initialize_copy)
+  end
+
+  # @behavior RG-032
+  def test_a_clone_stands_for_no_engine_object_while_initialize_copy_runs
+    raised = []
+    Godot::RefCounted.define_method(:initialize_copy) do |_original|
+      get_reference_count
+    rescue StandardError => e
+      raised << e.class
+    end
+
+    Godot::RefCounted.new.clone
+    Godot::RefCounted.new.get_reference_count
+    Godot::RefCounted.new.clone
+
+    assert_equal [TypeError, TypeError], raised
+  ensure
+    Godot::RefCounted.__send__(:remove_method, :initialize_copy)
+  end
 end

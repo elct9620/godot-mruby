@@ -358,17 +358,20 @@ module Godot
       __instance_id__.hash
     end
 
-    # A copy of an engine object stands for the same engine object and
-    # carries its instance variables; a node class's object is the only one
-    # its node has, so it refuses.
+    # A copy of an engine object stands for the same engine object, made as
+    # Ruby makes one; a node class's object is the only one its node has, so
+    # it refuses.
     def dup
-      __make_copy__("dup")
+      __refuse_copy__("dup")
+      copy = self.class.__send__(:__allocate__, self)
+      instance_variables.each { |name| copy.instance_variable_set(name, instance_variable_get(name)) }
+      copy.__send__(:initialize_copy, self)
+      copy
     end
 
     def clone
-      copy = __make_copy__("clone")
-      copy.freeze if frozen?
-      copy
+      __refuse_copy__("clone")
+      __clone__
     end
 
     # The Ruby class, the engine object as Godot prints it, and the instance
@@ -387,12 +390,8 @@ module Godot
 
     private
 
-    def __make_copy__(verb)
+    def __refuse_copy__(verb)
       raise TypeError, "can't #{verb} #{self.class}" unless self.class.instance_variable_get(:@engine_class) == true
-
-      copy = self.class.__send__(:__allocate__, self)
-      instance_variables.each { |name| copy.instance_variable_set(name, instance_variable_get(name)) }
-      copy
     end
   end
 

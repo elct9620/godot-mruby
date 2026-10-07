@@ -239,3 +239,27 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | a node class whose object has called an engine method |
 | When | Ruby lists the methods the class defines itself |
 | Then | the engine method is not among them, so the script answers no method of that name to Godot |
+
+## `RG-030` An engine object's clone keeps its singleton methods and frozen state
+
+| Step | Statement |
+| --- | --- |
+| Given | a frozen object of an engine class with a singleton method |
+| When | Ruby calls `clone` on it |
+| Then | the copy answers the singleton method and is frozen, as Ruby's `clone` keeps both |
+
+## `RG-031` An engine object's copy runs initialize_copy with the original
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine class defining `initialize_copy` |
+| When | Ruby calls `dup` or `clone` on one of its objects |
+| Then | `initialize_copy` runs on the copy with the original, as Ruby's copies run it |
+
+## `RG-032` A clone stands for no engine object while initialize_copy runs
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine class whose `initialize_copy` calls an engine method on the copy |
+| When | Ruby calls `clone` on one of its objects |
+| Then | the call raises `TypeError`, since the copy takes the engine object only after `initialize_copy` returns |
