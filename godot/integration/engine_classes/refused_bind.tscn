@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://integration/engine_classes/refused_bind.rb" id="1"]
+
+[node name="RefusedBind" type="Node"]
+script = ExtResource("1")

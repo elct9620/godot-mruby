@@ -27,6 +27,7 @@ bundle install
 bundle exec rake beni:build              # download mruby and godot-cell into vendor/, build mruby's archives
 bundle exec rake extension:build         # host debug build, installed into the addon's bin/
 bundle exec rake godot:verify            # headless editor pass, then its scenes and the Ruby tests
+GODOT_RELEASE_TEMPLATE=<binary> bundle exec rake godot:release   # the release checks on an export template
 bundle exec rake editor                  # build, then open the editor on godot/
 godot --headless --path godot res://addons/godot_mruby/runner.tscn -- --dir res://test   # the Ruby tests alone
 bundle exec rake extension:dist          # the library this platform ships (PROFILE=release|debug; macOS: lipo universal)
