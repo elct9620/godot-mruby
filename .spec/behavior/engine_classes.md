@@ -257,13 +257,13 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | When | Ruby calls `dup` or `clone` on one of its objects |
 | Then | `initialize_copy` runs on the copy with the original, as Ruby's copies run it |
 
-## `RG-032` A clone stands for no engine object while initialize_copy runs
+## `RG-032` A copy stands for the engine object once initialize_copy calls super
 
 | Step | Statement |
 | --- | --- |
-| Given | an engine class whose `initialize_copy` calls an engine method on the copy |
-| When | Ruby calls `clone` on one of its objects |
-| Then | the call raises `TypeError`, since the copy takes the engine object only after `initialize_copy` returns |
+| Given | an engine class whose `initialize_copy` calls an engine method on the copy before and after calling `super` |
+| When | Ruby calls `dup` or `clone` on one of its objects |
+| Then | the call before `super` raises `TypeError` and the one after answers as on the original, since `Godot::Object#initialize_copy` gives the copy its engine object, as a Ruby extension's data does |
 
 ## `RG-033` A property the engine reads by index reads and writes as GDScript's
 
@@ -320,3 +320,19 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | an engine method taking any number of arguments that calls another by name with those past its own, such as `call` |
 | When | Ruby calls it with a count the method it forwards to does not take |
 | Then | it raises `ArgumentError` naming the arguments forwarded and those the forwarded method requires, as Ruby's `send` does |
+
+## `RG-041` An object already standing for an engine object takes no other
+
+| Step | Statement |
+| --- | --- |
+| Given | two objects of an engine class |
+| When | Ruby calls `initialize_copy` on one with the other |
+| Then | it raises `TypeError`, and the object still stands for its own engine object |
+
+## `RG-042` A freed engine object refuses copies
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine object that has been freed |
+| When | Ruby calls `dup` or `clone` on it |
+| Then | it raises `TypeError`, since a copy stands only for a live engine object |

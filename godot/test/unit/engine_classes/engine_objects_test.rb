@@ -252,21 +252,43 @@ class EngineObjectsTest < Minitest::Test
   end
 
   # @behavior RG-032
-  def test_a_clone_stands_for_no_engine_object_while_initialize_copy_runs
-    raised = []
-    Godot::RefCounted.define_method(:initialize_copy) do |_original|
-      get_reference_count
-    rescue StandardError => e
-      raised << e.class
+  def test_a_copy_stands_for_the_engine_object_once_initialize_copy_calls_super
+    answers = []
+    Godot::RefCounted.define_method(:initialize_copy) do |original|
+      begin
+        get_reference_count
+      rescue TypeError => e
+        answers << e.class
+      end
+      super(original)
+      answers << (get_instance_id == original.get_instance_id)
     end
+    object = Godot::RefCounted.new
 
-    Godot::RefCounted.new.clone
-    Godot::RefCounted.new.get_reference_count
-    Godot::RefCounted.new.clone
+    object.dup
+    object.clone
 
-    assert_equal [TypeError, TypeError], raised
+    assert_equal [TypeError, true, TypeError, true], answers
   ensure
     Godot::RefCounted.__send__(:remove_method, :initialize_copy)
+  end
+
+  # @behavior RG-041
+  def test_an_object_already_standing_for_an_engine_object_takes_no_other
+    object = Godot::RefCounted.new
+    id = object.get_instance_id
+
+    assert_raises(TypeError) { object.__send__(:initialize_copy, Godot::RefCounted.new) }
+    assert_equal id, object.get_instance_id
+  end
+
+  # @behavior RG-042
+  def test_a_freed_engine_object_refuses_copies
+    object = Godot::Object.new
+    object.free
+
+    assert_raises(TypeError) { object.dup }
+    assert_raises(TypeError) { object.clone }
   end
 
   # @behavior RG-033

@@ -4,7 +4,7 @@
 
 use std::fmt;
 
-use beni::typed_data::{Dup, Obj};
+use beni::typed_data::RTypedData;
 use beni::{
     DataType, Error, ExceptionClass, FromValue, Id, IntoValue, Module, Mrb, Object as _, RArray,
     RClass, RModule, ReprValue, Symbol, TryConvert, TypedData, Value, method, value::qnil,
@@ -82,7 +82,7 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     object.define_singleton_method(mrb, c"__shape__", method!(shape, 1))?;
     object.define_private_method(mrb, c"__instance_id__", method!(instance_id, 0))?;
     object.define_private_method(mrb, c"__label__", method!(label, 0))?;
-    object.define_private_method(mrb, c"__clone__", method!(clone, -1))?;
+    object.define_private_method(mrb, c"initialize_copy", method!(initialize_copy, 1))?;
     Ok(())
 }
 
@@ -152,11 +152,34 @@ fn allocate(mrb: &Mrb, class: RClass, owner: &EngineObject) -> Result<Value, Err
     Ok(mrb.wrap_as(owner.clone(), class).as_value())
 }
 
-// Godot::Object#__clone__: a copy made as Ruby's clone makes one, standing
-// for the receiver's engine object, or the TypeError a freed one raises.
-fn clone(mrb: &Mrb, held: Obj<EngineObject>, args: &[Value]) -> Result<Obj<EngineObject>, Error> {
-    check_stands_for(mrb, held.as_value().class(mrb), &held)?;
-    <EngineObject as Dup>::clone(mrb, held, args)
+// Godot::Object#initialize_copy(original): gives the copy Ruby's dup or
+// clone made the engine object `original` stands for, as a Ruby
+// extension's data fills its copy; or the TypeError raised when the two
+// differ in class, the engine object is freed, or the copy already stands
+// for one.
+fn initialize_copy(mrb: &Mrb, copy: RTypedData, original: Value) -> Result<RTypedData, Error> {
+    if copy.as_value().is_equal(mrb, original) {
+        return Ok(copy);
+    }
+    let class = copy.as_value().class(mrb);
+    let same_class = original
+        .class(mrb)
+        .as_value()
+        .is_equal(mrb, class.as_value());
+    if !same_class {
+        let message = "initialize_copy should take same class object";
+        return Err(type_error(mrb, message));
+    }
+    let owner = <&EngineObject>::try_convert(original, mrb)?;
+    check_stands_for(mrb, class, owner)?;
+    match copy.init(mrb, owner.clone()) {
+        Ok(()) => Ok(copy),
+        Err(_) => {
+            let path = class.path(mrb).unwrap_or_default();
+            let message = format!("{path} already stands for an engine object");
+            Err(type_error(mrb, &message))
+        }
+    }
 }
 
 // The TypeError raised when an object of `class` would stand for `owner`'s
