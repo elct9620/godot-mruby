@@ -65,6 +65,14 @@ class ValueTypesTest < Minitest::Test
   end
 
   # @behavior RV-014
+  def test_a_values_comparisons_answer_true_or_false
+    vector = Godot::Vector2.new(1, 2)
+    other = Godot::Vector2.new(1, 3)
+
+    assert_equal [true, false, true, false], [vector < other, vector > other, vector <= other, vector >= other]
+  end
+
+  # @behavior RV-014
   def test_another_value_type_answers_the_engines_operators
     vector = Godot::Vector3.new(1, 2, 3)
 
