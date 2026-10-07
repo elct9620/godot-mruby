@@ -46,7 +46,7 @@ sumi fmt                                 # write .spec/ in sumi's form (--check 
 ## Guidelines
 
 - Run Godot only with `--headless`; never start anything that opens its GUI, `rake editor` included: it is how the user sees what a headless run cannot.
-- Minimum Godot is 4.6: keep gdext's `api-4-6` feature and the `.gdextension`'s `compatibility_minimum` in step.
+- Minimum Godot is 4.6: keep gdext's `api-4-6` feature, `rust/build.rs`'s `version_4_6` with the `gdextension-api` pin, and the `.gdextension`'s `compatibility_minimum` in step.
 - `godot/.godot/extension_list.cfg` is committed so Godot loads the addon at startup; an editor that first discovers it and quits at once crashes (godotengine/godot#111048).
 - Library file names are shared by `godot_mruby.gdextension` and `tasks/support/extension.rb`; change both together.
 - A scenario is claimed where its outcome is observed: a Ruby test under `godot/test/unit/<spec>/` or, playing the game, `godot/test/e2e/`; or, when only a log or a run's outcome shows it, a check in `tasks/support/<spec>` reading `godot/integration/<spec>/`; or, when only the extension's own code reaches it, a Rust test beside that code; or, when a dependency must keep it, a Rust test under `rust/tests/`; a fixture claims nothing.

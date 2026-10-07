@@ -25,7 +25,11 @@ module Godot
   class << self
     def const_missing(name)
       superclass = __engine_superclass__(name)
-      return const_set(name, Class.new(Value)) if superclass.nil? && Value.__send__(:__has_value_type__, name)
+      if superclass.nil? && Value.__send__(:__has_value_type__, name)
+        value_class = const_set(name, Class.new(Value))
+        value_class.__send__(:__define_engine_names__)
+        return value_class
+      end
       return super if superclass.nil?
 
       engine_class = Class.new(const_get(superclass))
@@ -415,12 +419,30 @@ module Godot
         const_set(name, value)
       end
 
-      private :__has_value_type__, :__call_static__, :__constant__
+      private :__has_value_type__, :__call_static__, :__constant__, :__engine_names__
 
       private
 
       # What is defined on a value type's class is the engine's, never a file's.
       def const_added(name); end
+
+      # Each member and method of the value type is the class's own from the
+      # moment it is made, so it answers before a method of the name any
+      # ancestor gains, as Integer's own methods answer before Numeric's. Its
+      # body is bound at the first call; a name Godot::Value itself answers
+      # stays Godot::Value's.
+      def __define_engine_names__
+        own = Value.instance_variable_get(:@own_methods)
+        __engine_names__.each do |name|
+          next if own.include?(name)
+
+          define_method(name) do |*args, &block|
+            raise NoMethodError, "undefined method '#{name}' for #{self.class}" unless __define_engine_name__(name)
+
+            __send__(name, *args, &block)
+          end
+        end
+      end
     end
 
     # A Hash key matches only a value of its own type, as 4 never matches
@@ -451,11 +473,25 @@ module Godot
       "#<#{self.class} #{self}>"
     end
 
-    # A member or engine method of the value's type is defined on its class
-    # at the first call, so later calls skip method_missing.
+    # A member or engine method the running engine has beyond those the class
+    # was made with is defined on the class at its first call.
     def method_missing(name, *args, &block)
       raise FrozenError, "can't modify #{self.class}: build a new one instead" if name.to_s[-1] == "="
+      return super unless __define_engine_name__(name)
 
+      __send__(name, *args, &block)
+    end
+
+    def respond_to_missing?(name, include_private = false)
+      !__resolve__(name).nil? || super
+    end
+
+    private
+
+    # Defines the member or engine method `name` of the value's type on its
+    # class, bound to the engine's getter or method, or answers false when
+    # the type has none.
+    def __define_engine_name__(name)
       kind, bound = __resolve__(name)
       case kind
       when :member
@@ -465,13 +501,11 @@ module Godot
           self.class.__send__(:define_method, name) { __member__(name) }
         end
       when :method then self.class.__send__(:define_method, name) { |*arguments| __call__(name, arguments) }
-      else return super
+      else return false
       end
-      __send__(name, *args, &block)
+      true
     end
 
-    def respond_to_missing?(name, include_private = false)
-      !__resolve__(name).nil? || super
-    end
+    @own_methods = (instance_methods + private_instance_methods).freeze
   end
 end

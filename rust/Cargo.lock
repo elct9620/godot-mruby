@@ -218,11 +218,13 @@ name = "godot-mruby"
 version = "0.1.0"
 dependencies = [
  "beni",
+ "gdextension-api",
  "godot",
  "godot-cell",
  "ruby-prism",
  "ruby-prism-sys",
  "rustc-hash",
+ "serde_json",
  "smallvec",
 ]
 

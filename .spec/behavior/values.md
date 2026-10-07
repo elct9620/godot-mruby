@@ -222,3 +222,19 @@ How a value crosses between Ruby and the engine, either way: data is copied and 
 | Given | a value type under `Godot` |
 | When | Ruby calls `allocate` on it |
 | Then | it raises `TypeError`, so every value is one an engine constructor built |
+
+## `RV-028` A value type's member or method wins over one an ancestor gains first
+
+| Step | Statement |
+| --- | --- |
+| Given | a method of a value type's member or method name added to `Godot::Value` before the type is first called |
+| When | Ruby calls that name on a value of the type |
+| Then | the type's member or method answers, as Integer's own methods answer before Numeric's |
+
+## `RV-029` A value type's member or method wins over one an ancestor gains later
+
+| Step | Statement |
+| --- | --- |
+| Given | a value type whose member or method Ruby has called, then a method of that name added to `Godot::Value` |
+| When | Ruby calls that name on a value of the type |
+| Then | the type's member or method answers |

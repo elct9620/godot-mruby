@@ -171,4 +171,27 @@ class ValueTypesTest < Minitest::Test
     assert_raises(TypeError) { Godot::Vector2.allocate }
     assert_raises(TypeError) { Godot::Color.allocate }
   end
+
+  # @behavior RV-028
+  def test_a_value_types_member_or_method_wins_over_one_an_ancestor_gains_first
+    Godot::Value.define_method(:length) { :ancestor }
+    Godot::Value.define_method(:x) { :ancestor }
+
+    vector = Godot::Vector3i.new(3, 4, 0)
+
+    assert_equal [5.0, 3], [vector.length, vector.x]
+  ensure
+    Godot::Value.__send__(:remove_method, :length, :x)
+  end
+
+  # @behavior RV-029
+  def test_a_value_types_member_or_method_wins_over_one_an_ancestor_gains_later
+    vector = Godot::Vector2.new(3, 4)
+    vector.length
+    Godot::Value.define_method(:length) { :ancestor }
+
+    assert_in_delta 5.0, vector.length
+  ensure
+    Godot::Value.__send__(:remove_method, :length)
+  end
 end

@@ -284,6 +284,8 @@ A value type's value is held in one of two ways. Either way the engine computes 
 
 Vector2 is what games build and compute with most. Its division, modulo, power and methods still go through variant calls.
 
+A value type's class defines its members and methods when it is made, so they answer before any ancestor's. `rust/build.rs` reads their names from the API gdext builds against, and each binds at its first call.
+
 ### 2.7 Snapshot
 
 ```

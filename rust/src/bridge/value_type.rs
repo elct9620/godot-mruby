@@ -92,6 +92,7 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     class.define_singleton_method(mrb, c"new", method!(construct, -1))?;
     class.define_singleton_method(mrb, c"__call_static__", method!(call_static, 2))?;
     class.define_singleton_method(mrb, c"__constant__", method!(constant, 1))?;
+    class.define_singleton_method(mrb, c"__engine_names__", method!(engine_names, 0))?;
     class.define_private_method(mrb, c"__resolve__", method!(resolve, 1))?;
     class.define_private_method(mrb, c"__member__", method!(member, 1))?;
     class.define_private_method(mrb, c"__get__", method!(get, 1))?;
@@ -260,6 +261,59 @@ fn read_vector2(args: &[Value]) -> Option<Vector2> {
         [x, y] => Some(Vector2::new(component(*x)?, component(*y)?)),
         _ => None,
     }
+}
+
+// A value type's name, its members, and its methods with the hash of each
+// one's signature.
+type ValueNames = (
+    &'static str,
+    &'static [&'static str],
+    &'static [(&'static str, i64)],
+);
+
+// Each value type's names, as the API the extension is built against lists
+// them.
+const VALUE_NAMES: &[ValueNames] = include!(concat!(env!("OUT_DIR"), "/value_names.rs"));
+
+// Godot::Value.__engine_names__: the names of the members and methods of the
+// receiver's value type that the running engine has.
+fn engine_names(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
+    let kind = kind_by_class(mrb, class)?;
+    let kind_name = type_name(kind);
+    let kind = kind.ord as sys::GDExtensionVariantType;
+    let Some((_, members, methods)) = VALUE_NAMES.iter().find(|(name, ..)| *name == kind_name)
+    else {
+        return Ok(mrb.ary_new_from_values(&[]).as_value());
+    };
+    // SAFETY: the interface is initialized while the extension runs, and
+    // each name lives for its call.
+    let has_member = |name: &str| unsafe {
+        sys::interface_fn!(variant_has_member)(kind, StringName::from(name).string_sys()) != 0
+    };
+    let has_method = |name: &str, hash: i64| unsafe {
+        sys::interface_fn!(variant_get_ptr_builtin_method)(
+            kind,
+            StringName::from(name).string_sys(),
+            hash,
+        )
+        .is_some()
+    };
+    let names = members
+        .iter()
+        .copied()
+        .filter(|name| has_member(name))
+        .chain(
+            methods
+                .iter()
+                .filter(|(name, hash)| has_method(name, *hash))
+                .map(|(name, _)| *name),
+        )
+        .map(|name| {
+            mrb.intern(name.as_bytes())
+                .map(|id| Symbol::from(id).as_value())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(mrb.ary_new_from_values(&names).as_value())
 }
 
 // Godot::Value#__resolve__(name): [:member, bound] when the value's type
