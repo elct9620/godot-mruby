@@ -8,6 +8,7 @@
 
 use std::collections::BTreeSet;
 use std::ffi::c_void;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, LazyLock, Mutex, PoisonError};
 
 use godot::classes::{ClassDb, Object, Script, ScriptLanguage};
@@ -131,6 +132,11 @@ enum Stage {
     Failed,
 }
 
+// Each Stage as a Caller holds it.
+const RECORDED: u8 = 0;
+const BUILT: u8 = 1;
+const FAILED: u8 = 2;
+
 impl RubyInstance {
     pub fn new(
         script: Gd<Script>,
@@ -146,7 +152,7 @@ impl RubyInstance {
                 owner: owner.instance_id(),
                 header,
                 ancestry,
-                stage: Mutex::new(Stage::Recorded),
+                stage: AtomicU8::new(RECORDED),
                 stash: Mutex::new(Stash::default()),
             }),
             script,
@@ -261,7 +267,9 @@ struct Caller {
     // answer which methods the node's class has without entering the realm.
     header: Arc<Header>,
     ancestry: Arc<Ancestry>,
-    stage: Mutex<Stage>,
+    // The Stage the node's object has reached, read on every call without a
+    // lock; a built object is always held under the node's own key.
+    stage: AtomicU8,
     // What Godot wrote to the node's properties before it had a Ruby object,
     // waiting for the object to be built.
     stash: Mutex<Stash>,
@@ -269,11 +277,23 @@ struct Caller {
 
 impl Caller {
     fn current_stage(&self) -> Stage {
-        *self.stage.lock().unwrap_or_else(PoisonError::into_inner)
+        match self.stage.load(Ordering::Acquire) {
+            BUILT => Stage::Built(bridge::node_key(self.owner)),
+            FAILED => Stage::Failed,
+            _ => Stage::Recorded,
+        }
     }
 
     fn settle(&self, stage: Stage) {
-        *self.stage.lock().unwrap_or_else(PoisonError::into_inner) = stage;
+        let stage = match stage {
+            Stage::Recorded => RECORDED,
+            Stage::Built(key) => {
+                debug_assert_eq!(key, bridge::node_key(self.owner));
+                BUILT
+            }
+            Stage::Failed => FAILED,
+        };
+        self.stage.store(stage, Ordering::Release);
     }
 
     // Whether building the node's object failed, so it never has one.
