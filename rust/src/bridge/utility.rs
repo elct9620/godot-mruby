@@ -189,7 +189,7 @@ fn call_utility(
     if *arity != ANY && args.len() != *arity {
         return Err(argument_error(mrb, &count_message(args.len(), arity)));
     }
-    let args = to_arguments(mrb, args)?;
+    let args = to_arguments(mrb, super::data(mrb), args)?;
     let answer = utility(&args).map_err(|reason| {
         type_error(
             mrb,

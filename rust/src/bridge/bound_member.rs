@@ -5,14 +5,11 @@
 //! value's type fixes. A Vector2 Ruby holds as its components answers its
 //! `x` and `y` from them, the memory the engine's getter reads.
 
-use std::cell::Cell;
 use std::ptr;
 
 use beni::{DataType, Mrb, RClass, TypedData};
 use godot::builtin::{StringName, Variant, VariantType, Vector2, Vector2Axis, real};
 use godot::sys;
-
-use crate::realm;
 
 type Getter = unsafe extern "C" fn(sys::GDExtensionConstTypePtr, sys::GDExtensionTypePtr);
 
@@ -34,8 +31,7 @@ static BOUND_MEMBER: DataType<BoundMember> = DataType::new(c"Godot::BoundMember"
 // wrapped as.
 unsafe impl TypedData for BoundMember {
     fn class(mrb: &Mrb) -> RClass {
-        let kept = &realm::extension_data::<BoundMemberClass>(mrb).0;
-        super::find_class_once(mrb, kept, || {
+        super::find_class_once(mrb, &super::data(mrb).bound_member_class, || {
             let class = mrb
                 .class_new(mrb.object_class())
                 .expect("mruby makes a class");
@@ -50,11 +46,6 @@ unsafe impl TypedData for BoundMember {
         &BOUND_MEMBER
     }
 }
-
-// The class of bound members, nameless so it takes no name under Godot,
-// made once for a realm and kept for it.
-#[derive(Default)]
-struct BoundMemberClass(Cell<Option<RClass>>);
 
 impl BoundMember {
     /// The member `name` of `value`'s type, bound to the type of the value

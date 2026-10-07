@@ -2,8 +2,6 @@
 //! so a call reaches the method's bind without the engine looking up its
 //! name.
 
-use std::cell::Cell;
-
 use beni::{DataType, Mrb, RClass, TypedData};
 use godot::builtin::{Array, GString, StringName, VarArray, VarDictionary, Variant, VariantType};
 use godot::classes::class_db::ApiType;
@@ -12,8 +10,6 @@ use godot::obj::{EngineBitfield, Gd, Singleton};
 use godot::register::info::{MethodFlags, PropertyUsageFlags};
 use godot::sys;
 use smallvec::SmallVec;
-
-use crate::realm;
 
 /// The bind of an engine method a class the engine registered itself
 /// declares, which lives until the engine shuts down; an extension's binds
@@ -43,8 +39,7 @@ static BOUND_METHOD: DataType<BoundMethod> = DataType::new(c"Godot::BoundMethod"
 // wrapped as.
 unsafe impl TypedData for BoundMethod {
     fn class(mrb: &Mrb) -> RClass {
-        let kept = &realm::extension_data::<BoundClass>(mrb).0;
-        super::find_class_once(mrb, kept, || {
+        super::find_class_once(mrb, &super::data(mrb).bound_class, || {
             let class = mrb
                 .class_new(mrb.object_class())
                 .expect("mruby makes a class");
@@ -59,11 +54,6 @@ unsafe impl TypedData for BoundMethod {
         &BOUND_METHOD
     }
 }
-
-// The class of bound methods, nameless so it takes no name under Godot,
-// made once for a realm and kept for it.
-#[derive(Default)]
-struct BoundClass(Cell<Option<RClass>>);
 
 impl BoundMethod {
     /// The method `method` of the engine class `class`, bound where the

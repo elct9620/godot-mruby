@@ -6,7 +6,6 @@
 //! do not answer, goes to the engine's variant calls, by name.
 
 use std::borrow::Cow;
-use std::cell::{Cell, RefCell};
 use std::ptr;
 use std::sync::OnceLock;
 
@@ -20,11 +19,11 @@ use godot::obj::EngineEnum;
 use godot::sys;
 use smallvec::SmallVec;
 
+use super::BridgeData;
 use super::bound_member::BoundMember;
 use super::object::{name_by_symbol, to_arguments, type_error, zero_division_error};
 use super::value::{self, ToRuby};
 use crate::hint::type_name;
-use crate::realm;
 
 /// A value of one of the engine's value types, as Ruby holds it: a Vector2,
 /// which games build and compute with most, as its components, so it
@@ -47,12 +46,7 @@ static ENGINE_VALUE: DataType<EngineValue> = DataType::new(c"Godot::Value");
 // Godot descends from it.
 unsafe impl TypedData for EngineValue {
     fn class(mrb: &Mrb) -> RClass {
-        let kept = &realm::extension_data::<ValueClass>(mrb).0;
-        super::find_class_once(mrb, kept, || {
-            mrb.module_get(c"Godot")
-                .and_then(|godot| godot.class_get(mrb, c"Value"))
-                .expect("the Godot gem defines Godot::Value")
-        })
+        value_class(mrb, super::data(mrb))
     }
 
     fn data_type() -> &'static DataType<Self> {
@@ -60,9 +54,14 @@ unsafe impl TypedData for EngineValue {
     }
 }
 
-// Godot::Value, found once for a realm and kept for it.
-#[derive(Default)]
-struct ValueClass(Cell<Option<RClass>>);
+/// Godot::Value, found once for a realm and kept in its bridge data.
+pub(super) fn value_class(mrb: &Mrb, data: &BridgeData) -> RClass {
+    super::find_class_once(mrb, &data.value_class, || {
+        mrb.module_get(c"Godot")
+            .and_then(|godot| godot.class_get(mrb, c"Value"))
+            .expect("the Godot gem defines Godot::Value")
+    })
+}
 
 /// The engine's value types Ruby holds as `Godot::Value`s: every type that
 /// is neither Ruby's own (nil, booleans, numbers, strings, names,
@@ -118,32 +117,26 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
 
 /// The Ruby value for a value of a value type: a value of its class under
 /// Godot.
-pub fn ruby_value(mrb: &Mrb, variant: &Variant) -> Value {
+pub(super) fn ruby_value(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> Value {
     let held = match variant.get_type() {
         VariantType::VECTOR2 => EngineValue::Vector2(variant.to()),
         _ => EngineValue::Held(variant.clone()),
     };
-    wrap(mrb, held)
+    wrap(mrb, data, held)
 }
 
 // The Ruby value holding `held`: a value of its type's class under Godot.
-fn wrap(mrb: &Mrb, held: EngineValue) -> Value {
-    match class_by_kind(mrb, held.kind()) {
+fn wrap(mrb: &Mrb, data: &BridgeData, held: EngineValue) -> Value {
+    match class_by_kind(mrb, data, held.kind()) {
         Some(class) => mrb.wrap_as(held, class).as_value(),
         None => qnil().as_value(),
     }
 }
 
-// The class under Godot of each value type a realm has handed Ruby a value
-// of, by the type's ordinal, so a value finds its class without spelling the
-// type's name, and a class finds its type without spelling its own.
-#[derive(Default)]
-struct ValueClasses(RefCell<Vec<Option<RClass>>>);
-
 // The class under Godot of the value type `kind`, found once for a realm and
 // kept for it, rooted for the collector so the class lives while it is kept.
-fn class_by_kind(mrb: &Mrb, kind: VariantType) -> Option<RClass> {
-    let classes = &realm::extension_data::<ValueClasses>(mrb).0;
+fn class_by_kind(mrb: &Mrb, data: &BridgeData, kind: VariantType) -> Option<RClass> {
+    let classes = &data.value_classes;
     let index = kind.ord as usize;
     if let Some(class) = classes.borrow().get(index).copied().flatten() {
         return Some(class);
@@ -152,15 +145,15 @@ fn class_by_kind(mrb: &Mrb, kind: VariantType) -> Option<RClass> {
         .module_get(c"Godot")
         .and_then(|godot| godot.class_get(mrb, type_name(kind).as_str()))
         .ok()?;
-    keep_class(mrb, kind, class);
+    keep_class(mrb, data, kind, class);
     Some(class)
 }
 
 // Keeps `class` as the class of the value type `kind`, rooted for the
 // collector so it lives while it is kept.
-fn keep_class(mrb: &Mrb, kind: VariantType, class: RClass) {
+fn keep_class(mrb: &Mrb, data: &BridgeData, kind: VariantType, class: RClass) {
     mrb.gc_register_forever(class.as_value());
-    let mut classes = realm::extension_data::<ValueClasses>(mrb).0.borrow_mut();
+    let mut classes = data.value_classes.borrow_mut();
     let index = kind.ord as usize;
     if classes.len() <= index {
         classes.resize(index + 1, None);
@@ -205,12 +198,11 @@ fn kind_by_name(name: &str) -> Option<VariantType> {
 // classes by identity, and by the class's name only before it is kept. A
 // class Godot names now is kept for its type in place of one it named
 // before, so the type's values are made of the class Ruby names.
-fn kind_by_class(mrb: &Mrb, class: RClass) -> Result<VariantType, Error> {
-    let kept = realm::extension_data::<ValueClasses>(mrb)
-        .0
-        .borrow()
-        .iter()
-        .position(|kept| kept.is_some_and(|kept| kept.as_value().is_equal(mrb, class.as_value())));
+fn kind_by_class(mrb: &Mrb, data: &BridgeData, class: RClass) -> Result<VariantType, Error> {
+    let kept =
+        data.value_classes.borrow().iter().position(|kept| {
+            kept.is_some_and(|kept| kept.as_value().is_equal(mrb, class.as_value()))
+        });
     if let Some(ord) = kept {
         return Ok(<VariantType as EngineEnum>::from_ord(ord as i32));
     }
@@ -219,7 +211,7 @@ fn kind_by_class(mrb: &Mrb, class: RClass) -> Result<VariantType, Error> {
     let kind = kind_by_name(name)
         .ok_or_else(|| type_error(mrb, &format!("{path} is no value type of the engine")))?;
     if is_named_by_godot(mrb, class, name) {
-        keep_class(mrb, kind, class);
+        keep_class(mrb, data, kind, class);
     }
     Ok(kind)
 }
@@ -236,13 +228,14 @@ fn is_named_by_godot(mrb: &Mrb, class: RClass, name: &str) -> bool {
 // Godot::Value.new(*args): the value the engine's constructor of the
 // receiver's type that takes `args` builds.
 fn construct(mrb: &Mrb, class: RClass, args: &[Value]) -> Result<Value, Error> {
-    let kind = kind_by_class(mrb, class)?;
+    let data = super::data(mrb);
+    let kind = kind_by_class(mrb, data, class)?;
     if kind == VariantType::VECTOR2
         && let Some(vector) = read_vector2(args)
     {
-        return Ok(wrap(mrb, EngineValue::Vector2(vector)));
+        return Ok(wrap(mrb, data, EngineValue::Vector2(vector)));
     }
-    let args = to_arguments(mrb, args.iter().copied())?;
+    let args = to_arguments(mrb, data, args.iter().copied())?;
     let pointers: SmallVec<[_; 4]> = args.iter().map(Variant::var_sys).collect();
     let kind_sys = kind.ord as sys::GDExtensionVariantType;
     // SAFETY: the argument pointers live as long as `args`.
@@ -256,7 +249,7 @@ fn construct(mrb: &Mrb, class: RClass, args: &[Value]) -> Result<Value, Error> {
         )
     });
     match built {
-        Ok(built) => Ok(ruby_value(mrb, &built)),
+        Ok(built) => Ok(ruby_value(mrb, data, &built)),
         Err(_) => {
             let message = format!(
                 "Invalid call. Nonexistent '{}' constructor.",
@@ -298,7 +291,7 @@ const VALUE_NAMES: &[ValueNames] = include!(concat!(env!("OUT_DIR"), "/value_nam
 // Godot::Value.__engine_names__: the names of the members and methods of the
 // receiver's value type that the running engine has.
 fn engine_names(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
-    let kind = kind_by_class(mrb, class)?;
+    let kind = kind_by_class(mrb, super::data(mrb), class)?;
     let kind_name = type_name(kind);
     let kind = kind.ord as sys::GDExtensionVariantType;
     let Some((_, members, methods)) = VALUE_NAMES.iter().find(|(name, ..)| *name == kind_name)
@@ -405,7 +398,7 @@ fn read_named(value: &Variant, name: &StringName) -> Option<Variant> {
 // the value's type has, answers for `args`.
 fn call(mrb: &Mrb, held: &EngineValue, name: Symbol, args: RArray) -> Result<Value, Error> {
     let name = name_by_symbol(mrb, name);
-    let args = to_arguments(mrb, args.entries(mrb))?;
+    let args = to_arguments(mrb, super::data(mrb), args.entries(mrb))?;
     let pointers: SmallVec<[_; 4]> = args.iter().map(Variant::var_sys).collect();
     let mut receiver = held.variant();
     // SAFETY: the name and argument pointers live for the call, which runs on
@@ -427,9 +420,9 @@ fn call(mrb: &Mrb, held: &EngineValue, name: Symbol, args: RArray) -> Result<Val
 // receiver's type called with `args`, in a one-element array, or nil when
 // the type has no such method.
 fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<Value, Error> {
-    let kind = kind_by_class(mrb, class)?;
+    let kind = kind_by_class(mrb, super::data(mrb), class)?;
     let name = name_by_symbol(mrb, name);
-    let args = to_arguments(mrb, args.entries(mrb))?;
+    let args = to_arguments(mrb, super::data(mrb), args.entries(mrb))?;
     let pointers: SmallVec<[_; 4]> = args.iter().map(Variant::var_sys).collect();
     let kind_sys = kind.ord as sys::GDExtensionVariantType;
     // SAFETY: the name and argument pointers live for the call.
@@ -480,7 +473,7 @@ fn take_answer(
 // Godot::Value.__constant__(name): the receiver's type's constant of that
 // name, or nil when it has none.
 fn constant(mrb: &Mrb, class: RClass, name: Symbol) -> Result<Value, Error> {
-    let kind = kind_by_class(mrb, class)?;
+    let kind = kind_by_class(mrb, super::data(mrb), class)?;
     let name = name_by_symbol(mrb, name);
     // SAFETY: the interface is initialized while the extension runs, and the
     // engine writes Nil for a name the type has no constant of.
@@ -506,14 +499,17 @@ fn constant(mrb: &Mrb, class: RClass, name: Symbol) -> Result<Value, Error> {
 macro_rules! operators {
     ($($method:ident: $op:ident, $shown:literal, $typed:literal;)*) => {$(
         fn $method(mrb: &Mrb, held: &EngineValue, other: Value) -> Result<Value, Error> {
+            let data = super::data(mrb);
             if $typed
                 && let EngineValue::Vector2(vector) = held
-                && let Some(answer) = read_operand(mrb, other)
-                    .and_then(|operand| operate_typed(mrb, *vector, VariantOperator::$op, operand))
+                && let Some(answer) = read_operand(mrb, data, other).and_then(|operand| {
+                    operate_typed(mrb, data, *vector, VariantOperator::$op, operand)
+                })
             {
                 return Ok(answer);
             }
-            let other = value::to_engine(mrb, other, 1).map_err(|reason| type_error(mrb, &reason))?;
+            let other =
+                value::to_engine(mrb, data, other, 1).map_err(|reason| type_error(mrb, &reason))?;
             operate(mrb, held, VariantOperator::$op, $shown, &other)
         }
     )*};
@@ -538,13 +534,15 @@ operators! {
 // Godot::Value#==: whether `other` is a value the engine's equality finds
 // equal to this one; any other object is not.
 fn is_equal(mrb: &Mrb, held: &EngineValue, other: Value) -> Result<Value, Error> {
-    if !other.is_kind_of(mrb, EngineValue::class(mrb)) {
+    let data = super::data(mrb);
+    if !other.is_kind_of(mrb, value_class(mrb, data)) {
         return Ok(false.into_value(mrb));
     }
     let other = <&EngineValue>::try_convert(other, mrb)?;
     if let (EngineValue::Vector2(vector), EngineValue::Vector2(right)) = (held, other)
         && let Some(answer) = operate_typed(
             mrb,
+            data,
             *vector,
             VariantOperator::EQUAL,
             Operand::Vector2(*right),
@@ -573,7 +571,7 @@ fn operate_unary(
     shown: &str,
 ) -> Result<Value, Error> {
     if let EngineValue::Vector2(vector) = held
-        && let Some(answer) = operate_typed(mrb, *vector, op, Operand::None)
+        && let Some(answer) = operate_typed(mrb, super::data(mrb), *vector, op, Operand::None)
     {
         return Ok(answer);
     }
@@ -612,14 +610,14 @@ impl Operand {
 }
 
 // `other` as the right operand of a typed operator, when it is one.
-fn read_operand(mrb: &Mrb, other: Value) -> Option<Operand> {
+fn read_operand(mrb: &Mrb, data: &BridgeData, other: Value) -> Option<Operand> {
     if let Some(integer) = i64::from_value(other) {
         return Some(Operand::Int(integer));
     }
     if let Some(float) = f64::from_value(other) {
         return Some(Operand::Float(float));
     }
-    if other.is_kind_of(mrb, EngineValue::class(mrb))
+    if other.is_kind_of(mrb, value_class(mrb, data))
         && let Ok(EngineValue::Vector2(vector)) = <&EngineValue>::try_convert(other, mrb)
     {
         return Some(Operand::Vector2(*vector));
@@ -655,7 +653,13 @@ fn evaluator_by_operands(op: VariantOperator, right: VariantType) -> Option<Eval
 
 // What the engine's typed operator `op` answers for `vector` and `right`, or
 // none when the engine has no typed function for the two.
-fn operate_typed(mrb: &Mrb, vector: Vector2, op: VariantOperator, right: Operand) -> Option<Value> {
+fn operate_typed(
+    mrb: &Mrb,
+    data: &BridgeData,
+    vector: Vector2,
+    op: VariantOperator,
+    right: Operand,
+) -> Option<Value> {
     let evaluate = evaluator_by_operands(op, right.kind())?;
     let left = ptr::from_ref(&vector).cast();
     let compares = matches!(
@@ -677,7 +681,7 @@ fn operate_typed(mrb: &Mrb, vector: Vector2, op: VariantOperator, right: Operand
         } else {
             let mut answer = Vector2::ZERO;
             evaluate(left, right.as_ptr(), ptr::from_mut(&mut answer).cast());
-            Some(wrap(mrb, EngineValue::Vector2(answer)))
+            Some(wrap(mrb, data, EngineValue::Vector2(answer)))
         }
     }
 }
@@ -728,7 +732,7 @@ fn operate(
 // Godot::Value#__copy_value__: a new value of the receiver's class holding
 // a copy of the receiver's, as the engine copies a value.
 fn copy_value(mrb: &Mrb, held: &EngineValue) -> Value {
-    wrap(mrb, held.clone())
+    wrap(mrb, super::data(mrb), held.clone())
 }
 
 fn hash(_mrb: &Mrb, held: &EngineValue) -> i64 {

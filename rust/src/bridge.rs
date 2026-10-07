@@ -1,16 +1,17 @@
 //! What Ruby sees of the engine: the `Godot` module, a gem every game realm
 //! opens with, and the values that cross between the engine and Ruby.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::ptr;
 
-use beni::{Error, Gem, Mrb, Object, RClass, ReprValue, Symbol, Value, method, value::qnil};
-use godot::builtin::Variant;
+use beni::{Error, Gem, Id, Mrb, Object, RClass, ReprValue, Symbol, Value, method, value::qnil};
+use godot::builtin::{StringName, Variant};
 use godot::classes::ClassDb;
 use godot::obj::Singleton;
 use godot::sys;
 
-use crate::{compiler, log};
+use crate::{compiler, log, realm};
 
 mod bound_member;
 mod bound_method;
@@ -54,6 +55,36 @@ impl Gem for Godot {
             log::compiler_warnings(FILE),
         )
     }
+}
+
+/// What the bridge keeps for a realm, in one place so a call reaches all of
+/// it with one lookup and hands it on to what it calls.
+#[derive(Default)]
+struct BridgeData {
+    // Godot::Object.
+    object_class: Cell<Option<RClass>>,
+    // Godot::Object::OMITTED, which an engine method's body passes for an
+    // optional argument the call left out, so the engine applies its
+    // default; the constant keeps it alive.
+    omitted: Cell<Option<Value>>,
+    // The engine's name for each symbol the realm has asked the engine about.
+    engine_names: RefCell<HashMap<Id, StringName>>,
+    // The class under Godot of each engine class the realm has handed Ruby an
+    // object of, by the engine's name for it.
+    engine_classes: RefCell<HashMap<NameKey, RClass>>,
+    // Godot::Value.
+    value_class: Cell<Option<RClass>>,
+    // The class under Godot of each value type the realm has handed Ruby a
+    // value of, by the type's ordinal.
+    value_classes: RefCell<Vec<Option<RClass>>>,
+    // The nameless classes of bound methods and of bound members.
+    bound_class: Cell<Option<RClass>>,
+    bound_member_class: Cell<Option<RClass>>,
+}
+
+// What the bridge keeps for the realm `mrb` belongs to.
+fn data(mrb: &Mrb) -> &BridgeData {
+    realm::extension_data::<BridgeData>(mrb)
 }
 
 // The class `kept` holds, or the one `find` finds, kept there for the realm

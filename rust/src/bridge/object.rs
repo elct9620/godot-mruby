@@ -2,8 +2,6 @@
 //! `Godot` carries the engine object it stands for, and Ruby reaches its
 //! methods by their names.
 
-use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
 use std::fmt;
 
 use beni::typed_data::{Dup, Obj};
@@ -22,6 +20,7 @@ use godot::register::info::PropertyHint;
 use godot::sys;
 use smallvec::SmallVec;
 
+use super::BridgeData;
 use super::bound_method::{Arity, BoundMethod};
 use super::name_key::NameKey;
 use super::value::{self, ToRuby};
@@ -46,10 +45,7 @@ static ENGINE_OBJECT: DataType<EngineObject> = DataType::new(c"Godot::Object");
 // Godot descends from it.
 unsafe impl TypedData for EngineObject {
     fn class(mrb: &Mrb) -> RClass {
-        let kept = &realm::extension_data::<ObjectClass>(mrb).0;
-        super::find_class_once(mrb, kept, || {
-            root(mrb).expect("the Godot gem defines Godot::Object")
-        })
+        object_class(mrb, super::data(mrb))
     }
 
     fn data_type() -> &'static DataType<Self> {
@@ -57,15 +53,12 @@ unsafe impl TypedData for EngineObject {
     }
 }
 
-// Godot::Object::OMITTED, which an engine method's body passes for an
-// optional argument the call left out, so the engine applies its default;
-// the constant keeps it alive.
-#[derive(Default)]
-struct Omitted(Cell<Option<Value>>);
-
-// Godot::Object, found once for a realm and kept for it.
-#[derive(Default)]
-struct ObjectClass(Cell<Option<RClass>>);
+/// Godot::Object, found once for a realm and kept in its bridge data.
+pub(super) fn object_class(mrb: &Mrb, data: &BridgeData) -> RClass {
+    super::find_class_once(mrb, &data.object_class, || {
+        root(mrb).expect("the Godot gem defines Godot::Object")
+    })
+}
 
 /// Defines Godot::Object, the class every engine class descends from.
 pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
@@ -93,7 +86,7 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     object.define_private_method(mrb, c"__clone__", method!(clone, -1))?;
     let omitted = mrb.object_class().new_instance(mrb, &[])?;
     object.const_set(mrb, c"OMITTED", omitted)?;
-    realm::extension_data::<Omitted>(mrb).0.set(Some(omitted));
+    super::data(mrb).omitted.set(Some(omitted));
     Ok(())
 }
 
@@ -294,12 +287,13 @@ fn call_bound(mrb: &Mrb, held: &EngineObject, args: &[Value]) -> Result<Value, E
         return Err(argument_error(mrb, &count_message(0, 1)));
     };
     let bound = <&BoundMethod>::try_convert(bound, mrb)?;
-    let omitted = realm::extension_data::<Omitted>(mrb).0.get();
+    let data = super::data(mrb);
+    let omitted = data.omitted.get();
     let given = args
         .iter()
         .rposition(|arg| omitted.is_none_or(|omitted| !arg.is_equal(mrb, omitted)))
         .map_or(0, |last| last + 1);
-    call_bind(mrb, held, bound, args[..given].iter().copied())
+    call_bind(mrb, data, held, bound, args[..given].iter().copied())
 }
 
 // Godot::Object#__apply_bound__(bound, args): calls the engine method
@@ -310,7 +304,7 @@ fn apply_bound(
     bound: &BoundMethod,
     args: RArray,
 ) -> Result<Value, Error> {
-    call_bind(mrb, held, bound, args.entries(mrb))
+    call_bind(mrb, super::data(mrb), held, bound, args.entries(mrb))
 }
 
 // Calls the engine method `bound` with `args`. The receiver's Ruby class was
@@ -318,17 +312,18 @@ fn apply_bound(
 // object is of that class or one extending it.
 fn call_bind(
     mrb: &Mrb,
+    data: &BridgeData,
     held: &EngineObject,
     bound: &BoundMethod,
     args: impl IntoIterator<Item = Value>,
 ) -> Result<Value, Error> {
     let object = held.live_object(mrb, bound.name())?;
-    let args = to_arguments(mrb, args)?;
+    let args = to_arguments(mrb, data, args)?;
     let answer = bound.call(&object, &args).map_err(|error| {
         let base = object.get_class().to_string();
         refusal_error(mrb, &error, bound.name(), &base, &args, Some(bound.arity()))
     })?;
-    ruby_answer(mrb, &answer)
+    ruby_answer(mrb, data, &answer)
 }
 
 // Godot::Object.__shape__(bound): how many arguments the engine method
@@ -346,20 +341,21 @@ fn shape(mrb: &Mrb, _class: RClass, bound: &BoundMethod) -> Value {
 // Godot::Object#__call__(name, args): calls the engine method `name` with
 // `args` and answers what it returns.
 fn call(mrb: &Mrb, held: &EngineObject, name: Symbol, args: RArray) -> Result<Value, Error> {
+    let data = super::data(mrb);
     let name = name_by_symbol(mrb, name);
     let mut object = held.live_object(mrb, &name)?;
-    let args = to_arguments(mrb, args.entries(mrb))?;
+    let args = to_arguments(mrb, data, args.entries(mrb))?;
     let answer = object.try_call(&name, &args).map_err(|error| {
         let base = object.get_class().to_string();
         call_refusal(mrb, &error, &base, &name.to_string(), args.len())
     })?;
-    ruby_answer(mrb, &answer)
+    ruby_answer(mrb, data, &answer)
 }
 
 /// The engine's name `symbol` spells, made once for a realm, since making
 /// one looks the name up in the engine's table of names.
 pub(super) fn name_by_symbol(mrb: &Mrb, symbol: Symbol) -> StringName {
-    let names = &realm::extension_data::<EngineNames>(mrb).0;
+    let names = &super::data(mrb).engine_names;
     let id = Id::from(symbol);
     if let Some(name) = names.borrow().get(&id) {
         return name.clone();
@@ -368,10 +364,6 @@ pub(super) fn name_by_symbol(mrb: &Mrb, symbol: Symbol) -> StringName {
     names.borrow_mut().insert(id, name.clone());
     name
 }
-
-// The engine's name for each symbol a realm has asked the engine about.
-#[derive(Default)]
-struct EngineNames(RefCell<HashMap<Id, StringName>>);
 
 // Godot::Object#__label__: the engine object as Godot prints it,
 // `<Class#id>`, or `<Freed Object>` once it is freed.
@@ -418,45 +410,40 @@ fn has_static_method(mrb: &Mrb, class: RClass, name: Symbol) -> bool {
 fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<Value, Error> {
     let name = name_by_symbol(mrb, name);
     let class = engine_name(mrb, class);
-    let args = to_arguments(mrb, args.entries(mrb))?;
+    let data = super::data(mrb);
+    let args = to_arguments(mrb, data, args.entries(mrb))?;
     let answer = ClassDb::singleton()
         .try_class_call_static(&class, &name, &args)
         .map_err(|error| call_refusal(mrb, &error, &class, &name.to_string(), args.len()))?;
-    ruby_answer(mrb, &answer)
+    ruby_answer(mrb, data, &answer)
 }
 
 // What the engine answered, as Ruby is given it, or the Godot::CallError an
 // answer that cannot reach Ruby raises.
-fn ruby_answer(mrb: &Mrb, answer: &Variant) -> Result<Value, Error> {
+fn ruby_answer(mrb: &Mrb, data: &BridgeData, answer: &Variant) -> Result<Value, Error> {
     ToRuby::try_new(answer)
-        .map(|answer| answer.into_value(mrb))
+        .map(|answer| answer.into_ruby(mrb, data))
         .map_err(|reason| call_error(mrb, &reason))
 }
 
 /// The Ruby object for an engine object: the one the realm holds for the
 /// node, or an object of its engine class under Godot.
-pub fn ruby_object(mrb: &Mrb, object: Gd<Object>) -> Value {
+pub(super) fn ruby_object(mrb: &Mrb, data: &BridgeData, object: Gd<Object>) -> Value {
     if let Some(held) = realm::object(mrb, node_key(object.instance_id())) {
         return held;
     }
-    let class = class_by_name(mrb, exposed_class(&object)).or_else(|| root(mrb).ok());
+    let class = class_by_name(mrb, data, exposed_class(&object)).or_else(|| root(mrb).ok());
     match class {
         Some(class) => mrb.wrap_as(EngineObject(object), class).as_value(),
         None => qnil().as_value(),
     }
 }
 
-// The class under Godot of each engine class a realm has handed Ruby an
-// object of, by the engine's name for it, so an object finds its class
-// without spelling that name.
-#[derive(Default)]
-struct EngineClasses(RefCell<HashMap<NameKey, RClass>>);
-
 // The class under Godot of the engine class `name`, found once for a realm
 // and kept for it, rooted for the collector so the class lives while it is
 // kept.
-fn class_by_name(mrb: &Mrb, name: StringName) -> Option<RClass> {
-    let classes = &realm::extension_data::<EngineClasses>(mrb).0;
+fn class_by_name(mrb: &Mrb, data: &BridgeData, name: StringName) -> Option<RClass> {
+    let classes = &data.engine_classes;
     let key = NameKey::new(name);
     if let Some(class) = classes.borrow().get(&key).copied() {
         return Some(class);
@@ -526,10 +513,11 @@ fn declare_export(
             Some(Hint::from_keyword(keyword).map_err(|reason| argument_error(mrb, &reason))?)
         }
     };
+    let data = super::data(mrb);
     let default =
-        value::to_engine(mrb, default, 1).map_err(|reason| argument_error(mrb, &reason))?;
+        value::to_engine(mrb, data, default, 1).map_err(|reason| argument_error(mrb, &reason))?;
     let written =
-        value::to_engine(mrb, written, 1).map_err(|reason| argument_error(mrb, &reason))?;
+        value::to_engine(mrb, data, written, 1).map_err(|reason| argument_error(mrb, &reason))?;
     if let Some(engine_class) = engine_member(mrb, class, &name) {
         let message =
             format!("Member \"{name}\" redefined (original in native class '{engine_class}')");
@@ -751,10 +739,13 @@ pub(super) type Arguments = SmallVec<[Variant; 4]>;
 /// reach it raises, before the engine is given any.
 pub(super) fn to_arguments(
     mrb: &Mrb,
+    data: &BridgeData,
     args: impl IntoIterator<Item = Value>,
 ) -> Result<Arguments, Error> {
     args.into_iter()
-        .map(|arg| value::to_engine(mrb, arg, 1).map_err(|reason| argument_error(mrb, &reason)))
+        .map(|arg| {
+            value::to_engine(mrb, data, arg, 1).map_err(|reason| argument_error(mrb, &reason))
+        })
         .collect()
 }
 

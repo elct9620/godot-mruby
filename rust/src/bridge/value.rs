@@ -5,7 +5,7 @@
 
 use beni::{
     Error, FromValue, IntoValue, Mrb, Proc, Qfalse, Qtrue, RArray, RHash, RString, ReprValue,
-    Symbol, TryConvert, TypedData, Value, value::qnil,
+    Symbol, TryConvert, Value, value::qnil,
 };
 use godot::builtin::{
     AnyArray, AnyDictionary, Color, GString, PackedArray, StringName, VarArray, VarDictionary,
@@ -16,6 +16,8 @@ use godot::meta::{PackedElement, ToGodot};
 use godot::obj::Gd;
 
 use crate::realm;
+
+use super::BridgeData;
 
 use super::object::{self, EngineObject};
 use super::ruby_object::{self, RubyObject};
@@ -38,9 +40,16 @@ impl<'a> ToRuby<'a> {
     }
 }
 
+impl ToRuby<'_> {
+    /// The value for Ruby, made with what the bridge keeps for the realm.
+    pub(super) fn into_ruby(self, mrb: &Mrb, data: &BridgeData) -> Value {
+        to_ruby(mrb, data, self.0)
+    }
+}
+
 impl IntoValue for ToRuby<'_> {
     fn into_value(self, mrb: &Mrb) -> Value {
-        to_ruby(mrb, self.0)
+        self.into_ruby(mrb, super::data(mrb))
     }
 }
 
@@ -69,7 +78,7 @@ fn unreachable_reason(variant: &Variant) -> Option<String> {
     })
 }
 
-fn to_ruby(mrb: &Mrb, variant: &Variant) -> Value {
+fn to_ruby(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> Value {
     match variant.get_type() {
         VariantType::BOOL => variant.to::<bool>().into_value(mrb),
         VariantType::INT => variant.to::<i64>().into_value(mrb),
@@ -78,11 +87,12 @@ fn to_ruby(mrb: &Mrb, variant: &Variant) -> Value {
             .str_new(variant.to::<GString>().to_string().as_bytes())
             .as_value(),
         VariantType::STRING_NAME => symbol(mrb, &variant.to::<StringName>().to_string()),
-        VariantType::ARRAY => array(mrb, variant.to::<AnyArray>().iter_shared()),
+        VariantType::ARRAY => array(mrb, data, variant.to::<AnyArray>().iter_shared()),
         VariantType::DICTIONARY => {
             let hash = mrb.hash_new();
             for (key, value) in variant.to::<AnyDictionary>().iter_shared() {
-                hash.set(mrb, to_ruby(mrb, &key), to_ruby(mrb, &value)).ok();
+                hash.set(mrb, to_ruby(mrb, data, &key), to_ruby(mrb, data, &value))
+                    .ok();
             }
             hash.as_value()
         }
@@ -96,20 +106,20 @@ fn to_ruby(mrb: &Mrb, variant: &Variant) -> Value {
                     Ok(held) => {
                         realm::object(mrb, held.bind().key()).unwrap_or_else(|| qnil().as_value())
                     }
-                    Err(object) => object::ruby_object(mrb, object),
+                    Err(object) => object::ruby_object(mrb, data, object),
                 },
             ),
-        kind if value_type::is_value_type(kind) => value_type::ruby_value(mrb, variant),
-        VariantType::PACKED_BYTE_ARRAY => from_packed::<u8>(mrb, variant),
-        VariantType::PACKED_INT32_ARRAY => from_packed::<i32>(mrb, variant),
-        VariantType::PACKED_INT64_ARRAY => from_packed::<i64>(mrb, variant),
-        VariantType::PACKED_FLOAT32_ARRAY => from_packed::<f32>(mrb, variant),
-        VariantType::PACKED_FLOAT64_ARRAY => from_packed::<f64>(mrb, variant),
-        VariantType::PACKED_STRING_ARRAY => from_packed::<GString>(mrb, variant),
-        VariantType::PACKED_VECTOR2_ARRAY => from_packed::<Vector2>(mrb, variant),
-        VariantType::PACKED_VECTOR3_ARRAY => from_packed::<Vector3>(mrb, variant),
-        VariantType::PACKED_COLOR_ARRAY => from_packed::<Color>(mrb, variant),
-        VariantType::PACKED_VECTOR4_ARRAY => from_packed::<Vector4>(mrb, variant),
+        kind if value_type::is_value_type(kind) => value_type::ruby_value(mrb, data, variant),
+        VariantType::PACKED_BYTE_ARRAY => from_packed::<u8>(mrb, data, variant),
+        VariantType::PACKED_INT32_ARRAY => from_packed::<i32>(mrb, data, variant),
+        VariantType::PACKED_INT64_ARRAY => from_packed::<i64>(mrb, data, variant),
+        VariantType::PACKED_FLOAT32_ARRAY => from_packed::<f32>(mrb, data, variant),
+        VariantType::PACKED_FLOAT64_ARRAY => from_packed::<f64>(mrb, data, variant),
+        VariantType::PACKED_STRING_ARRAY => from_packed::<GString>(mrb, data, variant),
+        VariantType::PACKED_VECTOR2_ARRAY => from_packed::<Vector2>(mrb, data, variant),
+        VariantType::PACKED_VECTOR3_ARRAY => from_packed::<Vector3>(mrb, data, variant),
+        VariantType::PACKED_COLOR_ARRAY => from_packed::<Color>(mrb, data, variant),
+        VariantType::PACKED_VECTOR4_ARRAY => from_packed::<Vector4>(mrb, data, variant),
         _ => qnil().as_value(),
     }
 }
@@ -119,14 +129,16 @@ fn symbol(mrb: &Mrb, name: &str) -> Value {
         .map_or_else(|_| qnil().as_value(), |id| Symbol::from(id).as_value())
 }
 
-fn array(mrb: &Mrb, elements: impl Iterator<Item = Variant>) -> Value {
-    let values: Vec<Value> = elements.map(|element| to_ruby(mrb, &element)).collect();
+fn array(mrb: &Mrb, data: &BridgeData, elements: impl Iterator<Item = Variant>) -> Value {
+    let values: Vec<Value> = elements
+        .map(|element| to_ruby(mrb, data, &element))
+        .collect();
     mrb.ary_new_from_values(&values).as_value()
 }
 
-fn from_packed<T: PackedElement>(mrb: &Mrb, variant: &Variant) -> Value {
+fn from_packed<T: PackedElement>(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> Value {
     let packed = variant.to::<PackedArray<T>>();
-    array(mrb, packed.as_slice().iter().map(ToGodot::to_variant))
+    array(mrb, data, packed.as_slice().iter().map(ToGodot::to_variant))
 }
 
 /// A Ruby value as the engine takes it. Its Variant follows the Ruby value's
@@ -136,7 +148,7 @@ pub struct ToEngine(pub Variant);
 
 impl TryConvert for ToEngine {
     fn try_convert(value: Value, mrb: &Mrb) -> Result<Self, Error> {
-        to_engine(mrb, value, 1)
+        to_engine(mrb, super::data(mrb), value, 1)
             .map(Self)
             .map_err(|reason| match mrb.exc_get(c"TypeError") {
                 Ok(class) => Error::new(mrb, class, &reason),
@@ -146,7 +158,12 @@ impl TryConvert for ToEngine {
 }
 
 /// `value` as the engine takes it, or why it cannot reach the engine.
-pub fn to_engine(mrb: &Mrb, value: Value, level: usize) -> Result<Variant, String> {
+pub fn to_engine(
+    mrb: &Mrb,
+    data: &BridgeData,
+    value: Value,
+    level: usize,
+) -> Result<Variant, String> {
     if value.is_nil() {
         return Ok(Variant::nil());
     }
@@ -173,12 +190,12 @@ pub fn to_engine(mrb: &Mrb, value: Value, level: usize) -> Result<Variant, Strin
     // Only a value of their class can carry either, and asking that first
     // keeps every other value from raising the TypeError a failed
     // conversion builds.
-    if value.is_kind_of(mrb, EngineObject::class(mrb))
+    if value.is_kind_of(mrb, object::object_class(mrb, data))
         && let Ok(held) = <&EngineObject>::try_convert(value, mrb)
     {
         return held.variant();
     }
-    if value.is_kind_of(mrb, EngineValue::class(mrb))
+    if value.is_kind_of(mrb, value_type::value_class(mrb, data))
         && let Ok(held) = <&EngineValue>::try_convert(value, mrb)
     {
         return Ok(held.variant());
@@ -193,7 +210,7 @@ pub fn to_engine(mrb: &Mrb, value: Value, level: usize) -> Result<Variant, Strin
         }
         let mut copied = VarArray::new();
         for element in array.entries(mrb) {
-            copied.push(&to_engine(mrb, element, level + 1)?);
+            copied.push(&to_engine(mrb, data, element, level + 1)?);
         }
         return Ok(copied.to_variant());
     }
@@ -206,8 +223,8 @@ pub fn to_engine(mrb: &Mrb, value: Value, level: usize) -> Result<Variant, Strin
         for key in keys.entries(mrb) {
             let entry = hash.get(mrb, key).map_err(|error| error.message(mrb))?;
             copied.set(
-                &to_engine(mrb, key, level + 1)?,
-                &to_engine(mrb, entry, level + 1)?,
+                &to_engine(mrb, data, key, level + 1)?,
+                &to_engine(mrb, data, entry, level + 1)?,
             );
         }
         return Ok(copied.to_variant());
