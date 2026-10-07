@@ -335,11 +335,14 @@ module Godot
     # A node class's own method of the name stays its own, reaching the
     # engine's through super.
     def method_missing(name, *args, &block)
-      target, declared, bound = __resolve__(name)
+      target, declared, bound, property = __resolve__(name)
       return super if target.nil?
 
       engine_class = self.class.__send__(:__engine_class__)
-      if bound
+      if property
+        engine_class.__send__(:define_method, name) { |*arguments| __call__(target, [property, *arguments]) }
+        __call__(target, [property, *args])
+      elsif bound
         engine_class.__send__(:define_method, name, &engine_class.__send__(:__bound_body__, bound))
         engine_class.instance_method(name).bind_call(self, *args)
       else

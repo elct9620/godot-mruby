@@ -266,4 +266,13 @@ class EngineObjectsTest < Minitest::Test
   ensure
     Godot::RefCounted.__send__(:remove_method, :initialize_copy)
   end
+
+  # @behavior RG-033
+  def test_a_property_the_engine_reads_by_index_reads_and_writes_as_gdscripts
+    control = autofree(Godot::Control.new)
+
+    control.offset_left = 5.0
+
+    assert_in_delta 5.0, control.offset_left
+  end
 end

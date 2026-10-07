@@ -209,26 +209,33 @@ impl IntoValue for Owner {
 // included, and the method bound for that class when the engine registered
 // it, or nil when it reaches none; a receiver carrying no engine object
 // raises TypeError. A name ending in `=` reaches the property's setter, and
-// a name no method has reaches its getter.
+// a name no method has reaches its getter; a property read or written by an
+// index reaches the engine's `get` or `set`, with the property's name.
 fn resolve(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
     let held = <&EngineObject>::try_convert(receiver, mrb)?;
     let name = name.name(mrb).unwrap_or_default();
     let object = held.live_object(mrb, &name)?;
     let class = StringName::from(&object.get_class());
     let mut class_db = ClassDb::singleton();
-    let target = if let Some(property) = name.strip_suffix('=') {
-        class_db
-            .class_get_property_setter(&class, property)
-            .to_string()
+    let (target, property) = if let Some(property) = name.strip_suffix('=') {
+        let setter = class_db.class_get_property_setter(&class, property);
+        (setter.to_string(), Some((property, "set")))
     } else if object.has_method(name.as_str()) {
-        name
+        (name.clone(), None)
     } else {
-        class_db
-            .class_get_property_getter(&class, name.as_str())
-            .to_string()
+        let getter = class_db.class_get_property_getter(&class, name.as_str());
+        (getter.to_string(), Some((name.as_str(), "get")))
     };
     if target.is_empty() {
         return Ok(qnil().as_value());
+    }
+    // A setter takes the value beside any index, a getter nothing more.
+    let takes_index = |accessor: &str| {
+        let values = usize::from(accessor == "set");
+        Arity::find(&class.to_string(), &target).is_some_and(|arity| arity.required > values)
+    };
+    if let Some((property, accessor)) = property.filter(|(_, accessor)| takes_index(accessor)) {
+        return indexed_property(mrb, accessor, property);
     }
     let extended = receiver
         .funcall(mrb, c"class", &[])
@@ -243,6 +250,17 @@ fn resolve(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
     let target = Symbol::from(mrb.intern(target.as_bytes())?).as_value();
     Ok(mrb
         .ary_new_from_values(&[target, declared.into_value(mrb), bound])
+        .as_value())
+}
+
+// What `__resolve__` answers for a property whose getter and setter take an
+// index the property's name stands for: the engine's `get` or `set`, called
+// by name with the property's name ahead of the arguments.
+fn indexed_property(mrb: &Mrb, accessor: &str, property: &str) -> Result<Value, Error> {
+    let target = Symbol::from(mrb.intern(accessor.as_bytes())?).as_value();
+    let property = mrb.str_new(property.as_bytes()).as_value();
+    Ok(mrb
+        .ary_new_from_values(&[target, true.into_value(mrb), qnil().as_value(), property])
         .as_value())
 }
 

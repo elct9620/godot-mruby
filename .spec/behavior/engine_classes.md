@@ -263,3 +263,11 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | an engine class whose `initialize_copy` calls an engine method on the copy |
 | When | Ruby calls `clone` on one of its objects |
 | Then | the call raises `TypeError`, since the copy takes the engine object only after `initialize_copy` returns |
+
+## `RG-033` A property the engine reads by index reads and writes as GDScript's
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine object whose class has a property its getter and setter reach by an index, such as a Control's `offset_left` |
+| When | Ruby writes the property by its name, then reads it |
+| Then | it reads what was written, as GDScript's `control.offset_left` does |
