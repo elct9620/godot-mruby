@@ -153,33 +153,12 @@ fn allocate(mrb: &Mrb, class: RClass, owner: &EngineObject) -> Result<Value, Err
 }
 
 // Godot::Object#initialize_copy(original): gives the copy Ruby's dup or
-// clone made the engine object `original` stands for, as a Ruby
-// extension's data fills its copy; or the TypeError raised when the two
-// differ in class, the engine object is freed, or the copy already stands
-// for one.
+// clone made the engine object `original` stands for, or the TypeError
+// raised when that object is freed or the copy cannot take it.
 fn initialize_copy(mrb: &Mrb, copy: RTypedData, original: Value) -> Result<RTypedData, Error> {
-    if copy.as_value().is_equal(mrb, original) {
-        return Ok(copy);
-    }
-    let class = copy.as_value().class(mrb);
-    let same_class = original
-        .class(mrb)
-        .as_value()
-        .is_equal(mrb, class.as_value());
-    if !same_class {
-        let message = "initialize_copy should take same class object";
-        return Err(type_error(mrb, message));
-    }
-    let owner = <&EngineObject>::try_convert(original, mrb)?;
-    check_stands_for(mrb, class, owner)?;
-    match copy.init(mrb, owner.clone()) {
-        Ok(()) => Ok(copy),
-        Err(_) => {
-            let path = class.path(mrb).unwrap_or_default();
-            let message = format!("{path} already stands for an engine object");
-            Err(type_error(mrb, &message))
-        }
-    }
+    super::fill_copy(mrb, copy, original, |class, owner: &EngineObject| {
+        check_stands_for(mrb, class, owner)
+    })
 }
 
 // The TypeError raised when an object of `class` would stand for `owner`'s

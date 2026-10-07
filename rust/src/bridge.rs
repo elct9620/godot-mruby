@@ -5,7 +5,11 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::ptr;
 
-use beni::{Error, Gem, Id, Mrb, Object, RClass, ReprValue, Symbol, Value, method, value::qnil};
+use beni::typed_data::RTypedData;
+use beni::{
+    Error, Gem, Id, Module, Mrb, Object, RClass, ReprValue, Symbol, TryConvert, TypedData, Value,
+    method, value::qnil,
+};
 use godot::builtin::{StringName, Variant};
 use godot::classes::ClassDb;
 use godot::obj::Singleton;
@@ -93,6 +97,36 @@ fn find_class_once(
         mrb.gc_register_forever(class.as_value());
         kept.set(Some(class));
         class
+    })
+}
+
+// The copy Ruby's dup or clone made of `original`, given a copy of what
+// `original` carries, as a Ruby extension's data fills its copy in
+// initialize_copy; or the TypeError raised when the two differ in class,
+// `admit` refuses what `original` carries, or the copy already carries one.
+fn fill_copy<T: TypedData + Clone>(
+    mrb: &Mrb,
+    copy: RTypedData,
+    original: Value,
+    admit: impl FnOnce(RClass, &T) -> Result<(), Error>,
+) -> Result<RTypedData, Error> {
+    if copy.as_value().is_equal(mrb, original) {
+        return Ok(copy);
+    }
+    let class = copy.as_value().class(mrb);
+    let same_class = original
+        .class(mrb)
+        .as_value()
+        .is_equal(mrb, class.as_value());
+    if !same_class {
+        let message = "initialize_copy should take same class object";
+        return Err(object::type_error(mrb, message));
+    }
+    let carried = <&T>::try_convert(original, mrb)?;
+    admit(class, carried)?;
+    copy.init(mrb, carried.clone()).map(|()| copy).map_err(|_| {
+        let path = class.path(mrb).unwrap_or_default();
+        object::type_error(mrb, &format!("{path} is already initialized"))
     })
 }
 

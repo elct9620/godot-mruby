@@ -174,6 +174,26 @@ class ValueTypesTest < Minitest::Test
     assert_equal Godot::Transform3D.new, copies[2]
   end
 
+  # @behavior RV-034
+  def test_a_values_clone_keeps_its_singleton_methods_and_frozen_state
+    vector = Godot::Vector2.new(1, 2)
+    vector.define_singleton_method(:label) { :start }
+    vector.freeze
+
+    copy = vector.clone
+
+    assert_equal [:start, true], [copy.label, copy.frozen?]
+    assert_equal vector, copy
+  end
+
+  # @behavior RV-035
+  def test_a_value_takes_no_other_value_in_place_of_its_own
+    vector = Godot::Vector2.new(1, 2)
+
+    assert_raises(TypeError) { vector.__send__(:initialize_copy, Godot::Vector2.new(3, 4)) }
+    assert_equal Godot::Vector2.new(1, 2), vector
+  end
+
   # @behavior RV-027
   def test_a_value_types_class_allocates_no_empty_value
     assert_raises(TypeError) { Godot::Vector2.allocate }

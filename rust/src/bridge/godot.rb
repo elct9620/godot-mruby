@@ -448,20 +448,6 @@ module Godot
       __hash__
     end
 
-    # A copy is another value of the same class, holding the engine's copy
-    # of this one and its instance variables.
-    def dup
-      copy = __copy_value__
-      instance_variables.each { |name| copy.instance_variable_set(name, instance_variable_get(name)) }
-      copy
-    end
-
-    def clone
-      copy = dup
-      copy.freeze if frozen?
-      copy
-    end
-
     def inspect
       "#<#{self.class} #{self}>"
     end

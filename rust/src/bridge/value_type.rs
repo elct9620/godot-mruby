@@ -9,6 +9,7 @@ use std::borrow::Cow;
 use std::ptr;
 use std::sync::{LazyLock, OnceLock};
 
+use beni::typed_data::RTypedData;
 use beni::{
     DataType, Error, FromValue, IntoValue, Module, Mrb, Object as _, RArray, RClass, RModule,
     ReprValue, Symbol, TryConvert, TypedData, Value, method, value::qnil,
@@ -100,7 +101,7 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     class.define_private_method(mrb, c"__get__", method!(get, 1))?;
     class.define_private_method(mrb, c"__call__", method!(call, 2))?;
     class.define_private_method(mrb, c"__hash__", method!(hash, 0))?;
-    class.define_private_method(mrb, c"__copy_value__", method!(copy_value, 0))?;
+    class.define_private_method(mrb, c"initialize_copy", method!(initialize_copy, 1))?;
     class.define_method(mrb, c"+", method!(add, 1))?;
     class.define_method(mrb, c"-", method!(subtract, 1))?;
     class.define_method(mrb, c"*", method!(multiply, 1))?;
@@ -810,14 +811,15 @@ fn evaluate_variants(op: VariantOperator, left: &Variant, right: &Variant) -> (V
     (answer, valid != 0)
 }
 
-// Godot::Value#__hash__: the engine's hash of the value, which equal values
-// share.
-// Godot::Value#__copy_value__: a new value of the receiver's class holding
-// a copy of the receiver's, as the engine copies a value.
-fn copy_value(mrb: &Mrb, held: &EngineValue) -> Value {
-    wrap(mrb, super::data(mrb), held.clone())
+// Godot::Value#initialize_copy(original): gives the copy Ruby's dup or
+// clone made the engine's copy of `original`'s value, or the TypeError
+// raised when the copy cannot take it.
+fn initialize_copy(mrb: &Mrb, copy: RTypedData, original: Value) -> Result<RTypedData, Error> {
+    super::fill_copy(mrb, copy, original, |_, _: &EngineValue| Ok(()))
 }
 
+// Godot::Value#__hash__: the engine's hash of the value, which equal values
+// share.
 fn hash(_mrb: &Mrb, held: &EngineValue) -> i64 {
     // SAFETY: the interface is initialized while the extension runs, and
     // the value lives for the call.

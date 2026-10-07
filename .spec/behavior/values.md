@@ -270,3 +270,19 @@ How a value crosses between Ruby and the engine, either way: data is copied and 
 | Given | a value type's method, or its static method, which a game exported without the engine's debug checks calls too |
 | When | Ruby calls it with fewer arguments than it requires |
 | Then | it raises `ArgumentError` naming the arguments given and those the method requires, without reaching the engine |
+
+## `RV-034` A value's clone keeps its singleton methods and frozen state
+
+| Step | Statement |
+| --- | --- |
+| Given | a frozen value of a value type with a singleton method |
+| When | Ruby calls `clone` on it |
+| Then | the copy answers the singleton method and is frozen, as Ruby's `clone` keeps both |
+
+## `RV-035` A value takes no other value in place of its own
+
+| Step | Statement |
+| --- | --- |
+| Given | two values of one value type |
+| When | Ruby calls `initialize_copy` on one with the other |
+| Then | it raises `TypeError`, and the value stays equal to what it was, since a value never changes |
