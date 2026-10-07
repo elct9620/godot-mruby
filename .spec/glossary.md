@@ -129,4 +129,4 @@ The way the call-cost analysis recommends writing a game's per-frame Ruby: engin
 
 ### Call-cost gate
 
-The check that is to fail a change that makes a round of the battle in the recommended style take more than twice its GDScript twin's time, and warn past one and a half times. Until it judges, the bench only reports the ratio.
+The check that marks a change making either style's battle take 10% more of its GDScript twin's time than main's last bench measured on the same CPU. It guards the level reached rather than an absolute ratio; the bench still judges nothing, so nothing waits on it.

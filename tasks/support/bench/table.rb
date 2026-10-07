@@ -15,7 +15,7 @@ module Bench
       growth = results["growth"]
       [describe_measured(results), describe_baseline(baseline, results["cpu"]),
        (tabulate_growth(growth) unless growth.empty?),
-       tabulate_battle(results["battle"], baseline&.fetch("battle", nil)),
+       tabulate_battle(results, baseline),
        tabulate_spreads("call, ns", results["operations"], "%.0f", baseline&.fetch("operations", nil))]
         .compact.join("\n\n")
     end
@@ -47,9 +47,36 @@ module Bench
       ["| #{name} |", *measures.map { |measure| format(" %.1f |", measure[name] / 1000.0) }].join
     end
 
-    def tabulate_battle(styles, baseline)
-      [tabulate_spreads("battle, ms a round", styles, "%.1f", baseline), "",
-       "The call-cost gate is to judge the recommended style's ratio."].join("\n")
+    # The battle's table beside main's, and the call-cost gate's verdict
+    # against main's bench from the same CPU: a battle ratio past main's by
+    # more than REGRESSION is marked, since the battle's ratio holds within a
+    # few percent on one CPU where a single call's does not.
+    def tabulate_battle(results, baseline)
+      styles = results["battle"]
+      [tabulate_spreads("battle, ms a round", styles, "%.1f", baseline&.fetch("battle", nil)), "",
+       judge_battle(styles, comparable(baseline, results["cpu"])&.fetch("battle", nil))].join("\n")
+    end
+
+    # How far past main's ratio a battle's may grow before the gate marks it.
+    REGRESSION = 0.10
+
+    def judge_battle(styles, baseline)
+      return "The call-cost gate judges only beside main's bench from the same CPU." unless baseline
+
+      regressed = styles.select do |name, measures|
+        main = baseline.dig(name, "ratio", "median")
+        main && measures["ratio"]["median"] > main * (1 + REGRESSION)
+      end
+      return "The call-cost gate passes: no battle's ratio grew past main's by more than 10%." if regressed.empty?
+
+      "**The call-cost gate warns: #{regressed.keys.join(" and ")} grew past main's by more than 10%.** " \
+        "One bench can be off by itself, so run it again before trusting this."
+    end
+
+    # `baseline` when it was measured on `cpu`, the only one whose ratios the
+    # gate compares.
+    def comparable(baseline, cpu)
+      baseline if baseline && baseline["cpu"] == cpu
     end
 
     # Rows of each language's measure and the ratio, each the median with the

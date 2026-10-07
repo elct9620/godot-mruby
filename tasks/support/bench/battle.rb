@@ -10,7 +10,7 @@ module Bench
   # Plays the battle of the game in godot/src against its GDScript twin, in
   # each style the call-cost analysis compares, and answers what a round
   # costs each language and how many times GDScript's Ruby takes. The
-  # recommended style is the one the call-cost gate is to judge; this only
+  # call-cost gate marks either style's ratio grown past main's; this only
   # reports. A pair whose two battles do not end alike fails, since a twin
   # that drifted from the game times something else.
   module Battle
