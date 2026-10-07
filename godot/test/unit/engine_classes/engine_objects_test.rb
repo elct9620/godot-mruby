@@ -295,4 +295,9 @@ class EngineObjectsTest < Minitest::Test
 
     assert_equal [nil, false], [node.call(:shown), node.is_visible]
   end
+
+  # @behavior RG-036
+  def test_the_marker_for_a_left_out_argument_is_not_rubys_to_name
+    assert_raises(NameError) { Godot::Object::OMITTED }
+  end
 end

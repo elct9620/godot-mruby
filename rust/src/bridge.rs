@@ -63,9 +63,9 @@ impl Gem for Godot {
 struct BridgeData {
     // Godot::Object.
     object_class: Cell<Option<RClass>>,
-    // Godot::Object::OMITTED, which an engine method's body passes for an
-    // optional argument the call left out, so the engine applies its
-    // default; the constant keeps it alive.
+    // What an engine method's body passes for an optional argument the
+    // call left out, so the engine applies its default; rooted for the
+    // collector, and named by no constant.
     omitted: Cell<Option<Value>>,
     // The engine's name for each symbol the realm has asked the engine about.
     engine_names: RefCell<HashMap<Id, StringName>>,

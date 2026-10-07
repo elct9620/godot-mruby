@@ -84,10 +84,21 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     object.define_private_method(mrb, c"__instance_id__", method!(instance_id, 0))?;
     object.define_private_method(mrb, c"__label__", method!(label, 0))?;
     object.define_private_method(mrb, c"__clone__", method!(clone, -1))?;
+    object.define_singleton_method(mrb, c"__omitted__", method!(omitted, 0))?;
     let omitted = mrb.object_class().new_instance(mrb, &[])?;
-    object.const_set(mrb, c"OMITTED", omitted)?;
+    mrb.gc_register_forever(omitted);
     super::data(mrb).omitted.set(Some(omitted));
     Ok(())
+}
+
+// Godot::Object.__omitted__: what an engine method's body passes for an
+// optional argument the call left out, so the engine applies its default;
+// no constant names it, so nothing Ruby passes is taken for it.
+fn omitted(mrb: &Mrb, _class: RClass) -> Value {
+    super::data(mrb)
+        .omitted
+        .get()
+        .unwrap_or_else(|| qnil().as_value())
 }
 
 fn root(mrb: &Mrb) -> Result<RClass, Error> {
