@@ -31,8 +31,8 @@ use crate::snapshot::{self, Heading, Member, Property, Snapshot};
 /// A node's instance of a `RubyScript`. It holds no Ruby value: the node's
 /// Ruby object is built in the game's realm the first time Godot calls a
 /// method its class defines, unless Ruby made the node, and the realm holds
-/// it under the node's key. Nothing in it changes but its stage, so Godot
-/// may ask it from any thread.
+/// it under the node's key. Nothing in it changes but its stage, an atomic,
+/// and its stash, behind a mutex, so Godot may ask it from any thread.
 pub struct RubyInstance {
     script: Gd<Script>,
     // Shared with the calls running Ruby, which outlive the instance when
@@ -571,7 +571,7 @@ static INFO: sys::GDExtensionScriptInstanceInfo3 = sys::GDExtensionScriptInstanc
 };
 
 // The instance Godot hands a callback, shared by callbacks on several
-// threads, since nothing changes it but its stage, behind a mutex.
+// threads: its stage is an atomic and its stash behind a mutex.
 //
 // SAFETY: `data` is what `into_godot` handed Godot, alive until `free`; the
 // reference must not be used once Ruby runs, since Ruby may have Godot free

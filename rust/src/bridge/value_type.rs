@@ -35,9 +35,9 @@ pub enum EngineValue {
     Vector2(Vector2),
 }
 
-// SAFETY: a value type holds no object and no reference into the engine
-// that another thread could change, and the realm holding it is entered by
-// one thread at a time.
+// SAFETY: the realm holding it is entered by one thread at a time, and the
+// engine's values, a Callable's or a Signal's object included, are shared
+// across threads under gdext's experimental-threads.
 unsafe impl Send for EngineValue {}
 
 static ENGINE_VALUE: DataType<EngineValue> = DataType::new(c"Godot::Value");
