@@ -123,19 +123,16 @@ impl Stash {
 
 /// How far a node's Ruby object has come.
 #[derive(Clone, Copy)]
+#[repr(u8)]
 enum Stage {
     /// Not built yet: making a node runs no Ruby.
     Recorded,
-    Built(Key),
+    /// Built and held under the node's own key.
+    Built,
     /// Its file or `initialize` raised, which was reported; the node calls
     /// nothing from then on, as an engine-made object is never built again.
     Failed,
 }
-
-// Each Stage as a Caller holds it.
-const RECORDED: u8 = 0;
-const BUILT: u8 = 1;
-const FAILED: u8 = 2;
 
 impl RubyInstance {
     pub fn new(
@@ -152,7 +149,7 @@ impl RubyInstance {
                 owner: owner.instance_id(),
                 header,
                 ancestry,
-                stage: AtomicU8::new(RECORDED),
+                stage: AtomicU8::new(Stage::Recorded as u8),
                 stash: Mutex::new(Stash::default()),
             }),
             script,
@@ -251,8 +248,8 @@ impl RubyInstance {
 // or when the node's script is set, even while a call into it runs.
 impl Drop for RubyInstance {
     fn drop(&mut self) {
-        if let Stage::Built(key) = self.caller.current_stage() {
-            realm::release(key);
+        if matches!(self.caller.current_stage(), Stage::Built) {
+            realm::release(self.caller.key());
         }
     }
 }
@@ -268,7 +265,7 @@ struct Caller {
     header: Arc<Header>,
     ancestry: Arc<Ancestry>,
     // The Stage the node's object has reached, read on every call without a
-    // lock; a built object is always held under the node's own key.
+    // lock.
     stage: AtomicU8,
     // What Godot wrote to the node's properties before it had a Ruby object,
     // waiting for the object to be built.
@@ -278,22 +275,19 @@ struct Caller {
 impl Caller {
     fn current_stage(&self) -> Stage {
         match self.stage.load(Ordering::Acquire) {
-            BUILT => Stage::Built(bridge::node_key(self.owner)),
-            FAILED => Stage::Failed,
+            stage if stage == Stage::Built as u8 => Stage::Built,
+            stage if stage == Stage::Failed as u8 => Stage::Failed,
             _ => Stage::Recorded,
         }
     }
 
     fn settle(&self, stage: Stage) {
-        let stage = match stage {
-            Stage::Recorded => RECORDED,
-            Stage::Built(key) => {
-                debug_assert_eq!(key, bridge::node_key(self.owner));
-                BUILT
-            }
-            Stage::Failed => FAILED,
-        };
-        self.stage.store(stage, Ordering::Release);
+        self.stage.store(stage as u8, Ordering::Release);
+    }
+
+    // The key the realm holds the node's object under.
+    fn key(&self) -> Key {
+        bridge::node_key(self.owner)
     }
 
     // Whether building the node's object failed, so it never has one.
@@ -340,18 +334,18 @@ impl Caller {
     // its file runs, before the class exists, finds none and builds nothing.
     fn object(&self) -> Option<Key> {
         match self.current_stage() {
-            Stage::Built(key) => return Some(key),
+            Stage::Built => return Some(self.key()),
             Stage::Failed => return None,
             Stage::Recorded => {}
         }
-        let key = bridge::node_key(self.owner);
+        let key = self.key();
         let owner = [Owner(self.owner)];
         let built = realm::enter(|realm| realm.build(&self.path, key, c"__build__", owner))
             .and_then(|built| {
                 if built == Build::Pending {
                     return Ok(None);
                 }
-                self.settle(Stage::Built(key));
+                self.settle(Stage::Built);
                 if built == Build::New {
                     realm::enter(|realm| realm.send::<ToRuby, ToEngine>(key, "initialize", []))?;
                 }
