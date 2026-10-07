@@ -305,4 +305,43 @@ class EngineObjectsTest < Minitest::Test
 
     assert_equal "Invalid call to function 'get_child_count' in base 'RefCounted'.", error.message
   end
+
+  # @behavior RG-039
+  def test_an_engine_methods_bind_is_refused_a_receiver_freed_while_its_arguments_convert
+    node = Godot::Node.new
+
+    error = assert_raises(Godot::CallError) { node.set_meta(:freed, freeing_argument(node)) }
+
+    assert_equal "Attempt to call function 'set_meta' in base 'previously freed' on a null instance.", error.message
+  end
+
+  # @behavior RG-039
+  def test_an_engine_call_by_name_is_refused_a_receiver_freed_while_its_arguments_convert
+    control = Godot::Control.new
+
+    error = assert_raises(Godot::CallError) { control.offset_left = freeing_argument(control) }
+
+    assert_equal "Attempt to call function 'set' in base 'previously freed' on a null instance.", error.message
+  end
+
+  private
+
+  # A Hash whose conversion for the engine frees `object`: its key's `hash`
+  # frees it once the Hash is built, and the Hash is large enough that a
+  # lookup hashes its keys.
+  def freeing_argument(object)
+    armed = false
+    key = Object.new
+    key.define_singleton_method(:hash) do
+      if armed
+        armed = false
+        object.free
+      end
+      0
+    end
+    argument = { key => 1 }
+    32.times { |index| argument[index] = index }
+    armed = true
+    argument
+  end
 end

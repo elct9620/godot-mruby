@@ -298,7 +298,8 @@ fn apply_bound(
 }
 
 // Calls the engine method `bound` with `args` on the receiver's engine
-// object.
+// object, asking whether it lives only once the arguments are converted,
+// since converting one may run Ruby that frees it.
 fn call_bind(
     mrb: &Mrb,
     data: &BridgeData,
@@ -306,8 +307,8 @@ fn call_bind(
     bound: &BoundMethod,
     args: impl IntoIterator<Item = Value>,
 ) -> Result<Value, Error> {
-    let object = held.live_object(mrb, bound.name())?;
     let args = to_arguments(mrb, data, args)?;
+    let object = held.live_object(mrb, bound.name())?;
     let answer = bound.call(object, &args).map_err(|error| {
         let base = object.get_class().to_string();
         refusal_error(mrb, &error, bound.name(), &base, &args, Some(bound.arity()))
@@ -328,12 +329,13 @@ fn shape(mrb: &Mrb, _class: RClass, bound: &BoundMethod) -> Value {
 }
 
 // Godot::Object#__call__(name, args): calls the engine method `name` with
-// `args` and answers what it returns.
+// `args` and answers what it returns, asking whether the receiver lives once
+// the arguments are converted, as `call_bind` does.
 fn call(mrb: &Mrb, held: &EngineObject, name: Symbol, args: RArray) -> Result<Value, Error> {
     let data = super::data(mrb);
     let name = name_by_symbol(mrb, name);
-    let mut object = held.live_object(mrb, &name)?.clone();
     let args = to_arguments(mrb, data, args.entries(mrb))?;
+    let mut object = held.live_object(mrb, &name)?.clone();
     let answer = object.try_call(&name, &args).map_err(|error| {
         let base = object.get_class().to_string();
         call_refusal(mrb, &error, &base, &name.to_string(), args.len())

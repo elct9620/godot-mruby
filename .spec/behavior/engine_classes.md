@@ -304,3 +304,11 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | the bind of an engine method one engine class declares, and an engine object of a class neither that one nor extending it |
 | When | Ruby calls the bind on that object |
 | Then | it raises `Godot::CallError` without reaching the engine |
+
+## `RG-039` An engine call is refused a receiver freed while its arguments convert
+
+| Step | Statement |
+| --- | --- |
+| Given | an argument whose conversion runs Ruby, such as a Hash keyed by an object whose `hash` frees the receiver |
+| When | Ruby calls an engine method on that receiver with the argument, through its bind or by its name |
+| Then | it raises `Godot::CallError` as a freed object's call does, without reaching the engine |

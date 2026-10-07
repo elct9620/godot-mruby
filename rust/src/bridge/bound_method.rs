@@ -103,10 +103,12 @@ impl BoundMethod {
         self.arity
     }
 
-    /// Calls the method on `object`. A receiver of a class neither declaring
-    /// the method nor extending one that does, and a count of arguments the
-    /// method does not take, are refused here: the bind trusts both, and a
-    /// game exported without the engine's debug checks checks neither.
+    /// Calls the method on `object`, which the caller found live with
+    /// nothing run since, Ruby included. A receiver of a class neither
+    /// declaring the method nor extending one that does, and a count of
+    /// arguments the method does not take, are refused here: the bind trusts
+    /// both, and a game exported without the engine's debug checks checks
+    /// neither.
     pub fn call(
         &self,
         object: &Gd<Object>,
