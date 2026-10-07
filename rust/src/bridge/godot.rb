@@ -143,7 +143,7 @@ module Godot
       # The engine class's integer constants and enum values, kept on the
       # engine class once named.
       def const_missing(name)
-        engine_class = ancestors.find { |ancestor| ancestor.instance_variable_get(:@engine_class) == true }
+        engine_class = __engine_class__
         value = engine_class.__send__(:__engine_constant__, name)
         return super if value.nil?
 
@@ -154,6 +154,12 @@ module Godot
               :__engine_constant__, :__declare_signal__, :__declare_export__, :__declare_heading__, :__shape__
 
       private
+
+      # The nearest engine class among the ancestors: the class itself for an
+      # engine class, the one it extends for a node class.
+      def __engine_class__
+        ancestors.find { |ancestor| ancestor.instance_variable_get(:@engine_class) == true }
+      end
 
       # The body of the engine method `bound` binds: a strict block of the
       # arguments it requires and takes, so a call gathers none into an array,
@@ -320,17 +326,20 @@ module Godot
     private :__write_variable__, :__read_variable__
 
     # An engine method the engine class this Ruby class extends declares is
-    # defined on the Ruby class at its first call, so later calls skip
+    # defined on that engine class at its first call, so later calls skip
     # method_missing, and call the method's bind when the engine gives one.
+    # A node class's own method of the name stays its own, reaching the
+    # engine's through super.
     def method_missing(name, *args, &block)
       target, declared, bound = __resolve__(name)
       return super if target.nil?
 
+      engine_class = self.class.__send__(:__engine_class__)
       if bound
-        self.class.__send__(:define_method, name, &self.class.__send__(:__bound_body__, bound))
-        __send__(name, *args)
+        engine_class.__send__(:define_method, name, &engine_class.__send__(:__bound_body__, bound))
+        engine_class.instance_method(name).bind_call(self, *args)
       else
-        self.class.__send__(:define_method, name) { |*arguments| __call__(target, arguments) } if declared
+        engine_class.__send__(:define_method, name) { |*arguments| __call__(target, arguments) } if declared
         __call__(target, args)
       end
     end

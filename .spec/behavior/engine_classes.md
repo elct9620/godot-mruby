@@ -223,3 +223,19 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | an engine object |
 | When | Ruby calls one of its engine methods with an argument of a type the method cannot take |
 | Then | it raises `TypeError` with the message GDScript's untyped call reports for the same call |
+
+## `RG-028` A node class's method calling super into an engine method stays its own
+
+| Step | Statement |
+| --- | --- |
+| Given | a node class defining a method of an engine method's name that calls `super` |
+| When | Ruby calls the method twice on the class's object |
+| Then | both calls run the class's method, and each reaches the engine's method |
+
+## `RG-029` An engine method a node class's object called is none of the class's own
+
+| Step | Statement |
+| --- | --- |
+| Given | a node class whose object has called an engine method |
+| When | Ruby lists the methods the class defines itself |
+| Then | the engine method is not among them, so the script answers no method of that name to Godot |

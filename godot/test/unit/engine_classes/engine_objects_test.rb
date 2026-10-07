@@ -205,4 +205,22 @@ class EngineObjectsTest < Minitest::Test
     assert_raises(TypeError) { Godot::Node.allocate }
     assert_raises(TypeError) { Unit::EngineClasses::Scout.allocate }
   end
+
+  # @behavior RG-028
+  def test_a_node_classs_method_calling_super_into_an_engine_method_stays_its_own
+    lookout = autofree(Unit::EngineClasses::Lookout.new)
+
+    lookout.set_visible(false)
+    lookout.set_visible(true)
+
+    assert_equal [2, true], [lookout.shown, lookout.is_visible]
+  end
+
+  # @behavior RG-029
+  def test_an_engine_method_a_node_classs_object_called_is_none_of_the_classs_own
+    lookout = autofree(Unit::EngineClasses::Lookout.new)
+    lookout.get_position
+
+    assert_equal [:set_visible, :shown].sort, Unit::EngineClasses::Lookout.instance_methods(false).sort
+  end
 end
