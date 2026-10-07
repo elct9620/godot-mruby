@@ -823,14 +823,39 @@ pub(super) fn refusal_error(
         }
         sys::GDEXTENSION_CALL_ERROR_TOO_MANY_ARGUMENTS
         | sys::GDEXTENSION_CALL_ERROR_TOO_FEW_ARGUMENTS => {
-            let required = arity.map_or(error.expected as usize, |arity| arity.required);
-            argument_error(mrb, &count_message(args.len(), required))
+            let message = match arity {
+                Some(arity) if arity.is_vararg && args.len() >= arity.required => {
+                    forwarded_count_message(error, base, args, arity)
+                }
+                Some(arity) => count_message(args.len(), arity.required),
+                None => count_message(args.len(), error.expected),
+            };
+            argument_error(mrb, &message)
         }
         _ => call_error(
             mrb,
             &format!("Invalid call to function '{method}' in base '{base}'."),
         ),
     }
+}
+
+// Ruby's words for a count the engine refused past a method taking any
+// number, which `Arity::check` let through: the method forwarded the
+// arguments past those it requires to the method its first one names, as
+// `call` does, so the words name that method's count, as Ruby's `send` does.
+fn forwarded_count_message(
+    error: &sys::GDExtensionCallError,
+    base: &str,
+    args: &[Variant],
+    arity: Arity,
+) -> String {
+    let forwarded = args.len() - arity.required;
+    let required = args
+        .first()
+        .and_then(|name| name.try_to::<StringName>().ok())
+        .and_then(|name| Arity::find(base, &name.to_string()))
+        .map_or(error.expected as usize, |method| method.required);
+    count_message(forwarded, required)
 }
 
 /// Ruby's words for a call given `given` arguments where `expected` are taken.

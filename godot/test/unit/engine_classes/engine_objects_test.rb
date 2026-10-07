@@ -93,10 +93,12 @@ class EngineObjectsTest < Minitest::Test
     too_many = assert_raises(ArgumentError) { node.add_child(child, false, 0, :extra) }
     any_number = assert_raises(ArgumentError) { node.emit_signal }
     static = assert_raises(ArgumentError) { Godot::Image.create_empty(1) }
+    any_number_past_two = assert_raises(ArgumentError) { node.rpc_id(1) }
 
     assert_equal "wrong number of arguments (given 0, expected 1)", too_few.message
     assert_equal "wrong number of arguments (given 4, expected 1)", too_many.message
     assert_equal "wrong number of arguments (given 0, expected 1)", any_number.message
+    assert_equal "wrong number of arguments (given 1, expected 2)", any_number_past_two.message
     assert_equal "wrong number of arguments (given 1, expected 4)", static.message
   end
 
@@ -322,6 +324,19 @@ class EngineObjectsTest < Minitest::Test
     error = assert_raises(Godot::CallError) { control.offset_left = freeing_argument(control) }
 
     assert_equal "Attempt to call function 'set' in base 'previously freed' on a null instance.", error.message
+  end
+
+  # @behavior RG-040
+  def test_a_call_the_engine_forwards_names_the_forwarded_methods_count
+    node = autofree(Godot::Node.new)
+
+    too_few = assert_raises(ArgumentError) { node.call(:set_meta, :k) }
+    too_many = assert_raises(ArgumentError) { node.call(:get_name, 1, 2) }
+    with_defaults = assert_raises(ArgumentError) { node.call(:add_child) }
+
+    assert_equal "wrong number of arguments (given 1, expected 2)", too_few.message
+    assert_equal "wrong number of arguments (given 2, expected 0)", too_many.message
+    assert_equal "wrong number of arguments (given 0, expected 1)", with_defaults.message
   end
 
   private

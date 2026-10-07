@@ -312,3 +312,11 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | an argument whose conversion runs Ruby, such as a Hash keyed by an object whose `hash` frees the receiver |
 | When | Ruby calls an engine method on that receiver with the argument, through its bind or by its name |
 | Then | it raises `Godot::CallError` as a freed object's call does, without reaching the engine |
+
+## `RG-040` A call the engine forwards names the forwarded method's count
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine method taking any number of arguments that calls another by name with those past its own, such as `call` |
+| When | Ruby calls it with a count the method it forwards to does not take |
+| Then | it raises `ArgumentError` naming the arguments forwarded and those the forwarded method requires, as Ruby's `send` does |
