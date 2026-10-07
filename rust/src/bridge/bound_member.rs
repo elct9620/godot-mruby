@@ -5,11 +5,11 @@
 //! value's type fixes. A Vector2 Ruby holds as its components answers its
 //! `x` and `y` from them, the memory the engine's getter reads.
 
-use std::ptr;
-
 use beni::{DataType, Mrb, RClass, TypedData};
 use godot::builtin::{StringName, Variant, VariantType, Vector2, Vector2Axis, real};
 use godot::sys;
+
+use super::value_type::new_default;
 
 type Getter = unsafe extern "C" fn(sys::GDExtensionConstTypePtr, sys::GDExtensionTypePtr);
 
@@ -95,25 +95,6 @@ impl BoundMember {
 
 fn kind_sys(kind: VariantType) -> sys::GDExtensionVariantType {
     kind.ord as sys::GDExtensionVariantType
-}
-
-// A value of type `kind` as the engine's default constructor builds it, for
-// a typed function to write over.
-fn new_default(kind: VariantType) -> Variant {
-    // SAFETY: the interface is initialized while the extension runs, and
-    // every value type has a constructor taking nothing.
-    unsafe {
-        Variant::new_with_var_uninit(|answer| {
-            let mut error = sys::default_call_error();
-            sys::interface_fn!(variant_construct)(
-                kind_sys(kind),
-                answer,
-                ptr::null(),
-                0,
-                ptr::addr_of_mut!(error),
-            );
-        })
-    }
 }
 
 // The engine's pointer to the data `variant` holds, for reading.

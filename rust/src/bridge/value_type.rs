@@ -635,20 +635,38 @@ const OPERATORS: usize = sys::GDEXTENSION_VARIANT_OP_MAX as usize;
 const OPERAND_KINDS: usize = VariantType::VECTOR2.ord as usize + 1;
 
 // The engine's typed function for `op` on a Vector2 and an operand of
-// `right`, found once: the engine's functions stay put while it runs.
+// `right`, found once: the engine's functions stay put while it runs. A
+// function is kept only once the engine's variant call, given values of the
+// same types, answers the type `answer_kind` says it writes.
 fn evaluator_by_operands(op: VariantOperator, right: VariantType) -> Option<Evaluator> {
     static EVALUATORS: [[OnceLock<Option<Evaluator>>; OPERAND_KINDS]; OPERATORS] =
         [const { [const { OnceLock::new() }; OPERAND_KINDS] }; OPERATORS];
     *EVALUATORS[op.ord() as usize][right.ord as usize].get_or_init(|| {
         // SAFETY: the interface is initialized while the extension runs.
-        unsafe {
+        let evaluate = unsafe {
             sys::interface_fn!(variant_get_ptr_operator_evaluator)(
                 op.ord() as sys::GDExtensionVariantOperator,
                 sys::GDEXTENSION_VARIANT_TYPE_VECTOR2,
                 right.ord as sys::GDExtensionVariantType,
             )
-        }
+        }?;
+        let left = new_default(VariantType::VECTOR2);
+        let (answer, valid) = evaluate_variants(op, &left, &new_default(right));
+        (valid && answer.get_type() == answer_kind(op)).then_some(evaluate)
     })
+}
+
+// The type a typed operator on a Vector2 writes: a bool for a comparison,
+// else a Vector2, the only answer the engine's arithmetic on one gives.
+fn answer_kind(op: VariantOperator) -> VariantType {
+    match op {
+        VariantOperator::EQUAL
+        | VariantOperator::LESS
+        | VariantOperator::LESS_EQUAL
+        | VariantOperator::GREATER
+        | VariantOperator::GREATER_EQUAL => VariantType::BOOL,
+        _ => VariantType::VECTOR2,
+    }
 }
 
 // What the engine's typed operator `op` answers for `vector` and `right`, or
@@ -662,19 +680,11 @@ fn operate_typed(
 ) -> Option<Value> {
     let evaluate = evaluator_by_operands(op, right.kind())?;
     let left = ptr::from_ref(&vector).cast();
-    let compares = matches!(
-        op,
-        VariantOperator::EQUAL
-            | VariantOperator::LESS
-            | VariantOperator::LESS_EQUAL
-            | VariantOperator::GREATER
-            | VariantOperator::GREATER_EQUAL
-    );
     // SAFETY: each operand is of the type the function was found for, and
-    // the answer is of the type it writes: a bool for a comparison, else a
-    // Vector2, the only answer the engine's arithmetic on one gives.
+    // the answer is of the type `answer_kind` names, which the engine was
+    // seen to answer before the function was kept.
     unsafe {
-        if compares {
+        if answer_kind(op) == VariantType::BOOL {
             let mut answer = false;
             evaluate(left, right.as_ptr(), ptr::from_mut(&mut answer).cast());
             Some(answer.into_value(mrb))
@@ -697,22 +707,8 @@ fn operate(
     shown: &str,
     other: &Variant,
 ) -> Result<Value, Error> {
-    let value = held.as_variant();
-    let mut valid = false as sys::GDExtensionBool;
-    // SAFETY: the operands live for the call, and the engine initializes the
-    // answer before writing either it or its reason for refusing.
-    let answer = unsafe {
-        Variant::new_with_var_uninit(|answer| {
-            sys::interface_fn!(variant_evaluate)(
-                op.ord() as sys::GDExtensionVariantOperator,
-                value.var_sys(),
-                other.var_sys(),
-                answer,
-                ptr::addr_of_mut!(valid),
-            )
-        })
-    };
-    if valid != 0 {
+    let (answer, valid) = evaluate_variants(op, &held.as_variant(), other);
+    if valid {
         return Ok(to_ruby(mrb, &answer));
     }
     if answer.get_type() == VariantType::STRING {
@@ -725,6 +721,45 @@ fn operate(
         type_name(other.get_type())
     );
     Err(type_error(mrb, &message))
+}
+
+// A value of type `kind` as the engine's default constructor builds it: one
+// a typed function writes over, or an operand to try an operator on.
+pub(super) fn new_default(kind: VariantType) -> Variant {
+    // SAFETY: the interface is initialized while the extension runs, and
+    // every type has a constructor taking nothing.
+    unsafe {
+        Variant::new_with_var_uninit(|answer| {
+            let mut error = sys::default_call_error();
+            sys::interface_fn!(variant_construct)(
+                kind.ord as sys::GDExtensionVariantType,
+                answer,
+                ptr::null(),
+                0,
+                ptr::addr_of_mut!(error),
+            );
+        })
+    }
+}
+
+// What the engine's variant call answers for `op` on `left` and `right`, and
+// whether the engine took the operands; a refusal answers its reason.
+fn evaluate_variants(op: VariantOperator, left: &Variant, right: &Variant) -> (Variant, bool) {
+    let mut valid = false as sys::GDExtensionBool;
+    // SAFETY: the operands live for the call, and the engine initializes the
+    // answer before writing either it or its reason for refusing.
+    let answer = unsafe {
+        Variant::new_with_var_uninit(|answer| {
+            sys::interface_fn!(variant_evaluate)(
+                op.ord() as sys::GDExtensionVariantOperator,
+                left.var_sys(),
+                right.var_sys(),
+                answer,
+                ptr::addr_of_mut!(valid),
+            )
+        })
+    };
+    (answer, valid != 0)
 }
 
 // Godot::Value#__hash__: the engine's hash of the value, which equal values
