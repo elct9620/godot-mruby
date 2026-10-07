@@ -91,11 +91,12 @@ godot/
 ├─ src/                  the game's code, named from the top level
 ├─ test/unit/<spec>/     Minitest judges, in the game's realm
 ├─ test/e2e/             Minitest judges, playing src/ to its end
-└─ integration/<spec>/   godot:verify judges, from a log or a run's outcome
+└─ integration/<spec>/   godot:verify judges, from a log or a run's outcome;
+                         godot:release, what only a release build shows
                          └─ read by tasks/support/<spec>.rb or <spec>/
 ```
 
-The extension is tested through itself, and `godot/` is sorted by who judges an outcome, then by the `.spec/behavior` file it claims. The extension's own runner judges `test/unit/<spec>/`, whose files loaded by name sit beside their tests, and `test/e2e/`, which plays the game in `src/` and claims what its node scripts do. `godot:verify` judges `integration/<spec>/`, for what no Ruby test can observe: a log line, a run's exit, the editor, an exported game. Its checks are named after the same spec, and GDScript stays only where a check must ask from outside the realm. What only the extension's own code reaches, such as a header, an ancestry or a realm entry, is judged by `cargo test` beside that code in `rust/src/`, and what a dependency must keep for the extension, such as the order gdext's cell gives threads, in `rust/tests/`.
+The extension is tested through itself, and `godot/` is sorted by who judges an outcome, then by the `.spec/behavior` file it claims. The extension's own runner judges `test/unit/<spec>/`, whose files loaded by name sit beside their tests, and `test/e2e/`, which plays the game in `src/` and claims what its node scripts do. `godot:verify` judges `integration/<spec>/`, for what no Ruby test can observe: a log line, a run's exit, the editor, an exported game. `godot:release` judges what only an export template's release build shows. Their checks are named after the same spec, and GDScript stays only where a check must ask from outside the realm. What only the extension's own code reaches, such as a header, an ancestry or a realm entry, is judged by `cargo test` beside that code in `rust/src/`, and what a dependency must keep for the extension, such as the order gdext's cell gives threads, in `rust/tests/`.
 
 ### 1.5 Naming
 
@@ -284,7 +285,7 @@ A value type's value is held in one of two ways. Either way the engine computes 
 
 Vector2 is what games build and compute with most. Its division, modulo, power and methods still go through variant calls.
 
-A value type's class defines its members and methods when it is made, so they answer before any ancestor's. `rust/build.rs` reads their names from the API gdext builds against, and each binds at its first call.
+A value type's class defines its members and methods when it is made, so they answer before any ancestor's. `rust/build.rs` reads their names from the API gdext builds against, with each method's required count, and each binds at its first call. Ruby refuses a call given fewer before the engine runs it, since a release engine stops instead.
 
 ### 2.7 Snapshot
 
