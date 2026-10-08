@@ -4,8 +4,8 @@
 //! hide; every other miss and addition is left to Ruby through `super`.
 
 use beni::{
-    Error, FromValue, IntoId, IntoValue, Module, Mrb, Qtrue, RArray, RClass, RModule, ReprValue,
-    Symbol, TryConvert, Value, method, value::qnil,
+    Class as _, Error, FromValue, IntoId, IntoValue, Module, Mrb, Qtrue, RArray, RClass, RModule,
+    ReprValue, Symbol, TryConvert, Value, method, value::qnil,
 };
 
 use super::index::{self, Entry, Namespace};
@@ -165,10 +165,8 @@ pub(super) fn keep_extends(mrb: &Mrb, path: &str, extends: Option<Extends>) -> R
         ),
     };
     let superclass = RClass::from_value(class)
-        .is_some()
-        .then(|| class.funcall(mrb, c"superclass", &[]).ok())
-        .flatten()
-        .and_then(|superclass| split_path(mrb, superclass));
+        .and_then(|class| class.superclass(mrb))
+        .and_then(|superclass| split_path(mrb, superclass.as_value()));
     let extended: Option<Vec<String>> = superclass
         .as_ref()
         .map(|names| names.iter().map(|name| index::normalize(name)).collect());

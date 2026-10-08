@@ -11,7 +11,7 @@ use std::sync::Arc;
 use super::constants::Scope;
 use super::{bookkeeping, compile, file_by_constant, publish_class};
 use crate::snapshot::{self, Heading, Member, Property, Signal};
-use beni::{Error, FromValue, Module, Mrb, RClass, ReprValue};
+use beni::{Class as _, Error, FromValue, Module, Mrb, RClass};
 
 /// How far a file has run in a realm.
 #[derive(Clone, Copy)]
@@ -212,10 +212,10 @@ pub(super) fn declare(mrb: &Mrb, class: RClass, declared: Declaration) -> Result
 // walk stops at the engine class.
 fn ancestor_by_member(mrb: &Mrb, class: RClass, name: &str) -> Option<String> {
     let snapshot = Arc::clone(&bookkeeping(mrb).snapshot.borrow());
-    let mut current = class.as_value();
+    let mut current = class;
     loop {
-        current = current.funcall(mrb, c"superclass", &[]).ok()?;
-        let path = RClass::from_value(current)?.path(mrb)?;
+        current = current.superclass(mrb)?;
+        let path = current.path(mrb)?;
         if path.starts_with("Godot::") {
             return None;
         }

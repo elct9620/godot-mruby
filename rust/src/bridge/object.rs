@@ -699,13 +699,13 @@ fn engine_member(mrb: &Mrb, class: RClass, name: &str) -> Option<String> {
 // The engine class `class` extends, itself or through its superclasses, as
 // the engine names it.
 fn engine_ancestor(mrb: &Mrb, class: RClass) -> Option<String> {
-    let mut current = class.as_value();
+    let mut current = class;
     loop {
-        let path = RClass::from_value(current)?.path(mrb)?;
+        let path = current.path(mrb)?;
         if let Some(name) = path.strip_prefix("Godot::") {
             return Some(name.to_owned());
         }
-        current = current.funcall(mrb, c"superclass", &[]).ok()?;
+        current = current.superclass(mrb)?;
     }
 }
 
