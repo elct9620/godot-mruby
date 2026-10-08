@@ -6,8 +6,9 @@ use std::fmt;
 
 use beni::typed_data::RTypedData;
 use beni::{
-    DataType, Error, ExceptionClass, FromValue, Id, IntoValue, Module, Mrb, Object as _, RArray,
-    RClass, RModule, ReprValue, Symbol, TryConvert, TypedData, Value, method, value::qnil,
+    Class as _, DataType, Error, ExceptionClass, FromValue, Id, IntoValue, Module, Mrb,
+    Object as _, RArray, RClass, RModule, ReprValue, Symbol, TryConvert, TypedData, Value, method,
+    value::qnil,
 };
 use godot::builtin::StringName;
 use godot::builtin::{Variant, VariantType};

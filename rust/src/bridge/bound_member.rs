@@ -5,7 +5,7 @@
 //! value's type fixes. A Vector2 Ruby holds as its components answers its
 //! `x` and `y` from them, the memory the engine's getter reads.
 
-use beni::{DataType, Mrb, RClass, TypedData};
+use beni::{Class as _, DataType, Mrb, RClass, TypedData};
 use godot::builtin::{StringName, Variant, VariantType, Vector2, Vector2Axis, real};
 use godot::sys;
 
@@ -32,9 +32,7 @@ static BOUND_MEMBER: DataType<BoundMember> = DataType::new(c"Godot::BoundMember"
 unsafe impl TypedData for BoundMember {
     fn class(mrb: &Mrb) -> RClass {
         super::find_class_once(mrb, &super::data(mrb).bound_member_class, || {
-            let class = mrb
-                .class_new(mrb.object_class())
-                .expect("mruby makes a class");
+            let class = RClass::new(mrb, mrb.object_class()).expect("mruby makes a class");
             class
                 .set_instance_data_tt(mrb)
                 .expect("mruby marks a class's data");

@@ -4,7 +4,7 @@
 
 use std::ffi::c_void;
 
-use beni::{DataType, Mrb, RClass, TypedData};
+use beni::{Class as _, DataType, Mrb, RClass, TypedData};
 use godot::builtin::{Array, GString, StringName, VarArray, VarDictionary, Variant, VariantType};
 use godot::classes::class_db::ApiType;
 use godot::classes::{ClassDb, Object};
@@ -45,9 +45,7 @@ static BOUND_METHOD: DataType<BoundMethod> = DataType::new(c"Godot::BoundMethod"
 unsafe impl TypedData for BoundMethod {
     fn class(mrb: &Mrb) -> RClass {
         super::find_class_once(mrb, &super::data(mrb).bound_class, || {
-            let class = mrb
-                .class_new(mrb.object_class())
-                .expect("mruby makes a class");
+            let class = RClass::new(mrb, mrb.object_class()).expect("mruby makes a class");
             class
                 .set_instance_data_tt(mrb)
                 .expect("mruby marks a class's data");

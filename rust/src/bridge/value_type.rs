@@ -11,8 +11,8 @@ use std::sync::{LazyLock, OnceLock};
 
 use beni::typed_data::RTypedData;
 use beni::{
-    DataType, Error, FromValue, IntoValue, Module, Mrb, Object as _, RArray, RClass, RModule,
-    ReprValue, Symbol, TryConvert, TypedData, Value, method, value::qnil,
+    Class as _, DataType, Error, FromValue, IntoValue, Module, Mrb, Object as _, RArray, RClass,
+    RModule, ReprValue, Symbol, TryConvert, TypedData, Value, method, value::qnil,
 };
 use godot::builtin::{GString, StringName, Variant, VariantOperator, VariantType, Vector2, real};
 use godot::meta::ToGodot;
