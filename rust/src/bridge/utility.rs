@@ -140,50 +140,53 @@ fn conversion_failure(arg: &Variant, index: usize, to: VariantType) -> String {
     )
 }
 
-/// Each utility function's name and how many arguments it takes, nil for
-/// any number, for `Godot` to define.
+/// Each utility function's name, how many arguments it takes, nil for any
+/// number, and the row a call names it by, for `Godot` to define.
 pub fn utilities(mrb: &Mrb, _godot: Value) -> Value {
     let rows: Vec<Value> = UTILITIES
         .iter()
-        .filter_map(|(name, arity, _)| {
+        .enumerate()
+        .filter_map(|(row, (name, arity, _))| {
             let name = Symbol::from(mrb.intern(name.as_bytes()).ok()?).as_value();
             let arity = if *arity == ANY {
                 qnil().as_value()
             } else {
                 (*arity as i64).into_value(mrb)
             };
-            Some(mrb.ary_new_from_values(&[name, arity]).as_value())
+            let row = (row as i64).into_value(mrb);
+            Some(mrb.ary_new_from_values(&[name, arity, row]).as_value())
         })
         .collect();
     mrb.ary_new_from_values(&rows).as_value()
 }
 
-/// Godot.__utility__(name, *args): the utility function `name` called with
-/// the arguments given.
+/// Godot.__utility__(row, *args): the utility function in that row called
+/// with the arguments given.
 pub fn utility(mrb: &Mrb, _godot: Value, args: &[Value]) -> Result<Value, Error> {
-    let Some((&name, args)) = args.split_first() else {
+    let Some((&row, args)) = args.split_first() else {
         return Err(argument_error(mrb, &count_message(0, 1)));
     };
-    let Some(name) = Symbol::from_value(name) else {
+    let Some(row) = i64::from_value(row) else {
         return Ok(qnil().as_value());
     };
-    call_utility(mrb, name, args.iter().copied())
+    call_utility(mrb, row, args.iter().copied())
 }
 
-/// Godot.__apply_utility__(name, args): the utility function `name` called
-/// with the arguments in `args`, for one taking any number.
-pub fn apply_utility(mrb: &Mrb, _godot: Value, name: Symbol, args: RArray) -> Result<Value, Error> {
-    call_utility(mrb, name, args.entries(mrb))
+/// Godot.__apply_utility__(row, args): the utility function in that row
+/// called with the arguments in `args`, for one taking any number.
+pub fn apply_utility(mrb: &Mrb, _godot: Value, row: i64, args: RArray) -> Result<Value, Error> {
+    call_utility(mrb, row, args.entries(mrb))
 }
 
-// The utility function `name` called with `args`.
+// The utility function in `row` called with `args`, or nil when no row is
+// that one.
 fn call_utility(
     mrb: &Mrb,
-    name: Symbol,
+    row: i64,
     args: impl ExactSizeIterator<Item = Value>,
 ) -> Result<Value, Error> {
-    let name = name.name(mrb).unwrap_or_default();
-    let Some((_, arity, utility)) = UTILITIES.iter().find(|(row, _, _)| *row == name) else {
+    let Some((name, arity, utility)) = usize::try_from(row).ok().and_then(|row| UTILITIES.get(row))
+    else {
         return Ok(qnil().as_value());
     };
     if *arity != ANY && args.len() != *arity {

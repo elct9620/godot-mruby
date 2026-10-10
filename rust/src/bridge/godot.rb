@@ -8,16 +8,17 @@ module Godot
   class CallError < StandardError; end
 
   # The engine's utility functions Ruby lacks, such as lerp and randf, each a
-  # strict block of the number of arguments it takes, so a call gathers none
-  # into an array; one taking any number gathers them.
-  __utilities__.each do |name, arity|
+  # strict block of the number of arguments it takes, naming its function by
+  # its row, so a call neither gathers its arguments into an array nor looks
+  # the function up by name; one taking any number gathers them.
+  __utilities__.each do |name, arity, row|
     body = case arity
-           when 0 then proc { __utility__(name) }
-           when 1 then proc { |a| __utility__(name, a) }
-           when 2 then proc { |a, b| __utility__(name, a, b) }
-           when 3 then proc { |a, b, c| __utility__(name, a, b, c) }
-           when 5 then proc { |a, b, c, d, e| __utility__(name, a, b, c, d, e) }
-           else proc { |*args| __apply_utility__(name, args) }
+           when 0 then proc { __utility__(row) }
+           when 1 then proc { |a| __utility__(row, a) }
+           when 2 then proc { |a, b| __utility__(row, a, b) }
+           when 3 then proc { |a, b, c| __utility__(row, a, b, c) }
+           when 5 then proc { |a, b, c, d, e| __utility__(row, a, b, c, d, e) }
+           else proc { |*args| __apply_utility__(row, args) }
            end
     singleton_class.__send__(:define_method, name, &body)
   end
