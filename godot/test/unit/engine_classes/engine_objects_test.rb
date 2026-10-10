@@ -384,6 +384,40 @@ class EngineObjectsTest < Minitest::Test
     Godot.__send__(:remove_const, :ReferenceRect)
   end
 
+  # @behavior RG-044
+  def test_an_engine_class_answers_a_singleton_or_static_method_it_was_called_with_as_its_own
+    Godot::Engine.get_frames_drawn
+    Godot::Tween.interpolate_value(0.0, 1.0, 0.5, 1.0, 0, 0)
+
+    assert_includes Godot::Engine.singleton_methods(false), :get_frames_drawn
+    assert_includes Godot::Tween.singleton_methods(false), :interpolate_value
+  end
+
+  # @behavior RG-045
+  def test_an_engine_class_raises_no_method_error_for_a_name_neither_its_singleton_nor_its_static_methods_have
+    assert_raises(NoMethodError) { Godot::Engine.no_such_method }
+    assert_raises(NoMethodError) { Godot::Tween.no_such_method }
+  end
+
+  # @behavior RG-046
+  def test_an_engine_class_keeps_no_method_for_a_name_neither_its_singleton_nor_its_static_methods_have
+    [Godot::Engine, Godot::Tween].each { |engine_class| assert_raises(NoMethodError) { engine_class.no_such_method } }
+
+    refute_includes Godot::Engine.singleton_methods(false), :no_such_method
+    refute_includes Godot::Tween.singleton_methods(false), :no_such_method
+  end
+
+  # @behavior RG-047
+  def test_a_class_extending_an_engine_class_answers_its_static_method_as_before_the_engine_class_was_called
+    extending = Class.new(Godot::Tween)
+    before = assert_raises(NoMethodError) { extending.interpolate_value(0.0, 1.0, 0.5, 1.0, 0, 0) }
+    Godot::Tween.interpolate_value(0.0, 1.0, 0.5, 1.0, 0, 0)
+
+    after = assert_raises(NoMethodError) { extending.interpolate_value(0.0, 1.0, 0.5, 1.0, 0, 0) }
+
+    assert_equal before.message, after.message
+  end
+
   private
 
   # A Hash whose conversion for the engine frees `object`: its key's `hash`

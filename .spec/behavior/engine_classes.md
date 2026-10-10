@@ -344,3 +344,35 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | a class not extending `Godot::Object`, put under `Godot` by the name of an engine class before Ruby first meets an object of it |
 | When | the engine hands Ruby an object of that engine class |
 | Then | Ruby gets a `Godot::Object` standing for it, rather than an object of the class put there |
+
+## `RG-044` An engine class answers a singleton or static method it was called with as its own
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine class whose singleton's method, or whose static method, Ruby has called on the class |
+| When | Ruby lists the methods the class defines on itself |
+| Then | the method is among them, so a later call reaches it without `method_missing` |
+
+## `RG-045` An engine class raises NoMethodError for a name neither its singleton nor its static methods have
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine class, and a name neither its singleton nor its static methods have |
+| When | Ruby calls that name on the class |
+| Then | it raises `NoMethodError` |
+
+## `RG-046` An engine class keeps no method for a name neither its singleton nor its static methods have
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine class on which Ruby called a name neither its singleton nor its static methods have |
+| When | Ruby lists the methods the class defines on itself |
+| Then | no method of that name is among them |
+
+## `RG-047` A class extending an engine class answers its static method as before the engine class was called
+
+| Step | Statement |
+| --- | --- |
+| Given | a Ruby class extending an engine class, and the engine class's static method that the engine class has answered since |
+| When | Ruby calls that method on the extending class |
+| Then | it raises the `NoMethodError` it raised before the engine class answered the method |

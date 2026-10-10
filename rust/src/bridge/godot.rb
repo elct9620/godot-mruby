@@ -127,14 +127,22 @@ module Godot
         node
       end
 
-      # An engine class answers its singleton's methods, or its static ones.
+      # An engine class answers its singleton's methods, or its static ones,
+      # each defined on the class at its first call, so later calls skip
+      # method_missing, as an engine object's methods are.
       def method_missing(name, *args, &block)
         return super unless @engine_class == true
 
         singleton = engine_singleton
-        return singleton.__send__(name, *args, &block) if singleton
+        if singleton
+          if singleton.respond_to?(name)
+            __define_answer__(name) { |*arguments, &body| engine_singleton.__send__(name, *arguments, &body) }
+          end
+          return singleton.__send__(name, *args, &block)
+        end
         return super unless __has_static_method__(name)
 
+        __define_answer__(name) { |*arguments| __call_static__(name, arguments) }
         __call_static__(name, args)
       end
 
@@ -177,6 +185,18 @@ module Godot
         when [3, 0] then proc { |a, b, c| __call_bound__(bound, a, b, c) }
         when [4, 0] then proc { |a, b, c, d| __call_bound__(bound, a, b, c, d) }
         else proc { |*arguments| __apply_bound__(bound, arguments) }
+        end
+      end
+
+      # Defines `answer` as the class's own method `name`, which answers only
+      # on this class: a class extending it reaches method_missing as it did
+      # before, so what it answers never turns on what was called first.
+      def __define_answer__(name, &answer)
+        owner = self
+        define_singleton_method(name) do |*arguments, &body|
+          next method_missing(name, *arguments, &body) unless equal?(owner)
+
+          answer.call(*arguments, &body)
         end
       end
 
