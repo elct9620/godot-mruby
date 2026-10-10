@@ -394,7 +394,7 @@ pub mod tests {
         assert_eq!(broken, Break::NoEngineClass);
     }
 
-    // @behavior RI-009
+    // @behavior RI-009 RI-010
     #[test]
     fn a_class_has_the_files_it_is_and_inherits_from_and_no_other() {
         let sources = [

@@ -1035,7 +1035,7 @@ mod tests {
         );
     }
 
-    // @behavior RR-004
+    // @behavior RR-004 RR-006
     #[test]
     fn a_raised_backtrace_holds_only_the_frames_ruby_called_through() {
         let (_turn, key) = held_thing();

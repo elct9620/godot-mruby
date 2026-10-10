@@ -28,7 +28,7 @@ module Godot
 
     # Runs the report scene and looks for each report followed by its location,
     # and for the exception's backtrace.
-    # @behavior RR-001 RR-002 RR-003 RR-004
+    # @behavior RR-001 RR-002 RR-003 RR-004 RR-006
     def verify!(project)
       output, status = Godot.run_scene(project, SCENE, "--quit-after", "3")
       lines = output.lines.map(&:strip)

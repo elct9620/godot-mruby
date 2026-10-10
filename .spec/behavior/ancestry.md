@@ -70,11 +70,18 @@ How a file's ancestry is read from the headers of the files its class inherits f
 | When | its ancestry is read |
 | Then | the ancestry is broken for reaching no engine class |
 
-## `RI-009` A class has the files it is and inherits from, and no other
+## `RI-009` A class has the files it is and inherits from
 
 | Step | Statement |
 | --- | --- |
 | Given | a file whose class extends another file's class, beside a third file |
 | When | its lineage is asked for each file |
 | Then | it has its own file and the file it extends |
+
+## `RI-010` A class has no file it neither is nor inherits from
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose class extends another file's class, beside a third file |
+| When | its lineage is asked for each file |
 | Then | it does not have the third file |

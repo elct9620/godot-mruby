@@ -1,5 +1,5 @@
 class NodeClassesTest < Minitest::Test
-  # @behavior RS-031
+  # @behavior RS-031 RS-069
   def test_a_node_scripts_class_makes_a_node_carrying_its_script
     beacon = autofree(Unit::Script::Beacon.new(3))
 
@@ -11,7 +11,7 @@ class NodeClassesTest < Minitest::Test
     assert_equal 9001, beacon.notified
   end
 
-  # @behavior RS-032
+  # @behavior RS-032 RS-070
   def test_a_node_that_fails_to_initialize_is_freed
     assert_raises(RuntimeError) { Unit::Script::Faulty.new }
     assert_raises(Godot::CallError) { Unit::Script::Faulty.last.get_child_count }

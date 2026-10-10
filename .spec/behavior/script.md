@@ -255,7 +255,6 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | the class a node script defines, whose `initialize` takes arguments |
 | When | Ruby calls `new` on the class with arguments |
 | Then | Ruby gets an object of the class, initialized with those arguments, that answers the engine methods of the node class it extends |
-| Then | Godot's calls on that node reach the same object |
 
 ## `RS-032` A node that fails to initialize is freed
 
@@ -263,7 +262,6 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | --- | --- |
 | Given | the class a node script defines, whose `initialize` raises |
 | When | Ruby calls `new` on the class |
-| Then | the exception reaches the caller |
 | Then | the node it made has been freed |
 
 ## `RS-033` A class no node script defines makes no node
@@ -564,4 +562,23 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | another thread calling a method of the node's script before `initialize` returns |
 | When | `initialize` returns |
 | Then | the other thread's call reaches the object only then |
+
+| Attribute | Value |
+| --- | --- |
 | unverifiable | no test can make another thread arrive between the object being built and initialized |
+
+## `RS-069` Godot's calls on a node a node script's class made reach its object
+
+| Step | Statement |
+| --- | --- |
+| Given | the class a node script defines, whose `initialize` takes arguments |
+| When | Godot calls the node that Ruby's `new` on the class made |
+| Then | the call reaches the object `new` answered |
+
+## `RS-070` What a node's `initialize` raises reaches the caller of `new`
+
+| Step | Statement |
+| --- | --- |
+| Given | the class a node script defines, whose `initialize` raises |
+| When | Ruby calls `new` on the class |
+| Then | the exception reaches the caller |

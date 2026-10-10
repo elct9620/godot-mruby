@@ -45,7 +45,6 @@ How what mruby has to say about a Ruby file reaches Godot: through the log, at t
 | Given | a node script whose callback calls a method that raises |
 | When | the scene runs |
 | Then | the log follows the exception with its Ruby backtrace, most recent call first, each frame at its method, file and line |
-| Then | the backtrace ends with the callback Godot called |
 
 ## `RR-005` An exception a file's top level raises carries that top level
 
@@ -54,3 +53,11 @@ How what mruby has to say about a Ruby file reaches Godot: through the log, at t
 | Given | a Ruby file whose top level raises |
 | When | the file runs |
 | Then | the exception's backtrace holds the file's top level at the line that raised |
+
+## `RR-006` An exception's backtrace ends with the callback Godot called
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose callback calls a method that raises |
+| When | the scene runs |
+| Then | the backtrace the log carries ends with the callback, with no frame of what called into Ruby |
