@@ -7,6 +7,8 @@ const N := 100000
 func _ready() -> void:
 	var v := Vector2(1, 2)
 	var w := Vector2(3, 4)
+	var from := v.x
+	var to := w.x
 	var started := Time.get_ticks_usec()
 	for i in N:
 		pass
@@ -27,6 +29,14 @@ func _ready() -> void:
 	for i in N:
 		position = v
 	report("position_set", started)
+	started = Time.get_ticks_usec()
+	for i in N:
+		var frames := Engine.get_process_frames()
+	report("singleton_call", started)
+	started = Time.get_ticks_usec()
+	for i in N:
+		var mixed = lerp(from, to, 0.5)
+	report("utility_call", started)
 	started = Time.get_ticks_usec()
 	for i in N:
 		var built := Vector2(1, 2)
