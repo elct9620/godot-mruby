@@ -135,14 +135,12 @@ module Godot
 
         singleton = engine_singleton
         if singleton
-          if singleton.respond_to?(name)
-            __define_answer__(name) { |*arguments, &body| engine_singleton.__send__(name, *arguments, &body) }
-          end
+          __define_singleton_answer__(name) if singleton.respond_to?(name)
           return singleton.__send__(name, *args, &block)
         end
         return super unless __has_static_method__(name)
 
-        __define_answer__(name) { |*arguments| __call_static__(name, arguments) }
+        __define_static_answer__(name)
         __call_static__(name, args)
       end
 
@@ -188,15 +186,25 @@ module Godot
         end
       end
 
-      # Defines `answer` as the class's own method `name`, which answers only
-      # on this class: a class extending it reaches method_missing as it did
-      # before, so what it answers never turns on what was called first.
-      def __define_answer__(name, &answer)
+      # Defines the singleton's method `name`, or the static method `name`, as
+      # the class's own method. It answers only on this class: a class
+      # extending it reaches method_missing as it did before, so what it
+      # answers never turns on what was called first.
+      def __define_singleton_answer__(name)
         owner = self
         define_singleton_method(name) do |*arguments, &body|
           next method_missing(name, *arguments, &body) unless equal?(owner)
 
-          answer.call(*arguments, &body)
+          engine_singleton.__send__(name, *arguments, &body)
+        end
+      end
+
+      def __define_static_answer__(name)
+        owner = self
+        define_singleton_method(name) do |*arguments, &body|
+          next method_missing(name, *arguments, &body) unless equal?(owner)
+
+          __call_static__(name, arguments)
         end
       end
 
