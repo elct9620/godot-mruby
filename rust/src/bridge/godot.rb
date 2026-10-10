@@ -329,7 +329,7 @@ module Godot
 
       engine_class = self.class.__send__(:__engine_class__)
       if property
-        engine_class.__send__(:define_method, name) { |*arguments| __call__(target, [property, *arguments]) }
+        engine_class.__send__(:define_method, name) { |*arguments| __call__(target, [property, *arguments]) } if declared
         __call__(target, [property, *args])
       elsif bound
         engine_class.__send__(:define_method, name, &engine_class.__send__(:__bound_body__, bound))

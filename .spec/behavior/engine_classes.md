@@ -174,7 +174,7 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Step | Statement |
 | --- | --- |
 | Given | a node class extending an engine class, made the script of a node of that class and of a node of a class extending it |
-| When | the second node's Ruby object calls an engine method only its engine class has, and the first node's then calls it |
+| When | the second node's Ruby object calls an engine method or property only its engine class has, a property read by an index included, and the first node's then calls it |
 | Then | the second reaches the engine's method, and the first raises `NoMethodError` |
 
 ## `RG-022` A node class's object stands only for an engine object of the class it extends

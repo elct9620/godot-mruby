@@ -151,6 +151,17 @@ class EngineObjectsTest < Minitest::Test
     assert_equal [true, false], reached
   end
 
+  # @behavior RG-021
+  def test_a_property_only_some_of_a_node_classs_engine_objects_have_stays_theirs
+    camera = autofree(Godot::Camera2D.new)
+    plain = autofree(Godot::Node2D.new)
+    [camera, plain].each { |node| node.set_script(Godot::ResourceLoader.load("res://test/unit/engine_classes/scout.rb")) }
+
+    reached = [camera, plain].map { |node| node.call(:reaches_limit) }
+
+    assert_equal [true, false], reached
+  end
+
   # @behavior RG-022
   def test_a_node_classs_object_stands_only_for_an_engine_object_of_the_class_it_extends
     node = autofree(Godot::Node.new)

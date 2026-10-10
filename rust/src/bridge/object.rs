@@ -211,32 +211,37 @@ fn resolve(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
     let object = held.live_object(mrb, &name)?;
     let class = StringName::from(&object.get_class());
     let mut class_db = ClassDb::singleton();
-    let (target, property) = if let Some(property) = name.strip_suffix('=') {
-        let setter = class_db.class_get_property_setter(&class, property);
-        (setter.to_string(), Some((property, "set")))
+    let property = if let Some(property) = name.strip_suffix('=') {
+        Some((property, "set"))
     } else if object.has_method(name.as_str()) {
-        (name.clone(), None)
+        None
     } else {
-        let getter = class_db.class_get_property_getter(&class, name.as_str());
-        (getter.to_string(), Some((name.as_str(), "get")))
+        Some((name.as_str(), "get"))
+    };
+    let target = match property {
+        Some((property, accessor)) => {
+            accessor_by_property(&mut class_db, &class, property, accessor).to_string()
+        }
+        None => name.clone(),
     };
     if target.is_empty() {
         return Ok(qnil().as_value());
     }
+    let extended = engine_ancestor(mrb, receiver.class(mrb));
     // A setter takes the value beside any index, a getter nothing more.
     let takes_index = |accessor: &str| {
         let values = usize::from(accessor == "set");
         Arity::find(&class.to_string(), &target).is_some_and(|arity| arity.required > values)
     };
     if let Some((property, accessor)) = property.filter(|(_, accessor)| takes_index(accessor)) {
-        return indexed_property(mrb, accessor, property);
+        let declared = extended.is_some_and(|extended| {
+            let extended = StringName::from(extended.as_str());
+            accessor_by_property(&mut class_db, &extended, property, accessor).to_string() == target
+        });
+        return indexed_property(mrb, accessor, property, declared);
     }
-    let extended = receiver
-        .funcall(mrb, c"class", &[])
-        .ok()
-        .and_then(RClass::from_value)
-        .and_then(|ruby_class| engine_ancestor(mrb, ruby_class))
-        .filter(|extended| class_db.class_has_method(extended.as_str(), target.as_str()));
+    let extended =
+        extended.filter(|extended| class_db.class_has_method(extended.as_str(), target.as_str()));
     let declared = extended.is_some();
     let bound = extended
         .and_then(|extended| BoundMethod::find(&extended, &target))
@@ -245,6 +250,21 @@ fn resolve(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
     Ok(mrb
         .ary_new_from_values(&[target, declared.into_value(mrb), bound])
         .as_value())
+}
+
+// The engine method the engine class `class` reads (`get`) or writes (`set`)
+// its property `property` with, empty when it has no such property.
+fn accessor_by_property(
+    class_db: &mut Gd<ClassDb>,
+    class: &StringName,
+    property: &str,
+    accessor: &str,
+) -> StringName {
+    if accessor == "set" {
+        class_db.class_get_property_setter(class, property)
+    } else {
+        class_db.class_get_property_getter(class, property)
+    }
 }
 
 // Godot::Object.__declares__(name): whether the engine class the receiver
@@ -270,12 +290,23 @@ fn declares(mrb: &Mrb, class: RClass, name: Symbol) -> bool {
 
 // What `__resolve__` answers for a property whose getter and setter take an
 // index the property's name stands for: the engine's `get` or `set`, called
-// by name with the property's name ahead of the arguments.
-fn indexed_property(mrb: &Mrb, accessor: &str, property: &str) -> Result<Value, Error> {
+// by name with the property's name ahead of the arguments, and whether the
+// engine class the receiver's Ruby class extends declares the property.
+fn indexed_property(
+    mrb: &Mrb,
+    accessor: &str,
+    property: &str,
+    declared: bool,
+) -> Result<Value, Error> {
     let target = Symbol::from(mrb.intern(accessor.as_bytes())?).as_value();
     let property = mrb.str_new(property.as_bytes()).as_value();
     Ok(mrb
-        .ary_new_from_values(&[target, true.into_value(mrb), qnil().as_value(), property])
+        .ary_new_from_values(&[
+            target,
+            declared.into_value(mrb),
+            qnil().as_value(),
+            property,
+        ])
         .as_value())
 }
 
