@@ -286,3 +286,11 @@ How a value crosses between Ruby and the engine, either way: data is copied and 
 | Given | two values of one value type |
 | When | Ruby calls `initialize_copy` on one with the other |
 | Then | it raises `TypeError`, and the value stays equal to what it was, since a value never changes |
+
+## `RV-036` A class Ruby puts under a value type's name holds none of its values
+
+| Step | Statement |
+| --- | --- |
+| Given | a class not extending `Godot::Value`, put under `Godot` by the name of a value type before Ruby first meets a value of it |
+| When | the engine hands Ruby a value of that type |
+| Then | Ruby gets a `Godot::Value` holding it, rather than a value of the class put there |

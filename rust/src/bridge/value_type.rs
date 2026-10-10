@@ -129,16 +129,16 @@ pub(super) fn ruby_value(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> Val
     wrap(mrb, data, held)
 }
 
-// The Ruby value holding `held`: a value of its type's class under Godot.
+// The Ruby value holding `held`: a value of its type's class under Godot,
+// or of Godot::Value when that name holds no value type's class.
 fn wrap(mrb: &Mrb, data: &BridgeData, held: EngineValue) -> Value {
-    match class_by_kind(mrb, data, held.kind()) {
-        Some(class) => mrb.wrap_as(held, class).as_value(),
-        None => qnil().as_value(),
-    }
+    let class = class_by_kind(mrb, data, held.kind()).unwrap_or_else(|| value_class(mrb, data));
+    mrb.wrap_as(held, class).as_value()
 }
 
 // The class under Godot of the value type `kind`, found once for a realm and
 // kept for it, rooted for the collector so the class lives while it is kept.
+// A class Ruby put under that name that is no value type's class is not one.
 fn class_by_kind(mrb: &Mrb, data: &BridgeData, kind: VariantType) -> Option<RClass> {
     let classes = &data.value_classes;
     let index = kind.ord as usize;
@@ -148,7 +148,8 @@ fn class_by_kind(mrb: &Mrb, data: &BridgeData, kind: VariantType) -> Option<RCla
     let class = mrb
         .module_get(c"Godot")
         .and_then(|godot| godot.class_get(mrb, type_name(kind).as_str()))
-        .ok()?;
+        .ok()
+        .filter(|class| super::has_ancestor(mrb, *class, value_class(mrb, data)))?;
     keep_class(mrb, data, kind, class);
     Some(class)
 }

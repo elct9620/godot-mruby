@@ -7,8 +7,8 @@ use std::ptr;
 
 use beni::typed_data::RTypedData;
 use beni::{
-    Error, Gem, Id, Module, Mrb, Object, RClass, ReprValue, Symbol, TryConvert, TypedData, Value,
-    method, value::qnil,
+    Class as _, Error, Gem, Id, Module, Mrb, Object, RClass, ReprValue, Symbol, TryConvert,
+    TypedData, Value, method, value::qnil,
 };
 use godot::builtin::{StringName, Variant};
 use godot::classes::ClassDb;
@@ -98,6 +98,19 @@ fn find_class_once(
         kept.set(Some(class));
         class
     })
+}
+
+// Whether `class` is `ancestor` or descends from it, as Ruby's `class <=
+// ancestor` answers, read without running Ruby.
+fn has_ancestor(mrb: &Mrb, class: RClass, ancestor: RClass) -> bool {
+    let mut current = Some(class);
+    while let Some(class) = current {
+        if class.as_value().is_equal(mrb, ancestor.as_value()) {
+            return true;
+        }
+        current = class.superclass(mrb);
+    }
+    false
 }
 
 // The copy Ruby's dup or clone made of `original`, given a copy of what

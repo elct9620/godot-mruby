@@ -452,7 +452,8 @@ fn ruby_answer(mrb: &Mrb, data: &BridgeData, answer: &Variant) -> Result<Value, 
 }
 
 /// The Ruby object for an engine object: the one the realm holds for the
-/// node, or an object of its engine class under Godot. Only a node is held
+/// node, or an object of its engine class under Godot, or of Godot::Object
+/// when that name holds no engine class. Only a node is held
 /// under its instance id, and a reference-counted object, never a node, is
 /// not looked for: its id is negative, as the keys the realm names itself.
 pub(super) fn ruby_object(mrb: &Mrb, data: &BridgeData, object: Gd<Object>) -> Value {
@@ -462,16 +463,14 @@ pub(super) fn ruby_object(mrb: &Mrb, data: &BridgeData, object: Gd<Object>) -> V
     {
         return held;
     }
-    let class = class_by_name(mrb, data, exposed_class(&object)).or_else(|| root(mrb).ok());
-    match class {
-        Some(class) => mrb.wrap_as(EngineObject(object), class).as_value(),
-        None => qnil().as_value(),
-    }
+    let class =
+        class_by_name(mrb, data, exposed_class(&object)).unwrap_or_else(|| object_class(mrb, data));
+    mrb.wrap_as(EngineObject(object), class).as_value()
 }
 
 // The class under Godot of the engine class `name`, found once for a realm
 // and kept for it, rooted for the collector so the class lives while it is
-// kept.
+// kept. A class Ruby put under that name that is no engine class is not one.
 fn class_by_name(mrb: &Mrb, data: &BridgeData, name: StringName) -> Option<RClass> {
     let classes = &data.engine_classes;
     if let Some(class) = classes.borrow().get(&name).copied() {
@@ -480,7 +479,8 @@ fn class_by_name(mrb: &Mrb, data: &BridgeData, name: StringName) -> Option<RClas
     let class = mrb
         .module_get(c"Godot")
         .and_then(|godot| godot.const_get::<_, RClass>(mrb, name.to_string().as_str()))
-        .ok()?;
+        .ok()
+        .filter(|class| super::has_ancestor(mrb, *class, object_class(mrb, data)))?;
     mrb.gc_register_forever(class.as_value());
     classes.borrow_mut().insert(name, class);
     Some(class)

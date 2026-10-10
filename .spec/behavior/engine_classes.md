@@ -336,3 +336,11 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | an engine object that has been freed |
 | When | Ruby calls `dup` or `clone` on it |
 | Then | it raises `TypeError`, since a copy stands only for a live engine object |
+
+## `RG-043` A class Ruby puts under an engine class's name stands for none of its objects
+
+| Step | Statement |
+| --- | --- |
+| Given | a class not extending `Godot::Object`, put under `Godot` by the name of an engine class before Ruby first meets an object of it |
+| When | the engine hands Ruby an object of that engine class |
+| Then | Ruby gets a `Godot::Object` standing for it, rather than an object of the class put there |

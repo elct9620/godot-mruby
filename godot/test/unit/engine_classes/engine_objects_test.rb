@@ -372,6 +372,18 @@ class EngineObjectsTest < Minitest::Test
     assert_equal "wrong number of arguments (given 0, expected 1)", with_defaults.message
   end
 
+  # @behavior RG-043
+  def test_a_class_ruby_puts_under_an_engine_classs_name_stands_for_none_of_its_objects
+    Godot.const_set(:ReferenceRect, Class.new)
+
+    rect = autofree(Godot::ClassDB.instantiate(:ReferenceRect))
+
+    assert_kind_of Godot::Object, rect
+    assert_equal "ReferenceRect", rect.get_class
+  ensure
+    Godot.__send__(:remove_const, :ReferenceRect)
+  end
+
   private
 
   # A Hash whose conversion for the engine frees `object`: its key's `hash`

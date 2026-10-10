@@ -194,6 +194,18 @@ class ValueTypesTest < Minitest::Test
     assert_equal Godot::Vector2.new(1, 2), vector
   end
 
+  # @behavior RV-036
+  def test_a_class_ruby_puts_under_a_value_types_name_holds_none_of_its_values
+    Godot.const_set(:Plane, Class.new)
+
+    plane = Godot::Projection.new.get_projection_plane(0)
+
+    assert_kind_of Godot::Value, plane
+    assert_equal plane, plane.dup
+  ensure
+    Godot.__send__(:remove_const, :Plane)
+  end
+
   # @behavior RV-027
   def test_a_value_types_class_allocates_no_empty_value
     assert_raises(TypeError) { Godot::Vector2.allocate }
