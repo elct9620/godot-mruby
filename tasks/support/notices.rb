@@ -17,6 +17,11 @@ module Notices
   # What the extension changed in a crate, by the crate's name; MPL-2.0 asks
   # that whoever receives the library can obtain the changed source.
   CHANGES = { "godot-cell" => GodotCell.change }.freeze
+  # How the section of a crate that publishes no license file opens; the
+  # rest of the line links the text of each license its manifest names.
+  UNPUBLISHED = "No license file is published with this crate"
+  # A license's text page on SPDX, which the line links by its identifier.
+  LICENSE_PAGE = %r{https://spdx\.org/licenses/[\w.+-]+\.html}
 
   module_function
 
@@ -36,12 +41,10 @@ module Notices
   end
 
   # Some crates publish no license file and state their license only in the
-  # manifest and source headers; those point at the SPDX text instead.
+  # manifest and source headers; those link each license's SPDX text instead.
   def compose_notice(title, dir, license, change = nil)
     texts = Dir.children(dir).grep(LICENSE_FILE).sort.map { |file| File.read(File.join(dir, file)) }
-    if texts.empty?
-      texts = ["No license file is published with this crate; the #{license} text is at https://spdx.org/licenses/\n"]
-    end
+    texts = ["#{UNPUBLISHED}; its license text is at #{link_license_pages(license).join(", ")}\n"] if texts.empty?
     texts << change if change
     title = "#{title}, changed" if change
     "#{"=" * 78}\n#{title} (#{license || "see license files"})\n#{"=" * 78}\n\n#{texts.join("\n")}\n"
@@ -86,6 +89,19 @@ module Notices
   # Finds the crates whose change the notices in `text` do not show.
   def find_missing_changes(text)
     CHANGES.reject { |crate, change| text.include?("#{crate} ") && text.include?(change) }.keys
+  end
+
+  # The SPDX page of each license an SPDX expression such as
+  # "MIT OR Apache-2.0" names.
+  def link_license_pages(license)
+    ids = license.to_s.split(/[\s()]+/) - %w[AND OR WITH] - [""]
+    ids.map { |id| "https://spdx.org/licenses/#{id}.html" }
+  end
+
+  # The lines in `text` saying a crate publishes no license file without
+  # linking a license's text.
+  def find_unlinked_licenses(text)
+    text.lines.grep(/\A#{UNPUBLISHED}/).grep_v(LICENSE_PAGE)
   end
 
   # Whether `text` carries mruby's notice of what it compiles in under other

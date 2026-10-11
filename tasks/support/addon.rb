@@ -88,12 +88,15 @@ module Addon
     project
   end
 
-  # @behavior RA-003 RA-004
+  # @behavior RA-003 RA-004 RA-006
   def verify_notices!(path)
     text = File.read(path)
     missing = Notices.find_missing_changes(text)
     raise "#{NOTICES} does not show the change to #{missing.join(", ")}" unless missing.empty?
     raise "#{NOTICES} does not carry mruby's legal notice" unless Notices.carries_mruby_legal?(text)
+
+    unlinked = Notices.find_unlinked_licenses(text)
+    raise "#{NOTICES} links no license text in:\n#{unlinked.join}" unless unlinked.empty?
   end
 
   # @behavior RA-005

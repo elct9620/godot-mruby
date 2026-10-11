@@ -53,3 +53,15 @@ How a project comes to run Ruby: the addon under `addons/godot_mruby/` carries t
 | Then | none names a C runtime DLL, such as `VCRUNTIME140.dll` or `api-ms-win-crt-*.dll` |
 
 Godot's Windows builds bring no Visual C++ runtime. CI runners have one installed, so only the import table shows a library needing it.
+
+## `RA-006` The package links the license text of a crate that publishes none
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RA-003` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a package with a crate that publishes no license file |
+| When | its third-party notices are read |
+| Then | the crate's section links the SPDX text of each license its manifest names |
