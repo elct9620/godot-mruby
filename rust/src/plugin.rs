@@ -9,8 +9,8 @@ use crate::highlighter::RubySyntaxHighlighter;
 use crate::panel::RubyTestPanel;
 
 /// Hands the editor the export plugin, the test panel and the Ruby
-/// highlighter for as long as the editor is open, and lists the game's files again whenever the editor
-/// finds them changed.
+/// highlighter for as long as the editor is open, and lists the game's files
+/// again whenever the editor finds them changed.
 #[derive(GodotClass)]
 #[class(tool, init, base = EditorPlugin)]
 pub struct RubyEditorPlugin {

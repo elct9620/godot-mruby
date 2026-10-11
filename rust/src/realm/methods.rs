@@ -22,8 +22,9 @@ pub(super) fn define(mrb: &Mrb) -> Result<(), Error> {
 /// The names of the methods the class the file at `path` names has of its
 /// own: those it defines and those of the modules it takes in, up to its
 /// superclass, private ones included, since Godot calls a method whatever its
-/// visibility, as the header lists a `def` written after `private`. The class is noted as a taker of each of those, so a method
-/// added to one later is read again. None when the file named no class.
+/// visibility, as the header lists a `def` written after `private`. The class
+/// is noted as a taker of each of those, so a method added to one later is
+/// read again. None when the file named no class.
 pub(super) fn methods_by_path(mrb: &Mrb, path: &str) -> Vec<String> {
     let Some(class) = constants::constant_by_key(mrb, &key_by_path(mrb, path)) else {
         return Vec::new();
