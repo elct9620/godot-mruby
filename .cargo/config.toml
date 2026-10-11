@@ -6,3 +6,8 @@
 # working directory, not from the manifest's.
 [env]
 BENI_VENDOR_DIR = { value = "vendor", relative = true }
+
+# Godot's Windows builds carry no Visual C++ runtime, so the library links
+# its own; mruby's archive is built with /MT to match (build_config/mruby.rb).
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static"]

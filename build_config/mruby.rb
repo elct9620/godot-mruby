@@ -11,10 +11,16 @@ GEMS = %w[
 
 # What every build shares, as each goes into the same shipped library. That
 # library is a shared one, so the archive's code is compiled
-# position-independent; MSVC has no such flag, its code already is.
+# position-independent; MSVC has no such flag, its code already is. On MSVC
+# the library links the C runtime statically (.cargo/config.toml), and the
+# archive follows with /MT, or its code would still import the runtime DLL.
 def extension_build(conf)
   GEMS.each { |name| conf.gem core: name }
-  conf.compilers.each { |cc| cc.flags << "-fPIC" } unless conf.primary_toolchain == "visualcpp"
+  if conf.primary_toolchain == "visualcpp"
+    conf.compilers.each { |cc| cc.flags = cc.flags.flatten.map { |flag| flag == "/MD" ? "/MT" : flag } }
+  else
+    conf.compilers.each { |cc| cc.flags << "-fPIC" }
+  end
 end
 
 MRuby::Build.new do |conf|
