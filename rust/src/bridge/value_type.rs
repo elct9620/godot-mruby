@@ -28,7 +28,7 @@ use super::read_engine_name;
 use super::refusal::{
     describe_count, make_argument_error, make_type_error, make_zero_division_error,
 };
-use super::value::{self, ToRuby};
+use super::value::{self, RubyCrossing};
 use crate::hint::name_type;
 
 /// A value of one of the engine's value types, as Ruby holds it: a Vector2,
@@ -287,12 +287,12 @@ fn read_vector2(args: &[Value]) -> Option<Vector2> {
 type ValueNames = (
     &'static str,
     &'static [&'static str],
-    &'static [MethodNames],
+    &'static [ValueMethod],
 );
 
 // A value type's method: its name, the hash of its signature, how many
 // arguments it requires, and whether it is static.
-type MethodNames = (&'static str, i64, usize, bool);
+type ValueMethod = (&'static str, i64, usize, bool);
 
 // Each value type's names, as the API the extension is built against lists
 // them.
@@ -839,5 +839,6 @@ fn to_s(mrb: &Mrb, held: &EngineValue) -> Value {
 // What the engine answered for a value, as Ruby is given it; a value type's
 // answers hold no container Ruby could not take.
 fn to_ruby(mrb: &Mrb, answer: &Variant) -> Value {
-    ToRuby::try_new(answer).map_or_else(|_| qnil().as_value(), |answer| answer.into_value(mrb))
+    RubyCrossing::try_new(answer)
+        .map_or_else(|_| qnil().as_value(), |answer| answer.into_value(mrb))
 }

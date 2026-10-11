@@ -22,7 +22,7 @@ use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 
 use crate::ancestry::{Ancestry, Lineage};
-use crate::bridge::{self, Owner, ToEngine, ToRuby};
+use crate::bridge::{self, EngineCrossing, Owner, RubyCrossing};
 use crate::error;
 use crate::header::Header;
 use crate::log::GodotLog;
@@ -365,7 +365,7 @@ impl Caller {
         }
         self.settle(Stage::Built);
         if built == Build::New {
-            realm.send::<ToRuby, ToEngine>(key, "initialize", [])?;
+            realm.send::<RubyCrossing, EngineCrossing>(key, "initialize", [])?;
         }
         self.write_stash(key);
         Ok(Some(key))
@@ -394,7 +394,7 @@ impl Caller {
         let Some(key) = self.ensure_object() else {
             return Variant::nil();
         };
-        let checked = args.iter().map(|arg| ToRuby::try_new(arg));
+        let checked = args.iter().map(|arg| RubyCrossing::try_new(arg));
         let args = match checked.collect::<Result<SmallVec<[_; 4]>, _>>() {
             Ok(args) => args,
             Err(reason) => {
@@ -402,8 +402,8 @@ impl Caller {
                 return Variant::nil();
             }
         };
-        realm::enter(|realm| realm.send::<_, ToEngine>(key, method, args))
-            .map(|ToEngine(answer)| answer)
+        realm::enter(|realm| realm.send::<_, EngineCrossing>(key, method, args))
+            .map(|EngineCrossing(answer)| answer)
             .unwrap_or_else(|failed: RubyError| {
                 failed.write(&GodotLog);
                 Variant::nil()
@@ -416,15 +416,15 @@ impl Caller {
 // instance variable the object wrote itself. Whether it was written is what
 // Godot takes for an answer, so a refusal leaves the name to the engine.
 fn write(key: Key, name: &str, exported: bool, value: &Variant) -> bool {
-    let Ok(value) = ToRuby::try_new(value) else {
+    let Ok(value) = RubyCrossing::try_new(value) else {
         return false;
     };
     let written = if exported {
         let setter = format!("{name}=");
-        realm::enter(|realm| realm.send::<_, ToEngine>(key, &setter, [value])).map(|_| true)
+        realm::enter(|realm| realm.send::<_, EngineCrossing>(key, &setter, [value])).map(|_| true)
     } else {
         let variable = StringName::from(name).to_variant();
-        let Ok(variable) = ToRuby::try_new(&variable) else {
+        let Ok(variable) = RubyCrossing::try_new(&variable) else {
             return false;
         };
         realm::enter(|realm| realm.send::<_, bool>(key, "__write_variable__", [variable, value]))
@@ -440,13 +440,13 @@ fn write(key: Key, name: &str, exported: bool, value: &Variant) -> bool {
 // variable the object wrote itself; nothing when it wrote none.
 fn read(key: Key, name: &str, exported: bool) -> Option<Variant> {
     let answered = if exported {
-        realm::enter(|realm| realm.send::<ToRuby, ToEngine>(key, name, []))
-            .map(|ToEngine(answer)| Some(answer))
+        realm::enter(|realm| realm.send::<RubyCrossing, EngineCrossing>(key, name, []))
+            .map(|EngineCrossing(answer)| Some(answer))
     } else {
         let variable = StringName::from(name).to_variant();
-        let variable = ToRuby::try_new(&variable).ok()?;
-        realm::enter(|realm| realm.send::<_, ToEngine>(key, "__read_variable__", [variable]))
-            .map(|ToEngine(answer)| (!answer.is_nil()).then(|| answer.to::<VarArray>().at(0)))
+        let variable = RubyCrossing::try_new(&variable).ok()?;
+        realm::enter(|realm| realm.send::<_, EngineCrossing>(key, "__read_variable__", [variable]))
+            .map(|EngineCrossing(answer)| (!answer.is_nil()).then(|| answer.to::<VarArray>().at(0)))
     };
     answered.unwrap_or_else(|failed: RubyError| {
         failed.write(&GodotLog);

@@ -70,19 +70,19 @@ A node as Ruby is given it, for the node script's class to make the node's Ruby 
 pub struct Owner(pub InstanceId);
 ```
 
-## `ToRuby`
+## `RubyCrossing`
 
-An engine value as Ruby is given it, made only once the value is known to reach Ruby, so a container nested too deep never does.
+An engine value crossing into Ruby, made only once the value is known to reach Ruby, so a container nested too deep never does.
 
 | Attribute | Value |
 | --- | --- |
 | internal | yes |
 
 ```rust
-pub struct ToRuby;
+pub struct RubyCrossing;
 ```
 
-## `ToRuby::try_new`
+## `RubyCrossing::try_new`
 
 An engine value for Ruby, or why it cannot reach Ruby.
 
@@ -91,19 +91,19 @@ An engine value for Ruby, or why it cannot reach Ruby.
 | internal | yes |
 
 ```rust
-impl ToRuby {
+impl RubyCrossing {
     pub fn try_new(variant: &Variant) -> Result<Self, String> {}
 }
 ```
 
-## `ToEngine`
+## `EngineCrossing`
 
-A Ruby value as the engine takes it, its type following the Ruby value's own class.
+A Ruby value crossing into the engine, its type following the Ruby value's own class.
 
 | Attribute | Value |
 | --- | --- |
 | internal | yes |
 
 ```rust
-pub struct ToEngine(pub Variant);
+pub struct EngineCrossing(pub Variant);
 ```

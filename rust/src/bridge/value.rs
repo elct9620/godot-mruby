@@ -27,10 +27,10 @@ use super::value_type::{self, EngineValue};
 /// Godot's own recursive Array and Dictionary operations stop at.
 const DEPTH: usize = 100;
 
-/// An engine value as Ruby is given it.
-pub struct ToRuby<'a>(&'a Variant);
+/// An engine value crossing into Ruby, as Ruby is given it.
+pub struct RubyCrossing<'a>(&'a Variant);
 
-impl<'a> ToRuby<'a> {
+impl<'a> RubyCrossing<'a> {
     /// `variant` for Ruby, or why it cannot reach Ruby.
     pub fn try_new(variant: &'a Variant) -> Result<Self, String> {
         match find_unreachable_reason(variant) {
@@ -40,14 +40,14 @@ impl<'a> ToRuby<'a> {
     }
 }
 
-impl ToRuby<'_> {
+impl RubyCrossing<'_> {
     /// The value for Ruby, made with what the bridge keeps for the realm.
     pub(super) fn into_ruby(self, mrb: &Mrb, data: &BridgeData) -> Value {
         to_ruby(mrb, data, self.0)
     }
 }
 
-impl IntoValue for ToRuby<'_> {
+impl IntoValue for RubyCrossing<'_> {
     fn into_value(self, mrb: &Mrb) -> Value {
         self.into_ruby(mrb, super::data(mrb))
     }
@@ -145,12 +145,12 @@ fn from_packed<T: PackedElement>(mrb: &Mrb, data: &BridgeData, variant: &Variant
     make_array(mrb, data, packed.as_slice().iter().map(ToGodot::to_variant))
 }
 
-/// A Ruby value as the engine takes it. Its Variant follows the Ruby value's
-/// own class, so a Float stays a float where a converting read would take
-/// an integer from it.
-pub struct ToEngine(pub Variant);
+/// A Ruby value crossing into the engine, as the engine takes it. Its
+/// Variant follows the Ruby value's own class, so a Float stays a float
+/// where a converting read would take an integer from it.
+pub struct EngineCrossing(pub Variant);
 
-impl TryConvert for ToEngine {
+impl TryConvert for EngineCrossing {
     fn try_convert(value: Value, mrb: &Mrb) -> Result<Self, Error> {
         to_engine(mrb, super::data(mrb), value, 1)
             .map(Self)

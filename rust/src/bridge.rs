@@ -29,7 +29,7 @@ mod value_type;
 
 pub use bound_method::find_method_declarer;
 pub use object::{Owner, derive_node_key};
-pub use value::{ToEngine, ToRuby};
+pub use value::{EngineCrossing, RubyCrossing};
 
 const FILE: &std::ffi::CStr = c"godot_mruby/bridge/godot.rb";
 
@@ -82,7 +82,7 @@ struct BridgeData {
     // value of, by the type's ordinal.
     value_classes: RefCell<Vec<Option<RClass>>>,
     // The nameless classes of bound methods and of bound members.
-    bound_class: Cell<Option<RClass>>,
+    bound_method_class: Cell<Option<RClass>>,
     bound_member_class: Cell<Option<RClass>>,
 }
 

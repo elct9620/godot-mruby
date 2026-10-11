@@ -23,7 +23,7 @@ use super::refusal::{
     describe_count, make_argument_error, make_call_error, make_call_refusal,
     make_not_implemented_error, make_refusal_error, make_type_error,
 };
-use super::value::{self, ToRuby};
+use super::value::{self, RubyCrossing};
 use super::{BridgeData, file_by_class_path, read_engine_name};
 use crate::realm::{self, Key};
 
@@ -54,7 +54,9 @@ unsafe impl TypedData for EngineObject {
 /// Godot::Object, found once for a realm and kept in its bridge data.
 pub(super) fn object_class(mrb: &Mrb, data: &BridgeData) -> RClass {
     super::find_class_once(mrb, &data.object_class, || {
-        root(mrb).expect("the Godot gem defines Godot::Object")
+        mrb.module_get(c"Godot")
+            .and_then(|godot| godot.class_get(mrb, c"Object"))
+            .expect("the Godot gem defines Godot::Object")
     })
 }
 
@@ -85,10 +87,6 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     object.define_private_method(mrb, c"__label__", method!(label, 0))?;
     object.define_private_method(mrb, c"initialize_copy", method!(initialize_copy, 1))?;
     Ok(())
-}
-
-fn root(mrb: &Mrb) -> Result<RClass, Error> {
-    mrb.module_get(c"Godot")?.class_get(mrb, c"Object")
 }
 
 // Godot::Object.__make__: a new engine object of the receiver's engine
@@ -446,7 +444,7 @@ fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<V
 // What the engine answered, as Ruby is given it, or the Godot::CallError an
 // answer that cannot reach Ruby raises.
 fn convert_answer(mrb: &Mrb, data: &BridgeData, answer: &Variant) -> Result<Value, Error> {
-    ToRuby::try_new(answer)
+    RubyCrossing::try_new(answer)
         .map(|answer| answer.into_ruby(mrb, data))
         .map_err(|reason| make_call_error(mrb, &reason))
 }
