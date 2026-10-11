@@ -9,6 +9,7 @@ require_relative "extension"
 require_relative "godot"
 require_relative "notices"
 require_relative "release"
+require_relative "windows_library"
 
 # Packages the addon as it is distributed and checks a package the way a
 # user would install it. Backs tasks/addon.rake.
@@ -21,6 +22,9 @@ module Addon
   FOLDER = "godot-mruby"
   PACKAGE = File.join(ROOT, "pkg", "#{FOLDER}.zip")
   NOTICES = "THIRD_PARTY_LICENSES.txt"
+  # The DLLs of the C runtime, which Windows lacks until the Visual C++
+  # Redistributable is installed.
+  C_RUNTIME = /\A(vcruntime|msvcp|ucrtbase|api-ms-win-crt-)/i
 
   module_function
 
@@ -72,13 +76,15 @@ module Addon
   end
 
   # A copy of the test project in `dir` with the package installed, once its
-  # notices are checked.
+  # notices and Windows libraries are checked.
   def install(package, dir)
     project = File.join(dir, "project")
     copy_project(project)
     extract(package, File.join(dir, "package"))
-    verify_notices!(File.join(dir, "package", FOLDER, "addons", "godot_mruby", NOTICES))
-    FileUtils.mv(File.join(dir, "package", FOLDER, "addons", "godot_mruby"), File.join(project, "addons"))
+    addon = File.join(dir, "package", FOLDER, "addons", "godot_mruby")
+    verify_notices!(File.join(addon, NOTICES))
+    verify_windows_libraries!(addon)
+    FileUtils.mv(addon, File.join(project, "addons"))
     project
   end
 
@@ -88,6 +94,14 @@ module Addon
     missing = Notices.find_missing_changes(text)
     raise "#{NOTICES} does not show the change to #{missing.join(", ")}" unless missing.empty?
     raise "#{NOTICES} does not carry mruby's legal notice" unless Notices.carries_mruby_legal?(text)
+  end
+
+  # @behavior RA-005
+  def verify_windows_libraries!(addon)
+    Dir.glob(File.join(addon, "**", "*.dll")).each do |path|
+      runtime = WindowsLibrary.read_imports(path).grep(C_RUNTIME)
+      raise "#{File.basename(path)} needs the C runtime installed: #{runtime.join(", ")}" unless runtime.empty?
+    end
   end
 
   # Of .godot, the copy keeps only what a fresh checkout has: the extension list.

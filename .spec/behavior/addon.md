@@ -43,3 +43,11 @@ How a project comes to run Ruby: the addon under `addons/godot_mruby/` carries t
 | Given | a package whose mruby compiles in files its `LEGAL` lists under other licenses |
 | When | its third-party notices are read |
 | Then | mruby's section carries that legal notice |
+
+## `RA-005` The package's Windows libraries need no C runtime installed
+
+| Step | Statement |
+| --- | --- |
+| Given | a package with its Windows libraries |
+| When | each library's imports are read |
+| Then | none names a C runtime DLL, such as `VCRUNTIME140.dll` or `api-ms-win-crt-*.dll` |
