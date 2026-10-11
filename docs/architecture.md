@@ -28,7 +28,7 @@ Godot never sees Ruby. It talks to the extension through the contracts it gives 
 
 The extension keeps no Ruby state of its own: it turns what Godot asks into entries into the realm.
 
-The realm is one `mrb_state`, reached only through `realm::enter`, and it reaches mruby only through beni. Calls flow downward, and the realm never turns back to Godot: the files it runs and the log it writes to are given to it as it opens.
+The realm is one `mrb_state`, reached only through `realm::enter`, and it reaches mruby only through beni. Calls flow downward, and the realm never turns back to Godot. The files it runs and the log it writes to are given to it as it opens.
 
 ### 1.2 What ships
 
@@ -43,7 +43,7 @@ res://addons/godot_mruby/
 
 What ships is the addon folder, placed where Godot expects a non-project asset: `addons/<name>/`, so its files clash with neither the project nor other assets.
 
-The editor loads the library the `.gdextension` names for the platform, from Godot 4.6 on. Each library is a single binary: the crate links the mruby archive beni builds and the Prism parser `ruby-prism` builds, so nothing else is needed at run time, and macOS ships one universal library. Building needs libclang, which Prism's bindings are generated with.
+The editor loads the library the `.gdextension` names for the platform, from Godot 4.6 on. Each library is a single binary: the crate links the mruby archive beni builds and the Prism parser `ruby-prism` builds. Nothing else is needed at run time, and macOS ships one universal library. Building needs libclang, which Prism's bindings are generated with.
 
 mruby carries only the gems `build_config/mruby.rb` lists, and none that reaches the host: Ruby reaches files, sockets and processes through Godot.
 
@@ -94,7 +94,7 @@ godot/
                          └─ read by tasks/support/<spec>.rb or <spec>/
 ```
 
-The extension is tested through itself, and `godot/` is sorted by who judges an outcome, then by the `.spec/behavior` file it claims. The extension's own runner judges `test/unit/<spec>/`, whose files loaded by name sit beside their tests, and `test/e2e/`, which plays the game in `src/` and claims what its node scripts do. `godot:verify` judges `integration/<spec>/`, for what no Ruby test can observe: a log line, a run's exit, the editor, an exported game. `godot:release` judges what only an export template's release build shows. Their checks are named after the same spec, and GDScript stays only where a check must ask from outside the realm. What only the extension's own code reaches, such as a header, an ancestry or a realm entry, is judged by `cargo test` beside that code in `rust/src/`, and what a dependency must keep for the extension, such as the order gdext's cell gives threads, in `rust/tests/`.
+The extension is tested through itself, and `godot/` is sorted by who judges an outcome, then by the `.spec/behavior` file it claims. The extension's own runner judges `test/unit/<spec>/`, whose files loaded by name sit beside their tests. It also judges `test/e2e/`, which plays the game in `src/` and claims what its node scripts do. `godot:verify` judges `integration/<spec>/`, for what no Ruby test can observe: a log line, a run's exit, the editor, an exported game. `godot:release` judges what only an export template's release build shows. Their checks are named after the same spec, and GDScript stays only where a check must ask from outside the realm. `cargo test` beside the code in `rust/src/` judges what only the extension's own code reaches, such as a header, an ancestry or a realm entry. `rust/tests/` judges what a dependency must keep for the extension, such as the order gdext's cell gives threads.
 
 ### 1.5 Naming
 
@@ -124,9 +124,9 @@ Names follow the naming chapter of [`convention.md`](convention.md#1-naming).
 
 Each class Godot knows answers what Godot already asks of a script language; none opens another way for Godot to reach Ruby.
 
-`ResourceFormatLoaderRubyScript` reads a file's source and runs nothing, and `ResourceFormatSaverRubyScript` writes it back. The script answers Godot from its header, which Prism reads from that source, and its ancestry; only a node script makes an instance (2.4), and the language announces it (2.5).
+`ResourceFormatLoaderRubyScript` reads a file's source and runs nothing, and `ResourceFormatSaverRubyScript` writes it back. The script answers Godot from its header, which Prism reads from that source, and its ancestry. Only a node script makes an instance (2.4), and the language announces it (2.5).
 
-The runner is an ordinary node the addon ships, refused in an exported game, whose export leaves out the tests and the runner scene; the test panel plays it with the run file's options. `RealmFiles`, `GodotLog` and the `Godot` gem are what the game's realm is given: the files under `res://`, less the test directories in the editor and an exported game, Godot's log, and the engine (2.6). The names Godot knows are in `.spec/contract/godot.md`, and the settings in `.spec/contract/project_settings.md`.
+The runner is an ordinary node the addon ships, refused in an exported game, whose export leaves out the tests and the runner scene. The test panel plays it with the run file's options. `RealmFiles`, `GodotLog` and the `Godot` gem are what the game's realm is given. They are the files under `res://`, less the test directories in the editor and an exported game, Godot's log, and the engine (2.6). The names Godot knows are in `.spec/contract/godot.md`, and the settings in `.spec/contract/project_settings.md`.
 
 ### 2.2 Lifecycle
 
@@ -161,7 +161,7 @@ Scene stage ends
 the library unloads
 ```
 
-Everything registers at the Scene stage, the stage a script language has to be registered by; gdext registers the classes themselves, and the editor plugin at the Editor stage, which only the editor reaches.
+Everything registers at the Scene stage, the stage a script language has to be registered by. gdext registers the classes themselves, and the editor plugin at the Editor stage, which only the editor reaches.
 
 Nothing opens the realm at startup: `lib.rs` only prepares how it opens. It opens at the first entry that needs Ruby, so a process that never runs a Ruby file never opens one.
 
@@ -198,9 +198,9 @@ lib.rs    registers Scripting and settings, prepares the realm
               compiler, snapshot
 ```
 
-Each layer uses only the layers below it. The realm uses only `compiler` and `snapshot`, the shape it publishes; what it needs from Godot, `game` and `log` implement, so it neither parses a file nor knows the engine. `language` checks typed source through `validation`, which compiles it in a state no realm holds and reads the other files as `announcement` does, so the editor never waits for the realm.
+Each layer uses only the layers below it. The realm uses only `compiler` and `snapshot`, the shape it publishes. What it needs from Godot, `game` and `log` implement, so it neither parses a file nor knows the engine. `language` checks typed source through `validation`, which compiles it in a state no realm holds. It reads the other files as `announcement` does, so the editor never waits for the realm.
 
-`header` and `ancestry` read what a file declares without running it, naming files from the root directories `Files::roots` gives, by `realm::Roots`, `realm::normalize` and the `ClassIndex` behind `Files::file_by_name`. Scripting answers Godot from them; `game` hands the realm, through `Files::declarations`, what each file opens and the superclass a node script's class is held to, asking `bridge` which engine classes are nodes. `language` and `script` refer to each other, as GDExtension script languages do; `minitest` uses the realm only for a failure's `Location`.
+`header` and `ancestry` read what a file declares without running it. They name files from the root directories of `Files::roots`, by `realm::Roots`, `realm::normalize` and the `ClassIndex` behind `Files::file_by_name`. Scripting answers Godot from them. Through `Files::declarations_by_path`, `game` hands the realm what each file opens and the superclass its node script's class is held to. `bridge` tells it which engine classes are nodes. `language` and `script` refer to each other, as GDExtension languages do; `minitest` uses the realm only for a failure's `Location`.
 
 ### 2.4 Node scripts
 
@@ -219,9 +219,9 @@ node.set_script ──► instance: recorded        no Ruby runs
 node freed (any thread) ──► release(key) ──► let go at the next entry or frame
 ```
 
-Before the file runs, the header and ancestry answer Godot on any thread: the engine node class, and what the source writes out; then the snapshot answers (2.7). Only such a node gets an instance, in the editor only a tool whose source parses; any other node there gets Godot's placeholder, its file run at the next frame unless under a test directory.
+Before the file runs, the header and ancestry answer Godot on any thread with the engine node class and what the source writes out. Then the snapshot answers (2.7). Only such a node gets an instance, and in the editor only a tool whose source parses. Any other node there gets Godot's placeholder, its file run at the next frame unless under a test directory.
 
-The instance holds no Ruby value: the realm holds the node's object under its instance id, so a node made by `new` or by Godot meets the same object. The instance goes to Godot through the extension interface rather than gdext's `ScriptInstance`, and a call copies what it needs before Ruby runs, since the engine may call back or take the script away before Ruby returns. Freeing a node queues its key and never waits for the realm. The rules are in `.spec/behavior/script.md` and `.spec/behavior/held_objects.md`.
+The instance holds no Ruby value. The realm holds the node's object under its instance id, so a node made by `new` or by Godot meets the same object. The instance goes to Godot through the extension interface rather than gdext's `ScriptInstance`. A call copies what it needs before Ruby runs, since the engine may call back or take the script away before Ruby returns. Freeing a node queues its key and never waits for the realm. The rules are in `.spec/behavior/script.md` and `.spec/behavior/held_objects.md`.
 
 ### 2.5 Announcement
 
@@ -242,9 +242,9 @@ tool, abstract, icon               from the header
 the editor's class list, saved for exported games
 ```
 
-A node script is listed like a GDScript's `class_name`. The list is flat, as it is for C#, so a name drops its namespaces, and node scripts sharing one are none of them listed; the scan order never picks one.
+A node script is listed like a GDScript's `class_name`. The list is flat, as it is for C#, so a name drops its namespaces. Node scripts sharing one are none of them listed, and the scan order never picks one.
 
-Godot asks every language for its stack as it prints, so the language never prints while it answers: it reads the files from disk, as GDScript does, and writes the warning by a deferred call, once while the clash lasts. Other threads wait while one holds the language, and the game runs and traces a file at a time, so `game` keeps one listing of the project and its class index rather than walking every directory per file: a file asked about joins it, and the editor plugin lists the files again when the editor finds them changed. The rules are in `.spec/behavior/announcement.md`, and what the editor shows in `.spec/behavior/script.md`.
+Godot asks every language for its stack as it prints, so the language never prints while it answers. It reads the files from disk, as GDScript does, and writes the warning by a deferred call, once while the clash lasts. Other threads wait while one holds the language, and the game runs and traces a file at a time. So `game` keeps one listing of the project and its class index rather than walking every directory per file. A file asked about joins it, and the editor plugin lists the files again when the editor finds them changed. The rules are in `.spec/behavior/announcement.md`, and what the editor shows in `.spec/behavior/script.md`.
 
 ### 2.6 Bridge
 
@@ -285,7 +285,7 @@ class body runs ──► its declarations, and the methods the class ends up wi
 has_signal, get_property_list, has_method, and the default each property was exported with
 ```
 
-A Ruby class takes its shape as its body runs, so its shape cannot be read from the source alone. The realm publishes what a file's class has when its run commits, and whatever answers Godot reads that value on any thread without entering the realm. Until a file runs its header answers, so a scene connects to a signal declared there; only what the source does not write out as literals waits for the run. While Godot holds a source other than the one that ran, as the editor does while a file is typed, what it writes out answers and the run answers for the rest. A property's value is the node's own: while no Ruby object answers, the instance keeps what Godot writes and answers from that or the published default. What a class declares is in `.spec/behavior/declarations.md`, and the published shape in `.spec/contract/snapshot.md`.
+A Ruby class takes its shape as its body runs, so its shape cannot be read from the source alone. The realm publishes what a file's class has when its run commits. Whatever answers Godot reads that value on any thread without entering the realm. Until a file runs, its header answers, so a scene connects to a signal declared there. Only what the source does not write out as literals waits for the run. While Godot holds a source other than the one that ran, as the editor does while a file is typed, what it writes out answers. The run answers for the rest. A property's value is the node's own. While no Ruby object answers, the instance keeps what Godot writes and answers from that or the published default. What a class declares is in `.spec/behavior/declarations.md`, and the published shape in `.spec/contract/snapshot.md`.
 
 ## 3. Realm
 
@@ -309,9 +309,9 @@ body(&Realm)
 a Rust value, or a RubyError ──► RubyError::write, at its Ruby line
 ```
 
-The realm is the one way into Ruby. A component hands `realm::enter` a body, which is given the realm, never its `mrb_state`. What comes back is a Rust value, or a `RubyError` the component writes to a log with its backtrace, answered as the language's stack while it is written (`.spec/behavior/report.md`). Since nothing outside holds a Ruby value, the realm's inside changes without its callers changing.
+The realm is the one way into Ruby. A component hands `realm::enter` a body, which is given the realm, never its `mrb_state`. What comes back is a Rust value, or a `RubyError` the component writes to a log with its backtrace. While it is written, that backtrace answers as the language's stack (`.spec/behavior/report.md`). Since nothing outside holds a Ruby value, the realm's inside changes without its callers changing.
 
-There is one realm, the game's, entered by one thread at a time; that thread enters again when the engine calls back into scripts, up to 24 entries deep, which the smallest thread stack holds. Freeing a node never waits: its key goes into a queue the next entry or frame empties, and a reloaded script's file runs again at the next frame among the objects it made. Its operations are in `.spec/contract/realm.md`.
+There is one realm, the game's, entered by one thread at a time. That thread enters again when the engine calls back into scripts, up to 24 entries deep, which the smallest thread stack holds. Freeing a node never waits: its key goes into a queue the next entry or frame empties. A reloaded script's file runs again at the next frame among the objects it made. Its operations are in `.spec/contract/realm.md`.
 
 ### 3.2 Internals
 
