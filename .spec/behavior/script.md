@@ -556,16 +556,16 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 
 ## `RS-068` A call from another thread waits while a node initializes
 
+| Attribute | Value |
+| --- | --- |
+| unverifiable | no test can make another thread arrive between the object being built and initialized |
+
 | Step | Statement |
 | --- | --- |
 | Given | a node whose first call from Godot builds its Ruby object and runs `initialize` |
 | Given | another thread calling a method of the node's script before `initialize` returns |
 | When | `initialize` returns |
 | Then | the other thread's call reaches the object only then |
-
-| Attribute | Value |
-| --- | --- |
-| unverifiable | no test can make another thread arrive between the object being built and initialized |
 
 ## `RS-069` Godot's calls on a node a node script's class made reach its object
 
