@@ -8,15 +8,15 @@ require_relative "project"
 
 module Bench
   # Plays the battle of the game in godot/src against its GDScript twin, in
-  # each style the call-cost analysis compares, and answers what a round
+  # each style, and answers what a round
   # costs each language and how many times GDScript's Ruby takes. The
   # call-cost gate marks either style's ratio grown past main's; this only
   # reports. A pair whose two battles do not end alike fails, since a twin
   # that drifted from the game times something else.
   module Battle
     TEMPLATE = File.expand_path("../../bench/battle", __dir__)
-    # The game's battle as written, and as the analysis recommends writing it.
-    STYLES = %w[original recommended].freeze
+    # The game's battle as written, and written for the lowest call cost.
+    STYLES = %w[original ideal].freeze
     SCENES = { ruby: "res://src/battle.tscn", gdscript: "res://gd/battle.tscn" }.freeze
     WAVE = 100
     ROUNDS = 10

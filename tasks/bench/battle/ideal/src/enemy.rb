@@ -1,4 +1,4 @@
-# The enemy of src/enemy.rb written as the call-cost analysis recommends: its
+# The enemy of src/enemy.rb written for the lowest call cost: its
 # position kept in Ruby and only written back, and moved by the battle rather
 # than by a callback of its own.
 class Enemy < Godot::Node2D

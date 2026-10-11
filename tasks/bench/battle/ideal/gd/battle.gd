@@ -1,5 +1,5 @@
 extends Node2D
-## The GDScript twin of the recommended src/battle.rb, line for line.
+## The GDScript twin of the ideal src/battle.rb, line for line.
 
 signal finished
 

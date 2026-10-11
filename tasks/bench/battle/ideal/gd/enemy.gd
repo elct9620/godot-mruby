@@ -1,5 +1,5 @@
 extends Node2D
-## The GDScript twin of the recommended src/enemy.rb, line for line.
+## The GDScript twin of the ideal src/enemy.rb, line for line.
 
 signal arrived
 

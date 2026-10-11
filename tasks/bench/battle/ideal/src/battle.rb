@@ -1,6 +1,6 @@
-# The battle of src/battle.rb written as the call-cost analysis recommends:
-# it keeps its enemies in Ruby and moves them all in one callback, after the
-# turret has fired, as their own callbacks did.
+# The battle of src/battle.rb written for the lowest call cost, to time what
+# Ruby can reach: it keeps its enemies in Ruby and moves them all in one
+# callback, after the turret has fired, as their own callbacks did.
 class Battle < Godot::Node2D
   signal :finished
 
