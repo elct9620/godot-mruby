@@ -99,7 +99,7 @@ fn make(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
     let class_db = ClassDb::singleton();
     if !class_db.can_instantiate(name) {
         let message = format!("the engine makes no objects of {path}");
-        return Err(not_implemented_error(mrb, &message));
+        return Err(make_not_implemented_error(mrb, &message));
     }
     let object = class_db.instantiate(name).to::<Gd<Object>>();
     Ok(mrb.wrap_as(EngineObject(object), class).as_value())
@@ -128,7 +128,7 @@ fn make_node(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
             "no node script defines {}, so it makes no node",
             class_name()
         );
-        return Err(not_implemented_error(mrb, &message));
+        return Err(make_not_implemented_error(mrb, &message));
     };
     let mut node = ClassDb::singleton()
         .instantiate(&script.get_instance_base_type())
@@ -137,10 +137,10 @@ fn make_node(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
     if node.get_script().is_none() {
         node.free();
         let message = format!("{}'s script refused its node here", class_name());
-        return Err(not_implemented_error(mrb, &message));
+        return Err(make_not_implemented_error(mrb, &message));
     }
     let object = mrb.wrap_as(EngineObject(node.clone()), class).as_value();
-    realm::hold(mrb, node_key(node.instance_id()), object)?;
+    realm::hold(mrb, derive_node_key(node.instance_id()), object)?;
     Ok(object)
 }
 
@@ -166,7 +166,7 @@ fn initialize_copy(mrb: &Mrb, copy: RTypedData, original: Value) -> Result<RType
 // engine object although that object is freed or not of the engine class
 // `class` extends, whose methods `class` calls on it.
 fn check_stands_for(mrb: &Mrb, class: RClass, owner: &EngineObject) -> Result<(), Error> {
-    let extended = engine_ancestor(mrb, class).unwrap_or_default();
+    let extended = find_engine_ancestor(mrb, class).unwrap_or_default();
     if owner.0.is_instance_valid() && owner.0.is_class(extended.as_str()) {
         return Ok(());
     }
@@ -174,12 +174,12 @@ fn check_stands_for(mrb: &Mrb, class: RClass, owner: &EngineObject) -> Result<()
         "{} stands only for a live {extended}",
         class.path(mrb).unwrap_or_default()
     );
-    Err(type_error(mrb, &message))
+    Err(make_type_error(mrb, &message))
 }
 
 /// The key a realm holds a node's Ruby object under: its instance id, which
 /// is positive, since only a reference-counted object's id is negative.
-pub fn node_key(node: InstanceId) -> Key {
+pub fn derive_node_key(node: InstanceId) -> Key {
     Key::from(node.to_i64())
 }
 
@@ -208,7 +208,7 @@ impl IntoValue for Owner {
 fn resolve(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
     let held = <&EngineObject>::try_convert(receiver, mrb)?;
     let name = name.name(mrb).unwrap_or_default();
-    let object = held.live_object(mrb, &name)?;
+    let object = held.borrow_live_object(mrb, &name)?;
     let class = StringName::from(&object.get_class());
     let mut class_db = ClassDb::singleton();
     let property = if let Some(property) = name.strip_suffix('=') {
@@ -227,7 +227,7 @@ fn resolve(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
     if target.is_empty() {
         return Ok(qnil().as_value());
     }
-    let extended = engine_ancestor(mrb, receiver.class(mrb));
+    let extended = find_engine_ancestor(mrb, receiver.class(mrb));
     // A setter takes the value beside any index, a getter nothing more.
     let takes_index = |accessor: &str| {
         let values = usize::from(accessor == "set");
@@ -238,7 +238,7 @@ fn resolve(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
             let extended = StringName::from(extended.as_str());
             accessor_by_property(&mut class_db, &extended, property, accessor).to_string() == target
         });
-        return indexed_property(mrb, accessor, property, declared);
+        return resolve_indexed_property(mrb, accessor, property, declared);
     }
     let extended =
         extended.filter(|extended| class_db.class_has_method(extended.as_str(), target.as_str()));
@@ -271,7 +271,7 @@ fn accessor_by_property(
 // extends has a method or property a call of `name` reaches, for an object
 // that has no live engine object to ask.
 fn declares(mrb: &Mrb, class: RClass, name: Symbol) -> bool {
-    let Some(extended) = engine_ancestor(mrb, class) else {
+    let Some(extended) = find_engine_ancestor(mrb, class) else {
         return false;
     };
     let name = name.name(mrb).unwrap_or_default();
@@ -292,7 +292,7 @@ fn declares(mrb: &Mrb, class: RClass, name: Symbol) -> bool {
 // index the property's name stands for: the engine's `get` or `set`, called
 // by name with the property's name ahead of the arguments, and whether the
 // engine class the receiver's Ruby class extends declares the property.
-fn indexed_property(
+fn resolve_indexed_property(
     mrb: &Mrb,
     accessor: &str,
     property: &str,
@@ -314,7 +314,7 @@ fn indexed_property(
 // `bound` with the arguments given and answers what it returns.
 fn call_bound(mrb: &Mrb, held: &EngineObject, args: &[Value]) -> Result<Value, Error> {
     let Some((&bound, args)) = args.split_first() else {
-        return Err(argument_error(mrb, &count_message(0, 1)));
+        return Err(make_argument_error(mrb, &describe_count(0, 1)));
     };
     let bound = <&BoundMethod>::try_convert(bound, mrb)?;
     call_bind(mrb, super::data(mrb), held, bound, args.iter().copied())
@@ -342,12 +342,12 @@ fn call_bind(
     args: impl IntoIterator<Item = Value>,
 ) -> Result<Value, Error> {
     let args = to_arguments(mrb, data, args)?;
-    let object = held.live_object(mrb, bound.name())?;
+    let object = held.borrow_live_object(mrb, bound.name())?;
     let answer = bound.call(object, &args).map_err(|error| {
         let base = object.get_class().to_string();
-        refusal_error(mrb, &error, bound.name(), &base, &args, Some(bound.arity()))
+        make_refusal_error(mrb, &error, bound.name(), &base, &args, Some(bound.arity()))
     })?;
-    ruby_answer(mrb, data, &answer)
+    convert_answer(mrb, data, &answer)
 }
 
 // Godot::Object.__shape__(bound): how many arguments the engine method
@@ -369,12 +369,12 @@ fn call(mrb: &Mrb, held: &EngineObject, name: Symbol, args: RArray) -> Result<Va
     let data = super::data(mrb);
     let name = name_by_symbol(mrb, name);
     let args = to_arguments(mrb, data, args.entries(mrb))?;
-    let mut object = held.live_object(mrb, &name)?.clone();
+    let mut object = held.borrow_live_object(mrb, &name)?.clone();
     let answer = object.try_call(&name, &args).map_err(|error| {
         let base = object.get_class().to_string();
         call_refusal(mrb, &error, &base, &name.to_string(), args.len())
     })?;
-    ruby_answer(mrb, data, &answer)
+    convert_answer(mrb, data, &answer)
 }
 
 /// The engine's name `symbol` spells, made once for a realm, since making
@@ -412,7 +412,7 @@ fn instance_id(_mrb: &Mrb, held: &EngineObject) -> i64 {
 // engine class, or nil when the engine keeps none. The engine is asked
 // first, since it reports a singleton it lacks as an error.
 fn singleton(mrb: &Mrb, class: RClass) -> Value {
-    let name = engine_name(mrb, class);
+    let name = read_engine_name(mrb, class);
     let engine = Engine::singleton();
     if !engine.has_singleton(&name) {
         return qnil().as_value();
@@ -427,25 +427,25 @@ fn singleton(mrb: &Mrb, class: RClass) -> Value {
 // has a method of that name to call on the class.
 fn has_static_method(mrb: &Mrb, class: RClass, name: Symbol) -> bool {
     let name = name.name(mrb).unwrap_or_default();
-    ClassDb::singleton().class_has_method(&engine_name(mrb, class), name.as_str())
+    ClassDb::singleton().class_has_method(&read_engine_name(mrb, class), name.as_str())
 }
 
 // Godot::Object.__call_static__(name, args): calls the static method `name`
 // of the receiver's engine class with `args`.
 fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<Value, Error> {
     let name = name_by_symbol(mrb, name);
-    let class = engine_name(mrb, class);
+    let class = read_engine_name(mrb, class);
     let data = super::data(mrb);
     let args = to_arguments(mrb, data, args.entries(mrb))?;
     let answer = ClassDb::singleton()
         .try_class_call_static(&class, &name, &args)
         .map_err(|error| call_refusal(mrb, &error, &class, &name.to_string(), args.len()))?;
-    ruby_answer(mrb, data, &answer)
+    convert_answer(mrb, data, &answer)
 }
 
 // What the engine answered, as Ruby is given it, or the Godot::CallError an
 // answer that cannot reach Ruby raises.
-fn ruby_answer(mrb: &Mrb, data: &BridgeData, answer: &Variant) -> Result<Value, Error> {
+fn convert_answer(mrb: &Mrb, data: &BridgeData, answer: &Variant) -> Result<Value, Error> {
     ToRuby::try_new(answer)
         .map(|answer| answer.into_ruby(mrb, data))
         .map_err(|reason| call_error(mrb, &reason))
@@ -456,15 +456,15 @@ fn ruby_answer(mrb: &Mrb, data: &BridgeData, answer: &Variant) -> Result<Value, 
 /// when that name holds no engine class. Only a node is held
 /// under its instance id, and a reference-counted object, never a node, is
 /// not looked for: its id is negative, as the keys the realm names itself.
-pub(super) fn ruby_object(mrb: &Mrb, data: &BridgeData, object: Gd<Object>) -> Value {
+pub(super) fn wrap_object(mrb: &Mrb, data: &BridgeData, object: Gd<Object>) -> Value {
     let id = object.instance_id();
     if !id.is_ref_counted()
-        && let Some(held) = realm::object_by_key(mrb, node_key(id))
+        && let Some(held) = realm::object_by_key(mrb, derive_node_key(id))
     {
         return held;
     }
-    let class =
-        class_by_name(mrb, data, exposed_class(&object)).unwrap_or_else(|| object_class(mrb, data));
+    let class = class_by_name(mrb, data, find_exposed_class(&object))
+        .unwrap_or_else(|| object_class(mrb, data));
     mrb.wrap_as(EngineObject(object), class).as_value()
 }
 
@@ -489,7 +489,7 @@ fn class_by_name(mrb: &Mrb, data: &BridgeData, name: StringName) -> Option<RClas
 // The name of the nearest class of `object` the engine exposes to
 // extensions, which is the object's own class unless the engine keeps that
 // one hidden.
-fn exposed_class(object: &Gd<Object>) -> StringName {
+fn find_exposed_class(object: &Gd<Object>) -> StringName {
     let mut name = StringName::default();
     // SAFETY: the interface is initialized while the extension runs and
     // `object` is alive; the name it writes over is empty, so it holds
@@ -539,24 +539,24 @@ fn declare_export(
     let keyword = match hint.as_str() {
         "type" => None,
         keyword => {
-            Some(Hint::from_keyword(keyword).map_err(|reason| argument_error(mrb, &reason))?)
+            Some(Hint::from_keyword(keyword).map_err(|reason| make_argument_error(mrb, &reason))?)
         }
     };
     let data = super::data(mrb);
-    let default =
-        value::to_engine(mrb, data, default, 1).map_err(|reason| argument_error(mrb, &reason))?;
-    let written =
-        value::to_engine(mrb, data, written, 1).map_err(|reason| argument_error(mrb, &reason))?;
-    if let Some(engine_class) = engine_member(mrb, class, &name) {
+    let default = value::to_engine(mrb, data, default, 1)
+        .map_err(|reason| make_argument_error(mrb, &reason))?;
+    let written = value::to_engine(mrb, data, written, 1)
+        .map_err(|reason| make_argument_error(mrb, &reason))?;
+    if let Some(engine_class) = find_engine_member(mrb, class, &name) {
         let message =
             format!("Member \"{name}\" redefined (original in native class '{engine_class}')");
-        return Err(argument_error(mrb, &message));
+        return Err(make_argument_error(mrb, &message));
     }
     let property = match keyword {
-        None => property_of_class(mrb, name, &default, &written.to_string()),
-        Some(hint) => property_of_value(name, &default, hint, &written),
+        None => declare_class_property(mrb, name, &default, &written.to_string()),
+        Some(hint) => declare_value_property(name, &default, hint, &written),
     }
-    .map_err(|reason| argument_error(mrb, &reason))?;
+    .map_err(|reason| make_argument_error(mrb, &reason))?;
     realm::declare_export(mrb, class, property)?;
     Ok(qnil().as_value())
 }
@@ -582,14 +582,14 @@ fn declare_heading(mrb: &Mrb, _class: RClass, name: String, prefix: String, kind
 // it names, which Godot fills in from the scene or the project's files. The
 // value it is declared with is the class's own to hold, so a value of
 // another type is refused as GDScript refuses a mismatched one.
-fn property_of_class(
+fn declare_class_property(
     mrb: &Mrb,
     name: String,
     default: &Variant,
     class: &str,
 ) -> Result<Property, String> {
     let (hint, class_name) = hint_by_class(mrb, class)?;
-    if let Some(given) = mismatch(mrb, default, class) {
+    if let Some(given) = describe_mismatch(mrb, default, class) {
         return Err(format!(
             "Cannot assign a value of type {given} to variable \"{name}\" with specified type {class_name}."
         ));
@@ -600,7 +600,7 @@ fn property_of_class(
 // What the value an export was declared with is, unless the class it names
 // takes it: nothing at all, which is what Godot fills in, or an object of
 // that class, a class descending from it included.
-fn mismatch(mrb: &Mrb, default: &Variant, class: &str) -> Option<String> {
+fn describe_mismatch(mrb: &Mrb, default: &Variant, class: &str) -> Option<String> {
     let kind = default.get_type();
     if kind == VariantType::NIL {
         return None;
@@ -623,13 +623,13 @@ fn is_of_class(mrb: &Mrb, object: &Gd<Object>, class: &str) -> bool {
     let Some(file) = realm::file_by_constant(mrb, &names) else {
         return false;
     };
-    script_files(object).any(|path| path == file)
+    collect_script_files(object).any(|path| path == file)
 }
 
 // The name `object`'s own class is known by: the one its node script is
 // announced under, or the engine class it is of.
 fn resolve_class_name(object: &Gd<Object>) -> String {
-    script_files(object)
+    collect_script_files(object)
         .next()
         .and_then(|path| editor_name_by_path(&path))
         .unwrap_or_else(|| object.get_class().to_string())
@@ -637,7 +637,7 @@ fn resolve_class_name(object: &Gd<Object>) -> String {
 
 // The files `object`'s script is written in, nearest first: its own and the
 // ones it inherits from, as Godot answers for them.
-fn script_files(object: &Gd<Object>) -> impl Iterator<Item = String> {
+fn collect_script_files(object: &Gd<Object>) -> impl Iterator<Item = String> {
     let mut script = object.get_script().map(Gd::upcast::<Script>);
     std::iter::from_fn(move || {
         let written = script.take()?;
@@ -649,7 +649,7 @@ fn script_files(object: &Gd<Object>) -> impl Iterator<Item = String> {
 // The property an export naming no type declares: its type is the declared
 // value's, so a value naming none is refused, and the keyword naming a hint
 // tells the editor how to show it.
-fn property_of_value(
+fn declare_value_property(
     name: String,
     default: &Variant,
     hint: Hint,
@@ -676,7 +676,7 @@ fn hint_by_class(mrb: &Mrb, class: &str) -> Result<(PropertyHint, String), Strin
     if let Some(engine_class) = class.strip_prefix("Godot::") {
         let class_db = ClassDb::singleton();
         if !class_db.class_exists(engine_class) {
-            return Err(unknown_type(class));
+            return Err(describe_unknown_type(class));
         }
         if class_db.is_parent_class(engine_class, "Resource") {
             return Ok((PropertyHint::RESOURCE_TYPE, engine_class.to_owned()));
@@ -686,14 +686,14 @@ fn hint_by_class(mrb: &Mrb, class: &str) -> Result<(PropertyHint, String), Strin
         }
         return Err("Export type can only be built-in, a resource, a node, or an enum.".to_owned());
     }
-    editor_name(mrb, class)
+    find_editor_name(mrb, class)
         .map(|name| (PropertyHint::NODE_TYPE, name))
-        .ok_or_else(|| unknown_type(class))
+        .ok_or_else(|| describe_unknown_type(class))
 }
 
 // The name the editor lists the Ruby class `class` under, if a node script
 // of the project defines it and nothing else is announced by that name.
-fn editor_name(mrb: &Mrb, class: &str) -> Option<String> {
+fn find_editor_name(mrb: &Mrb, class: &str) -> Option<String> {
     let names: Vec<String> = class.split("::").map(str::to_owned).collect();
     editor_name_by_path(&realm::file_by_constant(mrb, &names)?)
 }
@@ -706,15 +706,15 @@ fn editor_name_by_path(path: &str) -> Option<String> {
 }
 
 // GDScript's words for a type nothing in the project is known by.
-fn unknown_type(class: &str) -> String {
+fn describe_unknown_type(class: &str) -> String {
     format!("The class \"{class}\" was not found in the global scope.")
 }
 
 // The engine class `class` extends that has a member of that name, if one
 // has: a signal, a property or an integer constant, which is what GDScript
 // refuses a member for redefining.
-fn engine_member(mrb: &Mrb, class: RClass, name: &str) -> Option<String> {
-    let engine_class = engine_ancestor(mrb, class)?;
+fn find_engine_member(mrb: &Mrb, class: RClass, name: &str) -> Option<String> {
+    let engine_class = find_engine_ancestor(mrb, class)?;
     let mut class_db = ClassDb::singleton();
     let has = class_db.class_has_signal(engine_class.as_str(), name)
         || class_db.class_has_integer_constant(engine_class.as_str(), name)
@@ -729,7 +729,7 @@ fn engine_member(mrb: &Mrb, class: RClass, name: &str) -> Option<String> {
 
 // The engine class `class` extends, itself or through its superclasses, as
 // the engine names it.
-fn engine_ancestor(mrb: &Mrb, class: RClass) -> Option<String> {
+fn find_engine_ancestor(mrb: &Mrb, class: RClass) -> Option<String> {
     let mut current = class;
     loop {
         let path = current.path(mrb)?;
@@ -744,7 +744,7 @@ fn engine_ancestor(mrb: &Mrb, class: RClass) -> Option<String> {
 // value of that name the receiver's engine class has, or nil.
 fn engine_constant(mrb: &Mrb, class: RClass, name: Symbol) -> Value {
     let name = name.name(mrb).unwrap_or_default();
-    let class = engine_name(mrb, class);
+    let class = read_engine_name(mrb, class);
     let class_db = ClassDb::singleton();
     if !class_db.class_has_integer_constant(&class, name.as_str()) {
         return qnil().as_value();
@@ -755,7 +755,7 @@ fn engine_constant(mrb: &Mrb, class: RClass, name: Symbol) -> Value {
 }
 
 // The engine class an engine class under Godot stands for.
-fn engine_name(mrb: &Mrb, class: RClass) -> String {
+fn read_engine_name(mrb: &Mrb, class: RClass) -> String {
     let path = class.path(mrb).unwrap_or_default();
     path.strip_prefix("Godot::").unwrap_or(&path).to_owned()
 }
@@ -773,7 +773,7 @@ pub(super) fn to_arguments(
 ) -> Result<Arguments, Error> {
     args.into_iter()
         .map(|arg| {
-            value::to_engine(mrb, data, arg, 1).map_err(|reason| argument_error(mrb, &reason))
+            value::to_engine(mrb, data, arg, 1).map_err(|reason| make_argument_error(mrb, &reason))
         })
         .collect()
 }
@@ -791,7 +791,7 @@ impl EngineObject {
     // The engine object, lent rather than copied since a copy checks it
     // again, or the Godot::CallError calling `method` on a freed one raises,
     // worded as GDScript words it.
-    fn live_object(
+    fn borrow_live_object(
         &self,
         mrb: &Mrb,
         method: &(impl fmt::Display + ?Sized),
@@ -807,7 +807,7 @@ impl EngineObject {
     }
 }
 
-// The error a call the engine refused raises, as `refusal_error` sorts it.
+// The error a call the engine refused raises, as `make_refusal_error` sorts it.
 // gdext hands the engine's reason only as text, so the expected count, the
 // argument and the types are read back from it; the count names those the
 // method requires, as the class database lists them.
@@ -816,12 +816,15 @@ fn call_refusal(mrb: &Mrb, error: &CallError, base: &str, method: &str, given: u
     let reason = reason.rsplit("Reason: ").next().unwrap_or_default();
     if let Some(expected) = parse_parameter_count(reason) {
         let message = Arity::find(base, method).map_or_else(
-            || count_message(given, expected),
-            |arity| count_message(given, arity.required),
+            || describe_count(given, expected),
+            |arity| describe_count(given, arity.required),
         );
-        argument_error(mrb, &message)
-    } else if let Some((argument, from, to)) = conversion(reason) {
-        type_error(mrb, &type_message(method, base, argument, &from, &to))
+        make_argument_error(mrb, &message)
+    } else if let Some((argument, from, to)) = parse_conversion(reason) {
+        make_type_error(
+            mrb,
+            &describe_type_refusal(method, base, argument, &from, &to),
+        )
     } else {
         call_error(
             mrb,
@@ -835,7 +838,7 @@ fn call_refusal(mrb: &Mrb, error: &CallError, base: &str, method: &str, given: u
 /// mruby words it, naming those the method's `arity` requires when it is
 /// known; TypeError for an argument's type, worded as GDScript's
 /// untyped call; Godot::CallError for what Ruby has no error for.
-pub(super) fn refusal_error(
+pub(super) fn make_refusal_error(
     mrb: &Mrb,
     error: &sys::GDExtensionCallError,
     method: &str,
@@ -850,21 +853,21 @@ pub(super) fn refusal_error(
                 .get(index)
                 .map_or_else(String::new, |arg| type_name(arg.get_type()));
             let to = type_name(<VariantType as EngineEnum>::from_ord(error.expected));
-            type_error(
+            make_type_error(
                 mrb,
-                &type_message(method, base, &(index + 1).to_string(), &from, &to),
+                &describe_type_refusal(method, base, &(index + 1).to_string(), &from, &to),
             )
         }
         sys::GDEXTENSION_CALL_ERROR_TOO_MANY_ARGUMENTS
         | sys::GDEXTENSION_CALL_ERROR_TOO_FEW_ARGUMENTS => {
             let message = match arity {
                 Some(arity) if arity.is_vararg && args.len() >= arity.required => {
-                    forwarded_count_message(error, base, args, arity)
+                    describe_forwarded_count(error, base, args, arity)
                 }
-                Some(arity) => count_message(args.len(), arity.required),
-                None => count_message(args.len(), error.expected),
+                Some(arity) => describe_count(args.len(), arity.required),
+                None => describe_count(args.len(), error.expected),
             };
-            argument_error(mrb, &message)
+            make_argument_error(mrb, &message)
         }
         _ => call_error(
             mrb,
@@ -877,7 +880,7 @@ pub(super) fn refusal_error(
 // number, which `Arity::check` let through: the method forwarded the
 // arguments past those it requires to the method its first one names, as
 // `call` does, so the words name that method's count, as Ruby's `send` does.
-fn forwarded_count_message(
+fn describe_forwarded_count(
     error: &sys::GDExtensionCallError,
     base: &str,
     args: &[Variant],
@@ -889,16 +892,16 @@ fn forwarded_count_message(
         .and_then(|name| name.try_to::<StringName>().ok())
         .and_then(|name| Arity::find(base, &name.to_string()))
         .map_or(error.expected as usize, |method| method.required);
-    count_message(forwarded, required)
+    describe_count(forwarded, required)
 }
 
 /// Ruby's words for a call given `given` arguments where `expected` are taken.
-pub(super) fn count_message(given: usize, expected: impl fmt::Display) -> String {
+pub(super) fn describe_count(given: usize, expected: impl fmt::Display) -> String {
     format!("wrong number of arguments (given {given}, expected {expected})")
 }
 
 // GDScript's words for a call given an argument of a type it cannot take.
-fn type_message(method: &str, base: &str, argument: &str, from: &str, to: &str) -> String {
+fn describe_type_refusal(method: &str, base: &str, argument: &str, from: &str, to: &str) -> String {
     format!(
         "Invalid type in function '{method}' in base '{base}'. \
          Cannot convert argument {argument} from {from} to {to}."
@@ -915,7 +918,7 @@ fn parse_parameter_count(reason: &str) -> Option<&str> {
 
 // "parameter #I -- cannot convert from FROM to TO": I and the two types as
 // GDScript names them.
-fn conversion(reason: &str) -> Option<(&str, String, String)> {
+fn parse_conversion(reason: &str) -> Option<(&str, String, String)> {
     let (argument, types) = reason
         .strip_prefix("parameter #")?
         .split_once(" -- cannot convert from ")?;
@@ -931,28 +934,28 @@ fn type_name_by_debug(debug: &str) -> Option<String> {
         .map(|kind| type_string(i64::from(kind.ord)).to_string())
 }
 
-pub(super) fn type_error(mrb: &Mrb, message: &str) -> Error {
+pub(super) fn make_type_error(mrb: &Mrb, message: &str) -> Error {
     match mrb.exc_get(c"TypeError") {
         Ok(class) => Error::new(mrb, class, message),
         Err(error) => error,
     }
 }
 
-pub(super) fn zero_division_error(mrb: &Mrb, message: &str) -> Error {
+pub(super) fn make_zero_division_error(mrb: &Mrb, message: &str) -> Error {
     match mrb.exc_get(c"ZeroDivisionError") {
         Ok(class) => Error::new(mrb, class, message),
         Err(error) => error,
     }
 }
 
-pub(super) fn argument_error(mrb: &Mrb, message: &str) -> Error {
+pub(super) fn make_argument_error(mrb: &Mrb, message: &str) -> Error {
     match mrb.exc_get(c"ArgumentError") {
         Ok(class) => Error::new(mrb, class, message),
         Err(error) => error,
     }
 }
 
-fn not_implemented_error(mrb: &Mrb, message: &str) -> Error {
+fn make_not_implemented_error(mrb: &Mrb, message: &str) -> Error {
     match mrb.exc_get(c"NotImplementedError") {
         Ok(class) => Error::new(mrb, class, message),
         Err(error) => error,

@@ -210,7 +210,7 @@ fn find_info(class_db: &Gd<ClassDb>, declarer: &StringName, method: &str) -> Opt
 // methods include `method`.
 /// The engine class that binds `method` among `class` and its ancestors,
 /// nearest first, as GDScript names the native class a method overrides.
-pub fn method_declarer(class: &str, method: &str) -> Option<String> {
+pub fn find_method_declarer(class: &str, method: &str) -> Option<String> {
     find_declarer(&ClassDb::singleton(), class, method).map(|declarer| declarer.to_string())
 }
 

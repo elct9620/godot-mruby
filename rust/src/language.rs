@@ -172,7 +172,7 @@ impl IScriptLanguageExtension for RubyLanguage {
             &settings::template_directory(),
             &validation::EngineClasses {
                 is_node: &bridge::is_node_class,
-                method_declarer: &bridge::method_declarer,
+                method_declarer: &bridge::find_method_declarer,
             },
             &path.to_string(),
             &script.to_string(),

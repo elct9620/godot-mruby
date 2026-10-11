@@ -25,8 +25,8 @@ mod utility;
 mod value;
 mod value_type;
 
-pub use bound_method::method_declarer;
-pub use object::{Owner, node_key};
+pub use bound_method::find_method_declarer;
+pub use object::{Owner, derive_node_key};
 pub use value::{ToEngine, ToRuby};
 
 const FILE: &std::ffi::CStr = c"godot_mruby/bridge/godot.rb";
@@ -133,13 +133,13 @@ fn fill_copy<T: TypedData + Clone>(
         .is_equal(mrb, class.as_value());
     if !same_class {
         let message = "initialize_copy should take same class object";
-        return Err(object::type_error(mrb, message));
+        return Err(object::make_type_error(mrb, message));
     }
     let carried = <&T>::try_convert(original, mrb)?;
     admit(class, carried)?;
     copy.init(mrb, carried.clone()).map(|()| copy).map_err(|_| {
         let path = class.path(mrb).unwrap_or_default();
-        object::type_error(mrb, &format!("{path} is already initialized"))
+        object::make_type_error(mrb, &format!("{path} is already initialized"))
     })
 }
 

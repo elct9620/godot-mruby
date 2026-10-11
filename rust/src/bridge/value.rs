@@ -33,7 +33,7 @@ pub struct ToRuby<'a>(&'a Variant);
 impl<'a> ToRuby<'a> {
     /// `variant` for Ruby, or why it cannot reach Ruby.
     pub fn try_new(variant: &'a Variant) -> Result<Self, String> {
-        match unreachable_reason(variant) {
+        match find_unreachable_reason(variant) {
             Some(reason) => Err(reason),
             None => Ok(Self(variant)),
         }
@@ -55,7 +55,7 @@ impl IntoValue for ToRuby<'_> {
 
 // Why an engine value cannot reach Ruby, if it cannot: a container nested
 // too deep, or holding itself.
-fn unreachable_reason(variant: &Variant) -> Option<String> {
+fn find_unreachable_reason(variant: &Variant) -> Option<String> {
     fn is_shallow(variant: &Variant, level: usize) -> bool {
         if level > DEPTH {
             return false;
@@ -86,8 +86,8 @@ fn to_ruby(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> Value {
         VariantType::STRING => mrb
             .str_new(variant.to::<GString>().to_string().as_bytes())
             .as_value(),
-        VariantType::STRING_NAME => symbol(mrb, &variant.to::<StringName>().to_string()),
-        VariantType::ARRAY => array(mrb, data, variant.to::<AnyArray>().iter_shared()),
+        VariantType::STRING_NAME => intern_symbol(mrb, &variant.to::<StringName>().to_string()),
+        VariantType::ARRAY => make_array(mrb, data, variant.to::<AnyArray>().iter_shared()),
         VariantType::DICTIONARY => {
             let hash = mrb.hash_new();
             for (key, value) in variant.to::<AnyDictionary>().iter_shared() {
@@ -108,12 +108,12 @@ fn to_ruby(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> Value {
                 match object.try_cast::<RubyObject>() {
                     Ok(held) => realm::object_by_key(mrb, held.bind().key())
                         .unwrap_or_else(|| qnil().as_value()),
-                    Err(object) => object::ruby_object(mrb, data, object),
+                    Err(object) => object::wrap_object(mrb, data, object),
                 }
             }
-            Some(object) => object::ruby_object(mrb, data, object),
+            Some(object) => object::wrap_object(mrb, data, object),
         },
-        kind if value_type::is_value_type(kind) => value_type::ruby_value(mrb, data, variant),
+        kind if value_type::is_value_type(kind) => value_type::wrap_variant(mrb, data, variant),
         VariantType::PACKED_BYTE_ARRAY => from_packed::<u8>(mrb, data, variant),
         VariantType::PACKED_INT32_ARRAY => from_packed::<i32>(mrb, data, variant),
         VariantType::PACKED_INT64_ARRAY => from_packed::<i64>(mrb, data, variant),
@@ -128,12 +128,12 @@ fn to_ruby(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> Value {
     }
 }
 
-fn symbol(mrb: &Mrb, name: &str) -> Value {
+fn intern_symbol(mrb: &Mrb, name: &str) -> Value {
     mrb.intern(name.as_bytes())
         .map_or_else(|_| qnil().as_value(), |id| Symbol::from(id).as_value())
 }
 
-fn array(mrb: &Mrb, data: &BridgeData, elements: impl Iterator<Item = Variant>) -> Value {
+fn make_array(mrb: &Mrb, data: &BridgeData, elements: impl Iterator<Item = Variant>) -> Value {
     let values: Vec<Value> = elements
         .map(|element| to_ruby(mrb, data, &element))
         .collect();
@@ -142,7 +142,7 @@ fn array(mrb: &Mrb, data: &BridgeData, elements: impl Iterator<Item = Variant>) 
 
 fn from_packed<T: PackedElement>(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> Value {
     let packed = variant.to::<PackedArray<T>>();
-    array(mrb, data, packed.as_slice().iter().map(ToGodot::to_variant))
+    make_array(mrb, data, packed.as_slice().iter().map(ToGodot::to_variant))
 }
 
 /// A Ruby value as the engine takes it. Its Variant follows the Ruby value's
@@ -236,7 +236,7 @@ pub fn to_engine(
     let class = value.classname(mrb);
     let key = realm::hold_new(mrb, value).map_err(|error| error.message(mrb))?;
     if Proc::from_value(value).is_some() || class == "Method" {
-        return Ok(ruby_object::callable(key, class).to_variant());
+        return Ok(ruby_object::make_callable(key, class).to_variant());
     }
     Ok(RubyObject::new(key, &class).to_variant())
 }

@@ -24,7 +24,8 @@ use smallvec::SmallVec;
 use super::BridgeData;
 use super::bound_member::BoundMember;
 use super::object::{
-    argument_error, count_message, name_by_symbol, to_arguments, type_error, zero_division_error,
+    describe_count, make_argument_error, make_type_error, make_zero_division_error, name_by_symbol,
+    to_arguments,
 };
 use super::value::{self, ToRuby};
 use crate::hint::type_name;
@@ -121,7 +122,7 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
 
 /// The Ruby value for a value of a value type: a value of its class under
 /// Godot.
-pub(super) fn ruby_value(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> Value {
+pub(super) fn wrap_variant(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> Value {
     let held = match variant.get_type() {
         VariantType::VECTOR2 => EngineValue::Vector2(variant.to()),
         _ => EngineValue::Held(variant.clone()),
@@ -214,7 +215,7 @@ fn kind_by_class(mrb: &Mrb, data: &BridgeData, class: RClass) -> Result<VariantT
     let path = class.path(mrb).unwrap_or_default();
     let name = path.strip_prefix("Godot::").unwrap_or(&path);
     let kind = kind_by_name(name)
-        .ok_or_else(|| type_error(mrb, &format!("{path} is no value type of the engine")))?;
+        .ok_or_else(|| make_type_error(mrb, &format!("{path} is no value type of the engine")))?;
     if is_named_by_godot(mrb, class, name) {
         keep_class(mrb, data, kind, class);
     }
@@ -254,13 +255,13 @@ fn construct(mrb: &Mrb, class: RClass, args: &[Value]) -> Result<Value, Error> {
         )
     });
     match built {
-        Ok(built) => Ok(ruby_value(mrb, data, &built)),
+        Ok(built) => Ok(wrap_variant(mrb, data, &built)),
         Err(_) => {
             let message = format!(
                 "Invalid call. Nonexistent '{}' constructor.",
                 type_name(kind)
             );
-            Err(super::object::argument_error(mrb, &message))
+            Err(super::object::make_argument_error(mrb, &message))
         }
     }
 }
@@ -469,7 +470,7 @@ fn check_argument_count(
 ) -> Result<(), Error> {
     match count_required(kind, method) {
         Some(required) if given < required => {
-            Err(argument_error(mrb, &count_message(given, required)))
+            Err(make_argument_error(mrb, &describe_count(given, required)))
         }
         _ => Ok(()),
     }
@@ -509,7 +510,7 @@ fn take_answer(
     outcome
         .map(|answer| to_ruby(mrb, &answer))
         .map_err(|error| {
-            super::object::refusal_error(
+            super::object::make_refusal_error(
                 mrb,
                 &error,
                 &method.to_string(),
@@ -559,7 +560,7 @@ macro_rules! operators {
                 return Ok(answer);
             }
             let other =
-                value::to_engine(mrb, data, other, 1).map_err(|reason| type_error(mrb, &reason))?;
+                value::to_engine(mrb, data, other, 1).map_err(|reason| make_type_error(mrb, &reason))?;
             operate(mrb, held, VariantOperator::$op, $shown, &other)
         }
     )*};
@@ -764,14 +765,14 @@ fn operate(
     }
     if answer.get_type() == VariantType::STRING {
         let message = format!("{answer} in operator '{shown}'.");
-        return Err(zero_division_error(mrb, &message));
+        return Err(make_zero_division_error(mrb, &message));
     }
     let message = format!(
         "Invalid operands '{}' and '{}' in operator '{shown}'.",
         type_name(held.kind()),
         type_name(other.get_type())
     );
-    Err(type_error(mrb, &message))
+    Err(make_type_error(mrb, &message))
 }
 
 // A value of type `kind` as the engine's default constructor builds it: one

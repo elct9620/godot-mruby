@@ -25,7 +25,7 @@ impl Drop for Hold {
 }
 
 /// A Callable calling `call` on the Proc or Method `key` holds.
-pub fn callable(key: Key, name: String) -> Callable {
+pub fn make_callable(key: Key, name: String) -> Callable {
     let hold = Hold(key);
     Callable::from_sync_fn(name, move |args: &[&Variant]| call(&hold, args))
 }

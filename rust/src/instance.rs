@@ -287,7 +287,7 @@ impl Caller {
 
     // The key the realm holds the node's object under.
     fn key(&self) -> Key {
-        bridge::node_key(self.owner)
+        bridge::derive_node_key(self.owner)
     }
 
     // Whether building the node's object failed, so it never has one.

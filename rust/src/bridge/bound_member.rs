@@ -53,7 +53,7 @@ impl BoundMember {
         // SAFETY: the interface is initialized while the extension runs, and
         // the name lives for the call.
         let getter = unsafe {
-            sys::interface_fn!(variant_get_ptr_getter)(kind_sys(kind), name.string_sys())
+            sys::interface_fn!(variant_get_ptr_getter)(to_sys_kind(kind), name.string_sys())
         }?;
         let axis = match (kind, name.to_string().as_str()) {
             (VariantType::VECTOR2, "x") => Some(Vector2Axis::X),
@@ -85,36 +85,36 @@ impl BoundMember {
         // the getter writes, so each internal pointer is of the type the
         // getter takes.
         unsafe {
-            (self.getter)(internal(value), internal_mut(&mut answer));
+            (self.getter)(locate_data(value), locate_data_mut(&mut answer));
         }
         Some(answer)
     }
 }
 
-fn kind_sys(kind: VariantType) -> sys::GDExtensionVariantType {
+fn to_sys_kind(kind: VariantType) -> sys::GDExtensionVariantType {
     kind.ord as sys::GDExtensionVariantType
 }
 
 // The engine's pointer to the data `variant` holds, for reading.
-fn internal(variant: &Variant) -> sys::GDExtensionConstTypePtr {
+fn locate_data(variant: &Variant) -> sys::GDExtensionConstTypePtr {
     // SAFETY: the engine only computes where the data lies, writing nothing.
-    unsafe { internal_getter(variant.get_type())(variant.var_sys().cast_mut()) }
+    unsafe { find_data_getter(variant.get_type())(variant.var_sys().cast_mut()) }
         .cast_const()
         .cast()
 }
 
 // The engine's pointer to the data `variant` holds, for writing.
-fn internal_mut(variant: &mut Variant) -> sys::GDExtensionTypePtr {
+fn locate_data_mut(variant: &mut Variant) -> sys::GDExtensionTypePtr {
     let kind = variant.get_type();
     // SAFETY: the variant is borrowed mutably for the pointer's use.
-    unsafe { internal_getter(kind)(variant.var_sys_mut()) }.cast()
+    unsafe { find_data_getter(kind)(variant.var_sys_mut()) }.cast()
 }
 
 // The engine's function finding the data a variant of type `kind` holds.
-fn internal_getter(
+fn find_data_getter(
     kind: VariantType,
 ) -> unsafe extern "C" fn(sys::GDExtensionVariantPtr) -> *mut std::ffi::c_void {
     // SAFETY: the interface is initialized while the extension runs.
-    unsafe { sys::interface_fn!(variant_get_ptr_internal_getter)(kind_sys(kind)) }
+    unsafe { sys::interface_fn!(variant_get_ptr_internal_getter)(to_sys_kind(kind)) }
         .expect("the engine has an internal getter for every type")
 }

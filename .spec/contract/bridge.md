@@ -58,7 +58,7 @@ Whether the engine class a name spells is a node class, the only kind a node scr
 pub fn is_node_class(class: &str) -> bool {}
 ```
 
-## `node_key`
+## `derive_node_key`
 
 The key a realm holds a node's Ruby object under: the node's instance id, so the object is found from the node alone.
 
@@ -67,7 +67,7 @@ The key a realm holds a node's Ruby object under: the node's instance id, so the
 | internal | yes |
 
 ```rust
-pub fn node_key(node: InstanceId) -> Key {}
+pub fn derive_node_key(node: InstanceId) -> Key {}
 ```
 
 ## `Owner`
