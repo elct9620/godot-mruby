@@ -66,8 +66,6 @@ mruby carries only the gems `build_config/mruby.rb` lists, and none that reaches
 └─ .claude/hooks/          edit-time format, stop-time gate
 ```
 
-A module in `rust/src/` is named after the Godot extension point it implements, as `language` and `script` are, or after what it produces or does, as `header` and `bridge` are; one with parts of its own keeps them in a directory of its name.
-
 A `.rake` file is thin glue; what a task does lives in `tasks/support/`.
 
 Build output stays out of the repository: `vendor/` holds mruby's source and archives and the changed godot-cell (`tasks/support/godot_cell.rb`), `rust/target/` the crate's builds, `bin/` the installed library, and `pkg/` the package.
@@ -100,19 +98,7 @@ The extension is tested through itself, and `godot/` is sorted by who judges an 
 
 ### 1.5 Naming
 
-| What it is | Its name | As in |
-| --- | --- | --- |
-| A module or a type | a noun | `Snapshot` |
-| A kind of a type | an adjective and a noun, or a noun | `Heading::Category` |
-| A state a value is in | the state's adjective, a participle included | `Run::Running`, `Game::Closed` |
-| What answers a thing it holds, taking nothing | the thing's noun, as `player.name` | `name`, `digest` |
-| What finds a thing by a key | the noun, `_by_` and the key | `file_by_name` |
-| A question | `is_` or `has_`; in Ruby, `?` | `is_hidden`, `has_run` |
-| A new value or a conversion | `new`, `try_new`, `with_`, `from_`, `into_`; `to_` for one that borrows | `with_hint`, `to_engine` |
-| What works a thing out from what it is given | a verb, and the thing | `collect_members`, `read_name` |
-| What acts | a verb first, a state after it if any | `publish`, `release_queued` |
-
-A preposition names nothing, so no name ends in `_of`. Outside a state, a word ending in `-ing` or `-ed` is a name only where the dictionary lists it as a noun, as `heading` is, or after a verb, as in `release_queued`. A name another side fixes is kept as it is: Godot's virtuals, Ruby's hooks such as `const_added`, Minitest's `passed?`. A Rust function standing behind a Ruby method `__name__` is named `name`.
+Names follow the naming chapter of [`convention.md`](convention.md#1-naming).
 
 ## 2. Extension
 
