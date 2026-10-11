@@ -57,6 +57,7 @@ module GodotCell
 
   # Refuses a lockfile in which cargo builds any godot-cell but this copy, as
   # it does without a word when gdext comes to require another version.
+  # @behavior RB-002
   def check_lock
     entries = File.read(LOCK).split("[[package]]").select { |entry| entry.include?('name = "godot-cell"') }
     if entries.size == 1 && entries.first.include?(%(version = "#{VERSION}")) && !entries.first.include?("source =")
