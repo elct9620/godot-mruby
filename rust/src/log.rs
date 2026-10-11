@@ -45,7 +45,7 @@ impl realm::Log for GodotLog {
 
 /// Writes what the compiler warns about in `file`, Ruby the extension ships
 /// with, to Godot's log at its line.
-pub fn compiler_warnings(file: &CStr) -> impl FnMut(Warning) {
+pub fn write_compiler_warnings(file: &CStr) -> impl FnMut(Warning) {
     let file = file.to_string_lossy().into_owned();
     move |warning| {
         let at = Location {

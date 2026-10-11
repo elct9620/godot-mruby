@@ -20,11 +20,11 @@ module Notices
   # The licenses of what the libraries carry: mruby, linked from the archive
   # beni builds, and every crate the extension depends on at run time.
   def text
-    sections = [notice("mruby", File.join(Extension::VENDOR_DIR, "mruby"), "MIT")]
+    sections = [compose_notice("mruby", File.join(Extension::VENDOR_DIR, "mruby"), "MIT")]
     runtime_crates.each do |package|
-      sections << notice("#{package["name"]} #{package["version"]}",
-                         File.dirname(package["manifest_path"]), package["license"],
-                         CHANGES[package["name"]])
+      sections << compose_notice("#{package["name"]} #{package["version"]}",
+                                 File.dirname(package["manifest_path"]), package["license"],
+                                 CHANGES[package["name"]])
     end
 
     "This addon includes the following third-party software. The source of each\n" \
@@ -34,7 +34,7 @@ module Notices
 
   # Some crates publish no license file and state their license only in the
   # manifest and source headers; those point at the SPDX text instead.
-  def notice(title, dir, license, change = nil)
+  def compose_notice(title, dir, license, change = nil)
     texts = Dir.children(dir).grep(LICENSE_FILE).sort.map { |file| File.read(File.join(dir, file)) }
     if texts.empty?
       texts = ["No license file is published with this crate; the #{license} text is at https://spdx.org/licenses/\n"]

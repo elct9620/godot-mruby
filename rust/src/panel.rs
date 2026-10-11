@@ -123,21 +123,24 @@ impl RubyTestPanel {
             return;
         };
         let root = self.rows.create_item();
-        let errors = entries(&results, "errors");
-        let tests = entries(&results, "tests");
+        let errors = list_entries(&results, "errors");
+        let tests = list_entries(&results, "tests");
         for error in &errors {
-            self.add_row(root.as_ref(), "error", &text(error, "file"), error);
+            self.add_row(root.as_ref(), "error", &read_text(error, "file"), error);
         }
         for kind in ["failure", "error", "skip"] {
-            for test in tests.iter().filter(|test| text(test, "result") == kind) {
-                let name = format!("{}#{}", text(test, "class"), text(test, "name"));
+            for test in tests
+                .iter()
+                .filter(|test| read_text(test, "result") == kind)
+            {
+                let name = format!("{}#{}", read_text(test, "class"), read_text(test, "name"));
                 self.add_row(root.as_ref(), kind, &name, test);
             }
         }
         let count = |kind: &str| {
             tests
                 .iter()
-                .filter(|test| text(test, "result") == kind)
+                .filter(|test| read_text(test, "result") == kind)
                 .count()
         };
         self.status.set_text(&format!(
@@ -163,7 +166,7 @@ impl RubyTestPanel {
         };
         row.set_text(0, result);
         row.set_text(1, name);
-        let message = text(entry, "message");
+        let message = read_text(entry, "message");
         row.set_text(2, message.lines().next().unwrap_or_default());
         row.set_tooltip_text(2, &message);
         row.set_metadata(0, &entry.get_or_nil("file"));
@@ -225,7 +228,7 @@ fn results() -> Option<VarDictionary> {
         .ok()
 }
 
-fn entries(results: &VarDictionary, key: &str) -> Vec<VarDictionary> {
+fn list_entries(results: &VarDictionary, key: &str) -> Vec<VarDictionary> {
     results
         .get_or_nil(key)
         .try_to::<VarArray>()
@@ -239,7 +242,7 @@ fn entries(results: &VarDictionary, key: &str) -> Vec<VarDictionary> {
 }
 
 // A string an entry holds under `key`, or nothing when it holds none.
-fn text(entry: &VarDictionary, key: &str) -> String {
+fn read_text(entry: &VarDictionary, key: &str) -> String {
     entry
         .get(key)
         .filter(|value| !value.is_nil())

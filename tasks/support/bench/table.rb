@@ -54,7 +54,7 @@ module Bench
     def tabulate_battle(results, baseline)
       styles = results["battle"]
       [tabulate_spreads("battle, ms a round", styles, "%.1f", baseline&.fetch("battle", nil)), "",
-       judge_battle(styles, comparable(baseline, results["cpu"])&.fetch("battle", nil))].join("\n")
+       judge_battle(styles, select_comparable(baseline, results["cpu"])&.fetch("battle", nil))].join("\n")
     end
 
     # How far past main's ratio a battle's may grow before the gate marks it.
@@ -75,7 +75,7 @@ module Bench
 
     # `baseline` when it was measured on `cpu`, the only one whose ratios the
     # gate compares.
-    def comparable(baseline, cpu)
+    def select_comparable(baseline, cpu)
       baseline if baseline && baseline["cpu"] == cpu
     end
 

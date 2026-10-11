@@ -54,7 +54,7 @@ impl Gem for Godot {
             mrb,
             FILE,
             include_str!("bridge/godot.rb"),
-            log::compiler_warnings(FILE),
+            log::write_compiler_warnings(FILE),
         )
     }
 }

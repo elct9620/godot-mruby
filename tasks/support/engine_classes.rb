@@ -12,7 +12,7 @@ module Godot
 
     # @behavior RG-037
     def verify_release!(dir)
-      refusals = Release.refusals(dir, SCENE)
+      refusals = Release.collect_refusals(dir, SCENE)
       return if refusals == REFUSALS
 
       raise "The release build's bind was not refused #{REFUSALS}, only #{refusals}"

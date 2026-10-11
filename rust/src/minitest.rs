@@ -42,7 +42,7 @@ pub struct Minitest;
 impl Gem for Minitest {
     fn init(mrb: &Mrb) -> Result<(), Error> {
         for (path, source) in FILES {
-            compiler::run(mrb, path, source, log::compiler_warnings(path))?;
+            compiler::run(mrb, path, source, log::write_compiler_warnings(path))?;
         }
         mrb.module_get(c"Minitest")?
             .class_get(mrb, c"LogReporter")?

@@ -122,8 +122,8 @@ impl IScriptLanguageExtension for RubyLanguage {
         base_class_name: GString,
     ) -> Option<Gd<Script>> {
         let base = resolve_base(&base_class_name.to_string());
-        let superclass = template::superclass(&base, &GameFiles.roots());
-        let source = template::source(
+        let superclass = template::write_superclass(&base, &GameFiles.roots());
+        let source = template::write_source(
             &template.to_string(),
             &class_name.to_string(),
             &superclass,
@@ -133,7 +133,7 @@ impl IScriptLanguageExtension for RubyLanguage {
     }
 
     fn get_built_in_templates(&self, object: StringName) -> Array<AnyDictionary> {
-        template::built_ins(&object.to_string())
+        template::list_built_ins(&object.to_string())
             .map(|(id, template)| {
                 vdict! {
                     "inherit" => template.inherit,
@@ -180,12 +180,12 @@ impl IScriptLanguageExtension for RubyLanguage {
         let errors: VarArray = checked
             .error
             .iter()
-            .map(|error| error_info(error, &path).to_variant())
+            .map(|error| describe_error(error, &path).to_variant())
             .collect();
         let warnings: VarArray = checked
             .warnings
             .iter()
-            .map(|warning| warning_info(warning).to_variant())
+            .map(|warning| describe_warning(warning).to_variant())
             .collect();
         vdict! {
             "valid" => checked.error.is_none(),
@@ -443,7 +443,7 @@ impl IScriptLanguageExtension for RubyLanguage {
                 "base_type" => announcement.base,
                 "icon_path" => announcement
                     .icon
-                    .map(|icon| icon_path(&path, &icon))
+                    .map(|icon| resolve_icon_path(&path, &icon))
                     .unwrap_or_default()
                     .to_string(),
                 "is_abstract" => announcement.is_abstract,
@@ -465,7 +465,7 @@ impl IScriptLanguageExtension for RubyLanguage {
 
 // An error as the script editor takes it: at the script's own path, or it is
 // shown as another file's.
-fn error_info(error: &CompileError, path: &GString) -> VarDictionary {
+fn describe_error(error: &CompileError, path: &GString) -> VarDictionary {
     vdict! {
         "path" => path,
         "line" => error.line,
@@ -475,7 +475,7 @@ fn error_info(error: &CompileError, path: &GString) -> VarDictionary {
 }
 
 // A warning as the script editor takes it, listed under its kind.
-fn warning_info(warning: &Warning) -> VarDictionary {
+fn describe_warning(warning: &Warning) -> VarDictionary {
     vdict! {
         "start_line" => warning.line,
         "end_line" => warning.line,
@@ -487,7 +487,7 @@ fn warning_info(warning: &Warning) -> VarDictionary {
 
 // An icon's path from the project's root: one written relative to the file's
 // directory is taken from there, as GDScript's `@icon` is.
-fn icon_path(script: &GString, icon: &str) -> GString {
+fn resolve_icon_path(script: &GString, icon: &str) -> GString {
     let icon = GString::from(icon);
     if icon.is_relative_path() {
         script.get_base_dir().path_join(&icon).simplify_path()

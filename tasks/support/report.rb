@@ -33,7 +33,7 @@ module Godot
       output, status = Godot.run_scene(project, SCENE, "--quit-after", "3")
       lines = output.lines.map(&:strip)
       missing = REPORTS.reject { |report, location| reported?(lines, report, location) }
-      missing.merge!(absent_pushes(lines))
+      missing.merge!(find_missing_pushes(lines))
       missing[:backtrace] = BACKTRACE unless backtraced?(lines)
       return if status.success? && missing.empty?
 
@@ -42,7 +42,7 @@ module Godot
 
     # What the report scene pushed that the log does not carry.
     # @behavior RC-006
-    def absent_pushes(lines)
+    def find_missing_pushes(lines)
       PUSH_LINES.reject { |line| lines.include?(line) }.to_h { |line| [line, "anywhere"] }
     end
 

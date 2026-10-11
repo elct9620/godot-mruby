@@ -16,12 +16,12 @@ namespace :extension do
 
     if Extension.macos?
       Extension::ARCHES.each_key do |triple|
-        sh Extension.cargo_env(triple),
+        sh Extension.build_cargo_env(triple),
            "cargo", "build", *flags, "--target", triple, "--manifest-path", Extension::MANIFEST
       end
 
-      output = Extension.universal_library(profile)
-      sh "lipo", "-create", "-output", output, *Extension::ARCHES.keys.map { |t| Extension.slice(t, profile) }
+      output = Extension.locate_universal_library(profile)
+      sh "lipo", "-create", "-output", output, *Extension::ARCHES.keys.map { |t| Extension.locate_slice(t, profile) }
       Extension.require_arches!(output)
       Extension.install(output, Extension::MACOS_LIBRARY)
     else

@@ -12,16 +12,16 @@ class AncestryTest < Minitest::Test
 
   # @behavior RF-001
   def test_a_node_script_reports_the_engine_class_the_file_it_extends_now_reaches
-    shifted = script(:shifted)
+    shifted = load_script(:shifted)
     shifted.get_instance_base_type
-    stub_source(script(:shifting), SHIFTED) do
+    stub_source(load_script(:shifting), SHIFTED) do
       assert_equal :Node2D, shifted.get_instance_base_type
     end
   end
 
   private
 
-  def script(name)
+  def load_script(name)
     Godot::ResourceLoader.load("#{DIRECTORY}/#{name}.rb")
   end
 

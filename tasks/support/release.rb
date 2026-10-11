@@ -45,7 +45,7 @@ module Godot
     # The messages of the refusals `scene` printed, or the error naming what
     # it printed when it did not end cleanly, as a game the engine stopped
     # does not.
-    def refusals(dir, scene)
+    def collect_refusals(dir, scene)
       output, status = play(dir, scene)
       raise "#{scene} did not end cleanly on the release build:\n#{output}" unless status.success?
 

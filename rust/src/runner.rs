@@ -43,9 +43,9 @@ impl INode for RubyTestRunner {
     fn ready(&mut self) {
         let args = user_args();
         let run_as_asked = refuse_exported_game()
-            .and_then(|()| test_directories(&args))
-            .and_then(|directories| test_files(&directories))
-            .and_then(|tests| Ok((tests, test_options(&args)?)));
+            .and_then(|()| choose_test_directories(&args))
+            .and_then(|directories| collect_test_files(&directories))
+            .and_then(|tests| Ok((tests, parse_test_options(&args)?)));
         match run_as_asked {
             Ok((tests, mut options)) => {
                 options.load_failures = load(&tests);
@@ -99,7 +99,7 @@ impl RubyTestRunner {
 }
 
 // The test files under `directories`, in name order.
-fn test_files(directories: &[String]) -> Result<Vec<String>, String> {
+fn collect_test_files(directories: &[String]) -> Result<Vec<String>, String> {
     let pattern = settings::test_pattern();
     let mut tests = Vec::new();
     for directory in directories {
@@ -207,9 +207,9 @@ fn run_file_args() -> Vec<String> {
 // @option --dir
 // The directories this run covers: the one `--dir` names, which has to be
 // one of the project's test directories, or every one of them.
-fn test_directories(args: &[String]) -> Result<Vec<String>, String> {
+fn choose_test_directories(args: &[String]) -> Result<Vec<String>, String> {
     let project = settings::test_directories();
-    let named = option(args, &["--dir"]);
+    let named = read_option(args, &["--dir"]);
     let directories = named
         .clone()
         .map_or_else(|| project.clone(), |dir| vec![dir]);
@@ -229,9 +229,9 @@ fn test_directories(args: &[String]) -> Result<Vec<String>, String> {
     }
 }
 
-fn test_options(args: &[String]) -> Result<minitest::Options, String> {
+fn parse_test_options(args: &[String]) -> Result<minitest::Options, String> {
     // @option --seed
-    let seed = option(args, &["-s", "--seed"])
+    let seed = read_option(args, &["-s", "--seed"])
         .map(|seed| {
             seed.parse()
                 .map_err(|_| format!("--seed takes a whole number, not {seed}"))
@@ -239,18 +239,18 @@ fn test_options(args: &[String]) -> Result<minitest::Options, String> {
         .transpose()?;
     Ok(minitest::Options {
         // @option --include
-        include: option(args, &["-i", "--include"]),
+        include: read_option(args, &["-i", "--include"]),
         // @option --exclude
-        exclude: option(args, &["-e", "--exclude"]),
+        exclude: read_option(args, &["-e", "--exclude"]),
         seed,
         // @option --results
-        results: option(args, &["--results"]),
+        results: read_option(args, &["--results"]),
         load_failures: Vec::new(),
     })
 }
 
 // The value after the first of `names` on the command line.
-fn option(args: &[String], names: &[&str]) -> Option<String> {
+fn read_option(args: &[String], names: &[&str]) -> Option<String> {
     args.windows(2)
         .find(|pair| names.contains(&pair[0].as_str()))
         .map(|pair| pair[1].clone())

@@ -49,7 +49,7 @@ pub const BUILT_INS: [Template; 5] = [
 ];
 
 /// The built-in templates listed under `base`.
-pub fn built_ins(base: &str) -> impl Iterator<Item = (usize, &'static Template)> {
+pub fn list_built_ins(base: &str) -> impl Iterator<Item = (usize, &'static Template)> {
     BUILT_INS
         .iter()
         .enumerate()
@@ -58,7 +58,7 @@ pub fn built_ins(base: &str) -> impl Iterator<Item = (usize, &'static Template)>
 
 /// The source `content` makes for the file named `file_name`, whose class
 /// extends `superclass` as Ruby writes it, indented a level by `indent`.
-pub fn source(content: &str, file_name: &str, superclass: &str, indent: &str) -> String {
+pub fn write_source(content: &str, file_name: &str, superclass: &str, indent: &str) -> String {
     content
         .replace("_BASE_", superclass)
         .replace("_CLASS_SNAKE_CASE_", file_name)
@@ -69,7 +69,7 @@ pub fn source(content: &str, file_name: &str, superclass: &str, indent: &str) ->
 /// How a class extends the base the editor names: an engine class under
 /// `Godot`, or a script's path, quoted, as the constant it spells, written
 /// from the top level so a namespace the file opens does not shadow it.
-pub fn superclass(base: &str, roots: &Roots) -> String {
+pub fn write_superclass(base: &str, roots: &Roots) -> String {
     match base
         .strip_prefix('"')
         .and_then(|base| base.strip_suffix('"'))
@@ -82,7 +82,7 @@ pub fn superclass(base: &str, roots: &Roots) -> String {
 /// `source`, made for the file whose constant is `constant`, inside the
 /// modules of the namespaces the constant spells, each a level deeper by
 /// `indent`, since a template knows only the file's name.
-pub fn source_in_namespaces(source: &str, constant: &str, indent: &str) -> String {
+pub fn nest_in_namespaces(source: &str, constant: &str, indent: &str) -> String {
     let namespaces: Vec<&str> = constant.split("::").collect();
     let Some((_, namespaces)) = namespaces.split_last() else {
         return source.to_owned();
@@ -108,7 +108,7 @@ pub fn source_in_namespaces(source: &str, constant: &str, indent: &str) -> Strin
 
 #[cfg(test)]
 mod tests {
-    use super::{BUILT_INS, built_ins, source, source_in_namespaces, superclass};
+    use super::{BUILT_INS, list_built_ins, nest_in_namespaces, write_source, write_superclass};
     use crate::compiler;
     use crate::realm::Roots;
 
@@ -116,7 +116,7 @@ mod tests {
     #[test]
     fn a_base_class_offers_the_templates_gdscript_has_for_it() {
         let named = |base: &str| {
-            built_ins(base)
+            list_built_ins(base)
                 .map(|(_, template)| template.name)
                 .collect::<Vec<_>>()
         };
@@ -132,7 +132,7 @@ mod tests {
     // @behavior RY-002
     #[test]
     fn a_template_made_for_a_file_names_its_class_after_the_file() {
-        let made = source(BUILT_INS[0].content, "enemy_ship", "Godot::Node", "  ");
+        let made = write_source(BUILT_INS[0].content, "enemy_ship", "Godot::Node", "  ");
 
         assert!(made.starts_with("class EnemyShip < Godot::Node\n"));
     }
@@ -140,7 +140,10 @@ mod tests {
     // @behavior RY-003
     #[test]
     fn a_template_made_on_an_engine_class_extends_it_under_godot() {
-        assert_eq!(superclass("Node2D", &Roots::default()), "Godot::Node2D");
+        assert_eq!(
+            write_superclass("Node2D", &Roots::default()),
+            "Godot::Node2D"
+        );
     }
 
     // @behavior RY-004
@@ -149,7 +152,7 @@ mod tests {
         let roots = Roots::new(["res://src".to_owned()]);
 
         assert_eq!(
-            superclass("\"res://src/enemies/boss.rb\"", &roots),
+            write_superclass("\"res://src/enemies/boss.rb\"", &roots),
             "::Enemies::Boss"
         );
     }
@@ -159,7 +162,7 @@ mod tests {
     fn every_built_in_template_compiles_once_made() {
         for template in &BUILT_INS {
             let base = format!("Godot::{}", template.inherit);
-            let made = source(template.content, "made", &base, "\t");
+            let made = write_source(template.content, "made", &base, "\t");
 
             let checked = compiler::diagnose(c"made.rb", &made);
 
@@ -175,7 +178,7 @@ mod tests {
     // @behavior RY-006
     #[test]
     fn a_template_indents_as_the_editor_does() {
-        let made = source(BUILT_INS[1].content, "made", "Godot::Node", "    ");
+        let made = write_source(BUILT_INS[1].content, "made", "Godot::Node", "    ");
 
         assert!(made.contains("\n    def _ready\n"));
     }
@@ -183,9 +186,9 @@ mod tests {
     // @behavior RY-007
     #[test]
     fn a_template_saved_under_a_namespace_opens_the_namespaces_its_path_spells() {
-        let made = source(BUILT_INS[1].content, "hero_ship", "Godot::Node", "  ");
+        let made = write_source(BUILT_INS[1].content, "hero_ship", "Godot::Node", "  ");
 
-        let nested = source_in_namespaces(&made, "Enemies::Ships::HeroShip", "  ");
+        let nested = nest_in_namespaces(&made, "Enemies::Ships::HeroShip", "  ");
 
         assert!(
             nested
@@ -198,16 +201,15 @@ mod tests {
     // @behavior RY-007
     #[test]
     fn a_template_saved_under_a_root_directory_stays_as_it_was_made() {
-        let made = source(BUILT_INS[0].content, "hero", "Godot::Node", "  ");
+        let made = write_source(BUILT_INS[0].content, "hero", "Godot::Node", "  ");
 
-        assert_eq!(source_in_namespaces(&made, "Hero", "  "), made);
+        assert_eq!(nest_in_namespaces(&made, "Hero", "  "), made);
     }
 
     // @behavior RY-007
     #[test]
     fn a_template_ending_in_blank_lines_closes_its_namespaces_right_after_it() {
-        let nested =
-            source_in_namespaces("class Hero < Godot::Node\nend\n\n", "Enemies::Hero", "\t");
+        let nested = nest_in_namespaces("class Hero < Godot::Node\nend\n\n", "Enemies::Hero", "\t");
 
         assert_eq!(
             nested,

@@ -296,7 +296,7 @@ impl RubyScript {
             values.set(&StringName::from(&property.name), &property.default_value());
         }
         Exports {
-            properties: self.members().iter().map(member_info).collect(),
+            properties: self.members().iter().map(describe_member).collect(),
             values,
         }
     }
@@ -518,7 +518,7 @@ impl IScriptExtension for RubyScript {
     }
 
     fn get_script_signal_list(&self) -> Array<AnyDictionary> {
-        self.signals().iter().map(signal_info).collect()
+        self.signals().iter().map(describe_signal).collect()
     }
 
     fn has_property_default_value(&self, property: StringName) -> bool {
@@ -559,12 +559,12 @@ impl IScriptExtension for RubyScript {
     fn get_script_method_list(&self) -> Array<AnyDictionary> {
         self.methods()
             .iter()
-            .map(|method| name_info(method.as_str()).upcast_any_dictionary())
+            .map(|method| describe_name(method.as_str()).upcast_any_dictionary())
             .collect()
     }
 
     fn get_script_property_list(&self) -> Array<AnyDictionary> {
-        self.members().iter().map(member_info).collect()
+        self.members().iter().map(describe_member).collect()
     }
 
     fn get_member_line(&self, _member: StringName) -> i32 {
@@ -594,30 +594,30 @@ impl IScriptExtension for RubyScript {
 // A declared signal as Godot reads it, which takes a method's shape: the
 // signal's name, and a parameter for each value it carries, of any type as
 // an untyped GDScript signal's parameters are.
-fn signal_info(signal: &Signal) -> AnyDictionary {
+fn describe_signal(signal: &Signal) -> AnyDictionary {
     let arguments: Array<AnyDictionary> = signal
         .parameters
         .iter()
-        .map(|parameter| parameter_info(parameter))
+        .map(|parameter| describe_parameter(parameter))
         .collect();
-    let mut info = name_info(signal.name.as_str());
+    let mut info = describe_name(signal.name.as_str());
     info.set("args", &arguments);
     info.upcast_any_dictionary()
 }
 
 // What a class declared as Godot reads it, a property or the heading the
 // properties after it are shown under.
-fn member_info(member: &Member) -> AnyDictionary {
+fn describe_member(member: &Member) -> AnyDictionary {
     match member {
-        Member::Property(property) => property_info(property),
-        Member::Heading(heading) => heading_info(heading),
+        Member::Property(property) => describe_property(property),
+        Member::Heading(heading) => describe_heading(heading),
     }
 }
 
 // A heading as Godot reads it: the name it is headed with, the prefix it
 // takes properties by, and the usage saying which kind of heading it is.
-fn heading_info(heading: &Heading) -> AnyDictionary {
-    let mut info = name_info(heading.name());
+fn describe_heading(heading: &Heading) -> AnyDictionary {
+    let mut info = describe_name(heading.name());
     info.set("type", VariantType::NIL.ord());
     info.set("hint_string", heading.hint_string());
     info.set("usage", heading.usage());
@@ -628,8 +628,8 @@ fn heading_info(heading: &Heading) -> AnyDictionary {
 // by, the type the value it was declared with gave it, the hint the editor
 // shows it with, and the usage of a script's own variable, which the editor
 // shows and a scene stores.
-fn property_info(property: &Property) -> AnyDictionary {
-    let mut info = name_info(property.name.as_str());
+fn describe_property(property: &Property) -> AnyDictionary {
+    let mut info = describe_name(property.name.as_str());
     info.set("type", property.kind.ord());
     info.set("hint", property.hint.ord());
     info.set("hint_string", property.hint_string.as_str());
@@ -642,8 +642,8 @@ fn property_info(property: &Property) -> AnyDictionary {
     info.upcast_any_dictionary()
 }
 
-fn parameter_info(name: &str) -> AnyDictionary {
-    let mut info = name_info(name);
+fn describe_parameter(name: &str) -> AnyDictionary {
+    let mut info = describe_name(name);
     info.set("type", VariantType::NIL.ord());
     info.set("usage", PropertyUsageFlags::NIL_IS_VARIANT);
     info.upcast_any_dictionary()
@@ -651,7 +651,7 @@ fn parameter_info(name: &str) -> AnyDictionary {
 
 // What Godot reads a method, a signal or a parameter by: its name, which for
 // a method is all a Ruby class says about it.
-fn name_info(name: &str) -> VarDictionary {
+fn describe_name(name: &str) -> VarDictionary {
     let mut info = VarDictionary::new();
     info.set("name", name);
     info

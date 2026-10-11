@@ -84,7 +84,7 @@ impl IResourceFormatSaver for ResourceFormatSaverRubyScript {
 // spells, the first place the path is known.
 fn nest_template(script: &mut Gd<RubyScript>, path: &str) {
     let constant = GameFiles.roots().name_by_path(path);
-    let nested = template::source_in_namespaces(
+    let nested = template::nest_in_namespaces(
         &script.get_source_code().to_string(),
         &constant,
         &language::indentation(),

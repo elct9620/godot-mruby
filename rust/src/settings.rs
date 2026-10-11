@@ -46,7 +46,7 @@ fn define(name: &str, default: &Variant, kind: VariantType) {
 
 /// The root directories the project names besides `res://`.
 pub fn root_directories() -> Vec<String> {
-    directories(ROOT_DIRECTORIES)
+    read_directories(ROOT_DIRECTORIES)
 }
 
 // The editor's own setting, with the default it registers it with; a game
@@ -56,10 +56,10 @@ const DEFAULT_TEMPLATE_DIRECTORY: &str = "res://script_templates";
 
 /// The directories the test runner runs.
 pub fn test_directories() -> Vec<String> {
-    directories(TEST_DIRECTORIES)
+    read_directories(TEST_DIRECTORIES)
 }
 
-fn directories(setting: &str) -> Vec<String> {
+fn read_directories(setting: &str) -> Vec<String> {
     ProjectSettings::singleton()
         .get_setting(setting)
         .to::<PackedStringArray>()

@@ -74,17 +74,17 @@ module Extension
   # The native build finds its archive through BENI_VENDOR_DIR, which
   # .cargo/config.toml sets. A cross target reads only MRUBY_LIB_DIR, and
   # that variable outranks the other, so it is set for the cross build alone.
-  def cargo_env(triple)
+  def build_cargo_env(triple)
     return {} if triple == NATIVE_TRIPLE
 
     { "MRUBY_LIB_DIR" => File.join(VENDOR_DIR, "mruby", "build", triple, "lib") }
   end
 
-  def slice(triple, profile)
+  def locate_slice(triple, profile)
     File.join(TARGET_DIR, triple, profile, "lib#{CRATE}.dylib")
   end
 
-  def universal_library(profile)
+  def locate_universal_library(profile)
     File.join(TARGET_DIR, profile, MACOS_LIBRARY)
   end
 

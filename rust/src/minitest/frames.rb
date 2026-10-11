@@ -28,11 +28,11 @@ module Minitest
     end
 
     def wait_process_frames(frames)
-      at_least_one("wait_process_frames", frames).times { yield_until(:process) }
+      clamp_frames("wait_process_frames", frames).times { yield_until(:process) }
     end
 
     def wait_physics_frames(frames)
-      at_least_one("wait_physics_frames", frames).times { yield_until(:physics) }
+      clamp_frames("wait_physics_frames", frames).times { yield_until(:physics) }
     end
 
     def wait_seconds(time)
@@ -99,7 +99,7 @@ module Minitest
 
     # A wait for no frames or fewer is reported and waits for one, as GUT's
     # does.
-    def at_least_one(wait, frames)
+    def clamp_frames(wait, frames)
       return frames if frames > 0
 
       Godot.push_error("#{wait}: frames must be > 0, you passed #{frames}. 1 frames waited.")

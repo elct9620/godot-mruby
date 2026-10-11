@@ -106,7 +106,7 @@ unsafe impl Send for Stash {}
 
 impl Stash {
     // What was written to the property `name`, if anything was.
-    fn value(&self, name: &str) -> Option<Variant> {
+    fn value_by_name(&self, name: &str) -> Option<Variant> {
         self.0
             .iter()
             .find(|(written, _)| written == name)
@@ -320,7 +320,7 @@ impl Caller {
             .stash
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .value(name);
+            .value_by_name(name);
         written.or_else(|| {
             self.lineage()
                 .property_by_name(&snapshot::latest(), name)
@@ -455,16 +455,16 @@ fn read(key: Key, name: &str, exported: bool) -> Option<Variant> {
 
 // What a class declared as Godot reads it from an instance, a property or
 // the heading the properties after it are shown under.
-fn member_info(member: &Member) -> sys::GDExtensionPropertyInfo {
+fn describe_member(member: &Member) -> sys::GDExtensionPropertyInfo {
     match member {
-        Member::Property(property) => property_info(property),
-        Member::Heading(heading) => heading_info(heading),
+        Member::Property(property) => describe_property(property),
+        Member::Heading(heading) => describe_heading(heading),
     }
 }
 
 // A heading as Godot reads it from an instance: the name it is headed with,
 // the prefix it takes properties by, and the usage saying which kind it is.
-fn heading_info(heading: &Heading) -> sys::GDExtensionPropertyInfo {
+fn describe_heading(heading: &Heading) -> sys::GDExtensionPropertyInfo {
     sys::GDExtensionPropertyInfo {
         type_: VariantType::NIL.ord() as sys::GDExtensionVariantType,
         name: into_raw(StringName::from(heading.name())),
@@ -478,7 +478,7 @@ fn heading_info(heading: &Heading) -> sys::GDExtensionPropertyInfo {
 // An exported property as Godot reads it from an instance: the strings it
 // points at are the array's own, taken back when Godot hands the array to
 // `free_property_list`.
-fn property_info(property: &Property) -> sys::GDExtensionPropertyInfo {
+fn describe_property(property: &Property) -> sys::GDExtensionPropertyInfo {
     let usage = PropertyUsageFlags::DEFAULT.ord() | PropertyUsageFlags::SCRIPT_VARIABLE.ord();
     sys::GDExtensionPropertyInfo {
         type_: property.kind.ord() as sys::GDExtensionVariantType,
@@ -493,7 +493,7 @@ fn property_info(property: &Property) -> sys::GDExtensionPropertyInfo {
 // A method as Godot reads it from an instance: its name, which is all a Ruby
 // class says about it, and an answer of any type, as an untyped GDScript
 // method's is.
-fn method_info(name: &str) -> sys::GDExtensionMethodInfo {
+fn describe_method(name: &str) -> sys::GDExtensionMethodInfo {
     sys::GDExtensionMethodInfo {
         name: into_raw(StringName::from(name)),
         return_value: answer_info(),
@@ -619,7 +619,7 @@ unsafe fn reach_property(
 
 // SAFETY: `method` is a StringName Godot hands for the call, which
 // `StringName` lays out as.
-unsafe fn name(method: sys::GDExtensionConstStringNamePtr) -> String {
+unsafe fn read_string_name(method: sys::GDExtensionConstStringNamePtr) -> String {
     unsafe { &*method.cast::<StringName>() }.to_string()
 }
 
@@ -635,7 +635,7 @@ unsafe extern "C" fn set(
     value: sys::GDExtensionConstVariantPtr,
 ) -> sys::GDExtensionBool {
     // SAFETY: the property name lives for the call.
-    let name = unsafe { name(property) };
+    let name = unsafe { read_string_name(property) };
     // SAFETY: Godot hands a live variant for the call.
     let value = unsafe { &*value.cast::<Variant>() };
     // SAFETY: Godot hands a live instance.
@@ -665,7 +665,7 @@ unsafe extern "C" fn get(
     answer: sys::GDExtensionVariantPtr,
 ) -> sys::GDExtensionBool {
     // SAFETY: the property name lives for the call.
-    let name = unsafe { name(property) };
+    let name = unsafe { read_string_name(property) };
     // SAFETY: Godot hands a live instance.
     let Some(PropertyReach {
         caller,
@@ -708,7 +708,7 @@ unsafe extern "C" fn get_property_list(
 ) -> *const sys::GDExtensionPropertyInfo {
     // SAFETY: Godot hands a live instance.
     let members = unsafe { with_instance(data, RubyInstance::members) };
-    let infos: Box<[sys::GDExtensionPropertyInfo]> = members.iter().map(member_info).collect();
+    let infos: Box<[sys::GDExtensionPropertyInfo]> = members.iter().map(describe_member).collect();
     // SAFETY: Godot hands a count to fill.
     unsafe { *count = infos.len() as u32 };
     Box::into_raw(infos).cast::<sys::GDExtensionPropertyInfo>()
@@ -728,7 +728,7 @@ unsafe extern "C" fn free_property_list(
         ))
     };
     for info in &infos {
-        // SAFETY: each string is what `property_info` made for this array.
+        // SAFETY: each string is what `describe_property` made for this array.
         unsafe {
             drop_raw::<StringName, _>(info.name);
             drop_raw::<StringName, _>(info.class_name);
@@ -745,7 +745,7 @@ unsafe extern "C" fn get_method_list(
     let methods = unsafe { with_instance(data, RubyInstance::methods) };
     let infos: Box<[sys::GDExtensionMethodInfo]> = methods
         .iter()
-        .map(|method| method_info(method.as_str()))
+        .map(|method| describe_method(method.as_str()))
         .collect();
     // SAFETY: Godot hands a count to fill.
     unsafe { *count = infos.len() as u32 };
@@ -766,7 +766,7 @@ unsafe extern "C" fn free_method_list(
         ))
     };
     for info in &infos {
-        // SAFETY: each string is what `method_info` made for this array.
+        // SAFETY: each string is what `describe_method` made for this array.
         unsafe {
             drop_raw::<StringName, _>(info.name);
             drop_raw::<StringName, _>(info.return_value.name);
@@ -829,7 +829,7 @@ unsafe fn revert_answer(
     method: &str,
 ) -> Variant {
     // SAFETY: as the caller promises.
-    let property = StringName::from(&unsafe { name(property) });
+    let property = StringName::from(&unsafe { read_string_name(property) });
     // SAFETY: as the caller promises.
     let caller = unsafe {
         with_instance(data, |instance| {

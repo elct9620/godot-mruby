@@ -179,25 +179,25 @@ class RerunTest < Minitest::Test
   def test_a_reloaded_node_script_answers_the_default_its_changed_source_exports
     with_node(:exporting).call(:speed?)
 
-    stub_source(:exporting, FASTER) { assert_equal 20, script(:exporting).get_property_default_value(:speed) }
+    stub_source(:exporting, FASTER) { assert_equal 20, load_script(:exporting).get_property_default_value(:speed) }
   end
 
   private
 
-  def script(name)
+  def load_script(name)
     Godot::ResourceLoader.load("#{DIRECTORY}/#{name}.rb")
   end
 
   def with_node(name)
     node = autofree(Godot::Node.new)
-    node.set_script(script(name))
+    node.set_script(load_script(name))
     node
   end
 
   # Runs the block once the script of that name has reloaded holding
   # `source`, then reloads it with what it held.
   def stub_source(name, source)
-    held = script(name).source_code
+    held = load_script(name).source_code
     reload(name, source)
     yield
   ensure
@@ -205,8 +205,8 @@ class RerunTest < Minitest::Test
   end
 
   def reload(name, source)
-    script(name).source_code = source
-    script(name).reload(true)
+    load_script(name).source_code = source
+    load_script(name).reload(true)
     wait_process_frames 1
   end
 end

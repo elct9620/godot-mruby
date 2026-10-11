@@ -22,14 +22,14 @@ func _physics_process(delta: float) -> void:
 
 func _nearest():
 	var in_range: Array = get_parent().enemies().filter(
-		func(enemy): return _distance(enemy) <= range
+		func(enemy): return _distance_to(enemy) <= range
 	)
 	if in_range.is_empty():
 		return null
 	return in_range.reduce(
-		func(near, enemy): return enemy if _distance(enemy) < _distance(near) else near
+		func(near, enemy): return enemy if _distance_to(enemy) < _distance_to(near) else near
 	)
 
 
-func _distance(enemy: Node2D) -> float:
+func _distance_to(enemy: Node2D) -> float:
 	return position.distance_to(enemy.position)
