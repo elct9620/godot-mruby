@@ -403,5 +403,6 @@ A gem's methods run with the state, and reach the realm's bookkeeping only throu
 | `hold`, `hold_new`, `object_by_key` | an object held under a key, found again |
 | `file_by_constant` | the file the class index names |
 | `extension_data` | its own data, such as a class it found, closed with the realm |
+| `declare_signal`, `declare_export`, `declare_heading` | what a running class declares, published once its file has run |
 
 The line: what every realm is, output and hooks included, belongs to the realm; what only some need is a gem. The framework is specified in `.spec/contract/minitest.md` and `.spec/behavior/minitest.md`.

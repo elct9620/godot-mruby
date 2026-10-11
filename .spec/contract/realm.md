@@ -84,6 +84,21 @@ impl Roots {
 }
 ```
 
+## `Roots::name_by_path`
+
+The constant a path spells from its root directory, each segment camelized, as a template or the editor names a file's class.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+| relates | `camelize` |
+
+```rust
+impl Roots {
+    pub fn name_by_path(&self, path: &str) -> String {}
+}
+```
+
 ## `normalize`
 
 A constant's name as the class index matches it against a path's segment: without underscores and in lower case.
@@ -94,6 +109,19 @@ A constant's name as the class index matches it against a path's segment: withou
 
 ```rust
 pub fn normalize(segment: &str) -> String {}
+```
+
+## `camelize`
+
+A path segment as the constant the loader names it by, as Zeitwerk camelizes it: `http_client` is `HttpClient`.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+| relates | `normalize` |
+
+```rust
+pub fn camelize(segment: &str) -> String {}
 ```
 
 ## `ClassIndex`
@@ -210,26 +238,39 @@ pub fn extension_data<T: Default + Send + 'static>(mrb: &Mrb) -> &T {}
 
 ## `declare_signal`
 
-Takes a signal as declared by the class of the file running now in the realm an extension's method runs in, which the realm publishes once that file has run; a name a class or one of its ancestors declared already is refused, and a declaration made while no file runs belongs to no class and is not taken.
+Takes a signal as declared by the class of the file running now in the realm an extension's method runs in, which the realm publishes once that file has run; a name a class or one of its ancestors declared already answers the refusal, and a declaration made while no file runs belongs to no class and is not taken.
 
 | Attribute | Value |
 | --- | --- |
 | internal | yes |
 
 ```rust
-pub fn declare_signal(mrb: &Mrb, class: RClass, signal: Signal) {}
+pub fn declare_signal(mrb: &Mrb, class: RClass, signal: Signal) -> Result<(), Error> {}
 ```
 
 ## `declare_export`
 
-Takes a property as exported by the class of the file running now in the realm an extension's method runs in, which the realm publishes once that file has run; a name a class or one of its ancestors declared already is refused, and a declaration made while no file runs belongs to no class and is not taken.
+Takes a property as exported by the class of the file running now in the realm an extension's method runs in, which the realm publishes once that file has run; a name a class or one of its ancestors declared already answers the refusal, and a declaration made while no file runs belongs to no class and is not taken.
 
 | Attribute | Value |
 | --- | --- |
 | internal | yes |
 
 ```rust
-pub fn declare_export(mrb: &Mrb, class: RClass, property: Property) {}
+pub fn declare_export(mrb: &Mrb, class: RClass, property: Property) -> Result<(), Error> {}
+```
+
+## `declare_heading`
+
+Takes a heading as written by the file running now in the realm an extension's method runs in, which the realm publishes with the properties after it; a heading names no member, so none is refused.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+| relates | `declare_export` |
+
+```rust
+pub fn declare_heading(mrb: &Mrb, heading: Heading) {}
 ```
 
 ## `release`
@@ -285,14 +326,14 @@ pub struct Rerun {
 
 ## `rerun_queued`
 
-Runs again each file whose source changed, if the game's realm is open: the class of a file that ran cleanly is sent what the `Rerun` names, and the file keeps what it changes if it raises; one that raised runs again all or nothing. What a file raises is written to the realm's log; the extension calls it every frame.
+Runs again each file whose source changed, if the game's realm is open: the class of a file that ran cleanly is sent what the `Rerun` names, and the file keeps what it changes if it raises; one that raised runs again all or nothing. What a file raises is written to the realm's log. It answers whether any file ran again, so what Godot was told of the classes can be told anew; the extension calls it every frame.
 
 | Attribute | Value |
 | --- | --- |
 | internal | yes |
 
 ```rust
-pub fn rerun_queued(rerun: &Rerun) {}
+pub fn rerun_queued(rerun: &Rerun) -> bool {}
 ```
 
 ## `Realm`
