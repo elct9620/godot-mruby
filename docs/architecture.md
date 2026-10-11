@@ -106,7 +106,7 @@ Names follow the naming chapter of [`convention.md`](convention.md#1-naming).
 
 | Component | Godot counterpart |
 | --- | --- |
-| `RubyLanguage` in `language.rs`, its `Project` and `Listing` in `announcement.rs`, its templates in `template.rs` | `ScriptLanguageExtension` |
+| `RubyLanguage` in `language.rs`, its `Project` in `announcement.rs`, its templates in `template.rs` | `ScriptLanguageExtension` |
 | `ResourceFormatLoaderRubyScript` in `loader.rs` | `ResourceFormatLoader` |
 | `ResourceFormatSaverRubyScript` in `saver.rs` | `ResourceFormatSaver` |
 | `RubyScript` in `script.rs`, answered from `header.rs` and `ancestry.rs` | `ScriptExtension` |
@@ -116,7 +116,7 @@ Names follow the naming chapter of [`convention.md`](convention.md#1-naming).
 | `RubySyntaxHighlighter` in `highlighter.rs`, from Prism's tokens | `EditorSyntaxHighlighter` |
 | `RubyTestPanel` in `panel.rs` | `EditorDock` |
 | `settings.rs` | `ProjectSettings` under `mruby/` |
-| `GameFiles`, `RealmFiles`, `FilesOnDisk` in `game.rs` | `ResourceLoader` under `res://`, and the files on disk |
+| `GameFiles`, `RealmFiles`, `FilesOnDisk` and their `Listing` in `game.rs` | `ResourceLoader` under `res://`, and the files on disk |
 | `GodotLog` in `log.rs` | Godot's log |
 | `Godot` in `bridge.rs` and `bridge/` | `ClassDB`, the engine's singletons, value types and utility functions |
 | `RubyObject` in `bridge/ruby_object.rs` | A `RefCounted` standing for a Ruby object |
@@ -173,34 +173,60 @@ Teardown runs in reverse: Godot stops loading `.rb` files and forgets the langua
 lib.rs    registers Scripting and settings, prepares the realm
   │
   ▼
-┌─ Scripting ───────────────────────────────┐   ┌─ Testing ────────────┐
-│  loader ──► script ◄──► language          │   │  runner ──► minitest │
-│               │            │              │   └──┬───────────────────┘
-│               ▼            ▼              │      │  export ──► settings
-│            instance    announcement       │      │
-│  highlighter ──► Prism, language          │      │
-└──┬────────────────────────────────────────┘      │
-   │                                               │
-   ▼                                               ▼
-┌─ Given to the realm ──────────────────────────────────────┐
-│  game ──► settings        bridge ──► log                  │
-└──┬────────────────────────────────────────────────────────┘
-   │
+┌─ Editor ────────────────────────────────────────────────────┐
+│  plugin ──► export, panel, highlighter, game                │
+└──┬──────────────────────────────────────────────────────────┘
    ▼
-┌─ Declarations ────────────────────────────┐
-│  ancestry ──► header ──► hint             │   Prism
-└──┬────────────────────────────────────────┘
+┌─ Scripting ─────────────────────────────┐   ┌─ Testing ────────┐
+│  loader, saver ──► script ◄──► language │   │  export, panel   │
+│  script ──► instance                    │   │    ──► runner    │
+│  language ──► validation, template      │   │  runner          │
+│  script, language, validation           │   │    ──► minitest  │
+│    ──► announcement                     │   └──┬───────────────┘
+│  highlighter ──► language, Prism        │      │
+└──┬──────────────────────────────────────┘      │
+   ▼                                             ▼
+┌─ Given to the realm ────────────────────────────────────────┐
+│  game: files, listing, node classes    bridge    log        │
+│  settings                                                   │
+└──┬──────────────────────────────────────────────────────────┘
    ▼
-┌─ Realm ───────────────────────────────────┐
-│  realm                                    │
-└─────────────────────┬─────────────────────┘
-                      ▼
-              compiler, snapshot
+┌─ Declarations ─────────────────────┐
+│  ancestry ──► header ──► hint      │   Prism
+└──┬─────────────────────────────────┘
+   ▼
+┌─ Realm ────────────────────────────┐
+│  realm ──► compiler, snapshot      │
+└────────────────────────────────────┘
 ```
 
-Each layer uses only the layers below it. The realm uses only `compiler` and `snapshot`, the shape it publishes. What it needs from Godot, `game` and `log` implement, so it neither parses a file nor knows the engine. `language` checks typed source through `validation`, which compiles it in a state no realm holds. It reads the other files as `announcement` does, so the editor never waits for the realm.
+Each layer uses only the layers below it. Only `language` and `script` refer to each other, as GDExtension languages do. The realm uses only `compiler` and `snapshot`, the shape it publishes. A property's default keeps its printed text, so the realm handles no engine value. What it needs from Godot, `game` and `log` implement, so it neither parses a file nor knows the engine.
 
-`header` and `ancestry` read what a file declares without running it. They name files from the root directories of `Files::roots`, by `realm::Roots`, `realm::normalize` and the `ClassIndex` behind `Files::file_by_name`. Scripting answers Godot from them. Through `Files::declarations_by_path`, `game` hands the realm what each file opens and the superclass its node script's class is held to. `bridge` tells it which engine classes are nodes. `language` and `script` refer to each other, as GDExtension languages do; `minitest` uses the realm only for a failure's `Location`.
+#### 2.3.1 Shared Answers
+
+Several layers ask the same questions, and each has one owner below them all.
+
+| Question | Owner |
+| --- | --- |
+| The project's files, kept listed | `game` |
+| Which engine classes are nodes | `game` |
+| The backtrace being written | `log` |
+| The name an export's class goes by | Godot's list of global classes |
+
+`language` answers the backtrace `log` is writing as its stack. `bridge` names the class an export takes as Godot lists it, as GDScript does. `language` checks typed source through `validation`, in a state no realm holds. It reads files as `announcement` does, so the editor never waits for the realm.
+
+#### 2.3.2 Declarations
+
+`header` and `ancestry` read what a file declares without running it, and Scripting answers Godot from them.
+
+| Through | What crosses |
+| --- | --- |
+| `Files::roots` | the root directories files are named from |
+| `realm::Roots`, `realm::normalize` | how a path spells a constant |
+| `Files::file_by_name` | the `ClassIndex` behind a lookup |
+| `Files::declarations_by_path` | what a file opens, and its node script's superclass |
+
+`game` hands the realm each file's declarations, so the realm holds a node script's class to its superclass. `minitest` uses the realm only for a failure's `Location`.
 
 ### 2.4 Node scripts
 

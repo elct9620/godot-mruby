@@ -3,6 +3,7 @@
 //! file and line; without it, a record is placed where it was written.
 //! `GodotLog` is the same log as a realm writes to it.
 
+use std::cell::RefCell;
 use std::ffi::CStr;
 use std::fmt;
 
@@ -10,7 +11,6 @@ use godot::global::{PrintLevel, PrintRecord, PrintSource, godot_print, print_cus
 use godot::prelude::ToGodot;
 
 use crate::compiler::Warning;
-use crate::language;
 use crate::realm::{self, Level, Location};
 
 /// Godot's log as a realm writes to it.
@@ -33,7 +33,7 @@ impl realm::Log for GodotLog {
     // Godot asks every language for its stack as it prints, so the language
     // answers the exception's backtrace while it is written.
     fn record_exception(&self, text: &str, backtrace: &[Location]) {
-        language::write_with_stack(backtrace, || {
+        write_with_backtrace(backtrace, || {
             write(
                 Level::ScriptError,
                 backtrace.first(),
@@ -41,6 +41,25 @@ impl realm::Log for GodotLog {
             );
         });
     }
+}
+
+thread_local! {
+    // The backtrace of the exception this thread is writing. It holds no
+    // Godot value, since a thread's locals outlive the engine.
+    static BACKTRACE: RefCell<Vec<Location>> = const { RefCell::new(Vec::new()) };
+}
+
+// Runs `write` while `backtrace` is the one this thread is writing.
+fn write_with_backtrace(backtrace: &[Location], write: impl FnOnce()) {
+    let written = BACKTRACE.replace(backtrace.to_vec());
+    write();
+    BACKTRACE.set(written);
+}
+
+/// The backtrace of the exception this thread is writing, which the
+/// language answers as its stack, since Godot asks for it as it prints.
+pub fn current_backtrace() -> Vec<Location> {
+    BACKTRACE.with_borrow(Clone::clone)
 }
 
 /// Writes what the compiler warns about in `file`, Ruby the extension ships

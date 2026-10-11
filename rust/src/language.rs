@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::ffi::c_void;
 use std::sync::{Mutex, PoisonError};
 
@@ -18,7 +17,7 @@ use crate::realm::{Files, Location};
 use crate::script::RubyScript;
 use crate::template;
 use crate::validation::{self, Warning};
-use crate::{bridge, settings, warn};
+use crate::{bridge, log, settings, warn};
 
 /// The Ruby script language, registered with the engine for `.rb` files.
 ///
@@ -36,20 +35,6 @@ pub const NAME: &str = "Ruby";
 
 static LANGUAGE: Mutex<Option<InstanceId>> = Mutex::new(None);
 static CLASHES: Mutex<Clashes> = Mutex::new(Clashes::new());
-
-thread_local! {
-    // What the language answers as this thread's stack. It holds no Godot
-    // value, since a thread's locals outlive the engine.
-    static STACK: RefCell<Vec<Location>> = const { RefCell::new(Vec::new()) };
-}
-
-/// Runs `write` while the language answers `backtrace` as this thread's
-/// stack, so what it writes to Godot's log carries the frames.
-pub fn write_with_stack(backtrace: &[Location], write: impl FnOnce()) {
-    let answered = STACK.replace(backtrace.to_vec());
-    write();
-    STACK.set(answered);
-}
 
 pub fn register() {
     let language = RubyLanguage::new_alloc();
@@ -171,7 +156,7 @@ impl IScriptLanguageExtension for RubyLanguage {
             &test_directories,
             &settings::template_directory(),
             &validation::EngineClasses {
-                is_node: &bridge::is_node_class,
+                is_node: &game::is_node_class,
                 method_declarer: &bridge::find_method_declarer,
             },
             &path.to_string(),
@@ -341,19 +326,17 @@ impl IScriptLanguageExtension for RubyLanguage {
     // mruby 4.0 has no public API answering the stack Ruby is running, so
     // only an exception being written has frames to answer.
     fn debug_get_current_stack_info(&mut self) -> Array<AnyDictionary> {
-        STACK.with_borrow(|stack| {
-            stack
-                .iter()
-                .map(|frame| {
-                    vdict! {
-                        "file" => frame.file.as_str(),
-                        "func" => frame.function.as_str(),
-                        "line" => frame.line,
-                    }
-                    .upcast_any_dictionary()
-                })
-                .collect()
-        })
+        log::current_backtrace()
+            .iter()
+            .map(|frame| {
+                vdict! {
+                    "file" => frame.file.as_str(),
+                    "func" => frame.function.as_str(),
+                    "line" => frame.line,
+                }
+                .upcast_any_dictionary()
+            })
+            .collect()
     }
 
     // What the debugger asks of a running game when the editor cannot say
@@ -432,7 +415,7 @@ impl IScriptLanguageExtension for RubyLanguage {
     // lists the file as a class by the name answered.
     fn get_global_class_name(&self, path: GString) -> AnyDictionary {
         let file = path.to_string();
-        let announced = game::announcement_by_path(&file);
+        let announced = announcement::announcement_by_path(&file);
         let mut clashes = CLASHES.lock().unwrap_or_else(PoisonError::into_inner);
         if !matches!(announced, Err(Omission::SharedName { .. })) {
             clashes.forget(&file);

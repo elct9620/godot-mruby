@@ -55,3 +55,15 @@ How a game ships without its tests: each layer keeps test code out of an exporte
 | Given | an exported game |
 | When | a test runner node enters its scene tree |
 | Then | the log carries an error saying the runner does not run in an exported game |
+
+## `RX-007` An exported game reads an export naming a node script's class
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RD-054` |
+
+| Step | Statement |
+| --- | --- |
+| Given | an exported game holding a node script whose class exports a property naming another node script's class |
+| When | the game lists the node's properties |
+| Then | the property's hint names the class as Godot lists it |

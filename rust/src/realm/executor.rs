@@ -44,7 +44,7 @@ impl Declaration {
     fn label(&self) -> String {
         match self {
             Self::Signal(signal) => format!("a signal of ({})", signal.parameters.join(", ")),
-            Self::Property(property) => format!("a property of {}", property.default_value()),
+            Self::Property(property) => format!("a property of {}", property.default_text()),
             Self::Heading(heading) => format!("a heading named {}", heading.name()),
         }
     }

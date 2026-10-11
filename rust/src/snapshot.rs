@@ -33,6 +33,7 @@ pub struct Property {
     pub hint: PropertyHint,
     pub hint_string: String,
     default: Vec<u8>,
+    default_text: String,
 }
 
 impl Property {
@@ -45,6 +46,7 @@ impl Property {
             hint: PropertyHint::NONE,
             hint_string: String::new(),
             default: var_to_bytes(default).to_vec(),
+            default_text: default.to_string(),
         }
     }
 
@@ -73,6 +75,12 @@ impl Property {
     /// The value the property was declared with.
     pub fn default_value(&self) -> Variant {
         bytes_to_var(&PackedByteArray::from(self.default.as_slice()))
+    }
+
+    /// The value the property was declared with, as Godot prints it, which
+    /// reads without the engine.
+    pub fn default_text(&self) -> &str {
+        &self.default_text
     }
 }
 
@@ -469,6 +477,7 @@ mod tests {
             hint: PropertyHint::NONE,
             hint_string: String::new(),
             default: Vec::new(),
+            default_text: "0.0".to_owned(),
         }
     }
 

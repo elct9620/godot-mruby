@@ -3,11 +3,11 @@
 //! the editor scans a project without running any of it.
 
 use std::collections::BTreeSet;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use crate::ancestry::{self, Ancestry};
+use crate::game;
 use crate::header::Header;
-use crate::realm::{self, ClassIndex, Declarations, Files, Roots};
+use crate::realm::{self, Files};
 use crate::settings;
 
 /// What the editor lists a node script by.
@@ -135,95 +135,18 @@ impl<'a, F: Files> Project<'a, F> {
     }
 }
 
-/// A project's files as last listed, for what the editor asks while it
-/// scans: listing walks every directory, which the editor would otherwise
-/// wait on for each file it asks about. A file asked about joins the listing,
-/// and a removed one leaves it once the project is listed again. The class
-/// index of the listing is kept until the listing changes.
-pub struct Listing<F: Files> {
-    files: F,
-    is_listed: fn(&str) -> bool,
-    paths: Mutex<Option<Vec<String>>>,
-    index: Mutex<Option<Arc<ClassIndex>>>,
-}
-
-impl<F: Files> Listing<F> {
-    /// `files`, listed the first time a question needs them; `is_listed`
-    /// says whether a file asked about belongs to the listing.
-    pub const fn new(files: F, is_listed: fn(&str) -> bool) -> Self {
-        Self {
-            files,
-            is_listed,
-            paths: Mutex::new(None),
-            index: Mutex::new(None),
-        }
-    }
-
-    /// Takes the file at `path` into the listing, as the editor asks about
-    /// it: it may have been added since the project was listed.
-    pub fn take_in(&self, path: &str) {
-        if !(self.is_listed)(path) {
-            return;
-        }
-        if let Some(paths) = self.lock_paths().as_mut()
-            && let Err(at) = paths.binary_search_by(|other| other.as_str().cmp(path))
-        {
-            paths.insert(at, path.to_owned());
-            self.lock_index().take();
-        }
-    }
-
-    /// Lists the project again, walking its directories outside the lock so
-    /// no question waits on the walk.
-    pub fn relist(&self) {
-        let paths = self.files.paths();
-        *self.lock_paths() = Some(paths);
-        self.lock_index().take();
-    }
-
-    // The class index of the listing, built outside the lock once the
-    // listing changed.
-    fn index(&self) -> Arc<ClassIndex> {
-        if let Some(index) = &*self.lock_index() {
-            return Arc::clone(index);
-        }
-        let index = Arc::new(ClassIndex::with_files(self.paths(), self.roots()));
-        Arc::clone(self.lock_index().get_or_insert(index))
-    }
-
-    fn lock_paths(&self) -> MutexGuard<'_, Option<Vec<String>>> {
-        self.paths.lock().unwrap_or_else(PoisonError::into_inner)
-    }
-
-    fn lock_index(&self) -> MutexGuard<'_, Option<Arc<ClassIndex>>> {
-        self.index.lock().unwrap_or_else(PoisonError::into_inner)
-    }
-}
-
-impl<F: Files> Files for Listing<F> {
-    fn paths(&self) -> Vec<String> {
-        if let Some(paths) = &*self.lock_paths() {
-            return paths.clone();
-        }
-        let paths = self.files.paths();
-        self.lock_paths().get_or_insert(paths).clone()
-    }
-
-    fn roots(&self) -> Roots {
-        self.files.roots()
-    }
-
-    fn source_by_path(&self, path: &str) -> Result<String, String> {
-        self.files.source_by_path(path)
-    }
-
-    fn declarations_by_path(&self, path: &str) -> Declarations {
-        self.files.declarations_by_path(path)
-    }
-
-    fn file_by_name(&self, scope: &[String], names: &[String]) -> Option<String> {
-        self.index().file_by_name(scope, names)
-    }
+/// The announcement of the file at `path` in the game's project, read from
+/// disk as the editor scans it.
+pub fn announcement_by_path(path: &str) -> Result<Announcement, Omission> {
+    let listing = game::listing();
+    listing.take_in(path);
+    Project::new(
+        listing,
+        settings::test_directories(),
+        settings::template_directory(),
+        &game::is_node_class,
+    )
+    .announcement_by_path(path)
 }
 
 /// The names node scripts share, each with the files sharing it, already
@@ -270,8 +193,9 @@ mod tests {
     use std::collections::BTreeMap;
     use std::sync::Mutex;
 
-    use super::{Announcement, Clashes, Listing, Omission, Project};
+    use super::{Announcement, Clashes, Omission, Project};
     use crate::ancestry::tests::Sources;
+    use crate::game::Listing;
     use crate::realm::{Declarations, Files, Roots};
 
     fn announce_sources(

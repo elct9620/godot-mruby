@@ -46,18 +46,6 @@ module Godot
 end
 ```
 
-## `is_node_class`
-
-Whether the engine class a name spells is a node class, the only kind a node script extends.
-
-| Attribute | Value |
-| --- | --- |
-| internal | yes |
-
-```rust
-pub fn is_node_class(class: &str) -> bool {}
-```
-
 ## `derive_node_key`
 
 The key a realm holds a node's Ruby object under: the node's instance id, so the object is found from the node alone.

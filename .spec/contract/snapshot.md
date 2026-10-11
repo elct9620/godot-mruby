@@ -229,6 +229,20 @@ impl Property {
 }
 ```
 
+## `Property::default_text`
+
+The value a property was declared with, as Godot prints it, which reads without the engine.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Property {
+    pub fn default_text(&self) -> &str {}
+}
+```
+
 ## `Snapshot`
 
 What the classes of a realm's files have, as one value that never changes once it is published.

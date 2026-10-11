@@ -30,6 +30,8 @@ module Godot
     GAME_FILE = "res://integration/export/seeker.rb"
     REFUSED_SCENE = "res://integration/export/intruder.tscn"
     REFUSAL = "ERROR: The test runner does not run in an exported game"
+    HINT_SCENE = "res://integration/export/lookout.tscn"
+    HINT = "quarry hint: Seeker"
 
     module_function
 
@@ -40,6 +42,7 @@ module Godot
         verify_index_left_out!(dir, pack)
         verify_tests_left_out!(dir, pack)
         verify_runner_refused!(dir, pack)
+        verify_ruby_class_hint!(dir, pack)
       end
     end
 
@@ -71,6 +74,14 @@ module Godot
       return if status.exitstatus == 1 && output.lines.map(&:chomp).include?(REFUSAL)
 
       raise "The exported game ran a test runner:\n#{output}"
+    end
+
+    # @behavior RX-007
+    def verify_ruby_class_hint!(dir, pack)
+      output, status = run(dir, pack, HINT_SCENE)
+      return if status.success? && output.lines.map(&:chomp).include?(HINT)
+
+      raise "The exported game did not read a Ruby class an export names:\n#{output}"
     end
 
     # The export prints the editor's complaints about having no window, so it

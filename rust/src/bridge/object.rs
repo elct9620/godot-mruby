@@ -12,7 +12,7 @@ use beni::{
 };
 use godot::builtin::StringName;
 use godot::builtin::{Variant, VariantType};
-use godot::classes::{ClassDb, Engine, Object, ResourceLoader, Script};
+use godot::classes::{ClassDb, Engine, Object, ProjectSettings, ResourceLoader, Script};
 use godot::global::type_string;
 use godot::meta::ToGodot;
 use godot::meta::error::CallError;
@@ -24,7 +24,6 @@ use smallvec::SmallVec;
 use super::BridgeData;
 use super::bound_method::{Arity, BoundMethod};
 use super::value::{self, ToRuby};
-use crate::game;
 use crate::hint::{Hint, name_type};
 use crate::realm::{self, Key};
 use crate::snapshot::{Heading, Property, Signal};
@@ -698,11 +697,14 @@ fn find_editor_name(mrb: &Mrb, class: &str) -> Option<String> {
     editor_name_by_path(&realm::file_by_constant(mrb, &names)?)
 }
 
-// The name the editor lists the file at `path` under, if it is announced.
+// The name Godot lists the file at `path` under among its global classes,
+// as GDScript finds a class an export names.
 fn editor_name_by_path(path: &str) -> Option<String> {
-    game::announcement_by_path(path)
-        .ok()
-        .map(|announcement| announcement.name)
+    ProjectSettings::singleton()
+        .get_global_class_list()
+        .iter_shared()
+        .find(|class| class.get_or_nil("path").to_string() == path)
+        .map(|class| class.get_or_nil("class").to_string())
 }
 
 // GDScript's words for a type nothing in the project is known by.

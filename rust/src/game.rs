@@ -2,15 +2,16 @@
 //! the source Godot holds for each as the game's realm is given them, or as
 //! each is on disk for what the editor asks while it scans.
 
-use godot::classes::{Engine, FileAccess, Os, ResourceLoader, Script};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+
+use godot::classes::{ClassDb, Engine, FileAccess, Os, ResourceLoader, Script};
 use godot::global::Error;
 use godot::obj::Singleton;
 
-use crate::announcement::{Announcement, Listing, Omission, Project};
+use crate::ancestry;
 use crate::header::Header;
-use crate::realm::{Declarations, Extends, Files, Roots};
+use crate::realm::{ClassIndex, Declarations, Extends, Files, Roots};
 use crate::settings;
-use crate::{ancestry, bridge};
 
 const ROOT: &str = "res://";
 
@@ -61,7 +62,7 @@ impl Files for GameFiles {
         let header = Header::from_source(path, &source, &self.roots());
         let extends = ancestry::trace_ancestry(path, &header, self)
             .ok()
-            .filter(|ancestry| bridge::is_node_class(ancestry.engine_class()))
+            .filter(|ancestry| is_node_class(ancestry.engine_class()))
             .map(|ancestry| match ancestry.files().first() {
                 Some((file, _)) => Extends::File(file.clone()),
                 None => {
@@ -111,25 +112,103 @@ pub fn is_left_out_in_editor(path: &str, test_directories: &[String]) -> bool {
     Engine::singleton().is_editor_hint() && settings::is_in_directory(path, test_directories)
 }
 
+/// A project's files as last listed, for what the editor asks while it
+/// scans: listing walks every directory, which the editor would otherwise
+/// wait on for each file it asks about. A file asked about joins the listing,
+/// and a removed one leaves it once the project is listed again. The class
+/// index of the listing is kept until the listing changes.
+pub struct Listing<F: Files> {
+    files: F,
+    is_listed: fn(&str) -> bool,
+    paths: Mutex<Option<Vec<String>>>,
+    index: Mutex<Option<Arc<ClassIndex>>>,
+}
+
+impl<F: Files> Listing<F> {
+    /// `files`, listed the first time a question needs them; `is_listed`
+    /// says whether a file asked about belongs to the listing.
+    pub const fn new(files: F, is_listed: fn(&str) -> bool) -> Self {
+        Self {
+            files,
+            is_listed,
+            paths: Mutex::new(None),
+            index: Mutex::new(None),
+        }
+    }
+
+    /// Takes the file at `path` into the listing, as the editor asks about
+    /// it: it may have been added since the project was listed.
+    pub fn take_in(&self, path: &str) {
+        if !(self.is_listed)(path) {
+            return;
+        }
+        if let Some(paths) = self.lock_paths().as_mut()
+            && let Err(at) = paths.binary_search_by(|other| other.as_str().cmp(path))
+        {
+            paths.insert(at, path.to_owned());
+            self.lock_index().take();
+        }
+    }
+
+    /// Lists the project again, walking its directories outside the lock so
+    /// no question waits on the walk.
+    pub fn relist(&self) {
+        let paths = self.files.paths();
+        *self.lock_paths() = Some(paths);
+        self.lock_index().take();
+    }
+
+    // The class index of the listing, built outside the lock once the
+    // listing changed.
+    fn index(&self) -> Arc<ClassIndex> {
+        if let Some(index) = &*self.lock_index() {
+            return Arc::clone(index);
+        }
+        let index = Arc::new(ClassIndex::with_files(self.paths(), self.roots()));
+        Arc::clone(self.lock_index().get_or_insert(index))
+    }
+
+    fn lock_paths(&self) -> MutexGuard<'_, Option<Vec<String>>> {
+        self.paths.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn lock_index(&self) -> MutexGuard<'_, Option<Arc<ClassIndex>>> {
+        self.index.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+}
+
+impl<F: Files> Files for Listing<F> {
+    fn paths(&self) -> Vec<String> {
+        if let Some(paths) = &*self.lock_paths() {
+            return paths.clone();
+        }
+        let paths = self.files.paths();
+        self.lock_paths().get_or_insert(paths).clone()
+    }
+
+    fn roots(&self) -> Roots {
+        self.files.roots()
+    }
+
+    fn source_by_path(&self, path: &str) -> Result<String, String> {
+        self.files.source_by_path(path)
+    }
+
+    fn declarations_by_path(&self, path: &str) -> Declarations {
+        self.files.declarations_by_path(path)
+    }
+
+    fn file_by_name(&self, scope: &[String], names: &[String]) -> Option<String> {
+        self.index().file_by_name(scope, names)
+    }
+}
+
 static LISTING: Listing<FilesOnDisk> = Listing::new(FilesOnDisk, is_listed);
 
 /// The game's files on disk as last listed, for what the editor asks while
 /// it holds the language.
 pub fn listing() -> &'static Listing<FilesOnDisk> {
     &LISTING
-}
-
-/// The announcement of the file at `path`, read from disk as the editor
-/// scans the project.
-pub fn announcement_by_path(path: &str) -> Result<Announcement, Omission> {
-    LISTING.take_in(path);
-    Project::new(
-        &LISTING,
-        settings::test_directories(),
-        settings::template_directory(),
-        &bridge::is_node_class,
-    )
-    .announcement_by_path(path)
 }
 
 /// Lists the game's files again, as the editor found the project's files
@@ -182,6 +261,12 @@ impl Files for FilesOnDisk {
     fn declarations_by_path(&self, _path: &str) -> Declarations {
         Declarations::default()
     }
+}
+
+/// Whether the engine class `class` is a node class, which only a node
+/// script's class extends.
+pub fn is_node_class(class: &str) -> bool {
+    ClassDb::singleton().is_parent_class(class, "Node")
 }
 
 /// Whether this is an exported game: Godot runs one on an export template's

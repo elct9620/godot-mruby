@@ -23,7 +23,7 @@ use crate::log::GodotLog;
 use crate::realm::{self, Files};
 use crate::settings;
 use crate::snapshot::{self, Heading, Member, Property, Signal};
-use crate::{bridge, error};
+use crate::{announcement, error};
 
 /// The script a `.rb` file loads as, the way a `.gd` file loads as a `GDScript`.
 ///
@@ -311,7 +311,7 @@ impl RubyScript {
 // The node class `ancestry` ends in, or why it ends in none.
 fn read_node_class(ancestry: &Ancestry) -> Result<StringName, Break> {
     let engine_class = ancestry.engine_class();
-    bridge::is_node_class(engine_class)
+    game::is_node_class(engine_class)
         .then(|| StringName::from(engine_class))
         .ok_or(Break::NoEngineClass)
 }
@@ -353,7 +353,7 @@ impl IScriptExtension for RubyScript {
     // `class_name`; none for a script it does not announce.
     fn get_global_name(&self) -> StringName {
         let path = self.base().get_path().to_string();
-        game::announcement_by_path(&path)
+        announcement::announcement_by_path(&path)
             .map(|announcement| StringName::from(&announcement.name))
             .unwrap_or_default()
     }
