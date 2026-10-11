@@ -13,14 +13,14 @@ func _physics_process(delta: float) -> void:
 	_cooldown -= delta
 	if _cooldown > 0.0:
 		return
-	var target = _nearest()
+	var target = _find_target()
 	if target == null:
 		return
 	target.hit()
 	_cooldown = RELOAD
 
 
-func _nearest():
+func _find_target():
 	var in_range: Array = get_parent().enemies().filter(
 		func(enemy): return _distance_to(enemy) <= range
 	)

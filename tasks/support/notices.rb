@@ -22,7 +22,7 @@ module Notices
 
   # The licenses of what the libraries carry: mruby, linked from the archive
   # beni builds, and every crate the extension depends on at run time.
-  def text
+  def compose_text
     sections = [compose_notice("mruby", File.join(Extension::VENDOR_DIR, "mruby"), "MIT")]
     runtime_crates.each do |package|
       sections << compose_notice("#{package["name"]} #{package["version"]}",

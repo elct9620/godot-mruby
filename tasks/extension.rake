@@ -35,7 +35,7 @@ end
 
 namespace :extension do
   desc "Write the changed godot-cell into vendor/"
-  task :godot_cell do
+  task :vendor_godot_cell do
     GodotCell.vendor
     GodotCell.check_lock
   end
@@ -43,4 +43,4 @@ end
 
 # cargo resolves no crate graph without the changed godot-cell, and every
 # build and check reaches cargo through beni:build.
-task "beni:build" => "extension:godot_cell"
+task "beni:build" => "extension:vendor_godot_cell"

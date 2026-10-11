@@ -44,7 +44,7 @@ module Addon
     FileUtils.mkdir_p(File.dirname(addon))
     FileUtils.cp_r(SOURCE, addon)
     FileUtils.cp(File.join(ROOT, "LICENSE"), addon)
-    File.write(File.join(addon, NOTICES), Notices.text)
+    File.write(File.join(addon, NOTICES), Notices.compose_text)
   end
 
   # Windows' own tar reads zip archives; a 7z found on PATH may be the MSYS2

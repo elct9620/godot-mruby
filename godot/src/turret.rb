@@ -11,7 +11,7 @@ class Turret < Godot::Node2D
     @cooldown = (@cooldown || 0.0) - delta
     return if @cooldown > 0.0
 
-    target = nearest
+    target = find_target
     return unless target
 
     target.hit
@@ -20,7 +20,7 @@ class Turret < Godot::Node2D
 
   private
 
-  def nearest
+  def find_target
     in_range = get_parent.enemies.select { |enemy| distance_to(enemy) <= range }
     in_range.inject { |near, enemy| distance_to(enemy) < distance_to(near) ? enemy : near }
   end
