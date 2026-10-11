@@ -110,7 +110,7 @@ impl Member {
 
 ## `Class`
 
-What a class has once its file has run: what its body declared, and the methods it has of its own, those metaprogramming defined and those of the modules it takes in included, with the digest of the source it ran and the names that source's `export` and `signal` calls write, which tell what the source Godot holds now has changed and what it cannot answer for.
+What a class has once its file has run: what its body declared, and the methods it has of its own, private ones and those metaprogramming defined or the modules it takes in give it included, with the digest of the source it ran and the names that source's `export` and `signal` calls write, which tell what the source Godot holds now has changed and what it cannot answer for.
 
 | Attribute | Value |
 | --- | --- |

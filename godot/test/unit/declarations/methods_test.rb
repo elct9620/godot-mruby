@@ -93,4 +93,11 @@ class MethodsTest < Minitest::Test
 
     refute belfry.has_method(:chime)
   end
+
+  # @behavior RD-076
+  def test_a_node_has_a_private_method_its_class_defined_as_it_ran
+    cloister = autofree(Unit::Declarations::Cloister.new)
+
+    assert cloister.has_method(:vespers)
+  end
 end

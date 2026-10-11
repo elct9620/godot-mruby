@@ -641,3 +641,15 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | Given | another file that defines a method on the class and then raises |
 | When | the other file runs |
 | Then | the node has the method |
+
+## `RD-076` A node has a private method its class defined as it ran
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RD-004` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class defines a method as its body runs and makes it private |
+| When | a node of that class is asked whether it has the method |
+| Then | it answers that it has it |

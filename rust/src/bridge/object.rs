@@ -722,7 +722,7 @@ fn describe_unknown_type(class: &str) -> String {
 fn find_engine_member(mrb: &Mrb, class: RClass, name: &str) -> Option<String> {
     let engine_class = find_engine_ancestor(mrb, class)?;
     let mut class_db = ClassDb::singleton();
-    let has = class_db.class_has_signal(engine_class.as_str(), name)
+    let has_member = class_db.class_has_signal(engine_class.as_str(), name)
         || class_db.class_has_integer_constant(engine_class.as_str(), name)
         || !class_db
             .class_get_property_setter(engine_class.as_str(), name)
@@ -730,7 +730,7 @@ fn find_engine_member(mrb: &Mrb, class: RClass, name: &str) -> Option<String> {
         || !class_db
             .class_get_property_getter(engine_class.as_str(), name)
             .is_empty();
-    has.then_some(engine_class)
+    has_member.then_some(engine_class)
 }
 
 // The engine class `class` extends, itself or through its superclasses, as

@@ -21,7 +21,8 @@ pub(super) fn define(mrb: &Mrb) -> Result<(), Error> {
 
 /// The names of the methods the class the file at `path` names has of its
 /// own: those it defines and those of the modules it takes in, up to its
-/// superclass. The class is noted as a taker of each of those, so a method
+/// superclass, private ones included, since Godot calls a method whatever its
+/// visibility, as the header lists a `def` written after `private`. The class is noted as a taker of each of those, so a method
 /// added to one later is read again. None when the file named no class.
 pub(super) fn methods_by_path(mrb: &Mrb, path: &str) -> Vec<String> {
     let Some(class) = constants::constant_by_key(mrb, &key_by_path(mrb, path)) else {
@@ -40,11 +41,11 @@ pub(super) fn methods_by_path(mrb: &Mrb, path: &str) -> Vec<String> {
         if let Some(id) = read_id(mrb, module) {
             record_taker(mrb, id, path);
         }
-        let methods = module
-            .funcall(mrb, c"instance_methods", &own)
-            .ok()
-            .and_then(RArray::from_value);
-        let found = methods.into_iter().flat_map(|methods| methods.entries(mrb));
+        let found = [c"instance_methods", c"private_instance_methods"]
+            .into_iter()
+            .filter_map(|listing| module.funcall(mrb, listing, &own).ok())
+            .filter_map(RArray::from_value)
+            .flat_map(|methods| methods.entries(mrb));
         for name in found
             .filter_map(Symbol::from_value)
             .filter_map(|name| name.name(mrb))

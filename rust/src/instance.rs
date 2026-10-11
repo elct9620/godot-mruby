@@ -812,9 +812,10 @@ unsafe extern "C" fn has_method(
         // SAFETY: Godot hands a method name living for the call.
         let method = unsafe { &*method.cast::<StringName>() };
         // SAFETY: Godot hands a live instance.
-        let has = unsafe { with_instance(data, |instance| instance.method_name_by_key(method)) }
-            .is_some();
-        sys::GDExtensionBool::from(has)
+        let has_method =
+            unsafe { with_instance(data, |instance| instance.method_name_by_key(method)) }
+                .is_some();
+        sys::GDExtensionBool::from(has_method)
     })
 }
 

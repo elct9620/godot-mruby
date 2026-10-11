@@ -367,6 +367,7 @@ realm.rs              Realm, prepare, enter, Files, Log, RubyError
 │     ├─ snapshot     what the files that ran declare, as published
 │     ├─ takers, changed  which classes take in a module, and whose methods changed
 │     ├─ spellings, method symbols  names interned once
+│     ├─ outermost, namespace flag  how the running Ruby started, a module the realm makes
 │     └─ extension data  what each gem keeps, by its type
 │
 ├─ reentrant_lock.rs  the lock a thread inside takes again
