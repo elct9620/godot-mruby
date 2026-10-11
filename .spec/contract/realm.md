@@ -484,7 +484,7 @@ Writes the error to a log, at its Ruby line when it has one.
 
 ```rust
 impl RubyError {
-    pub fn write(&self, log: &impl Log) {}
+    pub fn write(&self, log: &(impl Log + ?Sized)) {}
 }
 ```
 
@@ -497,7 +497,7 @@ The Ruby files a realm runs: which there are, for its class index, and what each
 | internal | yes |
 
 ```rust
-pub trait Files {}
+pub trait Files: Send {}
 ```
 
 ## `Files::paths`
@@ -524,7 +524,7 @@ The root directories the class index names the files from; only `res://` for fil
 
 ```rust
 pub trait Files {
-    fn roots(&self) -> Roots;
+    fn roots(&self) -> Roots {}
 }
 ```
 
@@ -603,7 +603,7 @@ Where a realm's words go: what Ruby prints, and the records placed at a Ruby fil
 | internal | yes |
 
 ```rust
-pub trait Log {}
+pub trait Log: Send {}
 ```
 
 ## `Log::print_line`
@@ -658,7 +658,7 @@ An exception, as a script error at the first frame of its backtrace, with the fr
 
 ```rust
 pub trait Log {
-    fn record_exception(&self, text: &str, backtrace: &[Location]);
+    fn record_exception(&self, text: &str, backtrace: &[Location]) {}
 }
 ```
 

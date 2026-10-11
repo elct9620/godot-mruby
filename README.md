@@ -28,7 +28,7 @@ The addon registers Ruby as a script language, so a `.rb` file is served whereve
 
 ## Requirements
 
-Each platform ships one self-contained library, so a game needs nothing else at run time.
+Each platform ships one self-contained library. On Windows it needs the Microsoft Visual C++ Redistributable, which Microsoft provides.
 
 | Item | Supported |
 |---|---|

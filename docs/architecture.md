@@ -135,7 +135,7 @@ the library loads
   │
   ▼
 Scene stage begins
-  │  settings::register     mruby/test/* and their defaults
+  │  settings::register     mruby/test/*, mruby/loader/*, their defaults
   │  language::register     RubyLanguage for .rb
   │  loader::register       .rb loads as RubyScript
   │  saver::register        RubyScript saves as .rb
@@ -200,7 +200,7 @@ lib.rs    registers Scripting and settings, prepares the realm
 └────────────────────────────────────┘
 ```
 
-Each layer uses only the layers below it. Only `language` and `script` refer to each other, as GDExtension languages do. The realm uses only `compiler` and `snapshot`, the shape it publishes. A property's default keeps its printed text, so the realm handles no engine value. What it needs from Godot, `game` and `log` implement, so it neither parses a file nor knows the engine.
+Each layer uses only its own and the layers below it, as `saver` uses `language` and `bridge` uses `log`. Only `language` and `script` refer to each other, as GDExtension languages do. The realm uses only `compiler` and `snapshot`, the shape it publishes. A property's default keeps its printed text, so the realm handles no engine value. What it needs from Godot, `game` and `log` implement, so it neither parses a file nor knows the engine.
 
 #### 2.3.1 Shared Answers
 
@@ -333,6 +333,8 @@ Only what the source does not write out as literals waits for the run. The edito
 ```
 RubyInstance ─────┐   on a call of a method its class defines
 RubyTestRunner ───┤   when it is ready, and as each frame begins until its run is over
+RubyObject ───────┤   when the engine calls a Callable Ruby handed it
+lib.rs, script ───┤   each frame: releases, reloads, the editor's placed scripts
                   ▼
 realm::enter(body)
   │  waits while another thread is inside; a thread inside goes on
@@ -362,6 +364,9 @@ realm.rs              Realm, prepare, enter, Files, Log, RubyError
 │     ├─ files, log   what the realm was given as it opened
 │     ├─ index, runs  the class index and each file's run
 │     ├─ registry     the objects held for keys outside
+│     ├─ snapshot     what the files that ran declare, as published
+│     ├─ takers, changed  which classes take in a module, and whose methods changed
+│     ├─ spellings, method symbols  names interned once
 │     └─ extension data  what each gem keeps, by its type
 │
 ├─ reentrant_lock.rs  the lock a thread inside takes again
