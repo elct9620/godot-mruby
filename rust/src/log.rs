@@ -67,11 +67,7 @@ pub fn current_backtrace() -> Vec<Location> {
 pub fn write_compiler_warnings(file: &CStr) -> impl FnMut(Warning) {
     let file = file.to_string_lossy().into_owned();
     move |warning| {
-        let at = Location {
-            file: file.clone(),
-            line: warning.line,
-            function: String::new(),
-        };
+        let at = Location::new(file.clone(), warning.line);
         crate::warn!(at: &at, "{}", warning.message);
     }
 }

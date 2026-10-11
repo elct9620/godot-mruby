@@ -37,6 +37,12 @@ pub struct Property {
 }
 
 impl Property {
+    /// The usage of a script's own variable, which the editor shows and a
+    /// scene stores.
+    pub fn usage(&self) -> PropertyUsageFlags {
+        PropertyUsageFlags::DEFAULT | PropertyUsageFlags::SCRIPT_VARIABLE
+    }
+
     /// The property `name`, taking its type from the value it is declared
     /// with and shown as the editor shows a property of that type.
     pub fn new(name: String, default: &Variant) -> Self {

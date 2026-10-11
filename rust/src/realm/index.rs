@@ -332,11 +332,7 @@ pub fn camelize(segment: &str) -> String {
 
 // A warning about a file as a whole points at its first line.
 fn locate_first_line(path: &str) -> Location {
-    Location {
-        file: path.to_owned(),
-        line: 1,
-        function: String::new(),
-    }
+    Location::new(path.to_owned(), 1)
 }
 
 #[cfg(test)]

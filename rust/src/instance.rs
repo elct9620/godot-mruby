@@ -480,14 +480,13 @@ fn describe_heading(heading: &Heading) -> sys::GDExtensionPropertyInfo {
 // points at are the array's own, taken back when Godot hands the array to
 // `free_property_list`.
 fn describe_property(property: &Property) -> sys::GDExtensionPropertyInfo {
-    let usage = PropertyUsageFlags::DEFAULT.ord() | PropertyUsageFlags::SCRIPT_VARIABLE.ord();
     sys::GDExtensionPropertyInfo {
         type_: property.kind.ord() as sys::GDExtensionVariantType,
         name: into_raw(StringName::from(&property.name)),
         class_name: into_raw(StringName::default()),
         hint: property.hint.ord() as u32,
         hint_string: into_raw(GString::from(&property.hint_string)),
-        usage: usage as u32,
+        usage: property.usage().ord() as u32,
     }
 }
 

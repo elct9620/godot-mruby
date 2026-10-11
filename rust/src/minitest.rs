@@ -59,11 +59,8 @@ fn log_error(
     file: Option<String>,
     line: Option<i64>,
 ) -> Value {
-    let at = file.map(|file| Location {
-        file,
-        line: line.and_then(|line| line.try_into().ok()).unwrap_or(0),
-        function: String::new(),
-    });
+    let line = line.and_then(|line| line.try_into().ok()).unwrap_or(0);
+    let at = file.map(|file| Location::new(file, line));
     error!(at: at.as_ref(), "{message}");
     qnil().as_value()
 }

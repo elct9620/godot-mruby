@@ -55,6 +55,17 @@ pub struct Location {
     pub function: String,
 }
 
+impl Location {
+    /// A line of a file, in no method it names.
+    pub fn new(file: String, line: u32) -> Self {
+        Self {
+            file,
+            line,
+            function: String::new(),
+        }
+    }
+}
+
 /// The Ruby files a realm runs: which there are, for its class index, and
 /// what each one's source is. A realm is given them as it opens, so it never
 /// knows where they are kept.
@@ -209,11 +220,7 @@ fn bookkeeping(mrb: &Mrb) -> &Bookkeeping {
 fn compile(mrb: &Mrb, name: &CStr, source: &str) -> Result<(), Error> {
     let file = name.to_string_lossy();
     compiler::run(mrb, name, source, |warning| {
-        let at = Location {
-            file: file.clone().into_owned(),
-            line: warning.line,
-            function: String::new(),
-        };
+        let at = Location::new(file.clone().into_owned(), warning.line);
         bookkeeping(mrb)
             .log
             .record(Level::Warn, Some(&at), &warning.message);
@@ -767,11 +774,7 @@ impl RubyError {
             Error::Syntax(parse) => Self {
                 level: Level::ScriptError,
                 message: parse.message().to_owned(),
-                at: path.map(|path| Location {
-                    file: path.to_owned(),
-                    line: parse.line().into(),
-                    function: String::new(),
-                }),
+                at: path.map(|path| Location::new(path.to_owned(), parse.line().into())),
                 backtrace: Vec::new(),
             },
             Error::Exception(_) => {

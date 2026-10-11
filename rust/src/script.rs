@@ -9,7 +9,7 @@ use godot::classes::{
 };
 use godot::global::Error;
 use godot::meta::conv::RawPtr;
-use godot::obj::{EngineBitfield, EngineEnum};
+use godot::obj::EngineEnum;
 use godot::prelude::*;
 use godot::register::info::PropertyUsageFlags;
 use godot::sys::{self, GodotFfi};
@@ -632,19 +632,13 @@ fn describe_heading(heading: &Heading) -> AnyDictionary {
 
 // An exported property as Godot reads it: the name it is read and written
 // by, the type the value it was declared with gave it, the hint the editor
-// shows it with, and the usage of a script's own variable, which the editor
-// shows and a scene stores.
+// shows it with, and the usage of a script's own variable.
 fn describe_property(property: &Property) -> AnyDictionary {
     let mut info = describe_name(property.name.as_str());
     info.set("type", property.kind.ord());
     info.set("hint", property.hint.ord());
     info.set("hint_string", property.hint_string.as_str());
-    info.set(
-        "usage",
-        PropertyUsageFlags::from_ord(
-            PropertyUsageFlags::DEFAULT.ord() | PropertyUsageFlags::SCRIPT_VARIABLE.ord(),
-        ),
-    );
+    info.set("usage", property.usage());
     info.upcast_any_dictionary()
 }
 

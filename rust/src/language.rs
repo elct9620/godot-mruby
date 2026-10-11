@@ -485,11 +485,7 @@ fn resolve_icon_path(script: &GString, icon: &str) -> GString {
 // while it answers.
 fn warn_of_shared_name(name: String, files: Vec<String>) {
     Callable::from_sync_fn("warn_of_shared_name", move |_| {
-        let at = Location {
-            file: files[0].clone(),
-            line: 1,
-            function: String::new(),
-        };
+        let at = Location::new(files[0].clone(), 1);
         let warning = announcement::describe_shared_name(&files[0], &name, &files[1..]);
         warn!(at: &at, "{warning}");
     })
