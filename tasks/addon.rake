@@ -5,15 +5,7 @@ require_relative "support/addon"
 namespace :addon do
   desc "Package the addon with every platform's library and its licenses into #{Addon::PACKAGE}"
   task package: ["beni:vendor:setup", "extension:vendor_godot_cell"] do
-    missing = Addon.absent_libraries
-    abort "The addon is missing libraries:\n#{missing.join("\n")}" unless missing.empty?
-
-    rm_f Addon::PACKAGE
-    mkdir_p File.dirname(Addon::PACKAGE)
-    Dir.mktmpdir do |dir|
-      Addon.stage(dir)
-      sh "zip", "-qr", Addon::PACKAGE, Addon::FOLDER, chdir: dir
-    end
+    Addon.package
   end
 
   desc "Install a package (ZIP=path, default #{Addon::PACKAGE}) into a copy of the test project and verify it loads"

@@ -33,6 +33,37 @@ module Extension
     RbConfig::CONFIG["host_os"].include?("darwin")
   end
 
+  # A debug build for this host, installed where the editor loads it.
+  def build_debug_library
+    build_host_library("debug")
+  end
+
+  # The library this platform ships, in the profile PROFILE names; macOS
+  # ships one universal library of both architectures.
+  def build_shipped_library
+    macos? ? build_universal_library(profile) : build_host_library(profile)
+  end
+
+  def build_host_library(profile)
+    system("cargo", "build", *PROFILES.fetch(profile), "--manifest-path", MANIFEST, exception: true)
+
+    source, name = host_library
+    install(File.join(TARGET_DIR, profile, source), name)
+  end
+
+  def build_universal_library(profile)
+    ARCHES.each_key do |triple|
+      system(build_cargo_env(triple),
+             "cargo", "build", *PROFILES.fetch(profile), "--target", triple, "--manifest-path", MANIFEST,
+             exception: true)
+    end
+
+    output = locate_universal_library(profile)
+    system("lipo", "-create", "-output", output, *ARCHES.keys.map { |t| locate_slice(t, profile) }, exception: true)
+    require_arches!(output)
+    install(output, MACOS_LIBRARY)
+  end
+
   # A distributed build is release unless PROFILE=debug asks for one to
   # compare against.
   def profile

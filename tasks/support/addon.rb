@@ -39,6 +39,19 @@ module Addon
     libraries.reject { |path| File.exist?(path) }
   end
 
+  # Zips the addon, every platform's library and the licenses into PACKAGE.
+  def package
+    missing = absent_libraries
+    raise "The addon is missing libraries:\n#{missing.join("\n")}" unless missing.empty?
+
+    FileUtils.rm_f(PACKAGE)
+    FileUtils.mkdir_p(File.dirname(PACKAGE))
+    Dir.mktmpdir do |dir|
+      stage(dir)
+      system("zip", "-qr", PACKAGE, FOLDER, chdir: dir, exception: true)
+    end
+  end
+
   def stage(dir)
     addon = File.join(dir, FOLDER, "addons", "godot_mruby")
     FileUtils.mkdir_p(File.dirname(addon))
