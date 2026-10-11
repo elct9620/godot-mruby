@@ -2,8 +2,8 @@
 
 [ext_resource type="Script" path="res://integration/report/warning.rb" id="1"]
 [ext_resource type="Script" path="res://integration/report/syntax_error.rb" id="2"]
-[ext_resource type="Script" path="res://integration/report/raising.rb" id="3"]
-[ext_resource type="Script" path="res://integration/report/pushing.rb" id="4"]
+[ext_resource type="Script" path="res://integration/report/fuse.rb" id="3"]
+[ext_resource type="Script" path="res://integration/report/crier.rb" id="4"]
 
 [node name="Report" type="Node"]
 
@@ -13,8 +13,8 @@ script = ExtResource("1")
 [node name="SyntaxError" type="Node" parent="."]
 script = ExtResource("2")
 
-[node name="Raising" type="Node" parent="."]
+[node name="Fuse" type="Node" parent="."]
 script = ExtResource("3")
 
-[node name="Pushing" type="Node" parent="."]
+[node name="Crier" type="Node" parent="."]
 script = ExtResource("4")

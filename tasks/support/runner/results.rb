@@ -16,11 +16,11 @@ module Godot
       # results have to list, and where the failure has to be placed.
       RUNS = {
         "#{RUNNER_TESTS}/skip" => [%w[SkipTest test_passes pass], %w[SkipTest test_skips skip]],
-        "#{RUNNER_TESTS}/failing/assertion" => [%w[FailedAssertionTest test_one_equals_two failure]]
+        "#{RUNNER_TESTS}/failures/assertion" => [%w[FailedAssertionTest test_one_equals_two failure]]
       }.freeze
-      FAILURE_LOCATION = ["#{RUNNER_TESTS}/failing/assertion/failed_assertion_test.rb", 9].freeze
+      FAILURE_LOCATION = ["#{RUNNER_TESTS}/failures/assertion/failed_assertion_test.rb", 9].freeze
       # A directory whose test file does not parse, and the line it fails at.
-      SYNTAX_TESTS = "#{RUNNER_TESTS}/failing/syntax".freeze
+      SYNTAX_TESTS = "#{RUNNER_TESTS}/failures/syntax".freeze
       SYNTAX_ERROR_LOCATION = ["#{SYNTAX_TESTS}/broken_syntax_test.rb", 4].freeze
       # The script that prints where user:// is, and the run file under it.
       USER_DIR_SCENE = "res://integration/runner/run_file/user_dir.tscn"

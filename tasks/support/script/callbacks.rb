@@ -9,10 +9,10 @@ module Godot
     module Callbacks
       # The scene, what its scripts print, and what they must never print.
       SCENE = "res://integration/script/callbacks/callbacks.tscn"
-      BUILT_LINE = "built.rb built an object"
-      FAILED_LINE = "SCRIPT ERROR: failing.rb cannot be built"
-      FAILED_PROCESS_LINE = "failing.rb processed"
-      IDLE_LINE = "idle.rb ran"
+      BUILT_LINE = "brick.rb built an object"
+      FAILED_LINE = "SCRIPT ERROR: fault.rb cannot be built"
+      FAILED_PROCESS_LINE = "fault.rb processed"
+      IDLE_LINE = "statue.rb ran"
       # What Godot gets for an answer that cannot cross, and the log's reason.
       REFUSED_ANSWER_LINES = ["looped answered Nil <null>",
                               "ERROR: #looped answered [[...]]: an Array nested more than 100 deep cannot " \

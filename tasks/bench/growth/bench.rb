@@ -3,7 +3,7 @@
 # Walk node walked in GDScript; prints each measure as
 # `bench <name> <microseconds>` and quits.
 class Bench < Godot::Node
-  # How many times the tree is walked, as walk.gd walks it.
+  # How many times the tree is walked, as walker.gd walks it.
   PASSES = 20
 
   def _ready

@@ -1,7 +1,7 @@
 extends Node
 ## Adds nodes of the ticker script the command line names, plays physics
 ## frames, and prints the nanoseconds of one ticker's callback: the time
-## between this node's physics callback, which runs first, and the closing
+## between this node's physics callback, which runs first, and the closer
 ## node's, which runs last. It is GDScript so that timing adds no Ruby.
 
 const TICKERS := 2000
@@ -19,11 +19,11 @@ func _ready() -> void:
 		var ticker := Node.new()
 		ticker.set_script(script)
 		add_child(ticker)
-	var closing := Node.new()
-	closing.set_script(load("res://ops/closing.gd"))
-	closing.process_physics_priority = 1000
-	closing.timer = self
-	add_child(closing)
+	var closer := Node.new()
+	closer.set_script(load("res://ops/closer.gd"))
+	closer.process_physics_priority = 1000
+	closer.timer = self
+	add_child(closer)
 
 
 func _physics_process(_delta: float) -> void:

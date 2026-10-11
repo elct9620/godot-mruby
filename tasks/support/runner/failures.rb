@@ -9,39 +9,39 @@ module Godot
     module Failures
       # Runs that have to fail, each as the runner's options and what the run
       # has to print on the way, in the order it prints it: one per way a run
-      # fails, all under godot/integration/runner/failing/ except the filter that
+      # fails, all under godot/integration/runner/failures/ except the filter that
       # names no test, the directories that are not the project's test
       # directories, and a seed that is not a number. An error's calls end at the
       # test method, so its frame is the last before the report's blank line.
       RUNS = {
-        %W[--dir #{RUNNER_TESTS}/failing/assertion] => [
+        %W[--dir #{RUNNER_TESTS}/failures/assertion] => [
           "teardown ran after a failure",
-          "FailedAssertionTest#test_one_equals_two [#{RUNNER_TESTS}/failing/assertion/failed_assertion_test.rb:9]:",
+          "FailedAssertionTest#test_one_equals_two [#{RUNNER_TESTS}/failures/assertion/failed_assertion_test.rb:9]:",
           "ERROR: FailedAssertionTest#test_one_equals_two: Expected: 1",
-          "(#{RUNNER_TESTS}/failing/assertion/failed_assertion_test.rb:9)"
+          "(#{RUNNER_TESTS}/failures/assertion/failed_assertion_test.rb:9)"
         ],
-        %W[--dir #{RUNNER_TESTS}/failing/assertion --seed 7] => [
+        %W[--dir #{RUNNER_TESTS}/failures/assertion --seed 7] => [
           "ERROR: FailedAssertionTest#test_one_equals_two: Expected: 1",
           "Run it again with --seed 7 --include FailedAssertionTest#test_one_equals_two"
         ],
-        %W[--dir #{RUNNER_TESTS}/failing/error] => [
-          "RaisedErrorTest#test_raises_an_argument_error [#{RUNNER_TESTS}/failing/error/raised_error_test.rb:10]:",
+        %W[--dir #{RUNNER_TESTS}/failures/error] => [
+          "RaisedErrorTest#test_raises_an_argument_error [#{RUNNER_TESTS}/failures/error/raised_error_test.rb:10]:",
           "ArgumentError: not an assertion",
-          "    #{RUNNER_TESTS}/failing/error/raised_error_test.rb:10:in refuse_the_item",
-          "    #{RUNNER_TESTS}/failing/error/raised_error_test.rb:6:in test_raises_an_argument_error\n\n",
+          "    #{RUNNER_TESTS}/failures/error/raised_error_test.rb:10:in refuse_the_item",
+          "    #{RUNNER_TESTS}/failures/error/raised_error_test.rb:6:in test_raises_an_argument_error\n\n",
           "ERROR: RaisedErrorTest#test_raises_an_argument_error: ArgumentError: not an assertion",
-          "(#{RUNNER_TESTS}/failing/error/raised_error_test.rb:10)"
+          "(#{RUNNER_TESTS}/failures/error/raised_error_test.rb:10)"
         ],
-        %W[--dir #{RUNNER_TESTS}/failing/syntax] => [
-          "(#{RUNNER_TESTS}/failing/syntax/broken_syntax_test.rb:4)",
+        %W[--dir #{RUNNER_TESTS}/failures/syntax] => [
+          "(#{RUNNER_TESTS}/failures/syntax/broken_syntax_test.rb:4)",
           "0 runs, 0 assertions"
         ],
-        %W[--dir #{RUNNER_TESTS}/failing/waited] => [
+        %W[--dir #{RUNNER_TESTS}/failures/delay] => [
           "ERROR: WaitedFailureTest#test_fails_after_a_frame: Expected: 1",
-          "(#{RUNNER_TESTS}/failing/waited/waited_failure_test.rb:6)"
+          "(#{RUNNER_TESTS}/failures/delay/waited_failure_test.rb:6)"
         ],
-        %W[--dir #{RUNNER_TESTS}/failing/missing] => [
-          "The test directory #{RUNNER_TESTS}/failing/missing does not exist"
+        %W[--dir #{RUNNER_TESTS}/failures/missing] => [
+          "The test directory #{RUNNER_TESTS}/failures/missing does not exist"
         ],
         %w[--dir res://test --include test_nothing] => ["ERROR: Nothing ran for filter: test_nothing"],
         %w[--dir res://src] => ["ERROR: res://src is not one of the project's test directories"],

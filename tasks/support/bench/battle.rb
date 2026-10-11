@@ -64,7 +64,7 @@ module Bench
 
     # The frames, microseconds and outcome of ROUNDS rounds of `scene`.
     def play(project, scene)
-      output, = Godot.run_scene(project, "res://measure.tscn", "--fixed-fps", "60", "--quit-after", FRAME_LIMIT,
+      output, = Godot.run_scene(project, "res://meter.tscn", "--fixed-fps", "60", "--quit-after", FRAME_LIMIT,
                                 "--", scene, WAVE.to_s, ROUNDS.to_s)
       outcome = output.match(OUTCOME)
       raise "The battle #{scene} did not finish:\n#{output}" unless outcome

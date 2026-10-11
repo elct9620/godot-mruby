@@ -13,20 +13,20 @@ module Godot
   # is given, what the editor makes of it and how it is announced. Part of
   # Godot.verify!.
   module Script
-    PRINTS_SCENE = "res://integration/script/prints.tscn"
+    PRINTER_SCENE = "res://integration/script/printer.tscn"
     # What the prints scene's Ruby prints. Each line must appear exactly once:
     # the scene attaches the same file to two nodes, and a file runs once.
     PRINTED_LINES = ["puts from mruby", "print from mruby", ":p_from_mruby"].freeze
     # A scene whose nodes take a library file, a node script extending a class
     # they are not, an abstract node script and a file extending a name no
     # file spells, and the errors refusing each.
-    ATTACH_SCENE = "res://integration/script/attach/attach.tscn"
+    ATTACHMENT_SCENE = "res://integration/script/attachment/attachment.tscn"
     REFUSALS = [
-      "ERROR: res://integration/script/attach/library.rb defines no class extending an engine node class, " \
+      "ERROR: res://integration/script/attachment/library.rb defines no class extending an engine node class, " \
       "so it cannot be a node's script",
-      "ERROR: res://integration/script/attach/planar.rb extends Node2D, so it cannot be the script of a Node",
-      'ERROR: Node "Abstract" previously had a class of type "Abstract", but that class is now abstract.',
-      "ERROR: res://integration/script/attach/orphan.rb extends Missing, which no one file names, " \
+      "ERROR: res://integration/script/attachment/plane.rb extends Node2D, so it cannot be the script of a Node",
+      'ERROR: Node "Blueprint" previously had a class of type "Blueprint", but that class is now abstract.',
+      "ERROR: res://integration/script/attachment/orphan.rb extends Missing, which no one file names, " \
       "so it cannot be a node's script"
     ].freeze
 
@@ -45,7 +45,7 @@ module Godot
     # printed; --quit-after ends the run even when nothing does.
     # @behavior RS-001 RS-002 RS-003 RS-004
     def verify_scripts_run!(project)
-      output, status = Godot.run_scene(project, PRINTS_SCENE, "--quit-after", "3")
+      output, status = Godot.run_scene(project, PRINTER_SCENE, "--quit-after", "3")
       lines = output.lines.map(&:chomp)
       counts = PRINTED_LINES.to_h { |line| [line, lines.count(line)] }
       return if status.success? && output.lines.grep(ERROR_LINE).empty? && counts.values.all?(1)
@@ -56,7 +56,7 @@ module Godot
     # Runs the scene whose nodes take scripts they cannot, each refused in the log.
     # @behavior RS-006 RS-007 RS-020 RS-024
     def verify_attach_refused!(project)
-      output, status = Godot.run_scene(project, ATTACH_SCENE, "--quit-after", "3")
+      output, status = Godot.run_scene(project, ATTACHMENT_SCENE, "--quit-after", "3")
       missing = REFUSALS.reject { |refusal| output.include?(refusal) }
       return if status.success? && missing.empty?
 

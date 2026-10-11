@@ -9,7 +9,7 @@ module Godot
     PROBE = File.join("integration", "panel", "probe")
     # Frames enough for the panel to play the runner scene and look after it.
     FRAMES = "900"
-    FAILURE_TEST = "res://integration/runner/failing/assertion/failed_assertion_test.rb"
+    FAILURE_TEST = "res://integration/runner/failures/assertion/failed_assertion_test.rb"
     LIST_LINES = [
       "panel status: 1 runs, 1 failures, 0 errors, 0 skips",
       "panel row: failure | FailedAssertionTest#test_one_equals_two | Expected: 1"

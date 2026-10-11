@@ -1,6 +1,6 @@
 [gd_scene load_steps=3 format=3]
 
-[ext_resource type="Script" path="res://integration/declarations/exports/ask.gd" id="1"]
+[ext_resource type="Script" path="res://integration/declarations/exports/probe.gd" id="1"]
 [ext_resource type="Script" path="res://integration/declarations/exports/preset.rb" id="2"]
 
 [node name="Exports" type="Node"]

@@ -7,7 +7,7 @@ module Integration
       class PanelProbe < Godot::EditorPlugin
         tool
 
-        DIRECTORY = "res://integration/runner/failing/assertion".freeze
+        DIRECTORY = "res://integration/runner/failures/assertion".freeze
         PRESS_AT = 30
         LOOK_EVERY = 30
 

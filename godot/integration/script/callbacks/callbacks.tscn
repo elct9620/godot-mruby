@@ -1,10 +1,10 @@
 [gd_scene load_steps=6 format=3]
 
-[ext_resource type="Script" path="res://integration/script/callbacks/built.rb" id="3"]
-[ext_resource type="Script" path="res://integration/script/callbacks/failing.rb" id="4"]
-[ext_resource type="Script" path="res://integration/script/callbacks/idle.rb" id="5"]
+[ext_resource type="Script" path="res://integration/script/callbacks/brick.rb" id="3"]
+[ext_resource type="Script" path="res://integration/script/callbacks/fault.rb" id="4"]
+[ext_resource type="Script" path="res://integration/script/callbacks/statue.rb" id="5"]
 [ext_resource type="Script" path="res://integration/script/callbacks/answers.rb" id="7"]
-[ext_resource type="Script" path="res://integration/script/callbacks/ask.gd" id="8"]
+[ext_resource type="Script" path="res://integration/script/callbacks/probe.gd" id="8"]
 
 [node name="Callbacks" type="Node"]
 
@@ -14,10 +14,10 @@ script = ExtResource("3")
 [node name="SecondBuilt" type="Node" parent="."]
 script = ExtResource("3")
 
-[node name="Failing" type="Node" parent="."]
+[node name="Fault" type="Node" parent="."]
 script = ExtResource("4")
 
-[node name="Idle" type="Node" parent="."]
+[node name="Statue" type="Node" parent="."]
 editor_description = "set by the scene"
 script = ExtResource("5")
 

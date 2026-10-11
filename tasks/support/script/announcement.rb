@@ -14,9 +14,9 @@ module Godot
       # beside the file.
       CLASS_LIST = File.join(".godot", "global_script_class_cache.cfg")
       BOSS_ENTRY = [
-        '"base": &"Grunt"', '"class": &"Boss"', '"icon": "res://integration/script/inherit/boss.svg"'
+        '"base": &"Grunt"', '"class": &"Boss"', '"icon": "res://integration/script/inheritance/boss.svg"'
       ].freeze
-      TWINS = "res://integration/script/announce"
+      TWINS = "res://integration/script/announcement"
       TWINS_WARNING = "WARNING: #{TWINS}/left/twin.rb and #{TWINS}/right/twin.rb " \
                       "define node scripts named Twin, so none is listed by that name".freeze
       # The twins are the project's only node scripts meant to share a name, so

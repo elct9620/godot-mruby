@@ -22,13 +22,13 @@ module Godot
     # The run ends within its first frames; this only stops one that never
     # does from hanging the check.
     FRAMES = "60"
-    SHIPPED_SCENE = "res://integration/export/shipped.tscn"
+    SHIPPED_SCENE = "res://integration/export/manifest.tscn"
     # Paths an export has to leave out, and a game file it has to ship, which
     # tells a game missing everything from one missing only its tests.
     LEFT_OUT_PATHS = ["res://test/unit/engine_classes/engine_classes_test.rb",
                       "res://addons/godot_mruby/runner.tscn"].freeze
     GAME_FILE = "res://integration/export/seeker.rb"
-    REFUSED_SCENE = "res://integration/export/refused.tscn"
+    REFUSED_SCENE = "res://integration/export/intruder.tscn"
     REFUSAL = "ERROR: The test runner does not run in an exported game"
 
     module_function

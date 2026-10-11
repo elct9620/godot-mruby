@@ -38,7 +38,7 @@ module Integration
             property["name"] == "Turning" && property["usage"] == PROPERTY_USAGE_GROUP
           end
           puts "knob turn hint: #{turn_hint}, grouped: #{grouped}"
-          puts "cracked kept: #{get_node('Cracked').get('kept')}"
+          puts "shard kept: #{get_node('Shard').get('kept')}"
         end
 
         def widen

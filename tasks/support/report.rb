@@ -12,7 +12,7 @@ module Godot
       "WARNING: else without rescue is useless" => "(res://integration/report/warning.rb:9)",
       %(SCRIPT ERROR: syntax error, unexpected "'end'", expecting end of file) =>
         "(res://integration/report/syntax_error.rb:12)",
-      "SCRIPT ERROR: wrong key" => "unlock (res://integration/report/raising.rb:10)"
+      "SCRIPT ERROR: wrong key" => "unlock (res://integration/report/fuse.rb:10)"
     }.freeze
     # What the report scene's Ruby reports through Godot's own functions.
     PUSH_LINES = ["ERROR: push_error from mruby", "WARNING: push_warning from mruby"].freeze
@@ -20,8 +20,8 @@ module Godot
     # Ruby called through, and nothing after them.
     BACKTRACE = [
       "Ruby backtrace (most recent call first):",
-      "[0] unlock (res://integration/report/raising.rb:10)",
-      "[1] _ready (res://integration/report/raising.rb:6)"
+      "[0] unlock (res://integration/report/fuse.rb:10)",
+      "[1] _ready (res://integration/report/fuse.rb:6)"
     ].freeze
 
     module_function

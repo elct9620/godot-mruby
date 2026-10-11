@@ -23,7 +23,7 @@ module Godot
       RUN_LINE = "knob turn hint: 0,10, grouped: true"
       RERUN_LINE = "knob turn hint after reload: 0,20"
       TEST_RUN_LINE = "a test directory's file ran in the editor"
-      KEEP_LINE = "cracked kept: 7"
+      KEEP_LINE = "shard kept: 7"
       # What the scene's tool script prints as its node is given each callback.
       TOOL_CALLBACKS = ["the torch is ready in the editor", "the torch is processed in the editor"].freeze
       # The line the editor prints as it takes the scene in, which is what says

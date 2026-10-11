@@ -13,11 +13,11 @@ module Godot
     # game file: the files spelling names it cannot hold, and game files
     # naming a constant mruby has, the realm opens with, or the runner installs.
     WARNINGS = [
-      "WARNING: res://integration/loader/taken/comparable.rb names Comparable, " \
+      "WARNING: res://integration/loader/namesakes/comparable.rb names Comparable, " \
       "which the realm already has, so it never loads by name",
-      "WARNING: res://integration/loader/taken/godot.rb names Godot, " \
+      "WARNING: res://integration/loader/namesakes/godot.rb names Godot, " \
       "which the realm already has, so it never loads by name",
-      "WARNING: res://integration/loader/taken/minitest.rb names Minitest, " \
+      "WARNING: res://integration/loader/namesakes/minitest.rb names Minitest, " \
       "which the realm already has, so it never loads by name",
       "WARNING: res://test/unit/loader/naming/http_client.rb and res://test/unit/loader/naming/httpclient.rb " \
       "both name Unit::Loader::Naming::HttpClient, so neither loads by name"
@@ -29,17 +29,17 @@ module Godot
                           "(res://test/unit/loader/bay/latch.rb:8)"].freeze
     # A test using a constant whose file raises, and what its run has to print
     # in order: the error placed at the line of the file that raised.
-    ERROR_TESTS = "res://integration/loader/failing/raising"
+    ERROR_TESTS = "res://integration/loader/failures/tripwire"
     ERROR_LINES = [
-      "RaisingFileTest#test_uses_a_file_that_raises [res://test/unit/loader/tripwire.rb:13]:",
+      "TripwireFileTest#test_uses_a_file_that_raises [res://test/unit/loader/tripwire.rb:13]:",
       "RuntimeError: tripwire.rb fails after defining its constants",
-      "ERROR: RaisingFileTest#test_uses_a_file_that_raises: " \
+      "ERROR: TripwireFileTest#test_uses_a_file_that_raises: " \
       "RuntimeError: tripwire.rb fails after defining its constants",
       "(res://test/unit/loader/tripwire.rb:13)"
     ].freeze
     # A test directory whose test loads a test class by name during the run,
     # and the summary that shows the loaded class's test did not run.
-    LATE = "res://integration/loader/late"
+    LATE = "res://integration/loader/latecomers"
     LATE_SUMMARY = /^1 runs, \d+ assertions, 0 failures, 0 errors, 0 skips$/
 
     module_function
