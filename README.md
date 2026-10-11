@@ -1,0 +1,109 @@
+# godot-mruby
+
+A Godot 4 addon that lets a game's scripts be written in Ruby, run by an embedded mruby.
+
+```ruby
+class Enemy < Godot::Node2D
+  signal :arrived
+  export :speed, 200.0
+  export :health, 3
+
+  def _physics_process(delta)
+    self.position = position + Godot::Vector2.new(speed * delta, 0)
+  end
+end
+```
+
+## Features
+
+The addon registers Ruby as a script language, so a `.rb` file is served wherever a `.gd` file is.
+
+| Area | What it gives |
+|---|---|
+| Scripts | `.rb` node scripts with exports and signals |
+| Engine | classes, singletons and values under `Godot` |
+| Loading | files load by constant name, no `require` |
+| Editor | highlighting, templates, validation, test panel |
+| Tests | Minitest runner, left out of exports |
+
+## Requirements
+
+Each platform ships one self-contained library, so a game needs nothing else at run time.
+
+| Item | Supported |
+|---|---|
+| Godot | 4.6 or later |
+| macOS | universal (arm64, x86_64) |
+| Linux | x86_64, arm64 |
+| Windows | x86_64, arm64 |
+
+## Installation
+
+The package is `godot-mruby.zip`, attached to each [GitHub release](https://github.com/elct9620/godot-mruby/releases).
+
+1. Download `godot-mruby.zip` from a release.
+2. Open the editor's AssetLib tab and click Import.
+3. Choose the zip and install `addons/godot_mruby/`.
+4. Restart the editor, the path the addon is tested on.
+
+## Usage
+
+### Ruby Scripts
+
+A script's class extends an engine class under `Godot` and is attached to a node like a GDScript one. A file's path names its class, as `res://enemy.rb` holds `Enemy` and `res://units/turret.rb` holds `Units::Turret`. Using the constant loads the file.
+
+```ruby
+class Units::Turret < Godot::Node2D
+  export :range, 300.0
+
+  def _ready
+    print "Turret #{name} covers #{range}"
+  end
+end
+```
+
+### Tests
+
+Tests are Minitest classes in files ending in `_test.rb` under `res://test`. Run them from the editor's test panel, or headless as CI does.
+
+```ruby
+class EnemyTest < Minitest::Test
+  def test_an_enemy_starts_with_three_health
+    enemy = Enemy.new
+    add_child_autofree(enemy)
+
+    assert_equal 3, enemy.health
+  end
+end
+```
+
+```bash
+godot --headless --path . res://addons/godot_mruby/runner.tscn -- --dir res://test
+```
+
+### Project Settings
+
+The addon adds these settings under `mruby/` in Project Settings.
+
+| Setting | Default | Purpose |
+|---|---|---|
+| `mruby/test/directories` | `res://test` | where tests live |
+| `mruby/test/pattern` | `*_test.rb` | which files are tests |
+| `mruby/loader/root_directories` | none | more roots naming files from the top |
+
+## Development
+
+Building needs Ruby with Bundler, Rust through rustup, and libclang. `rust-toolchain.toml` pins the compiler.
+
+```bash
+bundle install
+bundle exec rake beni:build       # fetch and build mruby into vendor/
+bundle exec rake extension:build  # build the extension into the addon
+bundle exec rake                  # lint, build, then godot:verify
+```
+
+[`docs/architecture.md`](docs/architecture.md) lays out how the parts fit, and [`.spec/`](.spec/) holds what each part promises.
+
+## License
+
+godot-mruby is released under the [Apache License 2.0](LICENSE).
