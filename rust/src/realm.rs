@@ -11,7 +11,7 @@ use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 
 use crate::compiler;
-use crate::snapshot::{self, Class, Heading, Member, Property, Signal, Snapshot};
+use crate::snapshot::{self, Heading, Property, Signal, Snapshot};
 
 mod constants;
 mod executor;
@@ -179,30 +179,6 @@ impl Drop for OutermostGuard<'_> {
 enum Origin {
     Run,
     Call,
-}
-
-// Publishes what the class of the file at `path` has, now that the file has
-// run from the source of that digest: what its body declared, and the
-// methods it defines, so a method metaprogramming defined is one the class
-// has. Ruby itself asks Godot what a class has, so a file's class is read
-// back while the thread that ran it is still inside the realm.
-fn publish_class(mrb: &Mrb, path: &str, signals: Vec<Signal>, members: Vec<Member>, digest: u64) {
-    let methods = methods::methods_by_path(mrb, path);
-    let bookkeeping = bookkeeping(mrb);
-    let declarations = bookkeeping.files.declarations_by_path(path);
-    let mut draft = bookkeeping.snapshot.borrow_mut();
-    Arc::make_mut(&mut draft).record_class(
-        path,
-        Class {
-            signals,
-            members,
-            methods,
-            digest,
-            export_names: declarations.exports,
-            signal_names: declarations.signals,
-        },
-    );
-    snapshot::publish(Arc::clone(&draft));
 }
 
 // The symbol `name` interns to in `mrb`'s realm, interned once, since

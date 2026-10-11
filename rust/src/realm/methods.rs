@@ -1,7 +1,8 @@
 //! The methods a class has of its own: those it defines and those of the
-//! modules it takes in. A module prepended to `Module` tells the realm when
-//! one of them gains or loses a method, or takes in a module, after its
-//! class's file has run, so the class's methods are read and published again.
+//! modules it takes in, published with the rest of the class once its file
+//! has run. A module prepended to `Module` tells the realm when one of them
+//! gains or loses a method, or takes in a module, after its class's file has
+//! run, so the class's methods are read and published again.
 
 use std::sync::Arc;
 
@@ -11,7 +12,7 @@ use beni::{
 };
 
 use super::{bookkeeping, compile, constants, executor, key_by_path};
-use crate::snapshot;
+use crate::snapshot::{self, Class, Member, Signal};
 
 pub(super) fn define(mrb: &Mrb) -> Result<(), Error> {
     let module = mrb.class_get(c"Module")?;
@@ -57,6 +58,36 @@ pub(super) fn methods_by_path(mrb: &Mrb, path: &str) -> Vec<String> {
         }
     }
     names
+}
+
+/// Publishes what the class of the file at `path` has, now that the file has
+/// run from the source of that digest: what its body declared, and the
+/// methods it defines, so a method metaprogramming defined is one the class
+/// has. Ruby itself asks Godot what a class has, so a file's class is read
+/// back while the thread that ran it is still inside the realm.
+pub(super) fn publish_class(
+    mrb: &Mrb,
+    path: &str,
+    signals: Vec<Signal>,
+    members: Vec<Member>,
+    digest: u64,
+) {
+    let methods = methods_by_path(mrb, path);
+    let bookkeeping = bookkeeping(mrb);
+    let declarations = bookkeeping.files.declarations_by_path(path);
+    let mut draft = bookkeeping.snapshot.borrow_mut();
+    Arc::make_mut(&mut draft).record_class(
+        path,
+        Class {
+            signals,
+            members,
+            methods,
+            digest,
+            export_names: declarations.exports,
+            signal_names: declarations.signals,
+        },
+    );
+    snapshot::publish(Arc::clone(&draft));
 }
 
 /// Publishes the methods of each class Ruby changed the methods of. Each is

@@ -9,7 +9,7 @@ use std::ffi::{CStr, CString};
 use std::sync::Arc;
 
 use super::constants::Scope;
-use super::{bookkeeping, compile, file_by_constant, methods, publish_class};
+use super::{bookkeeping, compile, file_by_constant, methods};
 use crate::snapshot::{self, Heading, Member, Property, Signal};
 use beni::{Class as _, Error, FromValue, Module, Mrb, RClass};
 
@@ -285,7 +285,7 @@ fn execute<T>(
         (Ok(()), frame) => {
             frame.into_iter().for_each(|frame| {
                 let (signals, members) = split(frame.declarations);
-                publish_class(mrb, &frame.path, signals, members, frame.digest);
+                methods::publish_class(mrb, &frame.path, signals, members, frame.digest);
             });
             Run::Done
         }
