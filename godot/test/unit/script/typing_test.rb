@@ -1,10 +1,10 @@
 class TypingTest < Minitest::Test
-  PATH = "res://test/unit/script/tuned.rb".freeze
+  PATH = "res://test/unit/script/tuner.rb".freeze
   RANGE = 1
-  CHANGED = <<~RUBY.freeze
+  EDITED_SOURCE = <<~RUBY.freeze
     module Unit
       module Script
-        class Tuned < Godot::Node2D
+        class Tuner < Godot::Node2D
           TREBLE = 3
           NOTES = %i[pitch].freeze
 
@@ -21,9 +21,9 @@ class TypingTest < Minitest::Test
   RUBY
 
   def setup
-    Unit::Script::Tuned
+    Unit::Script::Tuner
     @source = script.source_code
-    script.source_code = CHANGED
+    script.source_code = EDITED_SOURCE
   end
 
   def teardown

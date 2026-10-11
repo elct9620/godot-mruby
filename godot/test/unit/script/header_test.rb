@@ -5,26 +5,26 @@ class HeaderTest < Minitest::Test
 
   # @behavior RS-008
   def test_a_node_script_reports_the_engine_class_it_extends_before_its_file_runs
-    assert_equal :Node2D, load_script(:reported).get_instance_base_type
-    refute ran?(:Reported)
+    assert_equal :Node2D, load_script(:dossier).get_instance_base_type
+    refute ran?(:Dossier)
   end
 
   # @behavior RS-009
   def test_a_node_script_reports_the_methods_its_class_defines_before_its_file_runs
-    with_node(:reported) { |node| assert node.has_method(:_ready) }
-    refute ran?(:Reported)
+    with_node(:dossier) { |node| assert node.has_method(:_ready) }
+    refute ran?(:Dossier)
   end
 
   # @behavior RS-018
   def test_a_node_script_reports_that_its_class_is_a_tool_before_its_file_runs
-    assert load_script(:marked).is_tool
-    refute ran?(:Marked)
+    assert load_script(:badge).is_tool
+    refute ran?(:Badge)
   end
 
   # @behavior RS-019
   def test_a_node_script_reports_that_its_class_is_abstract_before_its_file_runs
-    assert load_script(:marked).is_abstract
-    refute ran?(:Marked)
+    assert load_script(:badge).is_abstract
+    refute ran?(:Badge)
   end
 
   # @behavior RS-021

@@ -31,11 +31,11 @@ module Godot
     # in order: the error placed at the line of the file that raised.
     ERROR_TESTS = "res://integration/loader/failing/raising"
     ERROR_LINES = [
-      "RaisingFileTest#test_uses_a_file_that_raises [res://test/unit/loader/raising.rb:13]:",
-      "RuntimeError: raising.rb fails after defining its constants",
+      "RaisingFileTest#test_uses_a_file_that_raises [res://test/unit/loader/tripwire.rb:13]:",
+      "RuntimeError: tripwire.rb fails after defining its constants",
       "ERROR: RaisingFileTest#test_uses_a_file_that_raises: " \
-      "RuntimeError: raising.rb fails after defining its constants",
-      "(res://test/unit/loader/raising.rb:13)"
+      "RuntimeError: tripwire.rb fails after defining its constants",
+      "(res://test/unit/loader/tripwire.rb:13)"
     ].freeze
     # A test directory whose test loads a test class by name during the run,
     # and the summary that shows the loaded class's test did not run.

@@ -32,10 +32,10 @@ class RerunTest < Minitest::Test
     end
   RUBY
 
-  BROKEN = <<~RUBY.freeze
+  RUBBLE = <<~RUBY.freeze
     module Unit
       module Reload
-        class Broken < Godot::Node
+        class Rubble < Godot::Node
           def answer
             "mended"
           end
@@ -44,10 +44,10 @@ class RerunTest < Minitest::Test
     end
   RUBY
 
-  FAILING = <<~RUBY.freeze
+  SNAG = <<~RUBY.freeze
     module Unit
       module Reload
-        class Failing < Godot::Node
+        class Snag < Godot::Node
           def answer
             "mended"
           end
@@ -56,10 +56,10 @@ class RerunTest < Minitest::Test
     end
   RUBY
 
-  EXPORTING = <<~RUBY.freeze
+  EXPORTER = <<~RUBY.freeze
     module Unit
       module Reload
-        class Exporting < Godot::Node
+        class Exporter < Godot::Node
           def speed?
             instance_variable_defined?(:@speed)
           end
@@ -68,10 +68,10 @@ class RerunTest < Minitest::Test
     end
   RUBY
 
-  ARMORED = <<~RUBY.freeze
+  ARMOR = <<~RUBY.freeze
     module Unit
       module Reload
-        class Armored < Godot::Node
+        class Armor < Godot::Node
           export :armor, 5
 
           def build; end
@@ -87,7 +87,7 @@ class RerunTest < Minitest::Test
   FASTER = <<~RUBY.freeze
     module Unit
       module Reload
-        class Exporting < Godot::Node
+        class Exporter < Godot::Node
           export :speed, 20
 
           def speed?
@@ -139,47 +139,47 @@ class RerunTest < Minitest::Test
 
   # @behavior RF-006
   def test_a_node_script_whose_file_raised_makes_objects_again_once_its_changed_source_runs
-    with_node(:broken).call(:answer)
+    with_node(:rubble).call(:answer)
 
-    stub_source(:broken, BROKEN) { assert_equal "mended", with_node(:broken).call(:answer) }
+    stub_source(:rubble, RUBBLE) { assert_equal "mended", with_node(:rubble).call(:answer) }
   end
 
   # @behavior RF-007
   def test_a_node_whose_object_failed_stays_without_one_after_its_file_reloads
-    node = with_node(:failing)
+    node = with_node(:snag)
     node.call(:answer)
 
-    stub_source(:failing, FAILING) { assert_nil node.call(:answer) }
+    stub_source(:snag, SNAG) { assert_nil node.call(:answer) }
   end
 
   # @behavior RF-008
   def test_a_property_the_changed_source_no_longer_exports_is_not_given_to_a_new_object
-    with_node(:exporting).call(:speed?)
+    with_node(:exporter).call(:speed?)
 
-    stub_source(:exporting, EXPORTING) { refute with_node(:exporting).call(:speed?) }
+    stub_source(:exporter, EXPORTER) { refute with_node(:exporter).call(:speed?) }
   end
 
   # @behavior RF-010
   def test_a_property_the_changed_source_exports_anew_is_given_to_an_object_made_before
-    node = with_node(:armored)
+    node = with_node(:armor)
     node.call(:build)
 
-    stub_source(:armored, ARMORED) { assert_equal 5, node.get(:armor) }
+    stub_source(:armor, ARMOR) { assert_equal 5, node.get(:armor) }
   end
 
   # @behavior RF-011
   def test_an_object_keeps_the_value_it_holds_for_a_property_the_changed_source_exports_anew
-    node = with_node(:armored)
+    node = with_node(:armor)
     node.call(:wear)
 
-    stub_source(:armored, ARMORED) { assert_equal 9, node.get(:armor) }
+    stub_source(:armor, ARMOR) { assert_equal 9, node.get(:armor) }
   end
 
   # @behavior RF-012
   def test_a_reloaded_node_script_answers_the_default_its_changed_source_exports
-    with_node(:exporting).call(:speed?)
+    with_node(:exporter).call(:speed?)
 
-    stub_source(:exporting, FASTER) { assert_equal 20, load_script(:exporting).get_property_default_value(:speed) }
+    stub_source(:exporter, FASTER) { assert_equal 20, load_script(:exporter).get_property_default_value(:speed) }
   end
 
   private

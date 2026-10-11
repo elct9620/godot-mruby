@@ -13,8 +13,8 @@ class NodeClassesTest < Minitest::Test
 
   # @behavior RS-032 RS-070
   def test_a_node_that_fails_to_initialize_is_freed
-    assert_raises(RuntimeError) { Unit::Script::Faulty.new }
-    assert_raises(Godot::CallError) { Unit::Script::Faulty.last.get_child_count }
+    assert_raises(RuntimeError) { Unit::Script::Glitch.new }
+    assert_raises(Godot::CallError) { Unit::Script::Glitch.last.get_child_count }
   end
 
   # @behavior RS-033

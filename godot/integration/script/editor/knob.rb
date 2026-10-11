@@ -5,7 +5,7 @@ module Integration
     module Editor
       class Knob < Godot::Node2D
         BOUNDS = 0..10
-        REACHED = (Unit::Script::Untouched rescue nil)
+        REACHED = (Unit::Script::Relic rescue nil)
 
         export_group "Turning"
         export :turn, 5, range: BOUNDS

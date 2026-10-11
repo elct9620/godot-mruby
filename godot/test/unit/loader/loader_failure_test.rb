@@ -7,26 +7,26 @@ class LoaderFailureTest < Minitest::Test
 
   # @behavior RL-016
   def test_a_file_that_runs_without_defining_its_constant_raises_name_error
-    error = assert_raises(NameError) { Unit::Loader::Undefined }
-    assert_equal "res://test/unit/loader/undefined.rb ran without defining Unit::Loader::Undefined", error.message
+    error = assert_raises(NameError) { Unit::Loader::Ghost }
+    assert_equal "res://test/unit/loader/ghost.rb ran without defining Unit::Loader::Ghost", error.message
   end
 
   # @behavior RL-017
   def test_a_file_that_raises_takes_the_constants_it_created_with_it
-    assert_raises(RuntimeError) { Unit::Loader::Raising }
-    refute Unit::Loader.const_defined?(:Raising)
-    refute Unit::Loader.const_defined?(:RaisingError)
+    assert_raises(RuntimeError) { Unit::Loader::Tripwire }
+    refute Unit::Loader.const_defined?(:Tripwire)
+    refute Unit::Loader.const_defined?(:TripwireError)
   end
 
   # @behavior RL-018
   def test_a_file_loaded_while_a_failing_file_ran_keeps_its_constants
-    assert_raises(RuntimeError) { Unit::Loader::Raising }
-    assert Unit::Loader.const_defined?(:Kept)
+    assert_raises(RuntimeError) { Unit::Loader::Tripwire }
+    assert Unit::Loader.const_defined?(:Keepsake)
   end
 
   # @behavior RL-022
   def test_a_directory_module_made_while_a_failing_file_ran_stays
-    assert_raises(RuntimeError) { Unit::Loader::Raising }
+    assert_raises(RuntimeError) { Unit::Loader::Tripwire }
     assert Unit::Loader.const_defined?(:Shelf)
   end
 
@@ -37,33 +37,33 @@ class LoaderFailureTest < Minitest::Test
 
   # @behavior RL-019
   def test_a_file_that_raised_runs_again_at_the_next_use_of_its_constant
-    first = assert_raises(RuntimeError) { Unit::Loader::Raising }
-    second = assert_raises(RuntimeError) { Unit::Loader::Raising }
+    first = assert_raises(RuntimeError) { Unit::Loader::Tripwire }
+    second = assert_raises(RuntimeError) { Unit::Loader::Tripwire }
     assert_equal first.message, second.message
   end
 
   # @behavior RL-020
   def test_a_file_loaded_by_name_that_does_not_parse_raises_syntax_error_at_its_line
-    error = assert_raises(SyntaxError) { Unit::Loader::Broken }
-    assert_includes error.message, "res://test/unit/loader/broken.rb:6: syntax error"
+    error = assert_raises(SyntaxError) { Unit::Loader::Wreck }
+    assert_includes error.message, "res://test/unit/loader/wreck.rb:6: syntax error"
   end
 
   # @behavior RL-027
   def test_opening_another_files_class_with_another_superclass_raises_type_error
-    error = assert_raises(TypeError) { Unit::Loader::Mismatching }
+    error = assert_raises(TypeError) { Unit::Loader::Impostor }
     assert_includes error.message, "superclass mismatch"
   end
 
   # @behavior RL-028
   def test_a_directory_module_a_file_opens_is_made_before_the_file_runs
-    assert_raises(RuntimeError) { Unit::Loader::Shading }
+    assert_raises(RuntimeError) { Unit::Loader::Awning }
     assert Unit::Loader.const_defined?(:Shades)
   end
 
   # @behavior RL-029
   def test_a_node_script_extending_another_class_than_its_ancestry_says_raises_type_error
-    error = assert_raises(TypeError) { Unit::Loader::Posts::Shadowed }
-    assert_equal "Unit::Loader::Posts::Shadowed in res://test/unit/loader/posts/shadowed.rb extends Unit::Loader::Posts::Sentry, " \
+    error = assert_raises(TypeError) { Unit::Loader::Posts::Lookalike }
+    assert_equal "Unit::Loader::Posts::Lookalike in res://test/unit/loader/posts/lookalike.rb extends Unit::Loader::Posts::Sentry, " \
                  "not the class res://test/unit/loader/sentry.rb names", error.message
   end
 

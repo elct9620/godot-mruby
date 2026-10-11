@@ -4,7 +4,7 @@ class AncestryTest < Minitest::Test
   SHIFTED = <<~RUBY.freeze
     module Unit
       module Reload
-        class Shifting < Godot::Node2D
+        class Shifter < Godot::Node2D
         end
       end
     end
@@ -12,10 +12,10 @@ class AncestryTest < Minitest::Test
 
   # @behavior RF-001
   def test_a_node_script_reports_the_engine_class_the_file_it_extends_now_reaches
-    shifted = load_script(:shifted)
-    shifted.get_instance_base_type
-    stub_source(load_script(:shifting), SHIFTED) do
-      assert_equal :Node2D, shifted.get_instance_base_type
+    drifter = load_script(:drifter)
+    drifter.get_instance_base_type
+    stub_source(load_script(:shifter), SHIFTED) do
+      assert_equal :Node2D, drifter.get_instance_base_type
     end
   end
 

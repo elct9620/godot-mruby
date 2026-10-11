@@ -41,9 +41,9 @@ class LoaderTest < Minitest::Test
   # @behavior RL-011
   def test_a_node_scripts_namespace_file_runs_before_it
     greeter = autofree(Godot::Node.new)
-    greeter.set_script(Godot::ResourceLoader.load("res://test/unit/loader/namespaced/greeter.rb"))
+    greeter.set_script(Godot::ResourceLoader.load("res://test/unit/loader/district/greeter.rb"))
 
-    assert_equal "namespace from namespaced.rb", greeter.call(:greeting)
+    assert_equal "namespace from district.rb", greeter.call(:greeting)
   end
 
   # @behavior RL-012

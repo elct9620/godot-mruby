@@ -1,8 +1,8 @@
 class SaveTest < Minitest::Test
-  SAVED = "user://save_test.rb".freeze
+  SAVE_PATH = "user://save_test.rb".freeze
 
   def teardown
-    Godot::DirAccess.remove_absolute(SAVED)
+    Godot::DirAccess.remove_absolute(SAVE_PATH)
   end
 
   # @behavior RS-049
@@ -10,8 +10,8 @@ class SaveTest < Minitest::Test
     script = Godot::ResourceLoader.load("res://test/unit/script/echo.rb").duplicate
     script.source_code = "# saved\n"
 
-    Godot::ResourceSaver.save(script, SAVED)
+    Godot::ResourceSaver.save(script, SAVE_PATH)
 
-    assert_equal "# saved\n", Godot::FileAccess.get_file_as_string(SAVED)
+    assert_equal "# saved\n", Godot::FileAccess.get_file_as_string(SAVE_PATH)
   end
 end
