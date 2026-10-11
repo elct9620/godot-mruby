@@ -19,7 +19,27 @@ Module.prepend(Module.new do
     __record_change__(base)
     super
   end
-  private :method_added, :included, :prepended
+
+  # A method it loses is one Godot may no longer call.
+  def method_removed(name)
+    __record_change__(self)
+    super
+  end
+
+  def method_undefined(name)
+    __record_change__(self)
+    super
+  end
+  private :method_added, :included, :prepended, :method_removed, :method_undefined
+
+  # mruby defines an attribute's methods without calling method_added.
+  %i[attr_reader attr_writer attr_accessor attr].each do |declare|
+    define_method(declare) do |*names|
+      defined = super(*names)
+      __record_change__(self)
+      defined
+    end
+  end
 
   # The class itself and the modules it takes in, up to its superclass.
   def __taken_in__

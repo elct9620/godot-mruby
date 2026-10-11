@@ -65,4 +65,32 @@ class MethodsTest < Minitest::Test
 
     assert belfry.has_method(:pull)
   end
+
+  # @behavior RD-073
+  def test_a_node_has_an_attribute_its_class_gains_after_its_file_ran
+    belfry = autofree(Unit::Declarations::Belfry.new)
+
+    Unit::Declarations::Belfry.attr_reader(:toll_count)
+
+    assert belfry.has_method(:toll_count)
+  end
+
+  # @behavior RD-073
+  def test_a_node_has_an_attribute_its_class_gains_through_attr_after_its_file_ran
+    belfry = autofree(Unit::Declarations::Belfry.new)
+
+    Unit::Declarations::Belfry.attr(:peal_count)
+
+    assert belfry.has_method(:peal_count)
+  end
+
+  # @behavior RD-074
+  def test_a_node_no_longer_has_a_method_its_class_removes_after_its_file_ran
+    belfry = autofree(Unit::Declarations::Belfry.new)
+    Unit::Declarations::Belfry.define_method(:chime) { "chimed" }
+
+    Unit::Declarations::Belfry.send(:remove_method, :chime)
+
+    refute belfry.has_method(:chime)
+  end
 end

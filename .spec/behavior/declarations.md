@@ -5,6 +5,7 @@ What a node script's class says about itself as its body runs, and how Godot is 
 ## Includes
 
 - `godot/test/unit/declarations/**/*_test.rb`
+- `rust/src/realm.rs`
 - `tasks/support/declarations.rb`
 
 ## `RD-001` A node has the signal its class declared
@@ -600,3 +601,42 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | Given | Ruby including a module defining a method into the class |
 | When | the node is asked whether it has the method |
 | Then | it answers that it has it |
+
+## `RD-073` A node has an attribute its class gains after its file ran
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RD-071` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a node of a class whose file has run |
+| Given | Ruby declaring an attribute reader on the class |
+| When | the node is asked whether it has the reader |
+| Then | it answers that it has it |
+
+## `RD-074` A node no longer has a method its class removes after its file ran
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RD-071` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a node of a class whose file has run and which has a method |
+| Given | Ruby removing the method from the class |
+| When | the node is asked whether it has the method |
+| Then | it answers that it does not |
+
+## `RD-075` A node has a method a file that raised gave its class
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RD-071` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a node of a class whose file has run |
+| Given | another file that defines a method on the class and then raises |
+| When | the other file runs |
+| Then | the node has the method |

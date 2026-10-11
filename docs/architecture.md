@@ -311,7 +311,7 @@ class body runs ──► its declarations, and the methods the class ends up wi
 has_signal, get_property_list, has_method, and the default each property was exported with
 ```
 
-A Ruby class takes its shape as its body runs, so its shape cannot be read from the source alone. The realm publishes what a file's class has when its run commits. A method Ruby adds later, to the class or a module it takes in, publishes it again. Whatever answers Godot reads that value on any thread without entering the realm. What a class declares is in `.spec/behavior/declarations.md`, and the published shape in `.spec/contract/snapshot.md`.
+A Ruby class takes its shape as its body runs, so its shape cannot be read from the source alone. The realm publishes what a file's class has when its run commits. Ruby's method hooks publish its methods again as they change, even when a run raised. A class overriding a hook without `super` hides its change. Whatever answers Godot reads that value on any thread without entering the realm. What a class declares is in `.spec/behavior/declarations.md`, and the published shape in `.spec/contract/snapshot.md`.
 
 #### 2.7.1 Answer Sources
 

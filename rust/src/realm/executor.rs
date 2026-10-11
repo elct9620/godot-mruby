@@ -9,7 +9,7 @@ use std::ffi::{CStr, CString};
 use std::sync::Arc;
 
 use super::constants::Scope;
-use super::{bookkeeping, compile, file_by_constant, publish_class};
+use super::{bookkeeping, compile, file_by_constant, methods, publish_class};
 use crate::snapshot::{self, Heading, Member, Property, Signal};
 use beni::{Class as _, Error, FromValue, Module, Mrb, RClass};
 
@@ -297,6 +297,9 @@ fn execute<T>(
         }
     };
     runs.files.borrow_mut().insert(path.to_owned(), run);
+    if !is_file_running(mrb) {
+        methods::publish_changed(mrb);
+    }
     outcome
 }
 

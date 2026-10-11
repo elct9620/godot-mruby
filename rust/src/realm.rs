@@ -4,7 +4,7 @@ use std::ffi::CStr;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use beni::{
-    Error, FromValue, Gem, IntoValue, Module as _, Mrb, Qtrue, RClass, RHash, ReprValue, Symbol,
+    Error, FromValue, Gem, IntoValue, Module as _, Mrb, Qtrue, RClass, ReprValue, Symbol,
     TryConvert, Value,
 };
 use rustc_hash::FxHashMap;
@@ -130,12 +130,10 @@ struct Bookkeeping {
     // What the files that have run declare, published once each of them has
     // run, so what any thread reads is never half-declared.
     snapshot: RefCell<Arc<Snapshot>>,
-    // The classes of the files that have run and the modules each takes in,
-    // each the key of its row in `takers`: a method Ruby adds to one later
-    // is one Godot may call on a node of every class taking it in.
-    taken_in: RHash,
-    // The paths of the files whose class takes in the module of each row.
-    takers: RefCell<Vec<BTreeSet<String>>>,
+    // The paths of the files whose class takes in each module, by the
+    // module's identity: a method Ruby adds to one later is one Godot may call
+    // on a node of every class taking it in.
+    takers: RefCell<HashMap<i64, BTreeSet<String>>>,
     // The paths of the files whose class Ruby changed the methods of since
     // they were last read.
     changed: RefCell<BTreeSet<String>>,
@@ -204,9 +202,6 @@ fn publish_class(mrb: &Mrb, path: &str, signals: Vec<Signal>, members: Vec<Membe
             signal_names: declarations.signals,
         },
     );
-    if !executor::is_file_running(mrb) {
-        methods::record_changed_methods(mrb, &mut draft);
-    }
     snapshot::publish(Arc::clone(&draft));
 }
 
@@ -500,11 +495,6 @@ impl Realm {
             index,
             runs: executor::Runs::default(),
             registry: Registry::new(&mrb),
-            taken_in: {
-                let taken_in = mrb.hash_new();
-                mrb.gc_register_forever(taken_in.as_value());
-                taken_in
-            },
             takers: RefCell::default(),
             changed: RefCell::default(),
             snapshot: RefCell::default(),
@@ -927,6 +917,31 @@ mod tests {
         }
     }
 
+    const BENCH: &str = "res://bench.rb";
+    const PATCH: &str = "res://patch.rb";
+
+    // A class's file, and a file that gives the class a method and then
+    // raises.
+    struct Workshop;
+
+    impl Files for Workshop {
+        fn paths(&self) -> Vec<String> {
+            vec![BENCH.to_owned(), PATCH.to_owned()]
+        }
+
+        fn source_by_path(&self, path: &str) -> Result<String, String> {
+            Ok(if path == BENCH {
+                "class Bench\nend\n".to_owned()
+            } else {
+                "class Bench\n  def mend = 1\nend\nraise \"patched\"\n".to_owned()
+            })
+        }
+
+        fn declarations_by_path(&self, _path: &str) -> Declarations {
+            Declarations::default()
+        }
+    }
+
     const SWORD: &str = "res://game/items/sword.rb";
     const SHIELD: &str = "res://mods/items/shield.rb";
 
@@ -1042,6 +1057,20 @@ mod tests {
         let sent = enter(|realm| realm.send::<_, i64>(key, "fail", no_args()));
 
         assert_eq!(format_frames(sent.err()), ["res://thing.rb:5:fail"]);
+    }
+
+    // @behavior RD-075
+    #[test]
+    fn a_method_a_file_that_raised_gave_a_class_is_published() {
+        let _turn = TURN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        close();
+        prepare(|| Realm::open(Workshop, Silence, |_| Ok(())));
+
+        enter(|realm| realm.run(BENCH)).unwrap_or_else(|_| panic!("the bench runs"));
+        let patched = enter(|realm| realm.run(PATCH));
+
+        assert!(patched.is_err());
+        assert!(snapshot::latest().has_method(BENCH, "mend"));
     }
 
     // @behavior RR-005

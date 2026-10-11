@@ -1,9 +1,8 @@
 //! The methods a class has of its own: those it defines and those of the
 //! modules it takes in. A module prepended to `Module` tells the realm when
-//! one of them gains a method or a module after its class's file has run, so
-//! the class's methods are read and published again.
+//! one of them gains or loses a method, or takes in a module, after its
+//! class's file has run, so the class's methods are read and published again.
 
-use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use beni::{
@@ -12,7 +11,7 @@ use beni::{
 };
 
 use super::{bookkeeping, compile, constants, executor, key_by_path};
-use crate::snapshot::{self, Snapshot};
+use crate::snapshot;
 
 pub(super) fn define(mrb: &Mrb) -> Result<(), Error> {
     let module = mrb.class_get(c"Module")?;
@@ -22,7 +21,7 @@ pub(super) fn define(mrb: &Mrb) -> Result<(), Error> {
 
 /// The names of the methods the class the file at `path` names has of its
 /// own: those it defines and those of the modules it takes in, up to its
-/// superclass. Each of those is noted as taken in by the class, so a method
+/// superclass. The class is noted as a taker of each of those, so a method
 /// added to one later is read again. None when the file named no class.
 pub(super) fn methods_by_path(mrb: &Mrb, path: &str) -> Vec<String> {
     let Some(class) = constants::constant_by_key(mrb, &key_by_path(mrb, path)) else {
@@ -38,7 +37,9 @@ pub(super) fn methods_by_path(mrb: &Mrb, path: &str) -> Vec<String> {
     let own = [false.into_value(mrb)];
     let mut names: Vec<String> = Vec::new();
     for module in taken.entries(mrb) {
-        record_taker(mrb, module, path);
+        if let Some(id) = read_id(mrb, module) {
+            record_taker(mrb, id, path);
+        }
         let methods = module
             .funcall(mrb, c"instance_methods", &own)
             .ok()
@@ -56,51 +57,56 @@ pub(super) fn methods_by_path(mrb: &Mrb, path: &str) -> Vec<String> {
     names
 }
 
-/// Takes into `draft` the methods of each class Ruby changed the methods of.
-pub(super) fn record_changed_methods(mrb: &Mrb, draft: &mut Arc<Snapshot>) {
-    let paths = std::mem::take(&mut *bookkeeping(mrb).changed.borrow_mut());
-    for path in paths {
-        let methods = methods_by_path(mrb, &path);
-        Arc::make_mut(draft).record_methods(&path, methods);
+/// Publishes the methods of each class Ruby changed the methods of. Each is
+/// read before the snapshot is borrowed, since reading runs Ruby.
+pub(super) fn publish_changed(mrb: &Mrb) {
+    let bookkeeping = bookkeeping(mrb);
+    let paths = std::mem::take(&mut *bookkeeping.changed.borrow_mut());
+    if paths.is_empty() {
+        return;
     }
+    let read: Vec<_> = paths
+        .into_iter()
+        .map(|path| {
+            let methods = methods_by_path(mrb, &path);
+            (path, methods)
+        })
+        .collect();
+    let mut draft = bookkeeping.snapshot.borrow_mut();
+    for (path, methods) in read {
+        Arc::make_mut(&mut draft).record_methods(&path, methods);
+    }
+    snapshot::publish(Arc::clone(&draft));
 }
 
-// Module#__record_change__(module): `module` has just gained a method or a
-// module, which changes the methods of every class taking it in. Outside a
-// file's run they are read and published now; a run publishes them as it
-// commits, so no thread reads a class half-run.
+// Module#__record_change__(module): `module` has just gained or lost a
+// method, or taken in a module, which changes the methods of every class
+// taking it in. Outside a file's run they are published now; a run
+// publishes them as it ends, so no thread reads a class half run.
 fn record_change(mrb: &Mrb, _receiver: Value, module: Value) -> Value {
     let bookkeeping = bookkeeping(mrb);
-    if let Some(row) = row_by_module(mrb, module) {
-        let takers = bookkeeping.takers.borrow()[row].clone();
+    let takers = read_id(mrb, module).and_then(|id| bookkeeping.takers.borrow().get(&id).cloned());
+    if let Some(takers) = takers {
         bookkeeping.changed.borrow_mut().extend(takers);
     }
-    if !bookkeeping.changed.borrow().is_empty() && !executor::is_file_running(mrb) {
-        let mut draft = bookkeeping.snapshot.borrow_mut();
-        record_changed_methods(mrb, &mut draft);
-        snapshot::publish(Arc::clone(&draft));
+    if !executor::is_file_running(mrb) {
+        publish_changed(mrb);
     }
     qnil().as_value()
 }
 
-// Notes that the class of the file at `path` takes in `module`.
-fn record_taker(mrb: &Mrb, module: Value, path: &str) {
-    let bookkeeping = bookkeeping(mrb);
-    let row = row_by_module(mrb, module).unwrap_or_else(|| {
-        let mut takers = bookkeeping.takers.borrow_mut();
-        takers.push(BTreeSet::new());
-        let row = takers.len() - 1;
-        bookkeeping
-            .taken_in
-            .set(mrb, module, (row as i64).into_value(mrb))
-            .ok();
-        row
-    });
-    bookkeeping.takers.borrow_mut()[row].insert(path.to_owned());
+// Notes that the class of the file at `path` takes in the module `id` names.
+fn record_taker(mrb: &Mrb, id: i64, path: &str) {
+    bookkeeping(mrb)
+        .takers
+        .borrow_mut()
+        .entry(id)
+        .or_default()
+        .insert(path.to_owned());
 }
 
-// The row of `takers` for `module`, if a class whose file has run takes it in.
-fn row_by_module(mrb: &Mrb, module: Value) -> Option<usize> {
-    let row = bookkeeping(mrb).taken_in.get(mrb, module).ok()?;
-    usize::try_from(i64::try_convert(row, mrb).ok()?).ok()
+// The identity of `module`, which no class overriding `hash` changes.
+fn read_id(mrb: &Mrb, module: Value) -> Option<i64> {
+    let id = module.funcall(mrb, c"__id__", &[]).ok()?;
+    i64::try_convert(id, mrb).ok()
 }
