@@ -226,7 +226,7 @@ class EngineObjectsTest < Minitest::Test
     lookout.set_visible(false)
     lookout.set_visible(true)
 
-    assert_equal [2, true], [lookout.shown, lookout.is_visible]
+    assert_equal [2, true], [lookout.show_count, lookout.is_visible]
   end
 
   # @behavior RG-029
@@ -234,7 +234,7 @@ class EngineObjectsTest < Minitest::Test
     lookout = autofree(Unit::EngineClasses::Lookout.new)
     lookout.get_position
 
-    assert_equal [:set_visible, :shown].sort, Unit::EngineClasses::Lookout.instance_methods(false).sort
+    assert_equal [:set_visible, :show_count].sort, Unit::EngineClasses::Lookout.instance_methods(false).sort
   end
 
   # @behavior RG-030
@@ -328,7 +328,7 @@ class EngineObjectsTest < Minitest::Test
 
     node.set_visible(false)
 
-    assert_equal [nil, false], [node.call(:shown), node.is_visible]
+    assert_equal [nil, false], [node.call(:show_count), node.is_visible]
   end
 
   # @behavior RG-038

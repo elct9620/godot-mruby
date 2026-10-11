@@ -3,7 +3,7 @@
 # properties, an engine singleton's method, a utility function, and the
 # engine's Vector2 and Color. The loop's own time is printed too, for the
 # bench to take away.
-class Ops < Godot::Node2D
+class Operations < Godot::Node2D
   N = 100_000
 
   def _ready

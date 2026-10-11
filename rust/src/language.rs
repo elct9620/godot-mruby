@@ -10,7 +10,7 @@ use godot::global::Error;
 use godot::meta::conv::RawPtr;
 use godot::prelude::*;
 
-use crate::announcement::{self, Clashes, Omission};
+use crate::announcement::{self, Omission, SharedNames};
 use crate::compiler::CompileError;
 use crate::game::{self, GameFiles};
 use crate::realm::{Files, Location};
@@ -34,7 +34,7 @@ pub struct RubyLanguage {
 pub const NAME: &str = "Ruby";
 
 static LANGUAGE: Mutex<Option<InstanceId>> = Mutex::new(None);
-static CLASHES: Mutex<Clashes> = Mutex::new(Clashes::new());
+static SHARED_NAMES: Mutex<SharedNames> = Mutex::new(SharedNames::new());
 
 pub fn register() {
     let language = RubyLanguage::new_alloc();
@@ -416,9 +416,9 @@ impl IScriptLanguageExtension for RubyLanguage {
     fn get_global_class_name(&self, path: GString) -> AnyDictionary {
         let file = path.to_string();
         let announced = announcement::announcement_by_path(&file);
-        let mut clashes = CLASHES.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut shared_names = SHARED_NAMES.lock().unwrap_or_else(PoisonError::into_inner);
         if !matches!(announced, Err(Omission::SharedName { .. })) {
-            clashes.forget(&file);
+            shared_names.forget(&file);
         }
         match announced {
             Ok(announcement) => vdict! {
@@ -436,7 +436,7 @@ impl IScriptLanguageExtension for RubyLanguage {
             Err(Omission::SharedName { name, mut others }) => {
                 others.push(file);
                 others.sort();
-                if clashes.note(&name, &others) {
+                if shared_names.note(&name, &others) {
                     warn_of_shared_name(name, others);
                 }
                 empty_dictionary()

@@ -12,16 +12,19 @@ module Bench
   # its loop, whose own time is a row too.
   module Operations
     LANGUAGES = %i[ruby gdscript].freeze
-    SCENES = { ruby: "res://ops/ops_ruby.tscn", gdscript: "res://ops/ops_gdscript.tscn" }.freeze
-    TICKERS = { ruby: "res://src/ticker.rb", gdscript: "res://ops/ticker.gd" }.freeze
-    CALLBACK = "res://ops/callback.tscn"
+    SCENES = {
+      ruby: "res://operations/operations_ruby.tscn",
+      gdscript: "res://operations/operations_gdscript.tscn"
+    }.freeze
+    TICKERS = { ruby: "res://src/ticker.rb", gdscript: "res://operations/ticker.gd" }.freeze
+    CALLBACK = "res://operations/callback.tscn"
     # The calls the scenes time, as they print them.
     CALLS = %w[loop ruby_call engine_call position_get position_set singleton_call utility_call vector_new
                color_new vector_add vector_x callback].freeze
     TIMING = /^op (\w+) ([\d.]+)$/
     # Frames past which a scene that never quits is stopped: the op scenes
     # time everything as they become ready, the callback scene in 100 frames.
-    FRAME_LIMITS = { ops: "10", callback: "1000" }.freeze
+    FRAME_LIMITS = { operations: "10", callback: "1000" }.freeze
 
     module_function
 
@@ -42,10 +45,10 @@ module Bench
 
     # The nanoseconds of one call of each kind in `language`.
     def time_calls(project, language)
-      ops, = Godot.run_scene(project, SCENES[language], "--quit-after", FRAME_LIMITS[:ops])
+      timed, = Godot.run_scene(project, SCENES[language], "--quit-after", FRAME_LIMITS[:operations])
       callback, = Godot.run_scene(project, CALLBACK, "--fixed-fps", "60", "--quit-after", FRAME_LIMITS[:callback],
                                   "--", TICKERS[language])
-      output = ops + callback
+      output = timed + callback
       timings = output.scan(TIMING).to_h { |call, nanoseconds| [call, Float(nanoseconds)] }
       raise "The #{language} calls were not all timed:\n#{output}" unless timings.keys.sort == CALLS.sort
 

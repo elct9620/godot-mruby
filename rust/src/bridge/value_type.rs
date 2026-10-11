@@ -95,10 +95,10 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     class.define_singleton_method(mrb, c"__has_value_type__", method!(has_value_type, 1))?;
     class.define_singleton_method(mrb, c"new", method!(construct, -1))?;
     class.define_singleton_method(mrb, c"__call_static__", method!(call_static, 2))?;
-    class.define_singleton_method(mrb, c"__constant__", method!(constant, 1))?;
+    class.define_singleton_method(mrb, c"__constant_by_name__", method!(constant_by_name, 1))?;
     class.define_singleton_method(mrb, c"__engine_names__", method!(engine_names, 0))?;
     class.define_private_method(mrb, c"__resolve__", method!(resolve, 1))?;
-    class.define_private_method(mrb, c"__member__", method!(member, 1))?;
+    class.define_private_method(mrb, c"__member_by_name__", method!(member_by_name, 1))?;
     class.define_private_method(mrb, c"__get__", method!(get, 1))?;
     class.define_private_method(mrb, c"__call__", method!(call, 2))?;
     class.define_private_method(mrb, c"__hash__", method!(hash, 0))?;
@@ -363,9 +363,9 @@ fn resolve(mrb: &Mrb, held: &EngineValue, name: Symbol) -> Result<Value, Error> 
     Ok(qnil().as_value())
 }
 
-// Godot::Value#__member__(name): the member of that name, which the value's
+// Godot::Value#__member_by_name__(name): the member of that name, which the value's
 // type has.
-fn member(mrb: &Mrb, held: &EngineValue, name: Symbol) -> Value {
+fn member_by_name(mrb: &Mrb, held: &EngineValue, name: Symbol) -> Value {
     let name = name_by_symbol(mrb, name);
     read_member(&held.as_variant(), &name)
         .map_or_else(|| qnil().as_value(), |found| to_ruby(mrb, &found))
@@ -521,9 +521,9 @@ fn take_answer(
         })
 }
 
-// Godot::Value.__constant__(name): the receiver's type's constant of that
+// Godot::Value.__constant_by_name__(name): the receiver's type's constant of that
 // name, or nil when it has none.
-fn constant(mrb: &Mrb, class: RClass, name: Symbol) -> Result<Value, Error> {
+fn constant_by_name(mrb: &Mrb, class: RClass, name: Symbol) -> Result<Value, Error> {
     let kind = kind_by_class(mrb, super::data(mrb), class)?;
     let name = name_by_symbol(mrb, name);
     // SAFETY: the interface is initialized while the extension runs, and the
@@ -689,7 +689,7 @@ const OPERAND_KINDS: usize = VariantType::VECTOR2.ord as usize + 1;
 // The engine's typed function for `op` on a Vector2 and an operand of
 // `right`, found once: the engine's functions stay put while it runs. A
 // function is kept only once the engine's variant call, given values of the
-// same types, answers the type `answer_kind` says it writes.
+// same types, answers the type `answer_kind_by_operator` says it writes.
 fn evaluator_by_operands(op: VariantOperator, right: VariantType) -> Option<Evaluator> {
     static EVALUATORS: [[OnceLock<Option<Evaluator>>; OPERAND_KINDS]; OPERATORS] =
         [const { [const { OnceLock::new() }; OPERAND_KINDS] }; OPERATORS];
@@ -704,13 +704,13 @@ fn evaluator_by_operands(op: VariantOperator, right: VariantType) -> Option<Eval
         }?;
         let left = new_default(VariantType::VECTOR2);
         let (answer, valid) = evaluate_variants(op, &left, &new_default(right));
-        (valid && answer.get_type() == answer_kind(op)).then_some(evaluate)
+        (valid && answer.get_type() == answer_kind_by_operator(op)).then_some(evaluate)
     })
 }
 
 // The type a typed operator on a Vector2 writes: a bool for a comparison,
 // else a Vector2, the only answer the engine's arithmetic on one gives.
-fn answer_kind(op: VariantOperator) -> VariantType {
+fn answer_kind_by_operator(op: VariantOperator) -> VariantType {
     match op {
         VariantOperator::EQUAL
         | VariantOperator::LESS
@@ -733,10 +733,10 @@ fn apply_typed_operator(
     let evaluate = evaluator_by_operands(op, right.kind())?;
     let left = ptr::from_ref(&vector).cast();
     // SAFETY: each operand is of the type the function was found for, and
-    // the answer is of the type `answer_kind` names, which the engine was
+    // the answer is of the type `answer_kind_by_operator` names, which the engine was
     // seen to answer before the function was kept.
     unsafe {
-        if answer_kind(op) == VariantType::BOOL {
+        if answer_kind_by_operator(op) == VariantType::BOOL {
             let mut answer = false;
             evaluate(left, right.as_ptr(), ptr::from_mut(&mut answer).cast());
             Some(answer.into_value(mrb))

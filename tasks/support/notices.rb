@@ -51,7 +51,7 @@ module Notices
     metadata = cargo_metadata
     packages = metadata["packages"]
     macros = packages.select { |package| proc_macro?(package) }.map { |package| package["id"] }
-    ids = runtime_closure(metadata["resolve"], macros).drop(1)
+    ids = trace_runtime_closure(metadata["resolve"], macros).drop(1)
 
     packages.select { |package| ids.include?(package["id"]) }.sort_by { |package| package["name"] }
   end
@@ -61,16 +61,16 @@ module Notices
   end
 
   # Breadth-first from the root, which stays first in the result.
-  def runtime_closure(resolve, excluded)
+  def trace_runtime_closure(resolve, excluded)
     nodes = resolve["nodes"].to_h { |node| [node["id"], node] }
     reached = [resolve["root"]]
     reached.each do |id|
-      (runtime_deps(nodes.fetch(id)) - excluded).each { |dep| reached << dep unless reached.include?(dep) }
+      (select_runtime_deps(nodes.fetch(id)) - excluded).each { |dep| reached << dep unless reached.include?(dep) }
     end
     reached
   end
 
-  def runtime_deps(node)
+  def select_runtime_deps(node)
     node["deps"].select { |dep| dep["dep_kinds"].any? { |kind| kind["kind"].nil? } }.map { |dep| dep["pkg"] }
   end
 

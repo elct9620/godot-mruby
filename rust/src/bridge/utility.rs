@@ -9,7 +9,7 @@ use godot::global;
 use godot::meta::ToGodot;
 
 use super::object::{
-    call_error, describe_count, make_argument_error, make_type_error, to_arguments,
+    describe_count, make_argument_error, make_call_error, make_type_error, to_arguments,
 };
 use super::value::ToRuby;
 
@@ -177,27 +177,27 @@ pub fn utilities(mrb: &Mrb, _godot: Value) -> Value {
     mrb.ary_new_from_values(&rows).as_value()
 }
 
-/// Godot.__utility__(row, *args): the utility function in that row called
+/// Godot.__call_utility__(row, *args): the utility function in that row called
 /// with the arguments given.
-pub fn utility(mrb: &Mrb, _godot: Value, args: &[Value]) -> Result<Value, Error> {
+pub fn call_utility(mrb: &Mrb, _godot: Value, args: &[Value]) -> Result<Value, Error> {
     let Some((&row, args)) = args.split_first() else {
         return Err(make_argument_error(mrb, &describe_count(0, 1)));
     };
     let Some(row) = i64::from_value(row) else {
         return Ok(qnil().as_value());
     };
-    call_utility(mrb, row, args.iter().copied())
+    call_row(mrb, row, args.iter().copied())
 }
 
 /// Godot.__apply_utility__(row, args): the utility function in that row
 /// called with the arguments in `args`, for one taking any number.
 pub fn apply_utility(mrb: &Mrb, _godot: Value, row: i64, args: RArray) -> Result<Value, Error> {
-    call_utility(mrb, row, args.entries(mrb))
+    call_row(mrb, row, args.entries(mrb))
 }
 
 // The utility function in `row` called with `args`, or nil when no row is
 // that one.
-fn call_utility(
+fn call_row(
     mrb: &Mrb,
     row: i64,
     args: impl ExactSizeIterator<Item = Value>,
@@ -218,5 +218,5 @@ fn call_utility(
     })?;
     ToRuby::try_new(&answer)
         .map(|answer| answer.into_value(mrb))
-        .map_err(|reason| call_error(mrb, &reason))
+        .map_err(|reason| make_call_error(mrb, &reason))
 }

@@ -68,10 +68,14 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     object.define_singleton_method(mrb, c"__make_node__", method!(make_node, 0))?;
     object.define_singleton_method(mrb, c"__allocate__", method!(allocate, 1))?;
     object.define_singleton_method(mrb, c"__singleton__", method!(singleton, 0))?;
-    object.define_singleton_method(mrb, c"__declares__", method!(declares, 1))?;
+    object.define_singleton_method(mrb, c"__has_engine_member__", method!(has_engine_member, 1))?;
     object.define_singleton_method(mrb, c"__has_static_method__", method!(has_static_method, 1))?;
     object.define_singleton_method(mrb, c"__call_static__", method!(call_static, 2))?;
-    object.define_singleton_method(mrb, c"__engine_constant__", method!(engine_constant, 1))?;
+    object.define_singleton_method(
+        mrb,
+        c"__engine_constant_by_name__",
+        method!(engine_constant_by_name, 1),
+    )?;
     object.define_singleton_method(mrb, c"__declare_signal__", method!(declare_signal, 2))?;
     object.define_singleton_method(mrb, c"__declare_export__", method!(declare_export, 4))?;
     object.define_singleton_method(mrb, c"__declare_heading__", method!(declare_heading, 3))?;
@@ -79,7 +83,7 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     object.define_private_method(mrb, c"__call__", method!(call, 2))?;
     object.define_private_method(mrb, c"__call_bound__", method!(call_bound, -1))?;
     object.define_private_method(mrb, c"__apply_bound__", method!(apply_bound, 2))?;
-    object.define_singleton_method(mrb, c"__shape__", method!(shape, 1))?;
+    object.define_singleton_method(mrb, c"__read_shape__", method!(read_shape, 1))?;
     object.define_private_method(mrb, c"__instance_id__", method!(instance_id, 0))?;
     object.define_private_method(mrb, c"__label__", method!(label, 0))?;
     object.define_private_method(mrb, c"initialize_copy", method!(initialize_copy, 1))?;
@@ -266,10 +270,10 @@ fn accessor_by_property(
     }
 }
 
-// Godot::Object.__declares__(name): whether the engine class the receiver
+// Godot::Object.__has_engine_member__(name): whether the engine class the receiver
 // extends has a method or property a call of `name` reaches, for an object
 // that has no live engine object to ask.
-fn declares(mrb: &Mrb, class: RClass, name: Symbol) -> bool {
+fn has_engine_member(mrb: &Mrb, class: RClass, name: Symbol) -> bool {
     let Some(extended) = find_engine_ancestor(mrb, class) else {
         return false;
     };
@@ -349,10 +353,10 @@ fn call_bind(
     convert_answer(mrb, data, &answer)
 }
 
-// Godot::Object.__shape__(bound): how many arguments the engine method
+// Godot::Object.__read_shape__(bound): how many arguments the engine method
 // `bound` requires and how many more it takes, or nil when it takes any
 // number.
-fn shape(mrb: &Mrb, _class: RClass, bound: &BoundMethod) -> Value {
+fn read_shape(mrb: &Mrb, _class: RClass, bound: &BoundMethod) -> Value {
     let arity = bound.arity();
     if arity.is_vararg {
         return qnil().as_value();
@@ -371,7 +375,7 @@ fn call(mrb: &Mrb, held: &EngineObject, name: Symbol, args: RArray) -> Result<Va
     let mut object = held.borrow_live_object(mrb, &name)?.clone();
     let answer = object.try_call(&name, &args).map_err(|error| {
         let base = object.get_class().to_string();
-        call_refusal(mrb, &error, &base, &name.to_string(), args.len())
+        make_call_refusal(mrb, &error, &base, &name.to_string(), args.len())
     })?;
     convert_answer(mrb, data, &answer)
 }
@@ -438,7 +442,7 @@ fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<V
     let args = to_arguments(mrb, data, args.entries(mrb))?;
     let answer = ClassDb::singleton()
         .try_class_call_static(&class, &name, &args)
-        .map_err(|error| call_refusal(mrb, &error, &class, &name.to_string(), args.len()))?;
+        .map_err(|error| make_call_refusal(mrb, &error, &class, &name.to_string(), args.len()))?;
     convert_answer(mrb, data, &answer)
 }
 
@@ -447,7 +451,7 @@ fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<V
 fn convert_answer(mrb: &Mrb, data: &BridgeData, answer: &Variant) -> Result<Value, Error> {
     ToRuby::try_new(answer)
         .map(|answer| answer.into_ruby(mrb, data))
-        .map_err(|reason| call_error(mrb, &reason))
+        .map_err(|reason| make_call_error(mrb, &reason))
 }
 
 /// The Ruby object for an engine object: the one the realm holds for the
@@ -742,9 +746,9 @@ fn find_engine_ancestor(mrb: &Mrb, class: RClass) -> Option<String> {
     }
 }
 
-// Godot::Object.__engine_constant__(name): the integer constant or enum
+// Godot::Object.__engine_constant_by_name__(name): the integer constant or enum
 // value of that name the receiver's engine class has, or nil.
-fn engine_constant(mrb: &Mrb, class: RClass, name: Symbol) -> Value {
+fn engine_constant_by_name(mrb: &Mrb, class: RClass, name: Symbol) -> Value {
     let name = name.name(mrb).unwrap_or_default();
     let class = read_engine_name(mrb, class);
     let class_db = ClassDb::singleton();
@@ -804,7 +808,7 @@ impl EngineObject {
             let message = format!(
                 "Attempt to call function '{method}' in base 'previously freed' on a null instance."
             );
-            Err(call_error(mrb, &message))
+            Err(make_call_error(mrb, &message))
         }
     }
 }
@@ -813,7 +817,13 @@ impl EngineObject {
 // gdext hands the engine's reason only as text, so the expected count, the
 // argument and the types are read back from it; the count names those the
 // method requires, as the class database lists them.
-fn call_refusal(mrb: &Mrb, error: &CallError, base: &str, method: &str, given: usize) -> Error {
+fn make_call_refusal(
+    mrb: &Mrb,
+    error: &CallError,
+    base: &str,
+    method: &str,
+    given: usize,
+) -> Error {
     let reason = error.message(false);
     let reason = reason.rsplit("Reason: ").next().unwrap_or_default();
     if let Some(expected) = parse_parameter_count(reason) {
@@ -828,7 +838,7 @@ fn call_refusal(mrb: &Mrb, error: &CallError, base: &str, method: &str, given: u
             &describe_type_refusal(method, base, argument, &from, &to),
         )
     } else {
-        call_error(
+        make_call_error(
             mrb,
             &format!("Invalid call to function '{method}' in base '{base}': {reason}"),
         )
@@ -871,7 +881,7 @@ pub(super) fn make_refusal_error(
             };
             make_argument_error(mrb, &message)
         }
-        _ => call_error(
+        _ => make_call_error(
             mrb,
             &format!("Invalid call to function '{method}' in base '{base}'."),
         ),
@@ -964,7 +974,7 @@ fn make_not_implemented_error(mrb: &Mrb, message: &str) -> Error {
     }
 }
 
-pub(super) fn call_error(mrb: &Mrb, message: &str) -> Error {
+pub(super) fn make_call_error(mrb: &Mrb, message: &str) -> Error {
     let class = mrb
         .module_get(c"Godot")
         .and_then(|godot| godot.class_get(mrb, c"CallError"));

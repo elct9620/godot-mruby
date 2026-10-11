@@ -7,7 +7,7 @@ module Unit
         @position = :mine
       end
 
-      def written
+      def own_position
         @position
       end
     end

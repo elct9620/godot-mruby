@@ -26,7 +26,7 @@ class ExportsTest < Minitest::Test
     cannon = autofree(Unit::Declarations::Cannon.new)
     script = Godot::ResourceLoader.load("res://test/unit/declarations/cannon.rb")
 
-    names = export_names(script)
+    names = read_export_names(script)
 
     assert_equal %w[barrel mode range], names
   end
@@ -133,16 +133,16 @@ class ExportsTest < Minitest::Test
   def test_godot_reads_an_instance_variable_the_class_did_not_export
     pouch = autofree(Unit::Declarations::Pouch.new)
 
-    assert_equal 7, pouch.get(:kept)
+    assert_equal 7, pouch.get(:stash)
   end
 
   # @behavior RD-029
   def test_godot_writes_an_instance_variable_the_class_did_not_export
     pouch = autofree(Unit::Declarations::Pouch.new)
 
-    pouch.set(:kept, 9)
+    pouch.set(:stash, 9)
 
-    assert_equal 9, pouch.kept
+    assert_equal 9, pouch.stash
   end
 
   # @behavior RD-033
@@ -157,7 +157,7 @@ class ExportsTest < Minitest::Test
 
   # The names of the properties a script has, without the headings they are
   # listed under.
-  def export_names(script)
+  def read_export_names(script)
     script.get_script_property_list
           .select { |member| member["usage"] & SCRIPT_VARIABLE != 0 }
           .map { |property| property["name"] }

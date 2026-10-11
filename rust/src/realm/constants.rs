@@ -8,8 +8,8 @@ use beni::{
     ReprValue, Symbol, TryConvert, Value, method, value::qnil,
 };
 
-use super::index::{self, Entry, Namespace};
-use super::{Extends, RubyError, bookkeeping, compile, executor, key_by_path};
+use super::index::{self, Definition, Namespace};
+use super::{Parent, RubyError, bookkeeping, compile, executor, key_by_path};
 
 pub(super) fn define(mrb: &Mrb) -> Result<(), Error> {
     let module = mrb.class_get(c"Module")?;
@@ -92,13 +92,13 @@ fn is_hidden(mrb: &Mrb, inner: &[String]) -> bool {
 // Loads the constant `inner` spells for no caller: a file that raises is
 // reported at its own line, and the outer constant being defined goes on.
 fn load_inner(mrb: &Mrb, inner: &[String]) {
-    let entry = bookkeeping(mrb).index.borrow().entry_by_key(inner);
+    let entry = bookkeeping(mrb).index.borrow().definition_by_key(inner);
     let (path, loaded) = match entry {
-        Some(Entry::File(path)) if executor::trace_cycle(mrb, &path).is_none() => {
+        Some(Definition::File(path)) if executor::trace_cycle(mrb, &path).is_none() => {
             let loaded = run_by_name(mrb, &path);
             (Some(path), loaded)
         }
-        Some(Entry::Namespace(namespace)) => {
+        Some(Definition::Namespace(namespace)) => {
             let Some(scope) = constant_by_key(mrb, &inner[..inner.len() - 1]) else {
                 return;
             };
@@ -119,7 +119,7 @@ fn load_inner(mrb: &Mrb, inner: &[String]) {
 /// that the class index names. mruby's statements never ask const_missing, so
 /// a file opening one first would make a module or class unrelated to it.
 /// Answers the superclass the file's class is held to once it has run.
-pub(super) fn ensure_opened(mrb: &Mrb, path: &str) -> Result<Option<Extends>, Error> {
+pub(super) fn ensure_opened(mrb: &Mrb, path: &str) -> Result<Option<Parent>, Error> {
     ensure_namespaces(mrb, path)?;
     let own = key_by_path(mrb, path);
     let declarations = bookkeeping(mrb).files.declarations_by_path(path);
@@ -133,33 +133,33 @@ pub(super) fn ensure_opened(mrb: &Mrb, path: &str) -> Result<Option<Extends>, Er
         let Some((name, outer)) = names.split_last() else {
             continue;
         };
-        let entry = bookkeeping(mrb).index.borrow().entry_by_key(&key);
+        let entry = bookkeeping(mrb).index.borrow().definition_by_key(&key);
         match entry {
-            Some(Entry::File(file)) => {
+            Some(Definition::File(file)) => {
                 load_constant(mrb, &file, outer, name)?;
             }
-            Some(Entry::Namespace(namespace)) => {
+            Some(Definition::Namespace(namespace)) => {
                 define_namespace_module(mrb, outer, name, &namespace)?;
             }
             None => {}
         }
     }
-    Ok(declarations.extends)
+    Ok(declarations.parent)
 }
 
 /// Holds the class the file at `path` defined to the superclass it declared,
 /// compared by name so the comparison loads nothing. A file that defined no
 /// class of its path's name is left to whoever asked for the class.
-pub(super) fn keep_extends(mrb: &Mrb, path: &str, extends: Option<Extends>) -> Result<(), Error> {
-    let Some(extends) = extends else {
+pub(super) fn keep_parent(mrb: &Mrb, path: &str, parent: Option<Parent>) -> Result<(), Error> {
+    let Some(parent) = parent else {
         return Ok(());
     };
     let Some(class) = constant_by_key(mrb, &key_by_path(mrb, path)) else {
         return Ok(());
     };
-    let (expected, promised) = match &extends {
-        Extends::File(file) => (key_by_path(mrb, file), format!("the class {file} names")),
-        Extends::Constant(names) => (
+    let (expected, promised) = match &parent {
+        Parent::File(file) => (key_by_path(mrb, file), format!("the class {file} names")),
+        Parent::Constant(names) => (
             names.iter().map(|name| index::normalize(name)).collect(),
             names.join("::"),
         ),
@@ -198,10 +198,13 @@ fn ensure_namespaces(mrb: &Mrb, path: &str) -> Result<(), Error> {
         if constant_by_key(mrb, &key[..depth]).is_some() {
             continue;
         }
-        let entry = bookkeeping(mrb).index.borrow().entry_by_key(&key[..depth]);
+        let entry = bookkeeping(mrb)
+            .index
+            .borrow()
+            .definition_by_key(&key[..depth]);
         match entry {
-            Some(Entry::File(file)) => run_by_name(mrb, &file)?,
-            Some(Entry::Namespace(namespace)) => {
+            Some(Definition::File(file)) => run_by_name(mrb, &file)?,
+            Some(Definition::Namespace(namespace)) => {
                 // A namespace file that ran without defining its module
                 // leaves the files inside to open it themselves.
                 let Some(scope) = constant_by_key(mrb, &key[..depth - 1]) else {
@@ -326,12 +329,15 @@ fn constant_by_segment(mrb: &Mrb, scope: Value, segment: &str) -> Option<Value> 
 // innermost scope alone, so the index looks outward from it.
 fn resolve(mrb: &Mrb, receiver: Value, name: &str) -> Result<Option<Value>, Error> {
     let scope = split_path(mrb, receiver).unwrap_or_default();
-    let entry = bookkeeping(mrb).index.borrow().entry_by_name(&scope, name);
+    let entry = bookkeeping(mrb)
+        .index
+        .borrow()
+        .definition_by_name(&scope, name);
     match entry {
-        Some((depth, Entry::File(path))) => {
+        Some((depth, Definition::File(path))) => {
             load_constant(mrb, &path, &scope[..depth], name).map(Some)
         }
-        Some((depth, Entry::Namespace(namespace))) => {
+        Some((depth, Definition::Namespace(namespace))) => {
             define_namespace_module(mrb, &scope[..depth], name, &namespace).map(Some)
         }
         None => Ok(None),
@@ -376,7 +382,7 @@ fn run_by_name(mrb: &Mrb, path: &str) -> Result<(), Error> {
         mrb,
         path,
         || ensure_opened(mrb, path),
-        |extends| keep_extends(mrb, path, extends),
+        |parent| keep_parent(mrb, path, parent),
     )
 }
 

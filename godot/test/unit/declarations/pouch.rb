@@ -4,11 +4,11 @@ module Unit
     # reaches by name.
     class Pouch < Godot::Node2D
       def initialize
-        @kept = 7
+        @stash = 7
       end
 
-      def kept
-        @kept
+      def stash
+        @stash
       end
     end
   end

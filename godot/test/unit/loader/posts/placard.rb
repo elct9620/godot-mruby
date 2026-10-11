@@ -4,7 +4,7 @@ module Unit
       # Ruby finds this Marker first, though the loader's rule finds marker.rb.
       Marker = Class.new(StandardError)
 
-      class Plain < Marker
+      class Placard < Marker
       end
     end
   end

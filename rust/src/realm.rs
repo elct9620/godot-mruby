@@ -84,7 +84,7 @@ pub struct Declarations {
     pub writes: Vec<Vec<String>>,
     /// The superclass its class extends when something relies on it; once the
     /// file has run, a class extending another raises `TypeError`.
-    pub extends: Option<Extends>,
+    pub parent: Option<Parent>,
     /// The names its class body's `export` calls spell out.
     pub exports: Vec<String>,
     /// The names its class body's `signal` calls spell out.
@@ -93,7 +93,7 @@ pub struct Declarations {
 
 /// The superclass a file's class is held to.
 #[derive(Debug)]
-pub enum Extends {
+pub enum Parent {
     /// The class the file at this path names.
     File(String),
     /// A constant no file names, as its names from the top level.
@@ -223,7 +223,7 @@ fn symbol_by_name(mrb: &Mrb, name: &str) -> Result<Symbol, Error> {
 }
 
 // The constant path the file at `path` spells in `mrb`'s realm.
-fn key_by_path(mrb: &Mrb, path: &str) -> index::Key {
+fn key_by_path(mrb: &Mrb, path: &str) -> index::ConstantPath {
     bookkeeping(mrb).index.borrow().key_by_path(path)
 }
 
@@ -403,9 +403,9 @@ pub fn extension_data<T: Default + Send + 'static>(mrb: &Mrb) -> &T {
 /// constant `names` spells from Object.
 pub fn file_by_constant(mrb: &Mrb, names: &[String]) -> Option<String> {
     let key: Vec<String> = names.iter().map(|name| normalize(name)).collect();
-    match bookkeeping(mrb).index.borrow().entry_by_key(&key)? {
-        index::Entry::File(path) => Some(path),
-        index::Entry::Namespace(_) => None,
+    match bookkeeping(mrb).index.borrow().definition_by_key(&key)? {
+        index::Definition::File(path) => Some(path),
+        index::Definition::Namespace(_) => None,
     }
 }
 
@@ -576,7 +576,7 @@ impl Realm {
                 &self.mrb,
                 path,
                 || constants::ensure_opened(&self.mrb, path),
-                |extends| constants::keep_extends(&self.mrb, path, extends),
+                |parent| constants::keep_parent(&self.mrb, path, parent),
             )
             .map_err(|error| RubyError::from_error(&self.mrb, Some(path), &error))
         })
@@ -598,7 +598,7 @@ impl Realm {
                 &self.mrb,
                 path,
                 || constants::ensure_opened(&self.mrb, path),
-                |extends| constants::keep_extends(&self.mrb, path, extends),
+                |parent| constants::keep_parent(&self.mrb, path, parent),
             )
             .map_err(read)?;
             if ran && let Some(class) = self.find_respondent(path, rerun.adopt).map_err(read)? {

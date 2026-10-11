@@ -10,7 +10,7 @@ use godot::obj::Singleton;
 
 use crate::ancestry;
 use crate::header::Header;
-use crate::realm::{ClassIndex, Declarations, Extends, Files, Roots};
+use crate::realm::{ClassIndex, Declarations, Files, Parent, Roots};
 use crate::settings;
 
 const ROOT: &str = "res://";
@@ -60,18 +60,18 @@ impl Files for GameFiles {
             return Declarations::default();
         };
         let header = Header::from_source(path, &source, &self.roots());
-        let extends = ancestry::trace_ancestry(path, &header, self)
+        let parent = ancestry::trace_ancestry(path, &header, self)
             .ok()
             .filter(|ancestry| is_node_class(ancestry.engine_class()))
             .map(|ancestry| match ancestry.files().first() {
-                Some((file, _)) => Extends::File(file.clone()),
+                Some((file, _)) => Parent::File(file.clone()),
                 None => {
-                    Extends::Constant(vec!["Godot".to_owned(), ancestry.engine_class().to_owned()])
+                    Parent::Constant(vec!["Godot".to_owned(), ancestry.engine_class().to_owned()])
                 }
             });
         Declarations {
             writes: header.writes().to_vec(),
-            extends,
+            parent,
             exports: header.export_names().map(str::to_owned).collect(),
             signals: header.signal_names().to_vec(),
         }

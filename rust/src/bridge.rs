@@ -38,11 +38,15 @@ impl Gem for Godot {
         let godot = mrb.define_module(c"Godot")?;
         godot.define_singleton_method(
             mrb,
-            c"__engine_superclass__",
-            method!(engine_superclass, 1),
+            c"__engine_superclass_by_name__",
+            method!(engine_superclass_by_name, 1),
         )?;
         godot.define_singleton_method(mrb, c"__utilities__", method!(utility::utilities, 0))?;
-        godot.define_singleton_method(mrb, c"__utility__", method!(utility::utility, -1))?;
+        godot.define_singleton_method(
+            mrb,
+            c"__call_utility__",
+            method!(utility::call_utility, -1),
+        )?;
         godot.define_singleton_method(
             mrb,
             c"__apply_utility__",
@@ -163,9 +167,9 @@ fn run_engine_call(
     }
 }
 
-// Godot.__engine_superclass__(name): the name of the engine class `name`
+// Godot.__engine_superclass_by_name__(name): the name of the engine class `name`
 // inherits from, empty for the root, or nil when the engine has no such class.
-fn engine_superclass(mrb: &Mrb, _godot: Value, name: Symbol) -> Value {
+fn engine_superclass_by_name(mrb: &Mrb, _godot: Value, name: Symbol) -> Value {
     let class_db = ClassDb::singleton();
     let Some(name) = name.name(mrb).filter(|name| class_db.class_exists(name)) else {
         return qnil().as_value();

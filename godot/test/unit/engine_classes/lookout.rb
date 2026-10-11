@@ -4,12 +4,12 @@ module Unit
     # counting the calls it ran.
     class Lookout < Godot::Node2D
       # Written with def so the script answers it before its file has run.
-      def shown
-        @shown
+      def show_count
+        @show_count
       end
 
       def set_visible(value)
-        @shown = (@shown || 0) + 1
+        @show_count = (@show_count || 0) + 1
         super
       end
     end

@@ -1,5 +1,5 @@
 extends Node2D
-## The GDScript twin of src/ops.rb, call for call.
+## The GDScript twin of src/operations.rb, call for call.
 
 const N := 100000
 

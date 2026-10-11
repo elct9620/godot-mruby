@@ -115,6 +115,7 @@ These names come from another side, and step 1 keeps each as that side spells it
 | Side | As in |
 | --- | --- |
 | Rust's API Guidelines | `new`, `into_`, a getter without `get_` |
+| Rust's `log` crate, which the log follows | `Level::Warn`, `error!`, `warn!` |
 | Godot's virtuals | `get_name`, `ready` |
 | Ruby's hooks and predicates | `const_added`, `empty?` |
 | Minitest | `passed?`, `test_` |

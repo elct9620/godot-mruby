@@ -67,7 +67,7 @@ class LoaderTest < Minitest::Test
 
   # @behavior RL-030
   def test_a_library_files_superclass_is_rubys_to_look_up
-    superclass = Unit::Loader::Posts::Plain.superclass
+    superclass = Unit::Loader::Posts::Placard.superclass
     assert_same Unit::Loader::Posts::Marker, superclass
   end
 end

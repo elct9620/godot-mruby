@@ -582,7 +582,7 @@ What a file declares before it runs: the constants its statements write, each as
 pub struct Declarations;
 ```
 
-## `Extends`
+## `Parent`
 
 The superclass a file's class is held to: the class another file's path names, or a constant no file names, spelled from the top level.
 
@@ -591,7 +591,7 @@ The superclass a file's class is held to: the class another file's path names, o
 | internal | yes |
 
 ```rust
-pub enum Extends {}
+pub enum Parent {}
 ```
 
 ## `Log`

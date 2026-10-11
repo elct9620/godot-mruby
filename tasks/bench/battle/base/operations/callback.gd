@@ -20,7 +20,7 @@ func _ready() -> void:
 		ticker.set_script(script)
 		add_child(ticker)
 	var closer := Node.new()
-	closer.set_script(load("res://ops/closer.gd"))
+	closer.set_script(load("res://operations/closer.gd"))
 	closer.process_physics_priority = 1000
 	closer.timer = self
 	add_child(closer)

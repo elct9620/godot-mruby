@@ -13,11 +13,11 @@ module Godot
   # the function up by name; one taking any number gathers them.
   __utilities__.each do |name, arity, row|
     body = case arity
-           when 0 then proc { __utility__(row) }
-           when 1 then proc { |a| __utility__(row, a) }
-           when 2 then proc { |a, b| __utility__(row, a, b) }
-           when 3 then proc { |a, b, c| __utility__(row, a, b, c) }
-           when 5 then proc { |a, b, c, d, e| __utility__(row, a, b, c, d, e) }
+           when 0 then proc { __call_utility__(row) }
+           when 1 then proc { |a| __call_utility__(row, a) }
+           when 2 then proc { |a, b| __call_utility__(row, a, b) }
+           when 3 then proc { |a, b, c| __call_utility__(row, a, b, c) }
+           when 5 then proc { |a, b, c, d, e| __call_utility__(row, a, b, c, d, e) }
            else proc { |*args| __apply_utility__(row, args) }
            end
     singleton_class.__send__(:define_method, name, &body)
@@ -25,7 +25,7 @@ module Godot
 
   class << self
     def const_missing(name)
-      superclass = __engine_superclass__(name)
+      superclass = __engine_superclass_by_name__(name)
       if superclass.nil? && Value.__send__(:__has_value_type__, name)
         value_class = const_set(name, Class.new(Value))
         value_class.__send__(:__define_engine_names__)
@@ -38,7 +38,7 @@ module Godot
       const_set(name, engine_class)
     end
 
-    private :__engine_superclass__, :__utilities__, :__utility__, :__apply_utility__
+    private :__engine_superclass_by_name__, :__utilities__, :__call_utility__, :__apply_utility__
 
     private
 
@@ -89,7 +89,7 @@ module Godot
           raise ArgumentError, "#{name} is a method every object answers, so it cannot be exported"
         end
 
-        __declare_export__(name.to_s, default, *__hint__(keywords))
+        __declare_export__(name.to_s, default, *__read_hint__(keywords))
         __exports__[name.to_sym] = default
         attr_reader name unless method_defined?(name)
         attr_writer name unless method_defined?(:"#{name}=")
@@ -155,14 +155,14 @@ module Godot
       # engine class once named.
       def const_missing(name)
         engine_class = __engine_class__
-        value = engine_class.__send__(:__engine_constant__, name)
+        value = engine_class.__send__(:__engine_constant_by_name__, name)
         return super if value.nil?
 
         engine_class.const_set(name, value)
       end
 
-      private :__make__, :__make_node__, :__allocate__, :__declares__, :__singleton__, :__has_static_method__, :__call_static__,
-              :__engine_constant__, :__declare_signal__, :__declare_export__, :__declare_heading__, :__shape__
+      private :__make__, :__make_node__, :__allocate__, :__has_engine_member__, :__singleton__, :__has_static_method__, :__call_static__,
+              :__engine_constant_by_name__, :__declare_signal__, :__declare_export__, :__declare_heading__, :__read_shape__
 
       private
 
@@ -175,8 +175,8 @@ module Godot
       # The body of the engine method `bound` binds: a strict block of the
       # arguments it requires, so a call gathers none into an array, when it
       # takes no others and at most four; any other method gathers them.
-      def __bound_body__(bound)
-        case __shape__(bound)
+      def __make_bound_body__(bound)
+        case __read_shape__(bound)
         when [0, 0] then proc { __call_bound__(bound) }
         when [1, 0] then proc { |a| __call_bound__(bound, a) }
         when [2, 0] then proc { |a, b| __call_bound__(bound, a, b) }
@@ -267,23 +267,23 @@ module Godot
       # extension takes them. A property carries one hint, as a GDScript
       # variable carries one `@export_*` annotation, and `step:` belongs to
       # the range it steps through rather than being a hint of its own.
-      def __hint__(keywords)
+      def __read_hint__(keywords)
         step = keywords[:step]
         named = keywords.keys.reject { |keyword| keyword == :step }
         raise ArgumentError, %("#{named.last}:" cannot be used with another hint.) if named.size > 1
 
         hint = named.first
-        return ["range", __bounds__(keywords[:range], step)] if hint == :range
+        return ["range", __read_bounds__(keywords[:range], step)] if hint == :range
         raise ArgumentError, %("step:" needs a "range:" to step through.) unless step.nil?
-        return ["type", __type_name__(keywords[:type])] if hint == :type
+        return ["type", __read_type_name__(keywords[:type])] if hint == :type
         return ["none", nil] if hint.nil?
 
-        [hint.to_s, __hint_value__(hint, keywords[hint])]
+        [hint.to_s, __check_hint_value__(hint, keywords[hint])]
       end
 
       # The value a hint is read with, a list where the hint takes the names
       # a value may take, which is refused where it is written otherwise.
-      def __hint_value__(hint, value)
+      def __check_hint_value__(hint, value)
         if %i[enum flags].include?(hint) && !value.is_a?(::Array)
           raise ArgumentError, %("#{hint}:" needs a list of names, but #{value.inspect} was given instead.)
         end
@@ -294,7 +294,7 @@ module Godot
       # The class a property names its type by, as the realm spells it. Only
       # a class names a type, so anything else is refused where it is
       # written.
-      def __type_name__(named)
+      def __read_type_name__(named)
         unless named.is_a?(::Module)
           raise ArgumentError, %("type:" needs a class, but #{named.inspect} was given instead.)
         end
@@ -305,7 +305,7 @@ module Godot
       # A range hint's bounds, the step included when one is declared. A
       # range leaving out its end names no highest value, so it is refused
       # where it is written.
-      def __bounds__(range, step)
+      def __read_bounds__(range, step)
         unless range.is_a?(::Range) && !range.exclude_end?
           raise ArgumentError,
                 %("range:" needs a range that includes its end, but #{range.inspect} was given instead.)
@@ -361,7 +361,7 @@ module Godot
         engine_class.__send__(:define_method, name) { |*arguments| __call__(target, [property, *arguments]) } if declared
         __call__(target, [property, *args])
       elsif bound
-        engine_class.__send__(:define_method, name, &engine_class.__send__(:__bound_body__, bound))
+        engine_class.__send__(:define_method, name, &engine_class.__send__(:__make_bound_body__, bound))
         engine_class.instance_method(name).bind_call(self, *args)
       else
         engine_class.__send__(:define_method, name) { |*arguments| __call__(target, arguments) } if declared
@@ -374,7 +374,7 @@ module Godot
     def respond_to_missing?(name, include_private = false)
       !__resolve__(name).nil? || super
     rescue Godot::CallError, TypeError
-      self.class.__send__(:__declares__, name) || super
+      self.class.__send__(:__has_engine_member__, name) || super
     end
 
     # Two Ruby objects for one engine object are equal.
@@ -435,13 +435,13 @@ module Godot
       end
 
       def const_missing(name)
-        value = __constant__(name)
+        value = __constant_by_name__(name)
         return super if value.nil?
 
         const_set(name, value)
       end
 
-      private :__has_value_type__, :__call_static__, :__constant__, :__engine_names__
+      private :__has_value_type__, :__call_static__, :__constant_by_name__, :__engine_names__
 
       private
 
@@ -506,7 +506,7 @@ module Godot
         if bound
           self.class.__send__(:define_method, name) { __get__(bound) }
         else
-          self.class.__send__(:define_method, name) { __member__(name) }
+          self.class.__send__(:define_method, name) { __member_by_name__(name) }
         end
       when :method then self.class.__send__(:define_method, name) { |*arguments| __call__(name, arguments) }
       else return false

@@ -70,7 +70,7 @@ module Godot
       # its results are written, and the run file is gone.
       # @behavior RT-038
       def verify_run_file!(project)
-        run_file = File.join(user_dir(project), RUN_FILE)
+        run_file = File.join(locate_user_dir(project), RUN_FILE)
         output, tests = Dir.mktmpdir { |dir| run_from(project, run_file, File.join(dir, "results.json")) }
         return if tests&.size == 2 && !File.exist?(run_file) && output.match?(/^2 runs,/)
 
@@ -133,7 +133,7 @@ module Godot
       end
 
       # Where Godot keeps user:// for the project.
-      def user_dir(project)
+      def locate_user_dir(project)
         output, = Godot.run_scene(project, USER_DIR_SCENE, "--quit-after", "10")
         output[USER_DIR, 1] or raise "Godot did not say where user:// is:\n#{output}"
       end

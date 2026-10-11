@@ -28,8 +28,8 @@ const FILES: [(&CStr, &str); 6] = [
         include_str!("minitest/test_root.rb"),
     ),
     (
-        c"godot_mruby/minitest/signals.rb",
-        include_str!("minitest/signals.rb"),
+        c"godot_mruby/minitest/signal_watcher.rb",
+        include_str!("minitest/signal_watcher.rb"),
     ),
     (
         c"godot_mruby/minitest/godot_plugin.rb",

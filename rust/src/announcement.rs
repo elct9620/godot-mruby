@@ -75,7 +75,7 @@ impl<'a, F: Files> Project<'a, F> {
             return Err(Omission::InTemplateDirectory);
         }
         let (header, ancestry) = self.read_node_script(path).ok_or(Omission::NotNodeScript)?;
-        let others = self.find_namesakes(path);
+        let others = self.find_name_sharers(path);
         if !others.is_empty() {
             return Err(Omission::SharedName {
                 name: header.name().to_owned(),
@@ -86,7 +86,7 @@ impl<'a, F: Files> Project<'a, F> {
             .files()
             .iter()
             .find(|(ancestor, _)| {
-                !self.is_in_test_directory(ancestor) && self.find_namesakes(ancestor).is_empty()
+                !self.is_in_test_directory(ancestor) && self.find_name_sharers(ancestor).is_empty()
             })
             .map_or_else(
                 || ancestry.engine_class().to_owned(),
@@ -114,7 +114,7 @@ impl<'a, F: Files> Project<'a, F> {
 
     // The other game files whose node scripts share the name of the file at
     // `path`: only a file whose last segment spells the same name can.
-    fn find_namesakes(&self, path: &str) -> Vec<String> {
+    fn find_name_sharers(&self, path: &str) -> Vec<String> {
         let name = read_file_name(path);
         self.paths
             .iter()
@@ -151,10 +151,10 @@ pub fn announcement_by_path(path: &str) -> Result<Announcement, Omission> {
 
 /// The names node scripts share, each with the files sharing it, already
 /// warned of: the editor scans the project again and again and asks of every
-/// file, and each clash is warned of once while it lasts.
-pub struct Clashes(BTreeSet<(String, Vec<String>)>);
+/// file, and each shared name is warned of once while it lasts.
+pub struct SharedNames(BTreeSet<(String, Vec<String>)>);
 
-impl Clashes {
+impl SharedNames {
     pub const fn new() -> Self {
         Self(BTreeSet::new())
     }
@@ -165,8 +165,8 @@ impl Clashes {
         self.0.insert((name.to_owned(), files.to_vec()))
     }
 
-    /// Forgets the clashes the file at `path` was in, once it is announced or
-    /// no node script: a clash coming back is news again.
+    /// Forgets the shared names the file at `path` was in, once it is
+    /// announced or no node script: a shared name coming back is news again.
     pub fn forget(&mut self, path: &str) {
         self.0
             .retain(|(_, files)| !files.iter().any(|file| file == path));
@@ -193,7 +193,7 @@ mod tests {
     use std::collections::BTreeMap;
     use std::sync::Mutex;
 
-    use super::{Announcement, Clashes, Omission, Project};
+    use super::{Announcement, Omission, Project, SharedNames};
     use crate::ancestry::tests::Sources;
     use crate::game::Listing;
     use crate::realm::{Declarations, Files, Roots};
@@ -356,13 +356,13 @@ mod tests {
 
     // @behavior RN-011
     #[test]
-    fn a_name_clash_that_came_back_is_warned_of_again() {
+    fn a_shared_name_that_came_back_is_warned_of_again() {
         let files = ["res://a/twin.rb".to_owned(), "res://b/twin.rb".to_owned()];
-        let mut clashes = Clashes::new();
-        clashes.note("Twin", &files);
-        clashes.forget("res://a/twin.rb");
+        let mut shared_names = SharedNames::new();
+        shared_names.note("Twin", &files);
+        shared_names.forget("res://a/twin.rb");
 
-        let is_news = clashes.note("Twin", &files);
+        let is_news = shared_names.note("Twin", &files);
 
         assert!(is_news);
     }

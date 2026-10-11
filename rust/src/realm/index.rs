@@ -13,12 +13,12 @@ const ROOT: &str = "res://";
 #[derive(Default)]
 pub struct ClassIndex {
     roots: Roots,
-    files: BTreeMap<Key, String>,
-    namespaces: BTreeMap<Key, Namespace>,
-    refusals: BTreeSet<Key>,
+    files: BTreeMap<ConstantPath, String>,
+    namespaces: BTreeMap<ConstantPath, Namespace>,
+    refusals: BTreeSet<ConstantPath>,
     // Every key a file or a namespace was taken in under, by its last name,
     // so a name is found without reading every key.
-    keys_by_last_name: BTreeMap<String, BTreeSet<Key>>,
+    keys_by_last_name: BTreeMap<String, BTreeSet<ConstantPath>>,
 }
 
 /// The root directories files are named from: `res://`, and the directories
@@ -42,7 +42,7 @@ impl Roots {
     }
 
     /// The constant path the file at `path` spells, as the index matches it.
-    pub fn key_by_path(&self, path: &str) -> Key {
+    pub fn key_by_path(&self, path: &str) -> ConstantPath {
         self.split_segments(path)
             .1
             .iter()
@@ -82,10 +82,10 @@ impl Roots {
 
 /// A constant path as the index matches it: one segment per namespace, each
 /// without underscores and in lower case.
-pub type Key = Vec<String>;
+pub type ConstantPath = Vec<String>;
 
 /// What a constant path names in the index.
-pub enum Entry {
+pub enum Definition {
     /// The file defining it.
     File(String),
     /// A directory with no file of its own name, which is an empty module.
@@ -118,7 +118,7 @@ impl ClassIndex {
     }
 
     /// The constant path the file at `path` spells, as the index matches it.
-    pub fn key_by_path(&self, path: &str) -> Key {
+    pub fn key_by_path(&self, path: &str) -> ConstantPath {
         self.roots.key_by_path(path)
     }
 
@@ -159,13 +159,17 @@ impl ClassIndex {
     }
 
     /// The constant paths the index names a file for.
-    pub fn file_keys(&self) -> Vec<Key> {
+    pub fn file_keys(&self) -> Vec<ConstantPath> {
         self.files.keys().cloned().collect()
     }
 
     /// Refuses the files naming `keys`, constants the realm has come to have
     /// since it took the files in.
-    pub fn refuse_constants(&mut self, keys: impl IntoIterator<Item = Key>, log: &dyn Log) {
+    pub fn refuse_constants(
+        &mut self,
+        keys: impl IntoIterator<Item = ConstantPath>,
+        log: &dyn Log,
+    ) {
         for key in keys {
             if let Some(path) = self.files.remove(&key) {
                 self.warn_of_constant(&path, log);
@@ -176,24 +180,24 @@ impl ClassIndex {
 
     /// What `key` names, if anything: a file is what a namespace's own file
     /// is too, so it answers before the directory.
-    pub fn entry_by_key(&self, key: &[String]) -> Option<Entry> {
+    pub fn definition_by_key(&self, key: &[String]) -> Option<Definition> {
         match self.files.get(key) {
-            Some(path) => Some(Entry::File(path.clone())),
-            None => self.namespaces.get(key).cloned().map(Entry::Namespace),
+            Some(path) => Some(Definition::File(path.clone())),
+            None => self.namespaces.get(key).cloned().map(Definition::Namespace),
         }
     }
 
     /// What `name` names from inside the namespaces `scope` spells, looked for
     /// from the innermost namespace outward, as Rails' classic autoloader does,
     /// and how many of those namespaces it was found inside.
-    pub fn entry_by_name(&self, scope: &[String], name: &str) -> Option<(usize, Entry)> {
+    pub fn definition_by_name(&self, scope: &[String], name: &str) -> Option<(usize, Definition)> {
         (0..=scope.len()).rev().find_map(|depth| {
-            let mut key: Key = scope[..depth]
+            let mut key: ConstantPath = scope[..depth]
                 .iter()
                 .map(|segment| normalize(segment))
                 .collect();
             key.push(normalize(name));
-            self.entry_by_key(&key).map(|entry| (depth, entry))
+            self.definition_by_key(&key).map(|entry| (depth, entry))
         })
     }
 
@@ -204,21 +208,21 @@ impl ClassIndex {
         let mut scope = scope.to_vec();
         let mut named = None;
         for name in names {
-            let (depth, found) = self.entry_by_name(&scope, name)?;
+            let (depth, found) = self.definition_by_name(&scope, name)?;
             scope.truncate(depth);
             scope.push(name.clone());
             named = Some(found);
         }
         match named? {
-            Entry::File(path) => Some(path),
-            Entry::Namespace(_) => None,
+            Definition::File(path) => Some(path),
+            Definition::Namespace(_) => None,
         }
     }
 
     /// What the index names directly inside the namespace `key` spells: its
     /// files, and its directories' modules.
-    pub fn members_by_key(&self, key: &[String]) -> Vec<Key> {
-        let below = |named: &&Key| named.starts_with(key);
+    pub fn members_by_key(&self, key: &[String]) -> Vec<ConstantPath> {
+        let below = |named: &&ConstantPath| named.starts_with(key);
         let start = key.to_vec();
         let files = self.files.range(start.clone()..).map(|(named, _)| named);
         let namespaces = self.namespaces.range(start..).map(|(named, _)| named);
@@ -232,7 +236,7 @@ impl ClassIndex {
 
     /// What the index names `name` inside the namespaces below the one
     /// `scope` spells.
-    pub fn collect_keys_below(&self, scope: &[String], name: &str) -> Vec<Key> {
+    pub fn collect_keys_below(&self, scope: &[String], name: &str) -> Vec<ConstantPath> {
         self.keys_by_last_name
             .get(&normalize(name))
             .into_iter()
@@ -281,7 +285,10 @@ impl ClassIndex {
 }
 
 // Files `key` under its last name in `keys_by_last_name`.
-fn add_last_name(keys_by_last_name: &mut BTreeMap<String, BTreeSet<Key>>, key: &Key) {
+fn add_last_name(
+    keys_by_last_name: &mut BTreeMap<String, BTreeSet<ConstantPath>>,
+    key: &ConstantPath,
+) {
     if let Some(name) = key.last() {
         keys_by_last_name
             .entry(name.clone())

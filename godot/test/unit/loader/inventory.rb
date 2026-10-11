@@ -3,7 +3,7 @@ module Unit
     # A library the tests reach by name: it holds items up to its slots.
     class Inventory
       # What adding to a full inventory raises.
-      class Full < StandardError; end
+      class Overflow < StandardError; end
 
       def initialize(slots)
         @slots = slots
@@ -11,7 +11,7 @@ module Unit
       end
 
       def add(item)
-        raise Full, "no slot is free" if @items.size >= @slots
+        raise Overflow, "no slot is free" if @items.size >= @slots
 
         @items << item
         self
