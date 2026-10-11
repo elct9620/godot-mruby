@@ -102,7 +102,7 @@ pub struct Namespace {
 
 impl ClassIndex {
     /// An index naming the files it takes in from `roots`.
-    pub fn new(roots: Roots) -> Self {
+    pub(super) fn new(roots: Roots) -> Self {
         Self {
             roots,
             ..Self::default()
@@ -118,13 +118,13 @@ impl ClassIndex {
     }
 
     /// The constant path the file at `path` spells, as the index matches it.
-    pub fn key_by_path(&self, path: &str) -> ConstantPath {
+    pub(super) fn key_by_path(&self, path: &str) -> ConstantPath {
         self.roots.key_by_path(path)
     }
 
     /// Takes in the files at `paths`, refusing a name two files spell and a
     /// name `is_defined` says the realm already has.
-    pub fn add(
+    pub(super) fn add(
         &mut self,
         paths: impl IntoIterator<Item = String>,
         is_defined: impl Fn(&[String]) -> bool,
@@ -159,13 +159,13 @@ impl ClassIndex {
     }
 
     /// The constant paths the index names a file for.
-    pub fn file_keys(&self) -> Vec<ConstantPath> {
+    pub(super) fn file_keys(&self) -> Vec<ConstantPath> {
         self.files.keys().cloned().collect()
     }
 
     /// Refuses the files naming `keys`, constants the realm has come to have
     /// since it took the files in.
-    pub fn refuse_constants(
+    pub(super) fn refuse_constants(
         &mut self,
         keys: impl IntoIterator<Item = ConstantPath>,
         log: &dyn Log,
@@ -180,7 +180,7 @@ impl ClassIndex {
 
     /// What `key` names, if anything: a file is what a namespace's own file
     /// is too, so it answers before the directory.
-    pub fn definition_by_key(&self, key: &[String]) -> Option<Definition> {
+    pub(super) fn definition_by_key(&self, key: &[String]) -> Option<Definition> {
         match self.files.get(key) {
             Some(path) => Some(Definition::File(path.clone())),
             None => self.namespaces.get(key).cloned().map(Definition::Namespace),
@@ -190,7 +190,11 @@ impl ClassIndex {
     /// What `name` names from inside the namespaces `scope` spells, looked for
     /// from the innermost namespace outward, as Rails' classic autoloader does,
     /// and how many of those namespaces it was found inside.
-    pub fn definition_by_name(&self, scope: &[String], name: &str) -> Option<(usize, Definition)> {
+    pub(super) fn definition_by_name(
+        &self,
+        scope: &[String],
+        name: &str,
+    ) -> Option<(usize, Definition)> {
         (0..=scope.len()).rev().find_map(|depth| {
             let mut key: ConstantPath = scope[..depth]
                 .iter()
@@ -221,7 +225,7 @@ impl ClassIndex {
 
     /// What the index names directly inside the namespace `key` spells: its
     /// files, and its directories' modules.
-    pub fn members_by_key(&self, key: &[String]) -> Vec<ConstantPath> {
+    pub(super) fn members_by_key(&self, key: &[String]) -> Vec<ConstantPath> {
         let below = |named: &&ConstantPath| named.starts_with(key);
         let start = key.to_vec();
         let files = self.files.range(start.clone()..).map(|(named, _)| named);
@@ -236,7 +240,7 @@ impl ClassIndex {
 
     /// What the index names `name` inside the namespaces below the one
     /// `scope` spells.
-    pub fn collect_keys_below(&self, scope: &[String], name: &str) -> Vec<ConstantPath> {
+    pub(super) fn collect_keys_below(&self, scope: &[String], name: &str) -> Vec<ConstantPath> {
         self.keys_by_last_name
             .get(&normalize(name))
             .into_iter()
@@ -248,7 +252,7 @@ impl ClassIndex {
     }
 
     /// Whether the file at `path` is one the index names.
-    pub fn is_named(&self, path: &str) -> bool {
+    pub(super) fn is_named(&self, path: &str) -> bool {
         self.files
             .get(&self.key_by_path(path))
             .is_some_and(|named| named == path)
