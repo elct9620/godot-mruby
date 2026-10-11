@@ -18,10 +18,10 @@ module Godot
         "#{RUNNER_TESTS}/skip" => [%w[SkipTest test_passes pass], %w[SkipTest test_skips skip]],
         "#{RUNNER_TESTS}/failing/assertion" => [%w[FailedAssertionTest test_one_equals_two failure]]
       }.freeze
-      FAILED_AT = ["#{RUNNER_TESTS}/failing/assertion/failed_assertion_test.rb", 9].freeze
+      FAILURE_LOCATION = ["#{RUNNER_TESTS}/failing/assertion/failed_assertion_test.rb", 9].freeze
       # A directory whose test file does not parse, and the line it fails at.
-      UNPARSED = "#{RUNNER_TESTS}/failing/syntax".freeze
-      UNPARSED_AT = ["#{UNPARSED}/broken_syntax_test.rb", 4].freeze
+      SYNTAX_TESTS = "#{RUNNER_TESTS}/failing/syntax".freeze
+      SYNTAX_ERROR_LOCATION = ["#{SYNTAX_TESTS}/broken_syntax_test.rb", 4].freeze
       # The script that prints where user:// is, and the run file under it.
       USER_DIR_SCENE = "res://integration/runner/run_file/user_dir.tscn"
       USER_DIR = /^user_dir=(.+)$/
@@ -51,15 +51,17 @@ module Godot
       end
 
       def placed?(failed)
-        failed.nil? || (failed.values_at("file", "line") == FAILED_AT && failed["message"].include?("Expected"))
+        failed.nil? || (failed.values_at("file", "line") == FAILURE_LOCATION && failed["message"].include?("Expected"))
       end
 
       # A test file that does not parse is among the results' errors, with
       # the compiler's message at its line.
       # @behavior RT-037
       def verify_load_failure!(project)
-        errors = read_results(project, "--dir", UNPARSED)["errors"]
-        return if errors.any? { |error| error.values_at("file", "line") == UNPARSED_AT && error["message"] =~ /syntax/ }
+        errors = read_results(project, "--dir", SYNTAX_TESTS)["errors"]
+        return if errors.any? do |error|
+          error.values_at("file", "line") == SYNTAX_ERROR_LOCATION && error["message"] =~ /syntax/
+        end
 
         raise "The results of a test file that does not parse carry #{errors}"
       end

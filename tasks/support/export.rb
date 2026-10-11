@@ -29,7 +29,7 @@ module Godot
                       "res://addons/godot_mruby/runner.tscn"].freeze
     GAME_FILE = "res://integration/export/seeker.rb"
     REFUSED_SCENE = "res://integration/export/refused.tscn"
-    REFUSED = "ERROR: The test runner does not run in an exported game"
+    REFUSAL = "ERROR: The test runner does not run in an exported game"
 
     module_function
 
@@ -68,7 +68,7 @@ module Godot
     # @behavior RX-006
     def verify_runner_refused!(dir, pack)
       output, status = run(dir, pack, REFUSED_SCENE)
-      return if status.exitstatus == 1 && output.lines.map(&:chomp).include?(REFUSED)
+      return if status.exitstatus == 1 && output.lines.map(&:chomp).include?(REFUSAL)
 
       raise "The exported game ran a test runner:\n#{output}"
     end

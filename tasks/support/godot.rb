@@ -25,8 +25,8 @@ module Godot
   EXTENSION_LIST = File.join(".godot", "extension_list.cfg")
   EXECUTABLE = ENV.fetch("GODOT", "godot")
   # What gdext prints once the engine has called into the library.
-  LOADED = "Initialize godot-rust"
-  FAILED = /^(ERROR|SCRIPT ERROR):/
+  LOAD_LINE = "Initialize godot-rust"
+  ERROR_LINE = /^(ERROR|SCRIPT ERROR):/
   # What a copy of the project adds to enable the probe in a directory and
   # play headless.
   PROBE_SETTINGS = <<~SETTINGS
@@ -81,8 +81,8 @@ module Godot
   # @behavior RA-001
   def verify_loaded!(project = PROJECT)
     output, status = run_editor(project)
-    errors = output.lines.grep(FAILED)
-    return if status.success? && errors.empty? && output.include?(LOADED)
+    errors = output.lines.grep(ERROR_LINE)
+    return if status.success? && errors.empty? && output.include?(LOAD_LINE)
 
     raise "The extension did not load:\n#{errors.empty? ? output : errors.join}"
   end

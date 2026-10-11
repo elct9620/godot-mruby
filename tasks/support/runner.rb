@@ -15,10 +15,10 @@ module Godot
     # that never quits from hanging the check.
     RUNNER_FRAMES = "600"
     TESTS = "res://test"
-    PASSED = /^(\d+) runs, \d+ assertions, 0 failures, 0 errors, \d+ skips$/
+    PASS_LINE = /^(\d+) runs, \d+ assertions, 0 failures, 0 errors, \d+ skips$/
     # What Godot warns at exit, in 4.6's wording and 4.7's alike, of an object
     # nothing freed, such as a node a test made and never freed.
-    LEAKED = "leaked at exit"
+    LEAK_LINE = "leaked at exit"
     # What Godot reports when asked for a singleton it does not keep.
     NO_SINGLETON = "non-existent singleton"
     RUNNER_TESTS = "res://integration/runner"
@@ -37,7 +37,7 @@ module Godot
     ORDER = "#{RUNNER_TESTS}/order".freeze
     SEEDS = %w[1 2 3 4 5].freeze
     SEED = /^Run options: --seed (\d+)$/
-    RAN = /ran (\w+#test_\w+)/
+    RUN_LINE = /ran (\w+#test_\w+)/
     # A test directory whose one test leaves an orphan node, and what the run
     # has to warn of it.
     ORPHAN = "#{RUNNER_TESTS}/orphan".freeze
@@ -59,7 +59,7 @@ module Godot
     # @behavior RT-001 RG-020
     def verify_tests!(project)
       output, status = run_tests_once(project)
-      return if status.success? && output[PASSED, 1].to_i.positive? && !output.include?(LEAKED) &&
+      return if status.success? && output[PASS_LINE, 1].to_i.positive? && !output.include?(LEAK_LINE) &&
                 !output.include?(NO_SINGLETON)
 
       raise "The Ruby tests under #{TESTS} did not pass, leaked, or asked for a missing singleton:\n#{output}"
@@ -112,7 +112,7 @@ module Godot
     end
 
     def scan_order(output)
-      output.scan(RAN).flatten
+      output.scan(RUN_LINE).flatten
     end
 
     # The expected lines that do not appear in the output after the one before

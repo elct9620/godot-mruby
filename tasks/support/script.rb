@@ -48,7 +48,7 @@ module Godot
       output, status = Godot.run_scene(project, PRINTS_SCENE, "--quit-after", "3")
       lines = output.lines.map(&:chomp)
       counts = PRINTED_LINES.to_h { |line| [line, lines.count(line)] }
-      return if status.success? && output.lines.grep(FAILED).empty? && counts.values.all?(1)
+      return if status.success? && output.lines.grep(ERROR_LINE).empty? && counts.values.all?(1)
 
       raise "The prints scene's Ruby did not print each line once #{counts}:\n#{output}"
     end

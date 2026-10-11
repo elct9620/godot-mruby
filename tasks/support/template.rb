@@ -10,10 +10,10 @@ module Godot
     MADE = File.join("enemies", "ships", "hero_ship.rb")
     # The namespaces the path spells around the class, each a level deeper by
     # whatever the editor indents with.
-    OPENED = /\Amodule Enemies\n(\s+)module Ships\n\1\1class HeroShip < Godot::CharacterBody2D\n/
-    CLOSED = /\n(\s+)\1end\n\1end\nend\n\z/
+    OPENING = /\Amodule Enemies\n(\s+)module Ships\n\1\1class HeroShip < Godot::CharacterBody2D\n/
+    CLOSING = /\n(\s+)\1end\n\1end\nend\n\z/
     # The project's own template, listed by the name its meta line gives.
-    LISTED = "template listed: Node: Friendly Hello"
+    LIST_LINE = "template listed: Node: Friendly Hello"
     SCENE = "hero.tscn"
     SCENE_SOURCE = <<~TSCN.freeze
       [gd_scene load_steps=2 format=3]
@@ -36,9 +36,9 @@ module Godot
 
     # @behavior RY-008
     def verify_listed!(output)
-      return if output.include?(LISTED)
+      return if output.include?(LIST_LINE)
 
-      raise "The script dialog did not list the project's template as #{LISTED}:\n#{output}"
+      raise "The script dialog did not list the project's template as #{LIST_LINE}:\n#{output}"
     end
 
     # A template saved under a namespace opens the namespaces its path
@@ -53,7 +53,7 @@ module Godot
     end
 
     def verify_opened!(source)
-      return if source.match?(OPENED) && source.match?(CLOSED) && source.include?("move_and_slide")
+      return if source.match?(OPENING) && source.match?(CLOSING) && source.include?("move_and_slide")
 
       raise "#{MADE} was not made inside its namespaces:\n#{source}"
     end
@@ -61,7 +61,7 @@ module Godot
     def verify_played!(copy)
       File.write(File.join(copy, SCENE), SCENE_SOURCE)
       output, = Godot.run_scene(copy, "res://#{SCENE}", "--quit-after", "10")
-      return if output.lines.grep(FAILED).empty?
+      return if output.lines.grep(ERROR_LINE).empty?
 
       raise "A scene holding #{MADE} did not run cleanly:\n#{output}"
     end

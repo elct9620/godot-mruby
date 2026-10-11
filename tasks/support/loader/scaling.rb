@@ -17,7 +17,7 @@ module Godot
       # fixed costs and noise of a small run.
       ALLOWANCE = 2
       # What Ruby timed that has to stay proportional to the files.
-      TIMED = %w[run_by_name attach].freeze
+      MEASURE_NAMES = %w[run_by_name attach].freeze
       # How many times the projects are measured while one stays past the
       # allowance, so a run slowed once by a loaded machine is not read as
       # growth; each size keeps its fastest.
@@ -65,7 +65,7 @@ module Godot
       end
 
       def all_proportional?(measures)
-        TIMED.all? { |name| proportional?(*measures.map { |measure| measure.fetch(name) }) }
+        MEASURE_NAMES.all? { |name| proportional?(*measures.map { |measure| measure.fetch(name) }) }
       end
 
       # Each size's measures, each the faster of `kept` and `again`.

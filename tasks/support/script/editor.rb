@@ -15,31 +15,31 @@ module Godot
       # and prints whether the node's placeholder lists the property the change
       # exports.
       EXPORTS_SCENE = "res://integration/script/exports/exports.tscn"
-      EXPORTED = "armor listed: true"
+      EXPORT_LINE = "armor listed: true"
       # A scene whose tool script prints what the extension told a node's
       # placeholder once the editor's realm ran its file, beside a node whose
       # script, under a test directory, the editor must never run.
       EDITOR_SCENE = "res://integration/script/editor/editor.tscn"
-      RAN = "knob turn hint: 0,10, grouped: true"
-      RAN_AGAIN = "knob turn hint after reload: 0,20"
-      UNTOUCHED = "a test directory's file ran in the editor"
-      KEPT = "cracked kept: 7"
+      RUN_LINE = "knob turn hint: 0,10, grouped: true"
+      RERUN_LINE = "knob turn hint after reload: 0,20"
+      TEST_RUN_LINE = "a test directory's file ran in the editor"
+      KEEP_LINE = "cracked kept: 7"
       # What the scene's tool script prints as its node is given each callback.
       TOOL_CALLBACKS = ["the torch is ready in the editor", "the torch is processed in the editor"].freeze
       # The line the editor prints as it takes the scene in, which is what says
       # the run reached it; the editor scans the whole project first, so the run
       # is given frames enough to get there and quits by itself. A run told to
       # quit sooner ends during that scan and opens no scene at all.
-      REACHED = "Loading resource: %s"
+      SCENE_LOAD_LINE = "Loading resource: %s"
       FRAMES = "300"
       # What Godot says of a connection to a signal the node has not got, which
       # is every scene connection while a node script has no script instance.
-      REFUSED = "Attempt to connect nonexistent signal"
-      DECLARED = "wailed"
+      CONNECT_ERROR = "Attempt to connect nonexistent signal"
+      SIGNAL_NAME = "wailed"
       # A plugin whose script is a Ruby tool script, and what it prints as the
       # editor adds it.
       PLUGIN = File.join("integration", "script", "plugin")
-      PLUGIN_ENTERED = "a Ruby editor plugin entered the tree"
+      PLUGIN_LINE = "a Ruby editor plugin entered the tree"
       PLUGIN_FRAMES = "60"
 
       module_function
@@ -59,7 +59,7 @@ module Godot
       # @behavior RS-045
       def verify_connected!(project)
         output = open_scene(project, SCENE)
-        refusals = output.lines.grep(/#{Regexp.escape(REFUSED)} '#{DECLARED}'/)
+        refusals = output.lines.grep(/#{Regexp.escape(CONNECT_ERROR)} '#{SIGNAL_NAME}'/)
         return if refusals.empty?
 
         raise "The editor refused a connection a node script declares:\n#{refusals.join}"
@@ -68,28 +68,28 @@ module Godot
       # @behavior RS-048
       def verify_exported!(project)
         output = open_scene(project, EXPORTS_SCENE)
-        return if output.lines.map(&:chomp).include?(EXPORTED)
+        return if output.lines.map(&:chomp).include?(EXPORT_LINE)
 
         raise "The editor's placeholder was not given what a reloaded node script exports:\n#{output}"
       end
 
       # @behavior RS-056
       def verify_ran!(output)
-        return if output.lines.map(&:chomp).include?(RAN)
+        return if output.lines.map(&:chomp).include?(RUN_LINE)
 
         raise "The editor's placeholder was not given what a node script declared as it ran:\n#{output}"
       end
 
       # @behavior RS-058
       def verify_ran_again!(output)
-        return if output.lines.map(&:chomp).include?(RAN_AGAIN)
+        return if output.lines.map(&:chomp).include?(RERUN_LINE)
 
         raise "The editor's placeholder was not given what a reloaded node script declared as it ran again:\n#{output}"
       end
 
       # @behavior RS-057
       def verify_left_out!(output)
-        return unless output.include?(UNTOUCHED)
+        return unless output.include?(TEST_RUN_LINE)
 
         raise "The editor ran a file under a test directory:\n#{output}"
       end
@@ -104,7 +104,7 @@ module Godot
 
       # @behavior RS-060
       def verify_kept!(output)
-        return if output.lines.map(&:chomp).include?(KEPT)
+        return if output.lines.map(&:chomp).include?(KEEP_LINE)
 
         raise "The editor lost a scene's value for a tool script that does not parse:\n#{output}"
       end
@@ -112,7 +112,7 @@ module Godot
       # @behavior RS-067
       def verify_plugin_entered!(project)
         output = Godot.with_probe(project, PLUGIN) { |copy| Godot.run_editor_frames(copy, PLUGIN_FRAMES).first }
-        return if output.lines.map(&:chomp).include?(PLUGIN_ENTERED)
+        return if output.lines.map(&:chomp).include?(PLUGIN_LINE)
 
         raise "The editor did not add a plugin whose script is a Ruby tool script:\n#{output}"
       end
@@ -121,7 +121,7 @@ module Godot
         output, status = Open3.capture2e(EXECUTABLE, "--headless", "--editor", "--verbose",
                                          "--path", project, scene, "--quit-after", FRAMES)
         raise "The editor did not run:\n#{output}" unless status.success?
-        raise "The editor did not reach #{scene}:\n#{output}" unless output.include?(format(REACHED, scene))
+        raise "The editor did not reach #{scene}:\n#{output}" unless output.include?(format(SCENE_LOAD_LINE, scene))
 
         output
       end

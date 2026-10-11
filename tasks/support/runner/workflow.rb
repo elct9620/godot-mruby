@@ -9,7 +9,7 @@ module Godot
     module Workflow
       # Where res:// sits in the repository.
       SOURCE = "godot"
-      FAILED = %w[failure error].freeze
+      FAILURE_RESULTS = %w[failure error].freeze
 
       module_function
 
@@ -22,7 +22,7 @@ module Godot
 
       # The annotations of the tests that failed and the files that did not load.
       def annotate_failures(results)
-        failed = results.fetch("tests").select { |test| FAILED.include?(test["result"]) }
+        failed = results.fetch("tests").select { |test| FAILURE_RESULTS.include?(test["result"]) }
         failed.map { |test| annotate("#{test["class"]}##{test["name"]}", test) } +
           results.fetch("errors").map { |error| annotate("Did not load", error) }
       end

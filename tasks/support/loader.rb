@@ -25,12 +25,12 @@ module Godot
     # What every run has to report of the namespace's own file that raises as
     # a constant of its name outside the namespace loads: the error placed at
     # the line of the file that raised.
-    HIDDEN_RAISED = ["SCRIPT ERROR: bay/latch.rb fails as a latch outside Bay loads",
-                     "(res://test/unit/loader/bay/latch.rb:8)"].freeze
+    HIDDEN_ERROR_LINES = ["SCRIPT ERROR: bay/latch.rb fails as a latch outside Bay loads",
+                          "(res://test/unit/loader/bay/latch.rb:8)"].freeze
     # A test using a constant whose file raises, and what its run has to print
     # in order: the error placed at the line of the file that raised.
-    RAISING = "res://integration/loader/failing/raising"
-    RAISED = [
+    ERROR_TESTS = "res://integration/loader/failing/raising"
+    ERROR_LINES = [
       "RaisingFileTest#test_uses_a_file_that_raises [res://test/unit/loader/raising.rb:13]:",
       "RuntimeError: raising.rb fails after defining its constants",
       "ERROR: RaisingFileTest#test_uses_a_file_that_raises: " \
@@ -67,7 +67,7 @@ module Godot
     # raised as the constant outside it loaded, at the file's line.
     # @behavior RL-035
     def verify_hidden_raised!(output)
-      missing = Runner.find_missing_in_order(output, HIDDEN_RAISED)
+      missing = Runner.find_missing_in_order(output, HIDDEN_ERROR_LINES)
       return if missing.empty?
 
       raise "A run of #{Runner::TESTS} did not report the hidden file that raised #{missing}:\n#{output}"
@@ -77,11 +77,11 @@ module Godot
     # error at the file's line.
     # @behavior RL-021
     def verify_raised!(project)
-      output, status = Runner.run(project, "--dir", RAISING)
-      missing = Runner.find_missing_in_order(output, RAISED)
+      output, status = Runner.run(project, "--dir", ERROR_TESTS)
+      missing = Runner.find_missing_in_order(output, ERROR_LINES)
       return if status.exitstatus == 1 && missing.empty?
 
-      raise "A run of #{RAISING} did not fail as it should #{missing}:\n#{output}"
+      raise "A run of #{ERROR_TESTS} did not fail as it should #{missing}:\n#{output}"
     end
 
     # Runs the test that loads a test class by name, which has to pass with its

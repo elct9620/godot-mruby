@@ -7,9 +7,9 @@ module Godot
   module Highlighting
     PROBE = File.join("integration", "highlighting", "probe")
     FRAMES = "60"
-    CHOSEN = "highlighter chosen: RubySyntaxHighlighter"
-    COLOURED = "keyword coloured: true"
-    RECOLOURED = "edited keyword coloured: false"
+    CHOICE_LINE = "highlighter chosen: RubySyntaxHighlighter"
+    COLOUR_LINE = "keyword coloured: true"
+    RECOLOUR_LINE = "edited keyword coloured: false"
 
     module_function
 
@@ -23,14 +23,14 @@ module Godot
 
     # @behavior RU-013
     def verify_coloured!(output)
-      return if output.include?(CHOSEN) && output.include?(COLOURED)
+      return if output.include?(CHOICE_LINE) && output.include?(COLOUR_LINE)
 
       raise "The script editor did not colour a Ruby script's keyword with the Ruby highlighter:\n#{output}"
     end
 
     # @behavior RU-014
     def verify_recoloured!(output)
-      return if output.include?(RECOLOURED)
+      return if output.include?(RECOLOUR_LINE)
 
       raise "The script editor kept a keyword's colour on a line edited into an assignment:\n#{output}"
     end

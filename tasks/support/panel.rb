@@ -9,12 +9,12 @@ module Godot
     PROBE = File.join("integration", "panel", "probe")
     # Frames enough for the panel to play the runner scene and look after it.
     FRAMES = "900"
-    FAILING = "res://integration/runner/failing/assertion/failed_assertion_test.rb"
-    LISTED = [
+    FAILURE_TEST = "res://integration/runner/failing/assertion/failed_assertion_test.rb"
+    LIST_LINES = [
       "panel status: 1 runs, 1 failures, 0 errors, 0 skips",
       "panel row: failure | FailedAssertionTest#test_one_equals_two | Expected: 1"
     ].freeze
-    OPENED = "panel opened: #{FAILING}:9 shown: true".freeze
+    OPEN_LINE = "panel opened: #{FAILURE_TEST}:9 shown: true".freeze
 
     module_function
 
@@ -26,7 +26,7 @@ module Godot
 
     # @behavior RP-001
     def verify_listed!(output)
-      missing = LISTED.reject { |line| output.include?(line) }
+      missing = LIST_LINES.reject { |line| output.include?(line) }
       return if missing.empty?
 
       raise "The test panel did not list #{missing}:\n#{output}"
@@ -34,9 +34,9 @@ module Godot
 
     # @behavior RP-002
     def verify_opened!(output)
-      return if output.include?(OPENED)
+      return if output.include?(OPEN_LINE)
 
-      raise "The test panel did not open #{OPENED}:\n#{output}"
+      raise "The test panel did not open #{OPEN_LINE}:\n#{output}"
     end
 
     # Opens the editor on a copy of the project with the probe enabled.
