@@ -69,6 +69,9 @@ impl IEditorDock for RubyTestPanel {
     fn process(&mut self, _delta: f64) {
         if self.is_waiting && !EditorInterface::singleton().is_playing_scene() {
             self.is_waiting = false;
+            // A run that stopped before the runner read its options leaves
+            // them for the next run of the runner.
+            DirAccess::remove_absolute(RUN_FILE);
             self.run.set_disabled(false);
             self.list_results();
         }

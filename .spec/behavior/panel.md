@@ -34,3 +34,16 @@ How the editor runs a project's Ruby tests: the test panel plays the test runner
 | Given | the panel's choice of a test directory, or of none |
 | When | the panel writes the run file |
 | Then | the run names that directory, or no directory so every test directory runs |
+
+## `RP-004` A run file the run left unread is gone once the run stops
+
+| Attribute | Value |
+| --- | --- |
+| refines | `RP-001` |
+| relates | `RT-038` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a run the test panel played whose run file was still there when it stopped |
+| When | the panel lists the run |
+| Then | the run file is gone, so a later run of the runner is not given its options |

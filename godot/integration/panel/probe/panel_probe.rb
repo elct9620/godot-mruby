@@ -1,6 +1,8 @@
 # Runs one test directory from the test panel and prints what the panel
 # lists, then activates the first row and prints the line the script editor
-# opened.
+# opened. Once the runner has read the panel's run file, it leaves one
+# again, as a run that stopped before the runner read it would, and prints
+# whether it remains.
 module Integration
   module Panel
     module Probe
@@ -8,6 +10,7 @@ module Integration
         tool
 
         DIRECTORY = "res://integration/runner/failures/assertion".freeze
+        RUN_FILE = "user://godot_mruby/run.json".freeze
         PRESS_AT = 30
         LOOK_EVERY = 30
 
@@ -22,9 +25,23 @@ module Integration
 
           if @frames == PRESS_AT
             press(panel)
+          elsif @pressed && !@left && runner_took_run_file?
+            leave_run_file
           elsif @pressed && !@opened && (@frames % LOOK_EVERY).zero?
             look(panel)
           end
+        end
+
+        def runner_took_run_file?
+          Godot::EditorInterface.is_playing_scene && !Godot::FileAccess.file_exists(RUN_FILE)
+        end
+
+        def leave_run_file
+          file = Godot::FileAccess.open(RUN_FILE, Godot::FileAccess::WRITE)
+          file.store_string("[]")
+          file.close
+          @left = true
+          puts "panel run file written while playing"
         end
 
         def press(panel)
@@ -42,6 +59,7 @@ module Integration
           return if Godot::EditorInterface.is_playing_scene || root.nil? || root.get_child_count.zero?
 
           print_rows(panel, root)
+          puts "panel run file left: #{Godot::FileAccess.file_exists(RUN_FILE)}"
           root.get_child(0).select(0)
           tree.emit_signal(:item_activated)
           @opened = true
