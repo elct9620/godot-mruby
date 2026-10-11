@@ -12,7 +12,7 @@ module Godot
 
     # @behavior RV-033
     def verify_release!(dir)
-      refusals = Release.refusals(dir, SCENE)
+      refusals = Release.collect_refusals(dir, SCENE)
       return if refusals == REFUSALS
 
       raise "The release build's value methods were not refused #{REFUSALS}, only #{refusals}"
