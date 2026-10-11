@@ -51,3 +51,5 @@ How a project comes to run Ruby: the addon under `addons/godot_mruby/` carries t
 | Given | a package with its Windows libraries |
 | When | each library's imports are read |
 | Then | none names a C runtime DLL, such as `VCRUNTIME140.dll` or `api-ms-win-crt-*.dll` |
+
+Godot's Windows builds bring no Visual C++ runtime. CI runners have one installed, so only the import table shows a library needing it.
