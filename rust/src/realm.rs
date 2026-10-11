@@ -1184,17 +1184,17 @@ mod tests {
     fn a_realm_opened_again_gives_each_extension_its_data_afresh() {
         let (_turn, _key) = held_thing();
         #[derive(Default)]
-        struct Remembered(Cell<u32>);
+        struct Tally(Cell<u32>);
         enter(|realm| {
-            extension_data::<Remembered>(&realm.mrb).0.set(7);
+            extension_data::<Tally>(&realm.mrb).0.set(7);
             Ok(())
         })
         .ok();
 
         close();
-        let remembered = enter(|realm| Ok(extension_data::<Remembered>(&realm.mrb).0.get()));
+        let tally = enter(|realm| Ok(extension_data::<Tally>(&realm.mrb).0.get()));
 
-        assert_eq!(remembered.ok(), Some(0));
+        assert_eq!(tally.ok(), Some(0));
     }
 
     // @behavior RE-008
@@ -1202,16 +1202,16 @@ mod tests {
     fn an_extensions_data_lasts_from_one_entry_to_the_next() {
         let (_turn, _key) = held_thing();
         #[derive(Default)]
-        struct Remembered(Cell<u32>);
+        struct Tally(Cell<u32>);
         enter(|realm| {
-            extension_data::<Remembered>(&realm.mrb).0.set(7);
+            extension_data::<Tally>(&realm.mrb).0.set(7);
             Ok(())
         })
         .ok();
 
-        let remembered = enter(|realm| Ok(extension_data::<Remembered>(&realm.mrb).0.get()));
+        let tally = enter(|realm| Ok(extension_data::<Tally>(&realm.mrb).0.get()));
 
-        assert_eq!(remembered.ok(), Some(7));
+        assert_eq!(tally.ok(), Some(7));
     }
 
     // @behavior RE-003

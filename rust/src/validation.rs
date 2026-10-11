@@ -131,7 +131,7 @@ fn native_method_overrides(
         .filter_map(|(name, offset)| {
             let native = (engine.method_declarer)(engine_class, name)?;
             Some(Warning {
-                line: line_at(source, offset),
+                line: locate_line(source, offset),
                 kind: Kind::NativeMethodOverride,
                 message: format!(
                     "The method \"{name}()\" overrides a method from native class \"{native}\". This won't be called by the engine and may not work as expected."
@@ -142,7 +142,7 @@ fn native_method_overrides(
 }
 
 // The line, counted from 1, that the byte at `offset` of `source` is on.
-fn line_at(source: &str, offset: usize) -> u32 {
+fn locate_line(source: &str, offset: usize) -> u32 {
     let before = source.get(..offset).unwrap_or(source);
     u32::try_from(before.matches('\n').count() + 1).unwrap_or(u32::MAX)
 }

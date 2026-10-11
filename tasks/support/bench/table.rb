@@ -13,7 +13,7 @@ module Bench
     # measured at no size has no table.
     def tabulate(results, baseline = nil)
       growth = results["growth"]
-      [describe_measured(results), describe_baseline(baseline, results["cpu"]),
+      [describe_setup(results), describe_baseline(baseline, results["cpu"]),
        (tabulate_growth(growth) unless growth.empty?),
        tabulate_battle(results, baseline),
        tabulate_spreads("call, ns", results["operations"], "%.0f", baseline&.fetch("operations", nil))]
@@ -21,7 +21,7 @@ module Bench
     end
 
     # The build, the Godot and the CPU the results were measured with.
-    def describe_measured(results)
+    def describe_setup(results)
       library = results["library"]
       "Measured with a #{library["build"]} build in Godot #{library["godot"]} on #{results["cpu"]}."
     end

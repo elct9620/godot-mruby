@@ -117,7 +117,7 @@ module Godot
 
     # The expected lines that do not appear in the output after the one before
     # them.
-    def absent_in_order(output, expected)
+    def find_missing_in_order(output, expected)
       position = 0
       expected.reject do |line|
         found = output.index(line, position)

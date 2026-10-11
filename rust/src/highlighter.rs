@@ -353,7 +353,7 @@ mod tests {
 
     // The role at a column of a line, as the editor reads it: the last
     // highlight starting at or before the column.
-    fn role_at(lines: &[Vec<Highlight>], line: usize, column: usize) -> Role {
+    fn read_role(lines: &[Vec<Highlight>], line: usize, column: usize) -> Role {
         lines[line]
             .iter()
             .take_while(|highlight| highlight.column <= column)
@@ -368,7 +368,7 @@ mod tests {
             .iter()
             .filter(|word| {
                 !matches!(
-                    role_at(&roles(word), 0, 0),
+                    read_role(&roles(word), 0, 0),
                     Role::Keyword | Role::ControlFlow
                 )
             })
@@ -384,9 +384,9 @@ mod tests {
 
         assert_eq!(
             [
-                role_at(&lines, 1, 2),
-                role_at(&lines, 1, 9),
-                role_at(&lines, 0, 0)
+                read_role(&lines, 1, 2),
+                read_role(&lines, 1, 9),
+                read_role(&lines, 0, 0)
             ],
             [Role::ControlFlow, Role::ControlFlow, Role::Keyword]
         );
@@ -399,9 +399,9 @@ mod tests {
 
         assert_eq!(
             [
-                role_at(&lines, 1, 2),
-                role_at(&lines, 2, 2),
-                role_at(&lines, 4, 8)
+                read_role(&lines, 1, 2),
+                read_role(&lines, 2, 2),
+                read_role(&lines, 4, 8)
             ],
             [Role::String, Role::String, Role::Number]
         );
@@ -413,11 +413,11 @@ mod tests {
         let lines = roles("speed = 1\n=begin\nnotes\n=end\nheight = 2\n");
 
         assert_eq!(
-            [1, 2, 3].map(|line| role_at(&lines, line, 0)),
+            [1, 2, 3].map(|line| read_role(&lines, line, 0)),
             [Role::Comment; 3]
         );
         assert_eq!(
-            [role_at(&lines, 0, 8), role_at(&lines, 4, 9)],
+            [read_role(&lines, 0, 8), read_role(&lines, 4, 9)],
             [Role::Number; 2]
         );
     }
@@ -429,9 +429,9 @@ mod tests {
 
         assert_eq!(
             [
-                role_at(&lines, 0, 10),
-                role_at(&lines, 0, 21),
-                role_at(&lines, 0, 27)
+                read_role(&lines, 0, 10),
+                read_role(&lines, 0, 21),
+                read_role(&lines, 0, 27)
             ],
             [Role::String, Role::Number, Role::String]
         );
@@ -443,7 +443,7 @@ mod tests {
         let lines = roles("names = %w[slime bat]\n");
 
         assert_eq!(
-            [role_at(&lines, 0, 11), role_at(&lines, 0, 17)],
+            [read_role(&lines, 0, 11), read_role(&lines, 0, 17)],
             [Role::String; 2]
         );
     }
@@ -454,7 +454,7 @@ mod tests {
         let lines = roles("enemy = { kind: :slime }\n");
 
         assert_eq!(
-            [role_at(&lines, 0, 10), role_at(&lines, 0, 17)],
+            [read_role(&lines, 0, 10), read_role(&lines, 0, 17)],
             [Role::Symbol; 2]
         );
     }
@@ -466,9 +466,9 @@ mod tests {
 
         assert_eq!(
             [
-                role_at(&lines, 0, 9),
-                role_at(&lines, 0, 14),
-                role_at(&lines, 0, 4)
+                read_role(&lines, 0, 9),
+                read_role(&lines, 0, 14),
+                read_role(&lines, 0, 4)
             ],
             [Role::Function, Role::Function, Role::Keyword]
         );
@@ -481,9 +481,9 @@ mod tests {
 
         assert_eq!(
             [
-                role_at(&lines, 0, 22),
-                role_at(&lines, 0, 6),
-                role_at(&lines, 0, 15)
+                read_role(&lines, 0, 22),
+                read_role(&lines, 0, 6),
+                read_role(&lines, 0, 15)
             ],
             [Role::EngineClass, Role::Constant, Role::Constant]
         );
@@ -494,7 +494,7 @@ mod tests {
     fn a_column_counts_characters() {
         let lines = roles("name = \"勇者\" # hero\n");
 
-        assert_eq!(role_at(&lines, 0, 12), Role::Comment);
+        assert_eq!(read_role(&lines, 0, 12), Role::Comment);
     }
 
     // @behavior RU-012
@@ -502,6 +502,6 @@ mod tests {
     fn source_that_does_not_parse_is_still_coloured() {
         let lines = roles("def jump\n  height = (\n  return\nend\n");
 
-        assert_eq!(role_at(&lines, 2, 2), Role::ControlFlow);
+        assert_eq!(read_role(&lines, 2, 2), Role::ControlFlow);
     }
 }

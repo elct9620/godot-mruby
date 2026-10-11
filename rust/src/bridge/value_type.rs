@@ -349,7 +349,7 @@ fn resolve(mrb: &Mrb, held: &EngineValue, name: Symbol) -> Result<Value, Error> 
     // name lives for the call.
     if unsafe { sys::interface_fn!(variant_has_member)(kind, name.string_sys()) } != 0 {
         let member = Symbol::from(mrb.intern(b"member")?).as_value();
-        let bound = read_named(&value, &name)
+        let bound = read_member(&value, &name)
             .and_then(|read| BoundMember::find(&value, &name, &read))
             .map_or_else(|| qnil().as_value(), |bound| mrb.wrap(bound).as_value());
         return Ok(mrb.ary_new_from_values(&[member, bound]).as_value());
@@ -366,7 +366,7 @@ fn resolve(mrb: &Mrb, held: &EngineValue, name: Symbol) -> Result<Value, Error> 
 // type has.
 fn member(mrb: &Mrb, held: &EngineValue, name: Symbol) -> Value {
     let name = name_by_symbol(mrb, name);
-    read_named(&held.as_variant(), &name)
+    read_member(&held.as_variant(), &name)
         .map_or_else(|| qnil().as_value(), |found| to_ruby(mrb, &found))
 }
 
@@ -384,7 +384,7 @@ fn get(mrb: &Mrb, held: &EngineValue, bound: &BoundMember) -> Value {
 }
 
 // The member `name` of `value`, as the engine reads it by name.
-fn read_named(value: &Variant, name: &StringName) -> Option<Variant> {
+fn read_member(value: &Variant, name: &StringName) -> Option<Variant> {
     // SAFETY: the interface is initialized while the extension runs, and
     // `variant_get_named` writes the member when it reports it valid.
     unsafe {
@@ -406,7 +406,7 @@ fn read_named(value: &Variant, name: &StringName) -> Option<Variant> {
 // the value's type has, answers for `args`.
 fn call(mrb: &Mrb, held: &EngineValue, name: Symbol, args: RArray) -> Result<Value, Error> {
     let name = name_by_symbol(mrb, name);
-    check_required(mrb, held.kind(), &name, args.len())?;
+    check_argument_count(mrb, held.kind(), &name, args.len())?;
     let args = to_arguments(mrb, super::data(mrb), args.entries(mrb))?;
     let pointers: SmallVec<[_; 4]> = args.iter().map(Variant::var_sys).collect();
     let mut receiver = held.variant();
@@ -431,7 +431,7 @@ fn call(mrb: &Mrb, held: &EngineValue, name: Symbol, args: RArray) -> Result<Val
 fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<Value, Error> {
     let kind = kind_by_class(mrb, super::data(mrb), class)?;
     let name = name_by_symbol(mrb, name);
-    check_required(mrb, kind, &name, args.len())?;
+    check_argument_count(mrb, kind, &name, args.len())?;
     let args = to_arguments(mrb, super::data(mrb), args.entries(mrb))?;
     let pointers: SmallVec<[_; 4]> = args.iter().map(Variant::var_sys).collect();
     let kind_sys = kind.ord as sys::GDExtensionVariantType;
@@ -461,13 +461,13 @@ fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<V
 // than it requires: the engine checks the count only in its debug builds,
 // and without that check it stops the game. Too many it ignores, so those are
 // left to it.
-fn check_required(
+fn check_argument_count(
     mrb: &Mrb,
     kind: VariantType,
     method: &StringName,
     given: usize,
 ) -> Result<(), Error> {
-    match required_count(kind, method) {
+    match count_required(kind, method) {
         Some(required) if given < required => {
             Err(argument_error(mrb, &count_message(given, required)))
         }
@@ -478,8 +478,8 @@ fn check_required(
 // How many arguments the method `method` of type `kind` requires, as the API
 // the extension is built against lists it. A later engine that gives one of
 // those arguments a default still has it required here.
-fn required_count(kind: VariantType, method: &StringName) -> Option<usize> {
-    static REQUIRED: LazyLock<FxHashMap<(i32, StringName), usize>> = LazyLock::new(|| {
+fn count_required(kind: VariantType, method: &StringName) -> Option<usize> {
+    static REQUIRED_COUNTS: LazyLock<FxHashMap<(i32, StringName), usize>> = LazyLock::new(|| {
         let kinds: Vec<VariantType> = (0..VariantType::MAX.ord)
             .map(<VariantType as EngineEnum>::from_ord)
             .collect();
@@ -494,7 +494,7 @@ fn required_count(kind: VariantType, method: &StringName) -> Option<usize> {
             .flatten()
             .collect()
     });
-    REQUIRED.get(&(kind.ord, method.clone())).copied()
+    REQUIRED_COUNTS.get(&(kind.ord, method.clone())).copied()
 }
 
 // What a call of `method` on a value of type `kind` answered, or the error
@@ -553,7 +553,7 @@ macro_rules! operators {
             if $typed
                 && let EngineValue::Vector2(vector) = held
                 && let Some(answer) = read_operand(mrb, data, other).and_then(|operand| {
-                    operate_typed(mrb, data, *vector, VariantOperator::$op, operand)
+                    apply_typed_operator(mrb, data, *vector, VariantOperator::$op, operand)
                 })
             {
                 return Ok(answer);
@@ -590,7 +590,7 @@ fn is_equal(mrb: &Mrb, held: &EngineValue, other: Value) -> Result<Value, Error>
     }
     let other = <&EngineValue>::try_convert(other, mrb)?;
     if let (EngineValue::Vector2(vector), EngineValue::Vector2(right)) = (held, other)
-        && let Some(answer) = operate_typed(
+        && let Some(answer) = apply_typed_operator(
             mrb,
             data,
             *vector,
@@ -621,7 +621,8 @@ fn operate_unary(
     shown: &str,
 ) -> Result<Value, Error> {
     if let EngineValue::Vector2(vector) = held
-        && let Some(answer) = operate_typed(mrb, super::data(mrb), *vector, op, Operand::None)
+        && let Some(answer) =
+            apply_typed_operator(mrb, super::data(mrb), *vector, op, Operand::None)
     {
         return Ok(answer);
     }
@@ -721,7 +722,7 @@ fn answer_kind(op: VariantOperator) -> VariantType {
 
 // What the engine's typed operator `op` answers for `vector` and `right`, or
 // none when the engine has no typed function for the two.
-fn operate_typed(
+fn apply_typed_operator(
     mrb: &Mrb,
     data: &BridgeData,
     vector: Vector2,

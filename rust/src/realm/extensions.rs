@@ -75,9 +75,9 @@ mod tests {
     }
 
     // Data whose default asks for other data of the same list.
-    struct Asking;
+    struct Asker;
 
-    impl Default for Asking {
+    impl Default for Asker {
         fn default() -> Self {
             NESTED_DATA.with(|data| data.data_by_type::<First>().0.set(3));
             Self
@@ -87,7 +87,7 @@ mod tests {
     #[test]
     fn a_default_may_ask_for_other_data_as_it_is_made() {
         NESTED_DATA.with(|data| {
-            data.data_by_type::<Asking>();
+            data.data_by_type::<Asker>();
 
             assert_eq!(data.data_by_type::<First>().0.get(), 3);
         });
