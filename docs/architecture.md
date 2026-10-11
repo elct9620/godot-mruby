@@ -68,7 +68,7 @@ mruby carries only the gems `build_config/mruby.rb` lists, and none that reaches
 
 A `.rake` file is thin glue; what a task does lives in `tasks/support/`.
 
-Build output stays out of the repository: `vendor/` holds mruby's source and archives and the changed godot-cell (`tasks/support/godot_cell.rb`), `rust/target/` the crate's builds, `bin/` the installed library, and `pkg/` the package.
+Build output stays out of the repository. `vendor/` holds mruby's source and archives and the changed godot-cell (`tasks/support/godot_cell.rb`). `rust/target/` holds the crate's builds, `bin/` the installed library, and `pkg/` the package.
 
 #### 1.3.1 Bench
 
@@ -336,9 +336,9 @@ realm.rs              Realm, prepare, enter, Files, Log, RubyError
 
 A realm's bookkeeping sits in the state's user data. Held objects live in a hash rooted for the collector, so mruby never frees an object a node still uses. Ruby's calls back into Rust reach it from the state they are given, and no gem knows the slot.
 
-What makes this mruby environment its own is defined as the realm opens: output to its log, and the hooks through which a missing constant asks the index and a running file's constants are recorded.
+What makes this mruby environment its own is defined as the realm opens. Its output goes to its log, and its hooks let a missing constant ask the index and record a running file's constants.
 
-The index is built from the paths its files give, and the executor takes each file's source and declaration from them, so the realm never reads a file itself: what a file opens loads before it runs, and a node script's class is held to its declared superclass after. The loader's rules are in `.spec/behavior/loader.md`.
+The index is built from the paths its files give, and the executor takes each file's source and declaration from them. The realm therefore never reads a file itself. What a file opens loads before it runs, and a node script's class is held to its declared superclass after. The loader's rules are in `.spec/behavior/loader.md`.
 
 ### 3.3 Extensions
 
@@ -354,7 +354,7 @@ RubyTestRunner
 Ruby in the realm sees Godot, and Minitest in a test run
 ```
 
-A gem is an extension: beni's `Gem`, mruby's gem init convention. What every realm of a kind has is installed by its opener's `extend`, before the class index takes the files in, so a file naming one of its constants is warned about; what only one use needs is installed by whoever needs it, and the install warns of an indexed file naming what it added. Only the test runner installs `Minitest`, so a shipped game never has it.
+A gem is an extension: beni's `Gem`, mruby's gem init convention. What every realm of a kind has is installed by its opener's `extend`, before the class index takes the files in. A file naming one of its constants is therefore warned about. What only one use needs is installed by whoever needs it, and that install warns of an indexed file naming what it added. Only the test runner installs `Minitest`, so a shipped game never has it.
 
 A gem's methods run with the state, and reach the realm's bookkeeping only through the functions that take it.
 
