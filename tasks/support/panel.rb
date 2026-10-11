@@ -41,7 +41,7 @@ module Godot
 
     # Opens the editor on a copy of the project with the probe enabled.
     def run_probe(project)
-      Godot.with_probe(project, PROBE) { |copy| Godot.run_editor_frames(copy, FRAMES).first }
+      Godot.copy_probe_project(project, PROBE) { |copy| Godot.run_editor_frames(copy, FRAMES).first }
     end
   end
 end

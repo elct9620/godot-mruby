@@ -15,7 +15,7 @@ use super::value::RubyCrossing;
 type Utility = fn(&[Variant]) -> Result<Variant, String>;
 
 // Any number of arguments.
-const ANY: usize = usize::MAX;
+const ANY_COUNT: usize = usize::MAX;
 
 /// The utility functions under `Godot`: each name, how many arguments it
 /// takes, and the engine function it calls.
@@ -119,11 +119,11 @@ static UTILITIES: &[(&str, usize, Utility)] = &[
     ("rand_from_seed", 1, |a| {
         Ok(global::rand_from_seed(read_int(a, 0)?).to_variant())
     }),
-    ("push_error", ANY, |a| {
+    ("push_error", ANY_COUNT, |a| {
         global::push_error(a);
         Ok(Variant::nil())
     }),
-    ("push_warning", ANY, |a| {
+    ("push_warning", ANY_COUNT, |a| {
         global::push_warning(a);
         Ok(Variant::nil())
     }),
@@ -164,7 +164,7 @@ pub fn utilities(mrb: &Mrb, _godot: Value) -> Value {
         .enumerate()
         .filter_map(|(row, (name, arity, _))| {
             let name = Symbol::from(mrb.intern(name.as_bytes()).ok()?).as_value();
-            let arity = if *arity == ANY {
+            let arity = if *arity == ANY_COUNT {
                 qnil().as_value()
             } else {
                 (*arity as i64).into_value(mrb)
@@ -205,7 +205,7 @@ fn call_row(
     else {
         return Ok(qnil().as_value());
     };
-    if *arity != ANY && args.len() != *arity {
+    if *arity != ANY_COUNT && args.len() != *arity {
         return Err(make_argument_error(mrb, &describe_count(args.len(), arity)));
     }
     let args = to_arguments(mrb, super::data(mrb), args)?;

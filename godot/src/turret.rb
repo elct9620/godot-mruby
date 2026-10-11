@@ -5,7 +5,7 @@ class Turret < Godot::Node2D
   export :range, 300.0
 
   # Seconds between two shots.
-  RELOAD = 0.1
+  RELOAD_TIME = 0.1
 
   def _physics_process(delta)
     @cooldown = (@cooldown || 0.0) - delta
@@ -15,7 +15,7 @@ class Turret < Godot::Node2D
     return unless target
 
     target.hit
-    @cooldown = RELOAD
+    @cooldown = RELOAD_TIME
   end
 
   private

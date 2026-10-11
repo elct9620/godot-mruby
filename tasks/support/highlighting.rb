@@ -14,7 +14,7 @@ module Godot
     module_function
 
     def verify!(project)
-      Godot.with_probe(project, PROBE) do |copy|
+      Godot.copy_probe_project(project, PROBE) do |copy|
         output, = Godot.run_editor_frames(copy, FRAMES)
         verify_coloured!(output)
         verify_recoloured!(output)

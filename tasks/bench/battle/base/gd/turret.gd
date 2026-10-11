@@ -1,7 +1,7 @@
 extends Node2D
 ## The GDScript twin of src/turret.rb, line for line.
 
-const RELOAD := 0.1
+const RELOAD_TIME := 0.1
 
 @export var mode := &"nearest"
 @export var range := 300.0
@@ -17,7 +17,7 @@ func _physics_process(delta: float) -> void:
 	if target == null:
 		return
 	target.hit()
-	_cooldown = RELOAD
+	_cooldown = RELOAD_TIME
 
 
 func _find_target():

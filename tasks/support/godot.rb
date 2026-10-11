@@ -92,7 +92,7 @@ module Godot
   # name its path spells; the copy plays its scenes headless, so a probe acts
   # in an editor no person uses and the scenes it plays run where the check
   # does.
-  def with_probe(project, probe)
+  def copy_probe_project(project, probe)
     Dir.mktmpdir do |dir|
       copy = File.join(dir, "project")
       FileUtils.cp_r(project, copy)

@@ -45,7 +45,7 @@ class LoaderFailureTest < Minitest::Test
   # @behavior RL-020
   def test_a_file_loaded_by_name_that_does_not_parse_raises_syntax_error_at_its_line
     error = assert_raises(SyntaxError) { Unit::Loader::Wreck }
-    assert_includes error.message, "res://test/unit/loader/wreck.rb:6: syntax error"
+    assert_includes error.message, "res://test/unit/loader/wreck.rb:7: syntax error"
   end
 
   # @behavior RL-027

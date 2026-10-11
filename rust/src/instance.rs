@@ -576,7 +576,7 @@ static INFO: sys::GDExtensionScriptInstanceInfo3 = sys::GDExtensionScriptInstanc
 // what it answers cannot borrow the instance past it.
 //
 // SAFETY: `data` is what `into_godot` handed Godot and not yet freed.
-unsafe fn with_instance<R>(
+unsafe fn borrow_instance<R>(
     data: sys::GDExtensionScriptInstanceDataPtr,
     body: impl FnOnce(&RubyInstance) -> R,
 ) -> R {
@@ -613,14 +613,14 @@ struct PropertyReach {
 // What reaching the property `name` of the instance `data` stands for takes,
 // or none when the engine's own property answers it.
 //
-// SAFETY: as `with_instance` requires.
+// SAFETY: as `borrow_instance` requires.
 unsafe fn reach_property(
     data: sys::GDExtensionScriptInstanceDataPtr,
     name: &str,
 ) -> Option<PropertyReach> {
     // SAFETY: as the caller promises.
     unsafe {
-        with_instance(data, |instance| {
+        borrow_instance(data, |instance| {
             let exported = instance.has_export(name);
             if !exported && is_engines_own(instance, name) {
                 return None;
@@ -738,7 +738,7 @@ unsafe extern "C" fn get_property_list(
     let infos: Box<[sys::GDExtensionPropertyInfo]> =
         catch_panic("get_property_list", Box::default(), || {
             // SAFETY: Godot hands a live instance.
-            let members = unsafe { with_instance(data, RubyInstance::members) };
+            let members = unsafe { borrow_instance(data, RubyInstance::members) };
             members.iter().map(describe_member).collect()
         });
     // SAFETY: Godot hands a count to fill.
@@ -776,7 +776,7 @@ unsafe extern "C" fn get_method_list(
     let infos: Box<[sys::GDExtensionMethodInfo]> =
         catch_panic("get_method_list", Box::default(), || {
             // SAFETY: Godot hands a live instance.
-            let methods = unsafe { with_instance(data, RubyInstance::methods) };
+            let methods = unsafe { borrow_instance(data, RubyInstance::methods) };
             methods
                 .iter()
                 .map(|method| describe_method(method.as_str()))
@@ -819,9 +819,10 @@ unsafe extern "C" fn has_method(
         // SAFETY: Godot hands a method name living for the call.
         let method = unsafe { &*method.cast::<StringName>() };
         // SAFETY: Godot hands a live instance.
-        let has_method =
-            unsafe { with_instance(data, |instance| instance.method_name_by_string_name(method)) }
-                .is_some();
+        let has_method = unsafe {
+            borrow_instance(data, |instance| instance.method_name_by_string_name(method))
+        }
+        .is_some();
         sys::GDExtensionBool::from(has_method)
     })
 }
@@ -882,7 +883,7 @@ unsafe fn ask_revert(
     let property = StringName::from(&unsafe { read_string_name(property) });
     // SAFETY: as the caller promises.
     let caller = unsafe {
-        with_instance(data, |instance| {
+        borrow_instance(data, |instance| {
             instance.has_method(method).then(|| instance.caller())
         })
     };
@@ -904,7 +905,7 @@ unsafe extern "C" fn call(
         let method = unsafe { &*method.cast::<StringName>() };
         // SAFETY: Godot hands a live instance.
         let found = unsafe {
-            with_instance(data, |instance| {
+            borrow_instance(data, |instance| {
                 let method = instance.method_name_by_string_name(method)?;
                 Some((method, instance.caller()))
             })
@@ -947,7 +948,7 @@ unsafe extern "C" fn notification(
     catch_panic("notification", (), || {
         // SAFETY: Godot hands a live instance.
         let caller = unsafe {
-            with_instance(data, |instance| {
+            borrow_instance(data, |instance| {
                 instance
                     .method_name_by_string_name(&NOTIFICATION)
                     .map(|_| instance.caller())
@@ -968,7 +969,7 @@ unsafe extern "C" fn to_string(
         // SAFETY: Godot hands a live instance, an initialized String, which
         // `GString` lays out as, and a flag.
         unsafe {
-            *out.cast::<GString>() = with_instance(data, |instance| instance.display.clone());
+            *out.cast::<GString>() = borrow_instance(data, |instance| instance.display.clone());
             *valid = sys::GDExtensionBool::from(true);
         }
     })
@@ -986,14 +987,14 @@ unsafe extern "C" fn get_script(
     data: sys::GDExtensionScriptInstanceDataPtr,
 ) -> sys::GDExtensionObjectPtr {
     // SAFETY: Godot hands a live instance, and takes its own reference.
-    unsafe { with_instance(data, |instance| instance.script.obj_sys()) }
+    unsafe { borrow_instance(data, |instance| instance.script.obj_sys()) }
 }
 
 unsafe extern "C" fn get_language(
     data: sys::GDExtensionScriptInstanceDataPtr,
 ) -> sys::GDExtensionScriptLanguagePtr {
     // SAFETY: Godot hands a live instance.
-    unsafe { with_instance(data, |instance| instance.language.obj_sys().cast()) }
+    unsafe { borrow_instance(data, |instance| instance.language.obj_sys().cast()) }
 }
 
 unsafe extern "C" fn free(data: sys::GDExtensionScriptInstanceDataPtr) {

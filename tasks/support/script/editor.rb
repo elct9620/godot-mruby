@@ -111,7 +111,7 @@ module Godot
 
       # @behavior RS-067
       def verify_plugin_entered!(project)
-        output = Godot.with_probe(project, PLUGIN) { |copy| Godot.run_editor_frames(copy, PLUGIN_FRAMES).first }
+        output = Godot.copy_probe_project(project, PLUGIN) { |copy| Godot.run_editor_frames(copy, PLUGIN_FRAMES).first }
         return if output.lines.map(&:chomp).include?(PLUGIN_LINE)
 
         raise "The editor did not add a plugin whose script is a Ruby tool script:\n#{output}"

@@ -11,7 +11,7 @@ class HeaderTest < Minitest::Test
 
   # @behavior RS-009
   def test_a_node_script_reports_the_methods_its_class_defines_before_its_file_runs
-    with_node(:dossier) { |node| assert node.has_method(:_ready) }
+    attach_script(:dossier) { |node| assert node.has_method(:_ready) }
     refute ran?(:Dossier)
   end
 
@@ -41,7 +41,7 @@ class HeaderTest < Minitest::Test
 
   # @behavior RS-038
   def test_a_node_script_reports_the_signals_its_class_declares_before_its_file_runs
-    with_node(:siren) { |node| assert node.has_signal(:wailed) }
+    attach_script(:siren) { |node| assert node.has_signal(:wailed) }
     refute ran?(:Siren)
   end
 
@@ -55,19 +55,19 @@ class HeaderTest < Minitest::Test
 
   # @behavior RS-041
   def test_a_node_script_lists_an_exported_property_before_its_file_runs
-    with_node(:siren) { |node| assert_includes collect_names(node.get_property_list), "volume" }
+    attach_script(:siren) { |node| assert_includes collect_names(node.get_property_list), "volume" }
     refute ran?(:Siren)
   end
 
   # @behavior RS-043
   def test_a_node_lists_the_methods_its_class_defines
-    with_node(:siren) { |node| assert_includes collect_names(node.get_method_list), "wail" }
+    attach_script(:siren) { |node| assert_includes collect_names(node.get_method_list), "wail" }
     refute ran?(:Siren)
   end
 
   # @behavior RS-044
   def test_a_node_lists_the_methods_its_class_inherits_from_another_file
-    with_node(:boss) { |node| assert_includes collect_names(node.get_method_list), "charge" }
+    attach_script(:boss) { |node| assert_includes collect_names(node.get_method_list), "charge" }
     refute ran?(:Boss)
   end
 
@@ -99,7 +99,7 @@ class HeaderTest < Minitest::Test
   end
 
   # A node with the script of that name.
-  def with_node(name)
+  def attach_script(name)
     node = autofree(Godot::Node2D.new)
     node.set_script(load_script(name))
     yield node

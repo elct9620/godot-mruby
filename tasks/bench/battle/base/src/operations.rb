@@ -4,24 +4,24 @@
 # engine's Vector2 and Color. The loop's own time is printed too, for the
 # bench to take away.
 class Operations < Godot::Node2D
-  N = 100_000
+  REPEATS = 100_000
 
   def _ready
     v = Godot::Vector2.new(1, 2)
     w = Godot::Vector2.new(3, 4)
     from = v.x
     to = w.x
-    measure("loop") { N.times { nil } }
-    measure("ruby_call") { N.times { noop } }
-    measure("engine_call") { N.times { get_child_count } }
-    measure("position_get") { N.times { position } }
-    measure("position_set") { N.times { self.position = v } }
-    measure("singleton_call") { N.times { Godot::Engine.get_process_frames } }
-    measure("utility_call") { N.times { Godot.lerp(from, to, 0.5) } }
-    measure("vector_new") { N.times { Godot::Vector2.new(1, 2) } }
-    measure("color_new") { N.times { Godot::Color.new(1, 0, 0) } }
-    measure("vector_add") { N.times { v + w } }
-    measure("vector_x") { N.times { v.x } }
+    measure("loop") { REPEATS.times { nil } }
+    measure("ruby_call") { REPEATS.times { noop } }
+    measure("engine_call") { REPEATS.times { get_child_count } }
+    measure("position_get") { REPEATS.times { position } }
+    measure("position_set") { REPEATS.times { self.position = v } }
+    measure("singleton_call") { REPEATS.times { Godot::Engine.get_process_frames } }
+    measure("utility_call") { REPEATS.times { Godot.lerp(from, to, 0.5) } }
+    measure("vector_new") { REPEATS.times { Godot::Vector2.new(1, 2) } }
+    measure("color_new") { REPEATS.times { Godot::Color.new(1, 0, 0) } }
+    measure("vector_add") { REPEATS.times { v + w } }
+    measure("vector_x") { REPEATS.times { v.x } }
     get_tree.quit
   end
 
@@ -30,6 +30,6 @@ class Operations < Godot::Node2D
   def measure(name)
     start = Godot::Time.get_ticks_usec
     yield
-    puts "op #{name} #{(Godot::Time.get_ticks_usec - start) * 1000.0 / N}"
+    puts "op #{name} #{(Godot::Time.get_ticks_usec - start) * 1000.0 / REPEATS}"
   end
 end
