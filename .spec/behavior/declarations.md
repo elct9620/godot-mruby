@@ -550,3 +550,53 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | Given | a node script whose class exports a value with `enum:` naming one symbol rather than a list |
 | When | the file runs |
 | Then | the declaration raises where it is written, naming the keyword and the value |
+
+## `RD-069` A node has a method a module its class takes in defines
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RD-004` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class includes a module defining a method |
+| When | a node of that class is asked whether it has the method |
+| Then | it answers that it has it |
+
+## `RD-070` A callback a module its class takes in defines is called on the node
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RD-006` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a node of a class that includes a module defining an engine callback |
+| When | the engine notifies the node |
+| Then | the callback is called with the notification |
+
+## `RD-071` A node has a method its class gains after its file ran
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RD-004` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a node of a class whose file has run |
+| Given | Ruby defining a method on the class |
+| When | the node is asked whether it has the method |
+| Then | it answers that it has it |
+
+## `RD-072` A node has a method of a module its class takes in after its file ran
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RD-069` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a node of a class whose file has run |
+| Given | Ruby including a module defining a method into the class |
+| When | the node is asked whether it has the method |
+| Then | it answers that it has it |

@@ -386,15 +386,16 @@ impl Snapshot {
         members
     }
 
-    /// The methods the class of the file at `path` defines; none for a file
-    /// that has not run.
+    /// The methods the class of the file at `path` has of its own, as last
+    /// read; none for a file that has not run.
     pub fn methods_by_path(&self, path: &str) -> &[String] {
         self.classes
             .get(path)
             .map_or(&[], |class| class.methods.as_slice())
     }
 
-    /// Whether the class of the file at `path` defines a method of that name.
+    /// Whether the class of the file at `path` has a method of that name of
+    /// its own.
     pub fn has_method(&self, path: &str, name: &str) -> bool {
         self.methods_by_path(path)
             .iter()
@@ -405,6 +406,14 @@ impl Snapshot {
     /// run, in place of what it had before.
     pub fn record_class(&mut self, path: &str, class: Class) {
         self.classes.insert(Arc::from(path), Arc::new(class));
+    }
+
+    /// Takes `methods` as what the class of the file at `path` has now, which
+    /// Ruby may change after the file has run.
+    pub fn record_methods(&mut self, path: &str, methods: Vec<String>) {
+        if let Some(class) = self.classes.get_mut(path) {
+            Arc::make_mut(class).methods = methods;
+        }
     }
 }
 

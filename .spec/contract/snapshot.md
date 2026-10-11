@@ -110,7 +110,7 @@ impl Member {
 
 ## `Class`
 
-What a class has once its file has run: what its body declared, and the methods it defines, those metaprogramming defined included, with the digest of the source it ran and the names that source's `export` and `signal` calls write, which tell what the source Godot holds now has changed and what it cannot answer for.
+What a class has once its file has run: what its body declared, and the methods it has of its own, those metaprogramming defined and those of the modules it takes in included, with the digest of the source it ran and the names that source's `export` and `signal` calls write, which tell what the source Godot holds now has changed and what it cannot answer for.
 
 | Attribute | Value |
 | --- | --- |
@@ -339,7 +339,7 @@ impl Snapshot {
 
 ## `Snapshot::methods_by_path`
 
-The methods the class of the file at a path defines; none for a file that has not run.
+The methods the class of the file at a path has of its own, as last read; none for a file that has not run.
 
 | Attribute | Value |
 | --- | --- |
@@ -353,7 +353,7 @@ impl Snapshot {
 
 ## `Snapshot::has_method`
 
-Whether the class of the file at a path defines a method of that name.
+Whether the class of the file at a path has a method of that name of its own.
 
 | Attribute | Value |
 | --- | --- |
@@ -376,6 +376,20 @@ Takes what the class of the file at a path has, now that the file has run, in pl
 ```rust
 impl Snapshot {
     pub fn record_class(&mut self, path: &str, class: Class) {}
+}
+```
+
+## `Snapshot::record_methods`
+
+Takes the methods the class of the file at a path has now, which Ruby may change after the file has run; a path with no class recorded takes none.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Snapshot {
+    pub fn record_methods(&mut self, path: &str, methods: Vec<String>) {}
 }
 ```
 

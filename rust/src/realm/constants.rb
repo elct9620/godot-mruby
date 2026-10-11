@@ -18,4 +18,5 @@ Module.prepend(Module.new do
     super
   end
   private :const_added
+
 end)

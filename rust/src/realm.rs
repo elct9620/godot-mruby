@@ -1,10 +1,10 @@
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::ffi::CStr;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use beni::{
-    Error, FromValue, Gem, IntoValue, Module as _, Mrb, Qtrue, RArray, RClass, ReprValue, Symbol,
+    Error, FromValue, Gem, IntoValue, Module as _, Mrb, Qtrue, RClass, RHash, ReprValue, Symbol,
     TryConvert, Value,
 };
 use rustc_hash::FxHashMap;
@@ -17,6 +17,7 @@ mod constants;
 mod executor;
 mod extensions;
 mod index;
+mod methods;
 mod print;
 mod reentrant_lock;
 mod registry;
@@ -129,6 +130,15 @@ struct Bookkeeping {
     // What the files that have run declare, published once each of them has
     // run, so what any thread reads is never half-declared.
     snapshot: RefCell<Arc<Snapshot>>,
+    // The classes of the files that have run and the modules each takes in,
+    // each the key of its row in `takers`: a method Ruby adds to one later
+    // is one Godot may call on a node of every class taking it in.
+    taken_in: RHash,
+    // The paths of the files whose class takes in the module of each row.
+    takers: RefCell<Vec<BTreeSet<String>>>,
+    // The paths of the files whose class Ruby changed the methods of since
+    // they were last read.
+    changed: RefCell<BTreeSet<String>>,
     // Set while the realm defines a directory's module, which no file created.
     is_defining_namespace: Cell<bool>,
     // How the Ruby running now started, while any does.
@@ -179,7 +189,7 @@ enum Origin {
 // has. Ruby itself asks Godot what a class has, so a file's class is read
 // back while the thread that ran it is still inside the realm.
 fn publish_class(mrb: &Mrb, path: &str, signals: Vec<Signal>, members: Vec<Member>, digest: u64) {
-    let methods = methods_by_path(mrb, path);
+    let methods = methods::methods_by_path(mrb, path);
     let bookkeeping = bookkeeping(mrb);
     let declarations = bookkeeping.files.declarations_by_path(path);
     let mut draft = bookkeeping.snapshot.borrow_mut();
@@ -194,29 +204,10 @@ fn publish_class(mrb: &Mrb, path: &str, signals: Vec<Signal>, members: Vec<Membe
             signal_names: declarations.signals,
         },
     );
+    if !executor::is_file_running(mrb) {
+        methods::record_changed_methods(mrb, &mut draft);
+    }
     snapshot::publish(Arc::clone(&draft));
-}
-
-// The names of the methods the class the file at `path` names defines
-// itself; none when the file named no class of its own.
-fn methods_by_path(mrb: &Mrb, path: &str) -> Vec<String> {
-    let Some(class) = constants::constant_by_key(mrb, &key_by_path(mrb, path)) else {
-        return Vec::new();
-    };
-    let own = [false.into_value(mrb)];
-    let methods = class
-        .funcall(mrb, c"instance_methods", &own)
-        .ok()
-        .and_then(RArray::from_value);
-    methods
-        .map(|methods| {
-            methods
-                .entries(mrb)
-                .filter_map(Symbol::from_value)
-                .filter_map(|name| name.name(mrb))
-                .collect()
-        })
-        .unwrap_or_default()
 }
 
 // The symbol `name` interns to in `mrb`'s realm, interned once, since
@@ -509,6 +500,13 @@ impl Realm {
             index,
             runs: executor::Runs::default(),
             registry: Registry::new(&mrb),
+            taken_in: {
+                let taken_in = mrb.hash_new();
+                mrb.gc_register_forever(taken_in.as_value());
+                taken_in
+            },
+            takers: RefCell::default(),
+            changed: RefCell::default(),
             snapshot: RefCell::default(),
             is_defining_namespace: Cell::default(),
             outermost: Cell::default(),
@@ -523,6 +521,7 @@ impl Realm {
         }
         print::define(&mrb)
             .and_then(|()| constants::define(&mrb))
+            .and_then(|()| methods::define(&mrb))
             .map_err(|error| RubyError::from_error(&mrb, None, &error))?;
         let realm = Self { mrb };
         extend(&realm)?;

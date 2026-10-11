@@ -132,6 +132,11 @@ pub(super) fn run_by_name<T>(
 }
 
 /// Whether the file at `path` is running now.
+// Whether a file is running in the realm `mrb` belongs to.
+pub(super) fn is_file_running(mrb: &Mrb) -> bool {
+    !runs(mrb).frames.borrow().is_empty()
+}
+
 pub(super) fn is_running(mrb: &Mrb, path: &str) -> bool {
     matches!(runs(mrb).files.borrow().get(path), Some(Run::Running))
 }

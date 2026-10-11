@@ -277,7 +277,7 @@ A value type's class defines its members and methods when it is made, so they an
 
 ```
 class body runs ──► its declarations, and the methods the class ends up with
-                         │ the file's run commits
+                         │ the file's run commits, or Ruby adds a method later
                          ▼
                     one immutable value, published
                          │ read by path: the script's own, then its ancestry
@@ -285,7 +285,20 @@ class body runs ──► its declarations, and the methods the class ends up wi
 has_signal, get_property_list, has_method, and the default each property was exported with
 ```
 
-A Ruby class takes its shape as its body runs, so its shape cannot be read from the source alone. The realm publishes what a file's class has when its run commits. Whatever answers Godot reads that value on any thread without entering the realm. Until a file runs, its header answers, so a scene connects to a signal declared there. Only what the source does not write out as literals waits for the run. While Godot holds a source other than the one that ran, as the editor does while a file is typed, what it writes out answers. The run answers for the rest. A property's value is the node's own. While no Ruby object answers, the instance keeps what Godot writes and answers from that or the published default. What a class declares is in `.spec/behavior/declarations.md`, and the published shape in `.spec/contract/snapshot.md`.
+A Ruby class takes its shape as its body runs, so its shape cannot be read from the source alone. The realm publishes what a file's class has when its run commits. A method Ruby adds later, to the class or a module it takes in, publishes it again. Whatever answers Godot reads that value on any thread without entering the realm. What a class declares is in `.spec/behavior/declarations.md`, and the published shape in `.spec/contract/snapshot.md`.
+
+#### 2.7.1 Answer Sources
+
+What answers Godot depends on how far the file has run, so a scene connects to a signal before any Ruby runs.
+
+| When | What answers |
+| --- | --- |
+| Before the file runs | its header |
+| Source changed, not run again | the header for what it writes out, the run for the rest |
+| After the run | the snapshot |
+| A property's value | the node's object; without one, what Godot wrote or the default |
+
+Only what the source does not write out as literals waits for the run. The editor holds a changed source while a file is typed. While no Ruby object answers, the instance keeps what Godot writes.
 
 ## 3. Realm
 
@@ -329,6 +342,7 @@ realm.rs              Realm, prepare, enter, Files, Log, RubyError
 ├─ print.rs           puts, print and p write to the log
 ├─ constants.rs, .rb  const_missing and const_added hooks
 ├─ index.rs           the class index: constant path to file
+├─ methods.rs, .rb    a class's own methods, read again as Ruby adds one
 ├─ executor.rs        runs a file once, all or nothing, or again
 ├─ extensions.rs      each gem's data, added and never removed
 └─ registry.rs        keys to objects, rooted for the collector
@@ -336,7 +350,7 @@ realm.rs              Realm, prepare, enter, Files, Log, RubyError
 
 A realm's bookkeeping sits in the state's user data. Held objects live in a hash rooted for the collector, so mruby never frees an object a node still uses. Ruby's calls back into Rust reach it from the state they are given, and no gem knows the slot.
 
-What makes this mruby environment its own is defined as the realm opens. Its output goes to its log, and its hooks let a missing constant ask the index and record a running file's constants.
+What makes this mruby environment its own is defined as the realm opens. Its output goes to its log. Its hooks let a missing constant ask the index, and record a running file's constants and a class's new methods.
 
 The index is built from the paths its files give, and the executor takes each file's source and declaration from them. The realm therefore never reads a file itself. What a file opens loads before it runs, and a node script's class is held to its declared superclass after. The loader's rules are in `.spec/behavior/loader.md`.
 
