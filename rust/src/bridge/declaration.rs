@@ -10,6 +10,7 @@ use godot::classes::{ClassDb, Object, ProjectSettings, Script};
 use godot::obj::{Gd, Singleton};
 use godot::register::info::PropertyHint;
 
+use super::file_by_class_path;
 use super::object::find_engine_ancestor;
 use super::refusal::make_argument_error;
 use super::value;
@@ -140,8 +141,7 @@ fn is_of_class(mrb: &Mrb, object: &Gd<Object>, class: &str) -> bool {
         let object_class = StringName::from(&object.get_class());
         return ClassDb::singleton().is_parent_class(&object_class, engine_class);
     }
-    let names: Vec<String> = class.split("::").map(str::to_owned).collect();
-    let Some(file) = realm::file_by_constant(mrb, &names) else {
+    let Some(file) = file_by_class_path(mrb, class) else {
         return false;
     };
     collect_script_files(object).any(|path| path == file)
@@ -215,8 +215,7 @@ fn hint_by_class(mrb: &Mrb, class: &str) -> Result<(PropertyHint, String), Strin
 // The name the editor lists the Ruby class `class` under, if a node script
 // of the project defines it and nothing else is announced by that name.
 fn find_editor_name(mrb: &Mrb, class: &str) -> Option<String> {
-    let names: Vec<String> = class.split("::").map(str::to_owned).collect();
-    editor_name_by_path(&realm::file_by_constant(mrb, &names)?)
+    editor_name_by_path(&file_by_class_path(mrb, class)?)
 }
 
 // The name Godot lists the file at `path` under among its global classes,

@@ -24,6 +24,7 @@ use smallvec::SmallVec;
 use super::BridgeData;
 use super::bound_member::BoundMember;
 use super::object::{name_by_symbol, to_arguments};
+use super::read_engine_name;
 use super::refusal::{
     describe_count, make_argument_error, make_type_error, make_zero_division_error,
 };
@@ -213,7 +214,7 @@ fn kind_by_class(mrb: &Mrb, data: &BridgeData, class: RClass) -> Result<VariantT
         return Ok(<VariantType as EngineEnum>::from_ord(ord as i32));
     }
     let path = class.path(mrb).unwrap_or_default();
-    let name = path.strip_prefix("Godot::").unwrap_or(&path);
+    let name = read_engine_name(&path);
     let kind = kind_by_name(name)
         .ok_or_else(|| make_type_error(mrb, &format!("{path} is no value type of the engine")))?;
     if is_named_by_godot(mrb, class, name) {

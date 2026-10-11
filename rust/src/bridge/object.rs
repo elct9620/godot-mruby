@@ -17,7 +17,6 @@ use godot::obj::{Gd, InstanceId, Singleton};
 use godot::sys;
 use smallvec::SmallVec;
 
-use super::BridgeData;
 use super::bound_method::{Arity, BoundMethod};
 use super::declaration;
 use super::refusal::{
@@ -25,6 +24,7 @@ use super::refusal::{
     make_not_implemented_error, make_refusal_error, make_type_error,
 };
 use super::value::{self, ToRuby};
+use super::{BridgeData, file_by_class_path, read_engine_name};
 use crate::realm::{self, Key};
 
 /// The engine object a Ruby object of an engine class stands for. Holding
@@ -95,7 +95,7 @@ fn root(mrb: &Mrb) -> Result<RClass, Error> {
 // class.
 fn make(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
     let path = class.path(mrb).unwrap_or_default();
-    let name = path.strip_prefix("Godot::").unwrap_or(&path);
+    let name = read_engine_name(&path);
     let class_db = ClassDb::singleton();
     if !class_db.can_instantiate(name) {
         let message = format!("the engine makes no objects of {path}");
@@ -112,10 +112,7 @@ fn make_node(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
     let path = class.path(mrb);
     let script = path
         .as_ref()
-        .and_then(|path| {
-            let names: Vec<String> = path.split("::").map(str::to_owned).collect();
-            realm::file_by_constant(mrb, &names)
-        })
+        .and_then(|path| file_by_class_path(mrb, path))
         .and_then(|file| ResourceLoader::singleton().load(&file))
         .and_then(|resource| resource.try_cast::<Script>().ok())
         .filter(|script| !script.get_instance_base_type().is_empty());
@@ -412,13 +409,14 @@ fn instance_id(_mrb: &Mrb, held: &EngineObject) -> i64 {
 // engine class, or nil when the engine keeps none. The engine is asked
 // first, since it reports a singleton it lacks as an error.
 fn singleton(mrb: &Mrb, class: RClass) -> Value {
-    let name = read_engine_name(mrb, class);
+    let path = class.path(mrb).unwrap_or_default();
+    let name = read_engine_name(&path);
     let engine = Engine::singleton();
-    if !engine.has_singleton(&name) {
+    if !engine.has_singleton(name) {
         return qnil().as_value();
     }
     engine
-        .get_singleton(&name)
+        .get_singleton(name)
         .map(|object| mrb.wrap_as(EngineObject(object), class).as_value())
         .unwrap_or_else(|| qnil().as_value())
 }
@@ -427,19 +425,21 @@ fn singleton(mrb: &Mrb, class: RClass) -> Value {
 // has a method of that name to call on the class.
 fn has_static_method(mrb: &Mrb, class: RClass, name: Symbol) -> bool {
     let name = name.name(mrb).unwrap_or_default();
-    ClassDb::singleton().class_has_method(&read_engine_name(mrb, class), name.as_str())
+    let path = class.path(mrb).unwrap_or_default();
+    ClassDb::singleton().class_has_method(read_engine_name(&path), name.as_str())
 }
 
 // Godot::Object.__call_static__(name, args): calls the static method `name`
 // of the receiver's engine class with `args`.
 fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<Value, Error> {
     let name = name_by_symbol(mrb, name);
-    let class = read_engine_name(mrb, class);
+    let path = class.path(mrb).unwrap_or_default();
+    let class = read_engine_name(&path);
     let data = super::data(mrb);
     let args = to_arguments(mrb, data, args.entries(mrb))?;
     let answer = ClassDb::singleton()
-        .try_class_call_static(&class, &name, &args)
-        .map_err(|error| make_call_refusal(mrb, &error, &class, &name.to_string(), args.len()))?;
+        .try_class_call_static(class, &name, &args)
+        .map_err(|error| make_call_refusal(mrb, &error, class, &name.to_string(), args.len()))?;
     convert_answer(mrb, data, &answer)
 }
 
@@ -521,20 +521,15 @@ pub(super) fn find_engine_ancestor(mrb: &Mrb, class: RClass) -> Option<String> {
 // value of that name the receiver's engine class has, or nil.
 fn engine_constant_by_name(mrb: &Mrb, class: RClass, name: Symbol) -> Value {
     let name = name.name(mrb).unwrap_or_default();
-    let class = read_engine_name(mrb, class);
+    let path = class.path(mrb).unwrap_or_default();
+    let class = read_engine_name(&path);
     let class_db = ClassDb::singleton();
-    if !class_db.class_has_integer_constant(&class, name.as_str()) {
+    if !class_db.class_has_integer_constant(class, name.as_str()) {
         return qnil().as_value();
     }
     class_db
-        .class_get_integer_constant(&class, name.as_str())
+        .class_get_integer_constant(class, name.as_str())
         .into_value(mrb)
-}
-
-// The engine class an engine class under Godot stands for.
-fn read_engine_name(mrb: &Mrb, class: RClass) -> String {
-    let path = class.path(mrb).unwrap_or_default();
-    path.strip_prefix("Godot::").unwrap_or(&path).to_owned()
 }
 
 /// The arguments of one engine call, which a game passes few of, so they stay

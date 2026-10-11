@@ -179,3 +179,15 @@ fn engine_superclass_by_name(mrb: &Mrb, _godot: Value, name: Symbol) -> Value {
     let parent = class_db.get_parent_class(&name).to_string();
     mrb.str_new(parent.as_bytes()).as_value()
 }
+
+// The engine class a class under Godot stands for, by the path Ruby names
+// it with; a path outside Godot is its own name.
+fn read_engine_name(path: &str) -> &str {
+    path.strip_prefix("Godot::").unwrap_or(path)
+}
+
+// The file the realm's class index names for the constant `path` spells.
+fn file_by_class_path(mrb: &Mrb, path: &str) -> Option<String> {
+    let names: Vec<String> = path.split("::").map(str::to_owned).collect();
+    realm::file_by_constant(mrb, &names)
+}
