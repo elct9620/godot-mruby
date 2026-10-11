@@ -11,6 +11,7 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 - `tasks/support/script/editor.rb`
 - `tasks/support/script/header.rb`
 - `tasks/support/script.rb`
+- `rust/src/snapshot.rs`
 
 ## `RS-001` A script attached to a node runs
 
@@ -594,3 +595,16 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a node whose object answers Godot's read of an instance variable with what the extension cannot read |
 | When | Godot reads that property |
 | Then | Godot gets nil |
+
+## `RS-072` A node script that ran lists what its class declared, not what its unchanged source writes
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RS-062` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose source writes a signal its class did not declare as the file ran |
+| Given | the source Godot holds, unchanged since the run |
+| When | Godot asks the script for its signals |
+| Then | the list leaves the signal out |

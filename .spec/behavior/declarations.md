@@ -7,6 +7,7 @@ What a node script's class says about itself as its body runs, and how Godot is 
 - `godot/test/unit/declarations/**/*_test.rb`
 - `rust/src/realm.rs`
 - `tasks/support/declarations.rb`
+- `rust/src/snapshot.rs`
 
 ## `RD-001` A node has the signal its class declared
 

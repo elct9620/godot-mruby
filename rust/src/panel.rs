@@ -254,11 +254,13 @@ fn read_text(entry: &VarDictionary, key: &str) -> String {
 mod tests {
     use super::{RESULTS_FILE, run_args};
 
+    // @behavior RP-003
     #[test]
     fn a_run_of_every_directory_names_only_its_results_file() {
         assert_eq!(run_args(None), ["--results", RESULTS_FILE]);
     }
 
+    // @behavior RP-003
     #[test]
     fn a_run_of_one_directory_names_it() {
         assert_eq!(

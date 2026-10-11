@@ -6,6 +6,7 @@ How a thread goes into the game's realm: one thread at a time is inside, and a t
 
 - `godot/test/unit/entry/**/*_test.rb`
 - `rust/src/realm.rs`
+- `rust/src/realm/extensions.rs`
 
 ## `RE-001` A thread inside the realm enters it again
 
@@ -71,3 +72,27 @@ How a thread goes into the game's realm: one thread at a time is inside, and a t
 | Given | an extension's data, kept in the game's realm |
 | When | a later entry into the same realm asks for data of the same type |
 | Then | the extension is given what it kept, so each type's data is made once for the realm |
+
+## `RE-009` An extension's data stays as it was while other data is made
+
+| Attribute | Value |
+| --- | --- |
+| refines | `RE-008` |
+
+| Step | Statement |
+| --- | --- |
+| Given | an extension's data, given out and changed |
+| When | data of another type is made in the same realm |
+| Then | the first data stays where it was, as it was |
+
+## `RE-010` An extension's data may ask for other data as it is made
+
+| Attribute | Value |
+| --- | --- |
+| refines | `RE-008` |
+
+| Step | Statement |
+| --- | --- |
+| Given | data whose default asks the realm for data of another type |
+| When | an extension first asks for it |
+| Then | both are made, and the other type keeps what the default set |

@@ -330,6 +330,7 @@ mod tests {
 
     // Words a method's signature gives its hash, as hash_method collects
     // them, beside the hash Godot 4.6's extension API lists for the method.
+    // @behavior RG-048
     #[test]
     fn hash_words_gives_the_engines_hash_of_a_signature() {
         let getter = [1, 0, VariantType::INT.ord as u32, 0, 1, 0];

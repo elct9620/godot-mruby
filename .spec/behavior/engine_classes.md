@@ -376,3 +376,15 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | a Ruby class extending an engine class, and the engine class's static method that the engine class has answered since |
 | When | Ruby calls that method on the extending class |
 | Then | it raises the `NoMethodError` it raised before the engine class answered the method |
+
+## `RG-048` An engine method binds by the hash the engine gives its signature
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RG-037` |
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine method's signature: whether it returns, its argument count, and each type |
+| When | the extension hashes the signature to ask the engine for the method's bind |
+| Then | the hash is the one Godot's extension API lists for that method |

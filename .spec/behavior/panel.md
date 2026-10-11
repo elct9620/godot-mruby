@@ -5,6 +5,7 @@ How the editor runs a project's Ruby tests: the test panel plays the test runner
 ## Includes
 
 - `tasks/support/panel.rb`
+- `rust/src/panel.rs`
 
 ## `RP-001` The panel lists what did not pass in the directory it ran
 
@@ -21,3 +22,15 @@ How the editor runs a project's Ruby tests: the test panel plays the test runner
 | Given | a failure the test panel lists |
 | When | its row is activated |
 | Then | the editor switches to the script editor, showing the test file at the line the failure names |
+
+## `RP-003` The panel runs the test directory chosen, or every one
+
+| Attribute | Value |
+| --- | --- |
+| refines | `RP-001` |
+
+| Step | Statement |
+| --- | --- |
+| Given | the panel's choice of a test directory, or of none |
+| When | the panel writes the run file |
+| Then | the run names that directory, or no directory so every test directory runs |

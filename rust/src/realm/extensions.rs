@@ -57,6 +57,7 @@ mod tests {
     #[derive(Default)]
     struct Second(u64);
 
+    // @behavior RE-009
     #[test]
     fn a_value_lent_earlier_stays_as_it_was_while_others_are_added() {
         let data = ExtensionData::default();
@@ -84,6 +85,7 @@ mod tests {
         }
     }
 
+    // @behavior RE-010
     #[test]
     fn a_default_may_ask_for_other_data_as_it_is_made() {
         NESTED_DATA.with(|data| {

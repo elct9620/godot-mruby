@@ -347,6 +347,7 @@ mod tests {
         Roots::new(directories.iter().map(|directory| (*directory).to_owned()))
     }
 
+    // @behavior RL-031
     #[test]
     fn a_file_is_named_from_the_nearest_root_directory_it_sits_under() {
         let roots = make_roots(&["res://src", "res://src/ui/"]);
@@ -362,6 +363,7 @@ mod tests {
         );
     }
 
+    // @behavior RL-031
     #[test]
     fn a_directory_only_sharing_a_root_directorys_prefix_is_named_from_res() {
         let roots = make_roots(&["res://src"]);
@@ -372,6 +374,7 @@ mod tests {
         );
     }
 
+    // @behavior RL-031
     #[test]
     fn res_itself_and_a_directory_outside_it_add_no_root_directory() {
         let roots = make_roots(&["res://", "user://saves"]);
@@ -379,6 +382,7 @@ mod tests {
         assert_eq!(roots.key_by_path("res://saves/slot.rb"), ["saves", "slot"]);
     }
 
+    // @behavior RL-031
     #[test]
     fn a_path_outside_res_spells_no_constant() {
         let roots = make_roots(&["res://src"]);

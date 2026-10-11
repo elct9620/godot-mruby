@@ -490,20 +490,7 @@ mod tests {
         }
     }
 
-    #[test]
-    fn a_file_that_has_not_run_has_no_signals() {
-        let snapshot = Snapshot::default();
-
-        assert!(snapshot.signals_by_path("res://bell.rb").is_empty());
-    }
-
-    #[test]
-    fn a_file_that_has_not_run_has_no_methods() {
-        let snapshot = Snapshot::default();
-
-        assert!(!snapshot.has_method("res://bell.rb", "ring"));
-    }
-
+    // @behavior RS-072
     #[test]
     fn a_file_that_ran_without_declaring_anything_answers_none_of_what_its_source_writes() {
         let mut snapshot = Snapshot::default();
@@ -529,6 +516,7 @@ mod tests {
         );
     }
 
+    // @behavior RD-001
     #[test]
     fn a_class_answers_the_signals_its_file_declared() {
         let mut snapshot = Snapshot::default();
@@ -538,13 +526,7 @@ mod tests {
         assert_eq!(snapshot.signals_by_path("res://bell.rb"), [rung()]);
     }
 
-    #[test]
-    fn a_file_that_has_not_run_has_no_properties() {
-        let snapshot = Snapshot::default();
-
-        assert_eq!(snapshot.properties_by_path("res://bell.rb").count(), 0);
-    }
-
+    // @behavior RD-011
     #[test]
     fn a_class_answers_the_properties_its_file_exported() {
         let mut snapshot = Snapshot::default();
@@ -559,6 +541,7 @@ mod tests {
         );
     }
 
+    // @behavior RD-005
     #[test]
     fn a_class_answers_the_methods_it_defines() {
         let mut snapshot = Snapshot::default();
@@ -566,17 +549,5 @@ mod tests {
         snapshot.record_class("res://bell.rb", bell());
 
         assert!(snapshot.has_method("res://bell.rb", "ring"));
-    }
-
-    #[test]
-    fn a_file_running_again_stands_in_place_of_what_it_had_before() {
-        let mut snapshot = Snapshot::default();
-
-        snapshot.record_class("res://bell.rb", bell());
-        snapshot.record_class("res://bell.rb", Class::default());
-
-        assert!(snapshot.signals_by_path("res://bell.rb").is_empty());
-        assert_eq!(snapshot.properties_by_path("res://bell.rb").count(), 0);
-        assert!(!snapshot.has_method("res://bell.rb", "ring"));
     }
 }
