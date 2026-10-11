@@ -6,14 +6,14 @@ module Godot
   module Runner
     # Makes the runs of the integration-test project's Ruby tests that have to
     # fail, and reads what each reports on the way. Part of Godot.verify!.
-    module Failing
+    module Failures
       # Runs that have to fail, each as the runner's options and what the run
       # has to print on the way, in the order it prints it: one per way a run
       # fails, all under godot/integration/runner/failing/ except the filter that
       # names no test, the directories that are not the project's test
       # directories, and a seed that is not a number. An error's calls end at the
       # test method, so its frame is the last before the report's blank line.
-      FAILING = {
+      RUNS = {
         %W[--dir #{RUNNER_TESTS}/failing/assertion] => [
           "teardown ran after a failure",
           "FailedAssertionTest#test_one_equals_two [#{RUNNER_TESTS}/failing/assertion/failed_assertion_test.rb:9]:",
@@ -59,7 +59,7 @@ module Godot
       # @behavior RT-002 RT-003 RT-004 RT-005 RT-006 RT-007 RT-008 RT-010
       # @behavior RT-020 RT-021 RT-022 RT-023 RT-026 RT-029 RT-030 RT-034 RT-039
       def verify!(project)
-        FAILING.each do |options, expected|
+        RUNS.each do |options, expected|
           output, status = Runner.run(project, *options)
           missing = Runner.absent_in_order(output, expected)
           missing << "no #{FRAMEWORK_FRAME} frame" if output.include?(FRAMEWORK_FRAME)

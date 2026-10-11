@@ -325,7 +325,7 @@ realm.rs              Realm, prepare, enter, Files, Log, RubyError
 │     ├─ registry     the objects held for keys outside
 │     └─ extension data  what each gem keeps, by its type
 │
-├─ reentrant.rs       the lock a thread inside takes again
+├─ reentrant_lock.rs  the lock a thread inside takes again
 ├─ print.rs           puts, print and p write to the log
 ├─ constants.rs, .rb  const_missing and const_added hooks
 ├─ index.rs           the class index: constant path to file

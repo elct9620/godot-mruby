@@ -11,7 +11,7 @@ require_relative "loader"
 require_relative "panel"
 require_relative "report"
 require_relative "runner"
-require_relative "runner/failing"
+require_relative "runner/failures"
 require_relative "runner/results"
 require_relative "runner/settings"
 require_relative "script"
@@ -41,7 +41,7 @@ module Godot
   SETTINGS
   # The checks, each in the module named after the behaviour it claims.
   CHECKS = [
-    Script, Declarations, Report, Runner, Runner::Failing, Runner::Results, Runner::Settings, Loader, Export,
+    Script, Declarations, Report, Runner, Runner::Failures, Runner::Results, Runner::Settings, Loader, Export,
     Panel, Template, Highlighting
   ].freeze
 

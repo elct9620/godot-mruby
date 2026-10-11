@@ -5,7 +5,7 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 ## Includes
 
 - `tasks/support/runner.rb`
-- `tasks/support/runner/failing.rb`
+- `tasks/support/runner/failures.rb`
 - `tasks/support/runner/results.rb`
 - `tasks/support/runner/settings.rb`
 

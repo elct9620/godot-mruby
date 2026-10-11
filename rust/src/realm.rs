@@ -18,13 +18,13 @@ mod executor;
 mod extensions;
 mod index;
 mod print;
-mod reentrant;
+mod reentrant_lock;
 mod registry;
 
 use executor::Declaration;
 use extensions::ExtensionData;
 pub use index::{ClassIndex, Roots, camelize, normalize};
-use reentrant::ReentrantLock;
+use reentrant_lock::ReentrantLock;
 pub use registry::Key;
 use registry::Registry;
 
