@@ -19,6 +19,7 @@ use crate::{compiler, log, realm};
 
 mod bound_member;
 mod bound_method;
+mod declaration;
 mod object;
 mod refusal;
 mod ruby_object;
