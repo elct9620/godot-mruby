@@ -118,7 +118,7 @@ pub(super) fn has_run(mrb: &Mrb, path: &str) -> bool {
 /// Runs the file at `path` for a name it defines, unless it has run cleanly
 /// or is running now. A file that raised runs again, as a failed `require`
 /// does in Ruby: it took away what it created, so it starts over.
-pub(super) fn run_by_name<T>(
+pub(super) fn run_for_name<T>(
     mrb: &Mrb,
     path: &str,
     prepare: impl FnOnce() -> Result<T, Error>,
@@ -164,7 +164,7 @@ pub(super) fn trace_cycle(mrb: &Mrb, path: &str) -> Option<Vec<String>> {
 
 /// Records that the file running now created `name` in the namespace the
 /// names in `scope` spell.
-pub(super) fn record(mrb: &Mrb, scope: Vec<String>, name: String) {
+pub(super) fn record_created(mrb: &Mrb, scope: Vec<String>, name: String) {
     if let Some(frame) = runs(mrb).frames.borrow_mut().last_mut() {
         frame.constants.push((scope, name));
     }
@@ -330,7 +330,7 @@ fn source_by_path(mrb: &Mrb, path: &str) -> Result<String, Error> {
 // goes before the class.
 fn take_away(mrb: &Mrb, frame: &Frame) {
     for (scope, name) in frame.constants.iter().rev() {
-        if let Some(scope) = scope_by_names(mrb, scope) {
+        if let Some(scope) = defined_scope_by_names(mrb, scope) {
             scope.const_remove(mrb, name.as_str()).ok();
         }
     }
@@ -338,7 +338,7 @@ fn take_away(mrb: &Mrb, frame: &Frame) {
 
 // The module the names in `scope` spell exactly, if each is still defined;
 // asking for a missing one would load it by name.
-fn scope_by_names(mrb: &Mrb, scope: &[String]) -> Option<Scope> {
+fn defined_scope_by_names(mrb: &Mrb, scope: &[String]) -> Option<Scope> {
     scope
         .iter()
         .try_fold(Scope::Class(mrb.object_class()), |outer, name| {

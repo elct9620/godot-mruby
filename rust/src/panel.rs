@@ -117,7 +117,7 @@ impl RubyTestPanel {
     // then the tests that failed, raised or skipped, and the counts as the
     // run's summary words them.
     fn list_results(&mut self) {
-        let Some(results) = results() else {
+        let Some(results) = read_results() else {
             self.status
                 .set_text("The run wrote no results; its output says why");
             return;
@@ -219,7 +219,7 @@ fn write_run_file(args: &[String]) -> Result<(), godot::global::Error> {
     Ok(())
 }
 
-fn results() -> Option<VarDictionary> {
+fn read_results() -> Option<VarDictionary> {
     if !FileAccess::file_exists(RESULTS_FILE) {
         return None;
     }

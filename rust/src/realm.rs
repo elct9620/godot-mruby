@@ -205,7 +205,7 @@ fn symbol_by_name(mrb: &Mrb, name: &str) -> Result<Symbol, Error> {
 }
 
 // The constant path the file at `path` spells in `mrb`'s realm.
-fn key_by_path(mrb: &Mrb, path: &str) -> index::ConstantPath {
+fn key_by_path(mrb: &Mrb, path: &str) -> index::ConstantKey {
     bookkeeping(mrb).index.borrow().key_by_path(path)
 }
 

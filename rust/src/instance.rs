@@ -68,7 +68,7 @@ struct MethodTable {
 impl Methods {
     // The name of `method` when the class has it, read from the latest
     // snapshot and the lineage `lineage` gives.
-    fn name_by_key<'l>(
+    fn name_by_string_name<'l>(
         &self,
         method: &StringName,
         lineage: impl FnOnce() -> Lineage<'l>,
@@ -182,8 +182,8 @@ impl RubyInstance {
 
     // The name of `method`, which Godot calls by its StringName, when the
     // node's class has it.
-    fn method_name_by_key(&self, method: &StringName) -> Option<Arc<str>> {
-        self.methods.name_by_key(method, || self.lineage())
+    fn method_name_by_string_name(&self, method: &StringName) -> Option<Arc<str>> {
+        self.methods.name_by_string_name(method, || self.lineage())
     }
 
     fn lineage(&self) -> Lineage<'_> {
@@ -214,7 +214,7 @@ impl RubyInstance {
 
     // Whether the node has no Ruby object yet, so what Godot writes has
     // nowhere to go but the instance.
-    fn is_unbuilt(&self) -> bool {
+    fn is_recorded(&self) -> bool {
         matches!(self.caller.current_stage(), Stage::Recorded)
     }
 
@@ -336,7 +336,7 @@ impl Caller {
     // or has failed.
     // A call arriving while its file runs, before the class exists, finds
     // none and builds nothing.
-    fn object(&self) -> Option<Key> {
+    fn ensure_object(&self) -> Option<Key> {
         match self.current_stage() {
             Stage::Built => return Some(self.key()),
             Stage::Failed => return None,
@@ -391,7 +391,7 @@ impl Caller {
     // that cannot reach Ruby, is reported and answers null, as a callback
     // that returned nothing does.
     fn send(&self, method: &str, args: &[&Variant]) -> Variant {
-        let Some(key) = self.object() else {
+        let Some(key) = self.ensure_object() else {
             return Variant::nil();
         };
         let checked = args.iter().map(|arg| ToRuby::try_new(arg));
@@ -496,7 +496,7 @@ fn describe_property(property: &Property) -> sys::GDExtensionPropertyInfo {
 fn describe_method(name: &str) -> sys::GDExtensionMethodInfo {
     sys::GDExtensionMethodInfo {
         name: into_raw(StringName::from(name)),
-        return_value: answer_info(),
+        return_value: describe_answer(),
         flags: sys::GDEXTENSION_METHOD_FLAG_NORMAL as u32,
         id: 0,
         argument_count: 0,
@@ -508,7 +508,7 @@ fn describe_method(name: &str) -> sys::GDExtensionMethodInfo {
 
 // What a method answers, of any type, since a Ruby method says nothing of
 // what it returns.
-fn answer_info() -> sys::GDExtensionPropertyInfo {
+fn describe_answer() -> sys::GDExtensionPropertyInfo {
     sys::GDExtensionPropertyInfo {
         type_: VariantType::NIL.ord() as sys::GDExtensionVariantType,
         name: into_raw(StringName::default()),
@@ -628,7 +628,7 @@ unsafe fn reach_property(
             Some(PropertyReach {
                 caller: instance.caller(),
                 exported,
-                is_deferred: instance.is_unbuilt() && !realm::is_inside(),
+                is_deferred: instance.is_recorded() && !realm::is_inside(),
             })
         })
     }
@@ -665,7 +665,11 @@ unsafe extern "C" fn set(
         else {
             return sys::GDExtensionBool::from(false);
         };
-        let key = if is_deferred { None } else { caller.object() };
+        let key = if is_deferred {
+            None
+        } else {
+            caller.ensure_object()
+        };
         let is_written = match key {
             Some(key) => write(key, &name, exported, value),
             None if is_deferred || caller.is_failed() => {
@@ -695,7 +699,11 @@ unsafe extern "C" fn get(
         else {
             return sys::GDExtensionBool::from(false);
         };
-        let key = if is_deferred { None } else { caller.object() };
+        let key = if is_deferred {
+            None
+        } else {
+            caller.ensure_object()
+        };
         let value = match key {
             Some(key) => read(key, &name, exported),
             None if is_deferred || caller.is_failed() => caller.answer_from_stash(&name),
@@ -812,7 +820,7 @@ unsafe extern "C" fn has_method(
         let method = unsafe { &*method.cast::<StringName>() };
         // SAFETY: Godot hands a live instance.
         let has_method =
-            unsafe { with_instance(data, |instance| instance.method_name_by_key(method)) }
+            unsafe { with_instance(data, |instance| instance.method_name_by_string_name(method)) }
                 .is_some();
         sys::GDExtensionBool::from(has_method)
     })
@@ -897,7 +905,7 @@ unsafe extern "C" fn call(
         // SAFETY: Godot hands a live instance.
         let found = unsafe {
             with_instance(data, |instance| {
-                let method = instance.method_name_by_key(method)?;
+                let method = instance.method_name_by_string_name(method)?;
                 Some((method, instance.caller()))
             })
         };
@@ -941,7 +949,7 @@ unsafe extern "C" fn notification(
         let caller = unsafe {
             with_instance(data, |instance| {
                 instance
-                    .method_name_by_key(&NOTIFICATION)
+                    .method_name_by_string_name(&NOTIFICATION)
                     .map(|_| instance.caller())
             })
         };

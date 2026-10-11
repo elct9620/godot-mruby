@@ -13,12 +13,12 @@ const ROOT: &str = "res://";
 #[derive(Default)]
 pub struct ClassIndex {
     roots: Roots,
-    files: BTreeMap<ConstantPath, String>,
-    namespaces: BTreeMap<ConstantPath, Namespace>,
-    refusals: BTreeSet<ConstantPath>,
+    files: BTreeMap<ConstantKey, String>,
+    namespaces: BTreeMap<ConstantKey, Namespace>,
+    refusals: BTreeSet<ConstantKey>,
     // Every key a file or a namespace was taken in under, by its last name,
     // so a name is found without reading every key.
-    keys_by_last_name: BTreeMap<String, BTreeSet<ConstantPath>>,
+    keys_by_last_name: BTreeMap<String, BTreeSet<ConstantKey>>,
 }
 
 /// The root directories files are named from: `res://`, and the directories
@@ -42,7 +42,7 @@ impl Roots {
     }
 
     /// The constant path the file at `path` spells, as the index matches it.
-    pub fn key_by_path(&self, path: &str) -> ConstantPath {
+    pub fn key_by_path(&self, path: &str) -> ConstantKey {
         self.split_segments(path)
             .1
             .iter()
@@ -82,7 +82,7 @@ impl Roots {
 
 /// A constant path as the index matches it: one segment per namespace, each
 /// without underscores and in lower case.
-pub type ConstantPath = Vec<String>;
+pub type ConstantKey = Vec<String>;
 
 /// What a constant path names in the index.
 pub enum Definition {
@@ -118,7 +118,7 @@ impl ClassIndex {
     }
 
     /// The constant path the file at `path` spells, as the index matches it.
-    pub(super) fn key_by_path(&self, path: &str) -> ConstantPath {
+    pub(super) fn key_by_path(&self, path: &str) -> ConstantKey {
         self.roots.key_by_path(path)
     }
 
@@ -159,7 +159,7 @@ impl ClassIndex {
     }
 
     /// The constant paths the index names a file for.
-    pub(super) fn file_keys(&self) -> Vec<ConstantPath> {
+    pub(super) fn file_keys(&self) -> Vec<ConstantKey> {
         self.files.keys().cloned().collect()
     }
 
@@ -167,7 +167,7 @@ impl ClassIndex {
     /// since it took the files in.
     pub(super) fn refuse_constants(
         &mut self,
-        keys: impl IntoIterator<Item = ConstantPath>,
+        keys: impl IntoIterator<Item = ConstantKey>,
         log: &dyn Log,
     ) {
         for key in keys {
@@ -196,7 +196,7 @@ impl ClassIndex {
         name: &str,
     ) -> Option<(usize, Definition)> {
         (0..=scope.len()).rev().find_map(|depth| {
-            let mut key: ConstantPath = scope[..depth]
+            let mut key: ConstantKey = scope[..depth]
                 .iter()
                 .map(|segment| normalize(segment))
                 .collect();
@@ -225,8 +225,8 @@ impl ClassIndex {
 
     /// What the index names directly inside the namespace `key` spells: its
     /// files, and its directories' modules.
-    pub(super) fn members_by_key(&self, key: &[String]) -> Vec<ConstantPath> {
-        let below = |named: &&ConstantPath| named.starts_with(key);
+    pub(super) fn members_by_key(&self, key: &[String]) -> Vec<ConstantKey> {
+        let below = |named: &&ConstantKey| named.starts_with(key);
         let start = key.to_vec();
         let files = self.files.range(start.clone()..).map(|(named, _)| named);
         let namespaces = self.namespaces.range(start..).map(|(named, _)| named);
@@ -240,7 +240,7 @@ impl ClassIndex {
 
     /// What the index names `name` inside the namespaces below the one
     /// `scope` spells.
-    pub(super) fn collect_keys_below(&self, scope: &[String], name: &str) -> Vec<ConstantPath> {
+    pub(super) fn collect_keys_below(&self, scope: &[String], name: &str) -> Vec<ConstantKey> {
         self.keys_by_last_name
             .get(&normalize(name))
             .into_iter()
@@ -290,8 +290,8 @@ impl ClassIndex {
 
 // Files `key` under its last name in `keys_by_last_name`.
 fn add_last_name(
-    keys_by_last_name: &mut BTreeMap<String, BTreeSet<ConstantPath>>,
-    key: &ConstantPath,
+    keys_by_last_name: &mut BTreeMap<String, BTreeSet<ConstantKey>>,
+    key: &ConstantKey,
 ) {
     if let Some(name) = key.last() {
         keys_by_last_name

@@ -240,7 +240,7 @@ impl Files for FilesOnDisk {
             .map(|dir| dir.trim_end_matches('/'))
             .collect();
         let mut paths = Vec::new();
-        collect(ROOT, &left_out, &mut paths);
+        collect_paths(ROOT, &left_out, &mut paths);
         paths.sort();
         paths
     }
@@ -287,7 +287,7 @@ fn left_out_directories() -> Vec<String> {
     left_out
 }
 
-fn collect(directory: &str, left_out: &[&str], paths: &mut Vec<String>) {
+fn collect_paths(directory: &str, left_out: &[&str], paths: &mut Vec<String>) {
     for entry in ResourceLoader::singleton()
         .list_directory(directory)
         .as_slice()
@@ -296,7 +296,7 @@ fn collect(directory: &str, left_out: &[&str], paths: &mut Vec<String>) {
         if let Some(child) = entry.strip_suffix('/') {
             let child = format!("{directory}{child}");
             if !left_out.contains(&child.as_str()) {
-                collect(&format!("{child}/"), left_out, paths);
+                collect_paths(&format!("{child}/"), left_out, paths);
             }
         } else if entry.ends_with(".rb") {
             paths.push(format!("{directory}{entry}"));

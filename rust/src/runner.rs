@@ -41,7 +41,7 @@ enum Run {
 #[godot_api]
 impl INode for RubyTestRunner {
     fn ready(&mut self) {
-        let args = user_args();
+        let args = take_user_args();
         let run_as_asked = refuse_exported_game()
             .and_then(|()| choose_test_directories(&args))
             .and_then(|directories| collect_test_files(&directories))
@@ -169,7 +169,7 @@ fn refuse_exported_game() -> Result<(), String> {
 
 // What follows `--` on Godot's command line, or what the run file holds
 // when nothing does.
-fn user_args() -> Vec<String> {
+fn take_user_args() -> Vec<String> {
     let args: Vec<String> = Os::singleton()
         .get_cmdline_user_args()
         .as_slice()
@@ -177,7 +177,7 @@ fn user_args() -> Vec<String> {
         .map(GString::to_string)
         .collect();
     if args.is_empty() {
-        run_file_args()
+        take_run_file_args()
     } else {
         args
     }
@@ -192,7 +192,7 @@ pub const RUN_FILE: &str = "user://godot_mruby/run.json";
 
 // The options the run file holds, removed as they are read, so a later run
 // is not given them again.
-fn run_file_args() -> Vec<String> {
+fn take_run_file_args() -> Vec<String> {
     if !FileAccess::file_exists(RUN_FILE) {
         return Vec::new();
     }

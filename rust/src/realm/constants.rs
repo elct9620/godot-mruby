@@ -41,7 +41,7 @@ fn record_constant(mrb: &Mrb, receiver: Value, symbol: Symbol) -> Value {
         return qnil().as_value();
     };
     if !bookkeeping(mrb).is_defining_namespace.get() {
-        executor::record(mrb, scope.clone(), name.clone());
+        executor::record_created(mrb, scope.clone(), name.clone());
     }
     let key = scope
         .iter()
@@ -95,7 +95,7 @@ fn load_inner(mrb: &Mrb, inner: &[String]) {
     let entry = bookkeeping(mrb).index.borrow().definition_by_key(inner);
     let (path, loaded) = match entry {
         Some(Definition::File(path)) if executor::trace_cycle(mrb, &path).is_none() => {
-            let loaded = run_by_name(mrb, &path);
+            let loaded = run_for_name(mrb, &path);
             (Some(path), loaded)
         }
         Some(Definition::Namespace(namespace)) => {
@@ -203,7 +203,7 @@ fn ensure_namespaces(mrb: &Mrb, path: &str) -> Result<(), Error> {
             .borrow()
             .definition_by_key(&key[..depth]);
         match entry {
-            Some(Definition::File(file)) => run_by_name(mrb, &file)?,
+            Some(Definition::File(file)) => run_for_name(mrb, &file)?,
             Some(Definition::Namespace(namespace)) => {
                 // A namespace file that ran without defining its module
                 // leaves the files inside to open it themselves.
@@ -366,7 +366,7 @@ fn load_constant(mrb: &Mrb, path: &str, outer: &[String], name: &str) -> Result<
         );
         return Err(make_name_error(mrb, &message, name));
     }
-    run_by_name(mrb, path).map_err(|error| with_file(mrb, path, error))?;
+    run_for_name(mrb, path).map_err(|error| with_file(mrb, path, error))?;
     let scope = scope_by_names(mrb, outer)?;
     let symbol = mrb.intern(name.as_bytes())?;
     if scope.const_defined_at(mrb, symbol) {
@@ -377,8 +377,8 @@ fn load_constant(mrb: &Mrb, path: &str, outer: &[String], name: &str) -> Result<
     }
 }
 
-fn run_by_name(mrb: &Mrb, path: &str) -> Result<(), Error> {
-    executor::run_by_name(
+fn run_for_name(mrb: &Mrb, path: &str) -> Result<(), Error> {
+    executor::run_for_name(
         mrb,
         path,
         || ensure_opened(mrb, path),
