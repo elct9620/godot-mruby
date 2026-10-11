@@ -73,7 +73,7 @@ class HintsTest < Minitest::Test
 
   # @behavior RD-047
   def test_a_hint_the_exported_type_cannot_take_is_refused
-    error = assert_raises(ArgumentError) { Unit::Declarations::Mistyped }
+    error = assert_raises(ArgumentError) { Unit::Declarations::Sign }
 
     assert_equal %("range:" requires a variable of type "int" or "float", but type "String" was given instead.),
                  error.message
@@ -81,29 +81,29 @@ class HintsTest < Minitest::Test
 
   # @behavior RD-048
   def test_a_range_leaving_out_its_end_is_refused
-    assert_raises(ArgumentError) { Unit::Declarations::Endless }
+    assert_raises(ArgumentError) { Unit::Declarations::Ramp }
   end
 
   # @behavior RD-049
   def test_a_step_without_a_range_is_refused
-    assert_raises(ArgumentError) { Unit::Declarations::Stepping }
+    assert_raises(ArgumentError) { Unit::Declarations::Stair }
   end
 
   # @behavior RD-050
   def test_a_second_hint_on_one_property_is_refused
-    assert_raises(ArgumentError) { Unit::Declarations::Doubling }
+    assert_raises(ArgumentError) { Unit::Declarations::Slider }
   end
 
   # @behavior RD-067
   def test_a_keyword_naming_no_hint_is_refused
-    error = assert_raises(ArgumentError) { Unit::Declarations::Misnamed }
+    error = assert_raises(ArgumentError) { Unit::Declarations::Tag }
 
     assert_equal %("slider:" is not a hint a property can be exported with.), error.message
   end
 
   # @behavior RD-068
   def test_a_list_hint_written_with_anything_but_a_list_is_refused
-    error = assert_raises(ArgumentError) { Unit::Declarations::Listless }
+    error = assert_raises(ArgumentError) { Unit::Declarations::Menu }
 
     assert_equal %("enum:" needs a list of names, but :one was given instead.), error.message
   end

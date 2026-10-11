@@ -2,7 +2,7 @@ module Unit
   module Declarations
     # Reads a property its own way, which stands in place of the reader its
     # export would define.
-    class Reading < Godot::Node2D
+    class Reader < Godot::Node2D
       def range
         @range * 2
       end

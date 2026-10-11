@@ -32,7 +32,7 @@ class TypesTest < Minitest::Test
 
   # @behavior RD-055
   def test_an_export_naming_a_type_takes_no_value_of_another_type
-    error = assert_raises(ArgumentError) { Unit::Declarations::Misvalued }
+    error = assert_raises(ArgumentError) { Unit::Declarations::Socket }
 
     assert_equal %(Cannot assign a value of type int to variable "spot" with specified type Marker2D.),
                  error.message
@@ -40,7 +40,7 @@ class TypesTest < Minitest::Test
 
   # @behavior RD-066
   def test_an_export_naming_a_class_takes_no_object_of_another_class
-    error = assert_raises(ArgumentError) { Unit::Declarations::Miscast }
+    error = assert_raises(ArgumentError) { Unit::Declarations::Mold }
 
     assert_equal %(Cannot assign a value of type Resource to variable "level" with specified type PackedScene.),
                  error.message
@@ -48,24 +48,24 @@ class TypesTest < Minitest::Test
 
   # @behavior RD-056
   def test_an_export_naming_neither_a_node_nor_a_resource_class_is_refused
-    error = assert_raises(ArgumentError) { Unit::Declarations::Countless }
+    error = assert_raises(ArgumentError) { Unit::Declarations::Abacus }
 
     assert_equal "Export type can only be built-in, a resource, a node, or an enum.", error.message
   end
 
   # @behavior RD-057
   def test_an_export_naming_a_class_no_announcement_lists_is_refused
-    error = assert_raises(ArgumentError) { Unit::Declarations::Unlisted }
+    error = assert_raises(ArgumentError) { Unit::Declarations::Stowaway }
 
     assert_equal %(The class "Unit::Loader::Items::Potion" was not found in the global scope.), error.message
   end
 
   private
 
-  # The property of that name among the ones the aiming class exported.
+  # The property of that name among the ones the sight class exported.
   def property_by_name(name)
-    Unit::Declarations::Aiming
-    script = Godot::ResourceLoader.load("res://test/unit/declarations/aiming.rb")
+    Unit::Declarations::Sight
+    script = Godot::ResourceLoader.load("res://test/unit/declarations/sight.rb")
     script.get_script_property_list.find { |property| property["name"] == name }
   end
 end

@@ -2,7 +2,7 @@ module Unit
   module Declarations
     # Exports a name every Ruby object answers, which its accessors would take
     # away.
-    class Obscuring < Godot::Node2D
+    class Veil < Godot::Node2D
       export :hash, 1
     end
   end

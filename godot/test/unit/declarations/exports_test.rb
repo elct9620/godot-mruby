@@ -33,28 +33,28 @@ class ExportsTest < Minitest::Test
 
   # @behavior RD-014
   def test_an_export_declared_with_no_value_is_refused
-    assert_raises(ArgumentError) { Unit::Declarations::Valueless }
+    assert_raises(ArgumentError) { Unit::Declarations::Blank }
   end
 
   # @behavior RD-015
   def test_an_export_a_ruby_superclass_declared_is_refused
-    assert_raises(ArgumentError) { Unit::Declarations::Shadowing }
+    assert_raises(ArgumentError) { Unit::Declarations::Decoy }
   end
 
   # @behavior RD-016
   def test_an_export_the_engine_class_already_has_is_refused
-    assert_raises(ArgumentError) { Unit::Declarations::Overriding }
+    assert_raises(ArgumentError) { Unit::Declarations::Overlay }
   end
 
   # @behavior RD-017
   def test_an_export_ruby_objects_already_answer_is_refused
-    assert_raises(ArgumentError) { Unit::Declarations::Obscuring }
+    assert_raises(ArgumentError) { Unit::Declarations::Veil }
   end
 
   # @behavior RD-018
   def test_an_export_declared_again_as_it_stands_is_no_new_property
-    restating = autofree(Unit::Declarations::Restating.new)
-    script = Godot::ResourceLoader.load("res://test/unit/declarations/restating.rb")
+    ledger = autofree(Unit::Declarations::Ledger.new)
+    script = Godot::ResourceLoader.load("res://test/unit/declarations/ledger.rb")
 
     mode = script.get_script_property_list.select { |property| property["name"] == "mode" }
 
@@ -63,12 +63,12 @@ class ExportsTest < Minitest::Test
 
   # @behavior RD-019
   def test_an_export_declared_again_with_another_value_is_refused
-    assert_raises(ArgumentError) { Unit::Declarations::Differing }
+    assert_raises(ArgumentError) { Unit::Declarations::Lever }
   end
 
   # @behavior RD-020
   def test_a_signal_a_ruby_superclass_declared_is_refused
-    assert_raises(ArgumentError) { Unit::Declarations::Resounding }
+    assert_raises(ArgumentError) { Unit::Declarations::Resonator }
   end
 
   # @behavior RD-021
@@ -80,22 +80,22 @@ class ExportsTest < Minitest::Test
 
   # @behavior RD-022
   def test_a_classs_own_accessor_stands_in_place_of_the_one_an_export_would_define
-    reading = autofree(Unit::Declarations::Reading.new)
+    reader = autofree(Unit::Declarations::Reader.new)
 
-    assert_equal 600.0, reading.range
+    assert_equal 600.0, reader.range
   end
 
   # @behavior RD-023
   def test_an_exported_value_is_written_before_the_object_is_initialized
-    priming = autofree(Unit::Declarations::Priming.new)
+    primer = autofree(Unit::Declarations::Primer.new)
 
-    assert_equal 300.0, priming.primed
+    assert_equal 300.0, primer.primed
   end
 
   # @behavior RD-024
   def test_each_node_has_its_own_copy_of_a_container_it_was_exported
-    one = autofree(Unit::Declarations::Stacking.new)
-    other = autofree(Unit::Declarations::Stacking.new)
+    one = autofree(Unit::Declarations::Crate.new)
+    other = autofree(Unit::Declarations::Crate.new)
 
     one.rounds << 3
 
@@ -122,27 +122,27 @@ class ExportsTest < Minitest::Test
 
   # @behavior RD-027
   def test_a_property_the_engine_class_has_stays_the_engines
-    masking = autofree(Unit::Declarations::Masking.new)
+    mask = autofree(Unit::Declarations::Mask.new)
 
-    masking.set(:position, Godot::Vector2.new(1, 2))
+    mask.set(:position, Godot::Vector2.new(1, 2))
 
-    assert_equal Godot::Vector2.new(1, 2), masking.position
+    assert_equal Godot::Vector2.new(1, 2), mask.position
   end
 
   # @behavior RD-028
   def test_godot_reads_an_instance_variable_the_class_did_not_export
-    holding = autofree(Unit::Declarations::Holding.new)
+    pouch = autofree(Unit::Declarations::Pouch.new)
 
-    assert_equal 7, holding.get(:kept)
+    assert_equal 7, pouch.get(:kept)
   end
 
   # @behavior RD-029
   def test_godot_writes_an_instance_variable_the_class_did_not_export
-    holding = autofree(Unit::Declarations::Holding.new)
+    pouch = autofree(Unit::Declarations::Pouch.new)
 
-    holding.set(:kept, 9)
+    pouch.set(:kept, 9)
 
-    assert_equal 9, holding.kept
+    assert_equal 9, pouch.kept
   end
 
   # @behavior RD-033
@@ -183,21 +183,21 @@ class ExportsTest < Minitest::Test
 
   # @behavior RD-036
   def test_a_name_a_ruby_superclass_declared_is_refused_in_gdscripts_words
-    error = assert_raises(ArgumentError) { Unit::Declarations::Shadowing }
+    error = assert_raises(ArgumentError) { Unit::Declarations::Decoy }
 
     assert_equal 'The member "mode" already exists in parent class Turret.', error.message
   end
 
   # @behavior RD-037
   def test_a_name_the_engine_class_has_is_refused_in_gdscripts_words
-    error = assert_raises(ArgumentError) { Unit::Declarations::Overriding }
+    error = assert_raises(ArgumentError) { Unit::Declarations::Overlay }
 
     assert_equal %(Member "position" redefined (original in native class 'Node2D')), error.message
   end
 
   # @behavior RD-038
   def test_an_export_naming_no_type_is_refused_in_gdscripts_words
-    error = assert_raises(ArgumentError) { Unit::Declarations::Valueless }
+    error = assert_raises(ArgumentError) { Unit::Declarations::Blank }
 
     assert_equal %(Cannot use "export" because the type of the initialized value can't be inferred.),
                  error.message
@@ -209,7 +209,7 @@ class ExportsTest < Minitest::Test
   # has written its own @centered.
   def covered_sprite
     sprite = Godot::Sprite2D.new
-    sprite.set_script(Godot::ResourceLoader.load("res://test/unit/declarations/covering.rb"))
+    sprite.set_script(Godot::ResourceLoader.load("res://test/unit/declarations/cloak.rb"))
     sprite.call(:covered)
     sprite
   end

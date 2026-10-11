@@ -27,14 +27,14 @@ class SignalsTest < Minitest::Test
 
   # @behavior RD-007
   def test_a_signal_declared_again_with_other_parameters_is_refused
-    assert_raises(ArgumentError) { Unit::Declarations::Clashing }
+    assert_raises(ArgumentError) { Unit::Declarations::Gong }
   end
 
   # @behavior RD-008
   def test_a_signal_declared_again_as_it_stands_is_no_new_signal
-    repeating = autofree(Unit::Declarations::Repeating.new)
+    repeater = autofree(Unit::Declarations::Repeater.new)
 
-    rung = repeating.get_signal_list.select { |signal| signal["name"] == "rung" }
+    rung = repeater.get_signal_list.select { |signal| signal["name"] == "rung" }
 
     assert_equal 1, rung.size
   end

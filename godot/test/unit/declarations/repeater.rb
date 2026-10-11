@@ -1,7 +1,7 @@
 module Unit
   module Declarations
     # Declares one signal twice, as it was declared the first time.
-    class Repeating < Godot::Node
+    class Repeater < Godot::Node
       signal :rung, :times
       signal :rung, :times
     end
