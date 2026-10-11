@@ -39,7 +39,7 @@ module Godot
     ].freeze
     # A test directory whose test loads a test class by name during the run,
     # and the summary that shows the loaded class's test did not run.
-    LATE = "res://integration/loader/latecomers"
+    LATE_DIRECTORY = "res://integration/loader/latecomers"
     LATE_SUMMARY = /^1 runs, \d+ assertions, 0 failures, 0 errors, 0 skips$/
 
     module_function
@@ -88,10 +88,10 @@ module Godot
     # own test alone.
     # @behavior RL-013
     def verify_late!(project)
-      output, status = Runner.run(project, "--dir", LATE)
+      output, status = Runner.run(project, "--dir", LATE_DIRECTORY)
       return if status.success? && output.match?(LATE_SUMMARY)
 
-      raise "A run of #{LATE} ran a test class loaded by name:\n#{output}"
+      raise "A run of #{LATE_DIRECTORY} ran a test class loaded by name:\n#{output}"
     end
   end
 end

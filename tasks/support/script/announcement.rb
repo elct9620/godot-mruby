@@ -24,7 +24,7 @@ module Godot
       SHARED_NAME = /define node scripts named (?<name>\w+), so none is listed/
       # A node script the editor cannot read, and what a scan must never print
       # while the language answers for it.
-      UNREADABLE = "unreadable.rb"
+      UNREADABLE_FILE = "unreadable.rb"
       UNREADABLE_SOURCE = "class Unreadable < Godot::Node\nend\n"
       PANIC = "already bound"
 
@@ -52,9 +52,9 @@ module Godot
       def verify_unreadable_skipped!(project)
         output, status = scan_with_unreadable(project)
         return if output.nil?
-        return if status.success? && !output.include?(PANIC) && !output.include?("res://#{UNREADABLE}")
+        return if status.success? && !output.include?(PANIC) && !output.include?("res://#{UNREADABLE_FILE}")
 
-        raise "The editor did not pass over #{UNREADABLE} quietly:\n#{output}"
+        raise "The editor did not pass over #{UNREADABLE_FILE} quietly:\n#{output}"
       end
 
       # Scans a copy of the project holding a node script nobody may read, and
@@ -65,7 +65,7 @@ module Godot
           copy = File.join(dir, "project")
           FileUtils.cp_r(project, copy)
           FileUtils.rm_rf(File.join(copy, ".godot", "editor"))
-          unreadable = File.join(copy, UNREADABLE)
+          unreadable = File.join(copy, UNREADABLE_FILE)
           File.write(unreadable, UNREADABLE_SOURCE)
           File.chmod(0o000, unreadable)
           File.readable?(unreadable) ? nil : Godot.run_editor(copy)

@@ -70,7 +70,7 @@ impl Files for GameFiles {
                 }
             });
         Declarations {
-            writes: header.writes().to_vec(),
+            written_constants: header.written_constants().to_vec(),
             parent,
             exports: header.export_names().map(str::to_owned).collect(),
             signals: header.signal_names().to_vec(),

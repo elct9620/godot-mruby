@@ -210,8 +210,8 @@ module Godot
 
       # The objects being inspected, so an instance variable leading back to
       # one of them is not inspected again.
-      def __inspected__
-        @__inspected__ ||= []
+      def __inspection_stack__
+        @__inspection_stack__ ||= []
       end
 
       # The class's object for a node the engine made, ready to initialize.
@@ -403,7 +403,7 @@ module Godot
     # The Ruby class, the engine object as Godot prints it, and the instance
     # variables as Ruby inspects them.
     def inspect
-      inspected = Godot::Object.__send__(:__inspected__)
+      inspected = Godot::Object.__send__(:__inspection_stack__)
       head = "#<#{self.class} #{__label__}"
       return "#{head} ...>" if inspected.any? { |object| object.equal?(self) }
 

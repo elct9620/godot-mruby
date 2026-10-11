@@ -28,7 +28,7 @@ pub(super) fn methods_by_path(mrb: &Mrb, path: &str) -> Vec<String> {
         return Vec::new();
     };
     let Some(taken) = class
-        .funcall(mrb, c"__taken_in__", &[])
+        .funcall(mrb, c"__own_ancestors__", &[])
         .ok()
         .and_then(RArray::from_value)
     else {

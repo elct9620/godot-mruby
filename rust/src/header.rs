@@ -18,7 +18,7 @@ use crate::snapshot::{self, Export, Heading, Member, Property, Signal};
 /// body calls.
 #[derive(Debug, Default)]
 pub struct Header {
-    writes: Vec<Vec<String>>,
+    written_constants: Vec<Vec<String>>,
     name: String,
     superclass: Option<Superclass>,
     methods: BTreeMap<String, usize>,
@@ -62,13 +62,13 @@ impl Header {
         let mut reader = Reader {
             key: roots.key_by_path(path),
             header: None,
-            writes: Vec::new(),
+            written_constants: Vec::new(),
         };
         if let Some(program) = result.node().as_program_node() {
             reader.read_body(&program.statements().body(), &[]);
         }
         Header {
-            writes: reader.writes,
+            written_constants: reader.written_constants,
             digest: snapshot::digest(source),
             is_parsed: result.errors().next().is_none(),
             ..reader.header.unwrap_or_default()
@@ -78,8 +78,8 @@ impl Header {
     /// Each constant a `module` or `class` statement writes, in the order
     /// they are written, as its names from the top level: `module Items` then
     /// `class Potion` inside it write `["Items"]` and `["Items", "Potion"]`.
-    pub fn writes(&self) -> &[Vec<String>] {
-        &self.writes
+    pub fn written_constants(&self) -> &[Vec<String>] {
+        &self.written_constants
     }
 
     /// The class's own name as its class statement writes it, without the
@@ -235,7 +235,7 @@ impl Header {
 struct Reader {
     key: Vec<String>,
     header: Option<Header>,
-    writes: Vec<Vec<String>>,
+    written_constants: Vec<Vec<String>>,
 }
 
 impl Reader {
@@ -258,7 +258,7 @@ impl Reader {
         let Some(names) = resolve_constant_names(&path, scope) else {
             return;
         };
-        self.writes.push(names.clone());
+        self.written_constants.push(names.clone());
         let statements = body
             .and_then(|body| body.as_statements_node())
             .map(|statements| statements.body());
@@ -666,7 +666,7 @@ mod tests {
         let header = Header::from_source("res://enemies/boss.rb", source, &Roots::default());
 
         assert_eq!(
-            header.writes(),
+            header.written_constants(),
             [
                 vec!["Enemies"],
                 vec!["Enemies", "Boss"],
@@ -684,7 +684,7 @@ mod tests {
 
         let header = Header::from_source("res://boss.rb", source, &Roots::default());
 
-        assert_eq!(header.writes(), [vec!["Boss"]]);
+        assert_eq!(header.written_constants(), [vec!["Boss"]]);
     }
 
     // @behavior RH-017

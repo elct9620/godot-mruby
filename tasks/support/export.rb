@@ -18,7 +18,7 @@ module Godot
     # What the leftover scene loads under a test directory, which is a root
     # directory, as the constant its path names from there.
     LEFTOVER = "class Leftover\nend\n"
-    LEFT_OUT = "left out: uninitialized constant Leftover"
+    LEFT_OUT_LINE = "left out: uninitialized constant Leftover"
     # The run ends within its first frames; this only stops one that never
     # does from hanging the check.
     FRAMES = "60"
@@ -51,7 +51,7 @@ module Godot
       source = File.join(dir, "leftover.rb")
       File.write(source, LEFTOVER)
       output, status = run(dir, pack, LEFTOVER_SCENE, source, File.join(dir, "leftover.pck"))
-      return if status.success? && output.lines.map(&:chomp).include?(LEFT_OUT)
+      return if status.success? && output.lines.map(&:chomp).include?(LEFT_OUT_LINE)
 
       raise "The exported game's Ruby reached a file under a test directory:\n#{output}"
     end

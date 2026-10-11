@@ -100,7 +100,7 @@ impl RubyTestPanel {
         let selected = self.directories.get_selected();
         let directory =
             (selected > 0).then(|| self.directories.get_item_text(selected).to_string());
-        if let Err(error) = write_run_file(&run_args(directory.as_deref())) {
+        if let Err(error) = write_run_file(&list_run_args(directory.as_deref())) {
             self.status
                 .set_text(&format!("The run file was not written: {error:?}"));
             return;
@@ -201,7 +201,7 @@ impl RubyTestPanel {
 
 /// What the run file holds for a run of `directory`, or of every test
 /// directory, writing its results where the panel reads them.
-pub fn run_args(directory: Option<&str>) -> Vec<String> {
+pub fn list_run_args(directory: Option<&str>) -> Vec<String> {
     let mut args = vec!["--results".to_owned(), RESULTS_FILE.to_owned()];
     if let Some(directory) = directory {
         args.extend(["--dir".to_owned(), directory.to_owned()]);
@@ -252,19 +252,19 @@ fn read_text(entry: &VarDictionary, key: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{RESULTS_FILE, run_args};
+    use super::{RESULTS_FILE, list_run_args};
 
     // @behavior RP-003
     #[test]
     fn a_run_of_every_directory_names_only_its_results_file() {
-        assert_eq!(run_args(None), ["--results", RESULTS_FILE]);
+        assert_eq!(list_run_args(None), ["--results", RESULTS_FILE]);
     }
 
     // @behavior RP-003
     #[test]
     fn a_run_of_one_directory_names_it() {
         assert_eq!(
-            run_args(Some("res://test")),
+            list_run_args(Some("res://test")),
             ["--results", RESULTS_FILE, "--dir", "res://test"]
         );
     }

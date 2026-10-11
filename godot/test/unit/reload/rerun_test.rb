@@ -21,7 +21,7 @@ class RerunTest < Minitest::Test
     end
   RUBY
 
-  UNFINISHED = <<~RUBY.freeze
+  UNFINISHED_SOURCE = <<~RUBY.freeze
     module Unit
       module Reload
         class Counter < Godot::Node
@@ -84,7 +84,7 @@ class RerunTest < Minitest::Test
     end
   RUBY
 
-  FASTER = <<~RUBY.freeze
+  FASTER_SOURCE = <<~RUBY.freeze
     module Unit
       module Reload
         class Exporter < Godot::Node
@@ -127,14 +127,14 @@ class RerunTest < Minitest::Test
     node = make_node(:counter)
     node.call(:answer)
 
-    stub_source(:counter, UNFINISHED) { assert_equal "before", node.call(:answer) }
+    stub_source(:counter, UNFINISHED_SOURCE) { assert_equal "before", node.call(:answer) }
   end
 
   # @behavior RF-009
   def test_a_changed_source_that_raises_keeps_the_constants_it_assigned_again
     make_node(:counter).call(:answer)
 
-    stub_source(:counter, UNFINISHED) { assert Unit::Reload::Counter.const_defined?(:LIMIT, false) }
+    stub_source(:counter, UNFINISHED_SOURCE) { assert Unit::Reload::Counter.const_defined?(:LIMIT, false) }
   end
 
   # @behavior RF-006
@@ -179,7 +179,7 @@ class RerunTest < Minitest::Test
   def test_a_reloaded_node_script_answers_the_default_its_changed_source_exports
     make_node(:exporter).call(:speed?)
 
-    stub_source(:exporter, FASTER) { assert_equal 20, load_script(:exporter).get_property_default_value(:speed) }
+    stub_source(:exporter, FASTER_SOURCE) { assert_equal 20, load_script(:exporter).get_property_default_value(:speed) }
   end
 
   private

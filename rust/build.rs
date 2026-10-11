@@ -13,17 +13,17 @@ fn main() {
     let api: Value = serde_json::from_str(&gdextension_api::version_4_6::load_extension_api_json())
         .expect("gdextension-api ships valid JSON");
     let mut table = String::from("&[\n");
-    for class in entries(&api["builtin_classes"]) {
-        let members: Vec<&str> = entries(&class["members"]).map(name).collect();
-        let methods: Vec<String> = entries(&class["methods"])
+    for class in list_entries(&api["builtin_classes"]) {
+        let members: Vec<&str> = list_entries(&class["members"]).map(read_name).collect();
+        let methods: Vec<String> = list_entries(&class["methods"])
             .map(|method| {
-                let required = entries(&method["arguments"])
+                let required = list_entries(&method["arguments"])
                     .filter(|argument| argument.get("default_value").is_none())
                     .count();
                 let is_static = method["is_static"].as_bool().unwrap_or(false);
                 format!(
                     "({:?}, {}, {required}, {is_static})",
-                    name(method),
+                    read_name(method),
                     method["hash"]
                 )
             })
@@ -31,7 +31,7 @@ fn main() {
         writeln!(
             table,
             "    ({:?}, &{members:?}, &[{}]),",
-            name(class),
+            read_name(class),
             methods.join(", ")
         )
         .expect("writing to a String succeeds");
@@ -41,10 +41,10 @@ fn main() {
     std::fs::write(Path::new(&out).join("value_names.rs"), table).expect("OUT_DIR is writable");
 }
 
-fn entries(list: &Value) -> impl Iterator<Item = &Value> {
+fn list_entries(list: &Value) -> impl Iterator<Item = &Value> {
     list.as_array().into_iter().flatten()
 }
 
-fn name(entry: &Value) -> &str {
+fn read_name(entry: &Value) -> &str {
     entry["name"].as_str().unwrap_or_default()
 }

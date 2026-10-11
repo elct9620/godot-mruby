@@ -123,7 +123,7 @@ pub(super) fn ensure_opened(mrb: &Mrb, path: &str) -> Result<Option<Parent>, Err
     ensure_namespaces(mrb, path)?;
     let own = key_by_path(mrb, path);
     let declarations = bookkeeping(mrb).files.declarations_by_path(path);
-    for names in declarations.writes {
+    for names in declarations.written_constants {
         let key: Vec<String> = names.iter().map(|name| index::normalize(name)).collect();
         // Its own class and the namespaces around it are the file's to define,
         // and nothing inside its class exists before the class does.

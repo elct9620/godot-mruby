@@ -461,7 +461,7 @@ pub fn publish(snapshot: Arc<Snapshot>) {
 mod tests {
     use super::*;
 
-    fn rung() -> Signal {
+    fn rung_signal() -> Signal {
         Signal {
             name: "rung".to_owned(),
             parameters: vec!["times".to_owned()],
@@ -483,7 +483,7 @@ mod tests {
 
     fn bell() -> Class {
         Class {
-            signals: vec![rung()],
+            signals: vec![rung_signal()],
             members: vec![Member::Property(tone())],
             methods: vec!["ring".to_owned()],
             ..Class::default()
@@ -494,7 +494,7 @@ mod tests {
     #[test]
     fn a_file_that_ran_without_declaring_anything_answers_none_of_what_its_source_writes() {
         let mut snapshot = Snapshot::default();
-        let written = [rung()];
+        let written = [rung_signal()];
         let names = ["rung".to_owned()];
         let source = Source {
             signals: &written,
@@ -512,7 +512,7 @@ mod tests {
         );
         assert_eq!(
             snapshot.collect_signals([("res://lamp.rb", source)]),
-            [rung()]
+            [rung_signal()]
         );
     }
 
@@ -523,7 +523,7 @@ mod tests {
 
         snapshot.record_class("res://bell.rb", bell());
 
-        assert_eq!(snapshot.signals_by_path("res://bell.rb"), [rung()]);
+        assert_eq!(snapshot.signals_by_path("res://bell.rb"), [rung_signal()]);
     }
 
     // @behavior RD-011

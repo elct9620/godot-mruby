@@ -1,5 +1,5 @@
 class DraftTest < Minitest::Test
-  GIVEN = <<~RUBY.freeze
+  GIVEN_SOURCE = <<~RUBY.freeze
     module Unit
       module Script
         class Draft < Godot::Node
@@ -12,7 +12,7 @@ class DraftTest < Minitest::Test
   # @behavior RS-005
   def test_a_script_runs_the_source_godot_holds_for_it
     script = Godot::ResourceLoader.load("res://test/unit/script/draft.rb")
-    script.source_code = GIVEN
+    script.source_code = GIVEN_SOURCE
     node = autofree(Godot::Node.new)
     node.set_script(script)
 

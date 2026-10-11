@@ -81,7 +81,7 @@ pub trait Files: Send {
 pub struct Declarations {
     /// The constants its statements write, each as its names from the top
     /// level; the realm loads them before the statements open them.
-    pub writes: Vec<Vec<String>>,
+    pub written_constants: Vec<Vec<String>>,
     /// The superclass its class extends when something relies on it; once the
     /// file has run, a class extending another raises `TypeError`.
     pub parent: Option<Parent>,

@@ -7,7 +7,7 @@ module Godot
   module Template
     PROBE = File.join("integration", "template", "probe")
     FRAMES = "120"
-    MADE = File.join("enemies", "ships", "hero_ship.rb")
+    MADE_PATH = File.join("enemies", "ships", "hero_ship.rb")
     # The namespaces the path spells around the class, each a level deeper by
     # whatever the editor indents with.
     OPENING = /\Amodule Enemies\n(\s+)module Ships\n\1\1class HeroShip < Godot::CharacterBody2D\n/
@@ -18,7 +18,7 @@ module Godot
     SCENE_SOURCE = <<~TSCN.freeze
       [gd_scene load_steps=2 format=3]
 
-      [ext_resource type="Script" path="res://#{MADE}" id="1"]
+      [ext_resource type="Script" path="res://#{MADE_PATH}" id="1"]
 
       [node name="Hero" type="CharacterBody2D"]
       script = ExtResource("1")
@@ -45,8 +45,8 @@ module Godot
     # spells, and the class it made runs as the node's script.
     # @behavior RY-007
     def verify_made!(copy, output)
-      made = File.join(copy, MADE)
-      raise "The script dialog made no #{MADE}:\n#{output}" unless File.exist?(made)
+      made = File.join(copy, MADE_PATH)
+      raise "The script dialog made no #{MADE_PATH}:\n#{output}" unless File.exist?(made)
 
       verify_opened!(File.read(made))
       verify_played!(copy)
@@ -55,7 +55,7 @@ module Godot
     def verify_opened!(source)
       return if source.match?(OPENING) && source.match?(CLOSING) && source.include?("move_and_slide")
 
-      raise "#{MADE} was not made inside its namespaces:\n#{source}"
+      raise "#{MADE_PATH} was not made inside its namespaces:\n#{source}"
     end
 
     def verify_played!(copy)
@@ -63,7 +63,7 @@ module Godot
       output, = Godot.run_scene(copy, "res://#{SCENE}", "--quit-after", "10")
       return if output.lines.grep(ERROR_LINE).empty?
 
-      raise "A scene holding #{MADE} did not run cleanly:\n#{output}"
+      raise "A scene holding #{MADE_PATH} did not run cleanly:\n#{output}"
     end
   end
 end

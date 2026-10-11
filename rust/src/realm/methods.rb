@@ -42,7 +42,7 @@ Module.prepend(Module.new do
   end
 
   # The class itself and the modules it takes in, up to its superclass.
-  def __taken_in__
+  def __own_ancestors__
     stop = is_a?(Class) ? superclass : nil
     taken = []
     ancestors.each do |taken_in|
@@ -52,5 +52,5 @@ Module.prepend(Module.new do
     end
     taken
   end
-  private :__taken_in__
+  private :__own_ancestors__
 end)
