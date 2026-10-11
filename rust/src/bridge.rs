@@ -20,6 +20,7 @@ use crate::{compiler, log, realm};
 mod bound_member;
 mod bound_method;
 mod object;
+mod refusal;
 mod ruby_object;
 mod utility;
 mod value;
@@ -137,13 +138,13 @@ fn fill_copy<T: TypedData + Clone>(
         .is_equal(mrb, class.as_value());
     if !same_class {
         let message = "initialize_copy should take same class object";
-        return Err(object::make_type_error(mrb, message));
+        return Err(refusal::make_type_error(mrb, message));
     }
     let carried = <&T>::try_convert(original, mrb)?;
     admit(class, carried)?;
     copy.init(mrb, carried.clone()).map(|()| copy).map_err(|_| {
         let path = class.path(mrb).unwrap_or_default();
-        object::make_type_error(mrb, &format!("{path} is already initialized"))
+        refusal::make_type_error(mrb, &format!("{path} is already initialized"))
     })
 }
 

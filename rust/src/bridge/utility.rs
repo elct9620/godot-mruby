@@ -8,9 +8,8 @@ use godot::builtin::{Variant, VariantType};
 use godot::global;
 use godot::meta::ToGodot;
 
-use super::object::{
-    describe_count, make_argument_error, make_call_error, make_type_error, to_arguments,
-};
+use super::object::to_arguments;
+use super::refusal::{describe_count, make_argument_error, make_call_error, make_type_error};
 use super::value::ToRuby;
 
 type Utility = fn(&[Variant]) -> Result<Variant, String>;

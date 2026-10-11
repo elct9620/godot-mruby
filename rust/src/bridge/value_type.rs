@@ -23,9 +23,9 @@ use smallvec::SmallVec;
 
 use super::BridgeData;
 use super::bound_member::BoundMember;
-use super::object::{
-    describe_count, make_argument_error, make_type_error, make_zero_division_error, name_by_symbol,
-    to_arguments,
+use super::object::{name_by_symbol, to_arguments};
+use super::refusal::{
+    describe_count, make_argument_error, make_type_error, make_zero_division_error,
 };
 use super::value::{self, ToRuby};
 use crate::hint::name_type;
@@ -261,7 +261,7 @@ fn construct(mrb: &Mrb, class: RClass, args: &[Value]) -> Result<Value, Error> {
                 "Invalid call. Nonexistent '{}' constructor.",
                 name_type(kind)
             );
-            Err(super::object::make_argument_error(mrb, &message))
+            Err(super::refusal::make_argument_error(mrb, &message))
         }
     }
 }
@@ -510,7 +510,7 @@ fn take_answer(
     outcome
         .map(|answer| to_ruby(mrb, &answer))
         .map_err(|error| {
-            super::object::make_refusal_error(
+            super::refusal::make_refusal_error(
                 mrb,
                 &error,
                 &method.to_string(),
