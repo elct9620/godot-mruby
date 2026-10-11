@@ -3,10 +3,10 @@ module Unit
     module Lineage
       # Defines the callback its subclasses inherit.
       class Enemy < Godot::Node2D
-        attr_reader :readied
+        attr_reader :ready_class_name
 
         def _ready
-          @readied = self.class.to_s
+          @ready_class_name = self.class.to_s
         end
       end
     end

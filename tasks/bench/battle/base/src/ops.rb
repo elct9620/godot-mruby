@@ -28,8 +28,8 @@ class Ops < Godot::Node2D
   def noop; end
 
   def measure(name)
-    started = Godot::Time.get_ticks_usec
+    start = Godot::Time.get_ticks_usec
     yield
-    puts "op #{name} #{(Godot::Time.get_ticks_usec - started) * 1000.0 / N}"
+    puts "op #{name} #{(Godot::Time.get_ticks_usec - start) * 1000.0 / N}"
   end
 end

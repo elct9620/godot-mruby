@@ -89,9 +89,9 @@ module Bench
 
   # The microseconds the block took.
   def time
-    started = Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond)
+    start = Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond)
     yield
-    Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond) - started
+    Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond) - start
   end
 
   # The build of the library the addon of `source` holds, and the Godot it

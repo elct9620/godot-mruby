@@ -6,6 +6,6 @@ class LineageTest < Minitest::Test
 
     add_child_autofree(boss)
 
-    assert_equal "Unit::Script::Lineage::Boss", boss.call(:readied)
+    assert_equal "Unit::Script::Lineage::Boss", boss.call(:ready_class_name)
   end
 end

@@ -27,8 +27,8 @@ class Bench < Godot::Node
   end
 
   def measure(name)
-    started = Godot::Time.get_ticks_usec
+    start = Godot::Time.get_ticks_usec
     yield
-    puts "bench #{name} #{Godot::Time.get_ticks_usec - started}"
+    puts "bench #{name} #{Godot::Time.get_ticks_usec - start}"
   end
 end

@@ -89,7 +89,7 @@ class ExportsTest < Minitest::Test
   def test_an_exported_value_is_written_before_the_object_is_initialized
     primer = autofree(Unit::Declarations::Primer.new)
 
-    assert_equal 300.0, primer.primed
+    assert_equal 300.0, primer.initial_range
   end
 
   # @behavior RD-024

@@ -6,9 +6,9 @@ extends Node
 var scene: PackedScene
 var wave := 0
 var rounds := 0
-var played := 0
+var round_count := 0
 var frames := 0
-var started := 0
+var start := 0
 var battle: Node
 
 
@@ -17,7 +17,7 @@ func _ready() -> void:
 	scene = load(args[0])
 	wave = int(args[1])
 	rounds = int(args[2])
-	started = Time.get_ticks_usec()
+	start = Time.get_ticks_usec()
 	_play()
 
 
@@ -33,13 +33,13 @@ func _play() -> void:
 
 
 func _on_finished() -> void:
-	played += 1
+	round_count += 1
 	var breached: bool = battle.call("breached") == true
 	battle.queue_free()
-	if played < rounds:
+	if round_count < rounds:
 		_play.call_deferred()
 		return
 	print(
-		"battle frames=%d usec=%d breached=%s" % [frames, Time.get_ticks_usec() - started, breached]
+		"battle frames=%d usec=%d breached=%s" % [frames, Time.get_ticks_usec() - start, breached]
 	)
 	get_tree().quit()

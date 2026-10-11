@@ -29,6 +29,6 @@ class MethodsTest < Minitest::Test
 
     bell.notification(9001)
 
-    assert_equal 9001, bell.noticed
+    assert_equal 9001, bell.last_notification
   end
 end

@@ -6,7 +6,7 @@ module Unit
     class Bell < Godot::Node
       signal :rung, :times
 
-      attr_reader :noticed
+      attr_reader :last_notification
 
       def ring(times)
         emit_signal(:rung, times)
@@ -14,7 +14,7 @@ module Unit
 
       define_method(:toll) { |times| ring(times) }
 
-      define_method(:_notification) { |what| @noticed = what }
+      define_method(:_notification) { |what| @last_notification = what }
     end
   end
 end

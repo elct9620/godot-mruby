@@ -5,10 +5,10 @@ module Unit
     class Primer < Godot::Node2D
       export :range, 300.0
 
-      attr_reader :primed
+      attr_reader :initial_range
 
       def initialize
-        @primed = @range
+        @initial_range = @range
       end
     end
   end

@@ -9,50 +9,50 @@ func _ready() -> void:
 	var w := Vector2(3, 4)
 	var from := v.x
 	var to := w.x
-	var started := Time.get_ticks_usec()
+	var start := Time.get_ticks_usec()
 	for i in N:
 		pass
-	report("loop", started)
-	started = Time.get_ticks_usec()
+	report("loop", start)
+	start = Time.get_ticks_usec()
 	for i in N:
 		noop()
-	report("ruby_call", started)
-	started = Time.get_ticks_usec()
+	report("ruby_call", start)
+	start = Time.get_ticks_usec()
 	for i in N:
 		get_child_count()
-	report("engine_call", started)
-	started = Time.get_ticks_usec()
+	report("engine_call", start)
+	start = Time.get_ticks_usec()
 	for i in N:
 		var at := position
-	report("position_get", started)
-	started = Time.get_ticks_usec()
+	report("position_get", start)
+	start = Time.get_ticks_usec()
 	for i in N:
 		position = v
-	report("position_set", started)
-	started = Time.get_ticks_usec()
+	report("position_set", start)
+	start = Time.get_ticks_usec()
 	for i in N:
 		var frames := Engine.get_process_frames()
-	report("singleton_call", started)
-	started = Time.get_ticks_usec()
+	report("singleton_call", start)
+	start = Time.get_ticks_usec()
 	for i in N:
-		var mixed = lerp(from, to, 0.5)
-	report("utility_call", started)
-	started = Time.get_ticks_usec()
+		var blend = lerp(from, to, 0.5)
+	report("utility_call", start)
+	start = Time.get_ticks_usec()
 	for i in N:
-		var built := Vector2(1, 2)
-	report("vector_new", started)
-	started = Time.get_ticks_usec()
+		var vector := Vector2(1, 2)
+	report("vector_new", start)
+	start = Time.get_ticks_usec()
 	for i in N:
 		var color := Color(1, 0, 0)
-	report("color_new", started)
-	started = Time.get_ticks_usec()
+	report("color_new", start)
+	start = Time.get_ticks_usec()
 	for i in N:
 		var sum := v + w
-	report("vector_add", started)
-	started = Time.get_ticks_usec()
+	report("vector_add", start)
+	start = Time.get_ticks_usec()
 	for i in N:
 		var x := v.x
-	report("vector_x", started)
+	report("vector_x", start)
 	get_tree().quit()
 
 
@@ -60,5 +60,5 @@ func noop() -> void:
 	pass
 
 
-func report(name: String, started: int) -> void:
-	print("op %s %s" % [name, (Time.get_ticks_usec() - started) * 1000.0 / N])
+func report(name: String, start: int) -> void:
+	print("op %s %s" % [name, (Time.get_ticks_usec() - start) * 1000.0 / N])

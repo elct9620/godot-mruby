@@ -17,10 +17,10 @@ func _ready() -> void:
 		tree.add_child(branch)
 		for leaf_index in LEAVES:
 			branch.add_child(Node.new())
-	var started := Time.get_ticks_usec()
+	var start := Time.get_ticks_usec()
 	for pass_index in PASSES:
 		walk(tree)
-	print("bench walk_gdscript ", Time.get_ticks_usec() - started)
+	print("bench walk_gdscript ", Time.get_ticks_usec() - start)
 
 
 func walk(node: Node) -> int:

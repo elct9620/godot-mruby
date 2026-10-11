@@ -8,7 +8,7 @@ const TICKERS := 2000
 const FRAMES := 100
 
 var frames := 0
-var started := 0
+var start := 0
 var total := 0
 
 
@@ -27,11 +27,11 @@ func _ready() -> void:
 
 
 func _physics_process(_delta: float) -> void:
-	started = Time.get_ticks_usec()
+	start = Time.get_ticks_usec()
 
 
 func close_frame() -> void:
-	total += Time.get_ticks_usec() - started
+	total += Time.get_ticks_usec() - start
 	frames += 1
 	if frames == FRAMES:
 		print("op callback %s" % (total * 1000.0 / (TICKERS * FRAMES)))
