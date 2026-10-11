@@ -129,7 +129,7 @@ pub fn announcement_by_path(path: &str) -> Result<Announcement, Omission> {
         settings::template_directory(),
         &bridge::is_node_class,
     )
-    .announcement(path)
+    .announcement_by_path(path)
 }
 
 /// Lists the game's files again, as the editor found the project's files

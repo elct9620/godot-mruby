@@ -161,7 +161,7 @@ mod tests {
             let base = format!("Godot::{}", template.inherit);
             let made = source(template.content, "made", &base, "\t");
 
-            let checked = compiler::diagnostics(c"made.rb", &made);
+            let checked = compiler::diagnose(c"made.rb", &made);
 
             assert!(
                 checked.error.is_none(),

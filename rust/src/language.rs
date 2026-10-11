@@ -166,7 +166,7 @@ impl IScriptLanguageExtension for RubyLanguage {
         _validate_safe_lines: bool,
     ) -> AnyDictionary {
         let test_directories = settings::test_directories();
-        let checked = validation::validation(
+        let checked = validation::validate(
             game::listing(),
             &test_directories,
             &settings::template_directory(),
@@ -507,7 +507,7 @@ fn warn_of_shared_name(name: String, files: Vec<String>) {
             line: 1,
             function: String::new(),
         };
-        let warning = announcement::shared_name_warning(&files[0], &name, &files[1..]);
+        let warning = announcement::describe_shared_name(&files[0], &name, &files[1..]);
         warn!(at: &at, "{warning}");
     })
     .call_deferred(&[]);

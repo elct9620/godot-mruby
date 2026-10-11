@@ -67,15 +67,15 @@ impl<'a, F: Files> Project<'a, F> {
     }
 
     /// The announcement of the file at `path`, or why it has none.
-    pub fn announcement(&self, path: &str) -> Result<Announcement, Omission> {
+    pub fn announcement_by_path(&self, path: &str) -> Result<Announcement, Omission> {
         if self.is_in_test_directory(path) {
             return Err(Omission::InTestDirectory);
         }
         if self.is_in_template_directory(path) {
             return Err(Omission::InTemplateDirectory);
         }
-        let (header, ancestry) = self.node_script(path).ok_or(Omission::NotNodeScript)?;
-        let others = self.namesakes(path);
+        let (header, ancestry) = self.read_node_script(path).ok_or(Omission::NotNodeScript)?;
+        let others = self.find_namesakes(path);
         if !others.is_empty() {
             return Err(Omission::SharedName {
                 name: header.name().to_owned(),
@@ -86,7 +86,7 @@ impl<'a, F: Files> Project<'a, F> {
             .files()
             .iter()
             .find(|(ancestor, _)| {
-                !self.is_in_test_directory(ancestor) && self.namesakes(ancestor).is_empty()
+                !self.is_in_test_directory(ancestor) && self.find_namesakes(ancestor).is_empty()
             })
             .map_or_else(
                 || ancestry.engine_class().to_owned(),
@@ -102,7 +102,7 @@ impl<'a, F: Files> Project<'a, F> {
     }
 
     // The header and ancestry of the file at `path`, when it is a node script.
-    fn node_script(&self, path: &str) -> Option<(Header, Ancestry)> {
+    fn read_node_script(&self, path: &str) -> Option<(Header, Ancestry)> {
         let header = Header::from_source(
             path,
             &self.files.source_by_path(path).ok()?,
@@ -114,12 +114,14 @@ impl<'a, F: Files> Project<'a, F> {
 
     // The other game files whose node scripts share the name of the file at
     // `path`: only a file whose last segment spells the same name can.
-    fn namesakes(&self, path: &str) -> Vec<String> {
-        let name = file_name(path);
+    fn find_namesakes(&self, path: &str) -> Vec<String> {
+        let name = read_file_name(path);
         self.paths
             .iter()
-            .filter(|other| other.as_str() != path && file_name(other) == name)
-            .filter(|other| !self.is_in_test_directory(other) && self.node_script(other).is_some())
+            .filter(|other| other.as_str() != path && read_file_name(other) == name)
+            .filter(|other| {
+                !self.is_in_test_directory(other) && self.read_node_script(other).is_some()
+            })
             .cloned()
             .collect()
     }
@@ -250,7 +252,7 @@ impl Clashes {
 
 /// The warning that node scripts in `others` share `name` with the file at
 /// `path`.
-pub fn shared_name_warning(path: &str, name: &str, others: &[String]) -> String {
+pub fn describe_shared_name(path: &str, name: &str, others: &[String]) -> String {
     format!(
         "{path} and {} define node scripts named {name}, so none is listed by that name",
         others.join(" and ")
@@ -258,7 +260,7 @@ pub fn shared_name_warning(path: &str, name: &str, others: &[String]) -> String 
 }
 
 // The last segment of the file at `path`, as the class index matches it.
-fn file_name(path: &str) -> String {
+fn read_file_name(path: &str) -> String {
     let name = path.rsplit('/').next().unwrap_or(path);
     realm::normalize(name.trim_end_matches(".rb"))
 }
@@ -272,7 +274,7 @@ mod tests {
     use crate::ancestry::tests::Sources;
     use crate::realm::{Declarations, Files, Roots};
 
-    fn announcement(
+    fn announce_sources(
         path: &str,
         sources: &[(&'static str, &'static str)],
     ) -> Result<Announcement, Omission> {
@@ -280,7 +282,8 @@ mod tests {
         let test_directories = vec!["res://test".to_owned()];
         let is_node = |class: &str| class != "Resource";
         let template_directory = "res://script_templates".to_owned();
-        Project::new(&files, test_directories, template_directory, &is_node).announcement(path)
+        Project::new(&files, test_directories, template_directory, &is_node)
+            .announcement_by_path(path)
     }
 
     const ENEMY: (&str, &str) = ("res://enemy.rb", "class Enemy < Godot::Node2D\nend\n");
@@ -293,7 +296,7 @@ mod tests {
             "module Enemies\n  class Boss < Godot::Node2D\n  end\nend\n",
         )];
 
-        let announcement = announcement("res://enemies/boss.rb", &sources).unwrap();
+        let announcement = announce_sources("res://enemies/boss.rb", &sources).unwrap();
 
         assert_eq!(announcement.name, "Boss");
     }
@@ -302,7 +305,7 @@ mod tests {
     #[test]
     fn a_node_script_inheriting_from_no_announced_file_is_announced_with_its_engine_class_as_base()
     {
-        let announcement = announcement("res://enemy.rb", &[ENEMY]).unwrap();
+        let announcement = announce_sources("res://enemy.rb", &[ENEMY]).unwrap();
 
         assert_eq!(announcement.base, "Node2D");
     }
@@ -312,7 +315,7 @@ mod tests {
     fn a_node_script_extending_an_announced_class_is_announced_with_that_class_as_base() {
         let sources = [("res://boss.rb", "class Boss < Enemy\nend\n"), ENEMY];
 
-        let announcement = announcement("res://boss.rb", &sources).unwrap();
+        let announcement = announce_sources("res://boss.rb", &sources).unwrap();
 
         assert_eq!(announcement.base, "Enemy");
     }
@@ -324,7 +327,7 @@ mod tests {
         let source =
             "module ScriptTemplates\nmodule Node\nclass Hero < Godot::Node\nend\nend\nend\n";
 
-        let omission = announcement(path, &[(path, source)]).unwrap_err();
+        let omission = announce_sources(path, &[(path, source)]).unwrap_err();
 
         assert_eq!(omission, Omission::InTemplateDirectory);
     }
@@ -334,7 +337,7 @@ mod tests {
     fn a_file_under_a_test_directory_is_not_announced() {
         let sources = [("res://test/dummy.rb", "class Dummy < Godot::Node\nend\n")];
 
-        let omission = announcement("res://test/dummy.rb", &sources).unwrap_err();
+        let omission = announce_sources("res://test/dummy.rb", &sources).unwrap_err();
 
         assert_eq!(omission, Omission::InTestDirectory);
     }
@@ -344,7 +347,7 @@ mod tests {
     fn a_library_file_is_not_announced() {
         let sources = [("res://save.rb", "class Save < Godot::Resource\nend\n")];
 
-        let omission = announcement("res://save.rb", &sources).unwrap_err();
+        let omission = announce_sources("res://save.rb", &sources).unwrap_err();
 
         assert_eq!(omission, Omission::NotNodeScript);
     }
@@ -363,7 +366,7 @@ mod tests {
             ),
         ];
 
-        let omission = announcement("res://enemies/boss.rb", &sources).unwrap_err();
+        let omission = announce_sources("res://enemies/boss.rb", &sources).unwrap_err();
 
         assert_eq!(
             omission,
@@ -386,7 +389,7 @@ mod tests {
             ),
         ];
 
-        let announcement = announcement("res://boss.rb", &sources).unwrap();
+        let announcement = announce_sources("res://boss.rb", &sources).unwrap();
 
         assert_eq!(announcement.base, "Node2D");
     }
@@ -396,7 +399,7 @@ mod tests {
     fn an_announcement_carries_whether_the_class_is_a_tool() {
         let sources = [("res://gizmo.rb", "class Gizmo < Godot::Node\n  tool\nend\n")];
 
-        let announcement = announcement("res://gizmo.rb", &sources).unwrap();
+        let announcement = announce_sources("res://gizmo.rb", &sources).unwrap();
 
         assert!(announcement.is_tool);
     }
@@ -409,7 +412,7 @@ mod tests {
             "class Enemy < Godot::Node\n  abstract\nend\n",
         )];
 
-        let announcement = announcement("res://enemy.rb", &sources).unwrap();
+        let announcement = announce_sources("res://enemy.rb", &sources).unwrap();
 
         assert!(announcement.is_abstract);
     }
@@ -422,7 +425,7 @@ mod tests {
             "class Enemy < Godot::Node\n  icon \"enemy.svg\"\nend\n",
         )];
 
-        let announcement = announcement("res://enemy.rb", &sources).unwrap();
+        let announcement = announce_sources("res://enemy.rb", &sources).unwrap();
 
         assert_eq!(announcement.icon.as_deref(), Some("enemy.svg"));
     }
@@ -487,7 +490,7 @@ mod tests {
     fn announce<F: Files>(listing: &Listing<F>, path: &str) -> Result<Announcement, Omission> {
         let is_node = |class: &str| class != "Resource";
         listing.take_in(path);
-        Project::new(listing, Vec::new(), String::new(), &is_node).announcement(path)
+        Project::new(listing, Vec::new(), String::new(), &is_node).announcement_by_path(path)
     }
 
     // @behavior RN-013

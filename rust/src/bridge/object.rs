@@ -25,7 +25,7 @@ use super::BridgeData;
 use super::bound_method::{Arity, BoundMethod};
 use super::value::{self, ToRuby};
 use crate::game;
-use crate::hint::{Hint, type_name};
+use crate::hint::{Hint, name_type};
 use crate::realm::{self, Key};
 use crate::snapshot::{Heading, Property, Signal};
 
@@ -606,7 +606,7 @@ fn describe_mismatch(mrb: &Mrb, default: &Variant, class: &str) -> Option<String
         return None;
     }
     let Ok(object) = default.try_to::<Gd<Object>>() else {
-        return Some(type_name(kind));
+        return Some(name_type(kind));
     };
     (!is_of_class(mrb, &object, class)).then(|| resolve_class_name(&object))
 }
@@ -661,9 +661,9 @@ fn declare_value_property(
                 .to_owned(),
         );
     }
-    let property_hint = hint.property_hint(default.get_type())?;
+    let property_hint = hint.choose_property_hint(default.get_type())?;
     // The gem refuses a value of another shape where it is written.
-    let hint_string = hint.hint_string(written).unwrap_or_default();
+    let hint_string = hint.write_hint_string(written).unwrap_or_default();
     Ok(Property::new(name, default).with_hint(property_hint, hint_string))
 }
 
@@ -851,8 +851,8 @@ pub(super) fn make_refusal_error(
             let index = error.argument as usize;
             let from = args
                 .get(index)
-                .map_or_else(String::new, |arg| type_name(arg.get_type()));
-            let to = type_name(<VariantType as EngineEnum>::from_ord(error.expected));
+                .map_or_else(String::new, |arg| name_type(arg.get_type()));
+            let to = name_type(<VariantType as EngineEnum>::from_ord(error.expected));
             make_type_error(
                 mrb,
                 &describe_type_refusal(method, base, &(index + 1).to_string(), &from, &to),

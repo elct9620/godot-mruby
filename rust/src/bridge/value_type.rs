@@ -28,7 +28,7 @@ use super::object::{
     to_arguments,
 };
 use super::value::{self, ToRuby};
-use crate::hint::type_name;
+use crate::hint::name_type;
 
 /// A value of one of the engine's value types, as Ruby holds it: a Vector2,
 /// which games build and compute with most, as its components, so it
@@ -148,7 +148,7 @@ fn class_by_kind(mrb: &Mrb, data: &BridgeData, kind: VariantType) -> Option<RCla
     }
     let class = mrb
         .module_get(c"Godot")
-        .and_then(|godot| godot.class_get(mrb, type_name(kind).as_str()))
+        .and_then(|godot| godot.class_get(mrb, name_type(kind).as_str()))
         .ok()
         .filter(|class| super::has_ancestor(mrb, *class, value_class(mrb, data)))?;
     keep_class(mrb, data, kind, class);
@@ -197,7 +197,7 @@ fn has_value_type(mrb: &Mrb, _class: Value, name: Symbol) -> bool {
 }
 
 fn kind_by_name(name: &str) -> Option<VariantType> {
-    value_types().find(|kind| type_name(*kind) == name)
+    value_types().find(|kind| name_type(*kind) == name)
 }
 
 // The value type a class under Godot stands for: found among the kept
@@ -259,7 +259,7 @@ fn construct(mrb: &Mrb, class: RClass, args: &[Value]) -> Result<Value, Error> {
         Err(_) => {
             let message = format!(
                 "Invalid call. Nonexistent '{}' constructor.",
-                type_name(kind)
+                name_type(kind)
             );
             Err(super::object::make_argument_error(mrb, &message))
         }
@@ -301,7 +301,7 @@ const VALUE_NAMES: &[ValueNames] = include!(concat!(env!("OUT_DIR"), "/value_nam
 // receiver's value type that the running engine has.
 fn engine_names(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
     let kind = kind_by_class(mrb, super::data(mrb), class)?;
-    let kind_name = type_name(kind);
+    let kind_name = name_type(kind);
     let kind = kind.ord as sys::GDExtensionVariantType;
     let Some((_, members, methods)) = VALUE_NAMES.iter().find(|(name, ..)| *name == kind_name)
     else {
@@ -487,7 +487,7 @@ fn count_required(kind: VariantType, method: &StringName) -> Option<usize> {
         VALUE_NAMES
             .iter()
             .filter_map(|(name, _, methods)| {
-                let kind = kinds.iter().find(|kind| type_name(**kind) == *name)?;
+                let kind = kinds.iter().find(|kind| name_type(**kind) == *name)?;
                 Some(methods.iter().map(move |(method, _, required, _)| {
                     ((kind.ord, StringName::from(*method)), *required)
                 }))
@@ -514,7 +514,7 @@ fn take_answer(
                 mrb,
                 &error,
                 &method.to_string(),
-                &type_name(kind),
+                &name_type(kind),
                 args,
                 None,
             )
@@ -769,8 +769,8 @@ fn operate(
     }
     let message = format!(
         "Invalid operands '{}' and '{}' in operator '{shown}'.",
-        type_name(held.kind()),
-        type_name(other.get_type())
+        name_type(held.kind()),
+        name_type(other.get_type())
     );
     Err(make_type_error(mrb, &message))
 }

@@ -51,7 +51,7 @@ impl Cache {
     /// The ancestry kept, or what `read` answers when none is kept since the
     /// last change. It reads outside the lock, so a source changing while it
     /// reads leaves what it read to be read again.
-    pub fn ancestry(
+    pub fn fetch_ancestry(
         &self,
         read: impl FnOnce() -> Result<Ancestry, Break>,
     ) -> Result<Arc<Ancestry>, Break> {
@@ -271,14 +271,17 @@ pub mod tests {
         }
     }
 
-    fn ancestry(path: &str, sources: &[(&'static str, &'static str)]) -> Result<Ancestry, Break> {
+    fn trace_source_ancestry(
+        path: &str,
+        sources: &[(&'static str, &'static str)],
+    ) -> Result<Ancestry, Break> {
         let files = Sources(sources.iter().copied().collect());
         let header =
             Header::from_source(path, &files.source_by_path(path).unwrap(), &files.roots());
         trace_ancestry(path, &header, &files)
     }
 
-    fn nearest(ancestry: &Ancestry) -> &str {
+    fn read_nearest(ancestry: &Ancestry) -> &str {
         &ancestry.files()[0].0
     }
 
@@ -297,9 +300,9 @@ pub mod tests {
             ("res://enemy.rb", "class Enemy < Godot::Node2D\nend\n"),
         ];
 
-        let ancestry = ancestry(BOSS, &sources).unwrap();
+        let ancestry = trace_source_ancestry(BOSS, &sources).unwrap();
 
-        assert_eq!(nearest(&ancestry), "res://enemies/enemy.rb");
+        assert_eq!(read_nearest(&ancestry), "res://enemies/enemy.rb");
     }
 
     // @behavior RI-002
@@ -310,9 +313,9 @@ pub mod tests {
             ("res://enemy.rb", "class Enemy < Godot::Node2D\nend\n"),
         ];
 
-        let ancestry = ancestry(BOSS, &sources).unwrap();
+        let ancestry = trace_source_ancestry(BOSS, &sources).unwrap();
 
-        assert_eq!(nearest(&ancestry), "res://enemy.rb");
+        assert_eq!(read_nearest(&ancestry), "res://enemy.rb");
     }
 
     // @behavior RI-003
@@ -326,9 +329,9 @@ pub mod tests {
             ),
         ];
 
-        let ancestry = ancestry("res://boss.rb", &sources).unwrap();
+        let ancestry = trace_source_ancestry("res://boss.rb", &sources).unwrap();
 
-        assert_eq!(nearest(&ancestry), "res://enemies/enemy.rb");
+        assert_eq!(read_nearest(&ancestry), "res://enemies/enemy.rb");
     }
 
     // @behavior RI-004
@@ -339,7 +342,7 @@ pub mod tests {
             ("res://enemy.rb", "class Enemy < Godot::Node2D\nend\n"),
         ];
 
-        let ancestry = ancestry("res://boss.rb", &sources).unwrap();
+        let ancestry = trace_source_ancestry("res://boss.rb", &sources).unwrap();
 
         assert_eq!(ancestry.engine_class(), "Node2D");
     }
@@ -349,7 +352,7 @@ pub mod tests {
     fn a_superclass_no_file_names_breaks_the_ancestry() {
         let sources = [("res://boss.rb", "class Boss < Enemy\nend\n")];
 
-        let broken = ancestry("res://boss.rb", &sources).unwrap_err();
+        let broken = trace_source_ancestry("res://boss.rb", &sources).unwrap_err();
 
         assert_eq!(broken, Break::NoFile("Enemy".to_owned()));
     }
@@ -366,7 +369,7 @@ pub mod tests {
             ("res://httpenemy.rb", "class HttpEnemy < Godot::Node\nend\n"),
         ];
 
-        let broken = ancestry("res://boss.rb", &sources).unwrap_err();
+        let broken = trace_source_ancestry("res://boss.rb", &sources).unwrap_err();
 
         assert_eq!(broken, Break::NoFile("HttpEnemy".to_owned()));
     }
@@ -379,7 +382,7 @@ pub mod tests {
             ("res://enemy.rb", "class Enemy < Boss\nend\n"),
         ];
 
-        let broken = ancestry("res://boss.rb", &sources).unwrap_err();
+        let broken = trace_source_ancestry("res://boss.rb", &sources).unwrap_err();
 
         assert_eq!(broken, Break::Cycle("res://boss.rb".to_owned()));
     }
@@ -392,7 +395,7 @@ pub mod tests {
             ("res://enemy.rb", "class Enemy\nend\n"),
         ];
 
-        let broken = ancestry("res://boss.rb", &sources).unwrap_err();
+        let broken = trace_source_ancestry("res://boss.rb", &sources).unwrap_err();
 
         assert_eq!(broken, Break::NoEngineClass);
     }

@@ -216,7 +216,7 @@ impl RubyScript {
     }
 
     fn ancestry(&self) -> Result<Arc<Ancestry>, Break> {
-        self.ancestry.ancestry(|| {
+        self.ancestry.fetch_ancestry(|| {
             let path = self.base().get_path().to_string();
             ancestry::trace_ancestry(&path, &self.header, &GameFiles)
         })

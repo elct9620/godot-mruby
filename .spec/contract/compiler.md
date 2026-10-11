@@ -18,7 +18,7 @@ Compiles and runs Ruby source under a name, which mruby stamps on everything com
 pub fn run(mrb: &Mrb, name: &CStr, source: &str, warned: impl FnMut(Warning)) -> Result<(), Error> {}
 ```
 
-## `diagnostics`
+## `diagnose`
 
 What the compiler says of Ruby source under a name, compiled in a new state and never run, so it answers on any thread without waiting for a realm or printing.
 
@@ -27,7 +27,7 @@ What the compiler says of Ruby source under a name, compiled in a new state and 
 | internal | yes |
 
 ```rust
-pub fn diagnostics(name: &CStr, source: &str) -> Diagnostics {}
+pub fn diagnose(name: &CStr, source: &str) -> Diagnostics {}
 ```
 
 ## `Diagnostics`

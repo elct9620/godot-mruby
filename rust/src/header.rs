@@ -177,7 +177,7 @@ impl Header {
                 if def.receiver().is_none() {
                     let offset = def.location().start_offset();
                     self.methods
-                        .entry(text(def.name().as_slice()))
+                        .entry(decode_text(def.name().as_slice()))
                         .or_insert(offset);
                 }
             } else if let Some(call) = node.as_call_node() {
@@ -199,22 +199,22 @@ impl Header {
             (b"abstract", []) => self.is_abstract = true,
             (b"icon", [path]) => {
                 if let Some(path) = path.as_string_node() {
-                    self.icon = Some(text(path.unescaped()));
+                    self.icon = Some(decode_text(path.unescaped()));
                 }
             }
             (b"signal", [name, parameters @ ..]) => {
                 self.signal_names.extend(read_name(name));
-                if let Some(signal) = signal(name, parameters) {
+                if let Some(signal) = read_signal(name, parameters) {
                     self.signals.push(signal);
                 }
             }
             (b"export", [name, default, keywords @ ..]) => {
-                if let Some(export) = export(name, default, keywords) {
+                if let Some(export) = read_export(name, default, keywords) {
                     self.exports.push(export);
                 }
             }
             (b"export_group" | b"export_subgroup", [name, prefix @ ..]) => {
-                if let Some(heading) = group(call.name().as_slice(), name, prefix) {
+                if let Some(heading) = read_group(call.name().as_slice(), name, prefix) {
                     self.exports.push(Export::Member(Member::Heading(heading)));
                 }
             }
@@ -255,7 +255,7 @@ impl Reader {
         } else {
             return;
         };
-        let Some(names) = constant_names(&path, scope) else {
+        let Some(names) = resolve_constant_names(&path, scope) else {
             return;
         };
         self.writes.push(names.clone());
@@ -293,7 +293,7 @@ impl Reader {
 // emitted by and a name for each value it carries. A name written as
 // anything but a symbol or a string is the file's to work out as it runs, so
 // the header carries none of that declaration.
-fn signal(name: &Node, parameters: &[Node]) -> Option<Signal> {
+fn read_signal(name: &Node, parameters: &[Node]) -> Option<Signal> {
     Some(Signal {
         name: read_name(name)?,
         parameters: parameters.iter().map(read_name).collect::<Option<_>>()?,
@@ -305,9 +305,9 @@ fn signal(name: &Node, parameters: &[Node]) -> Option<Signal> {
 // type, and the hint its keywords spell out. A value or a hint written as
 // anything but a literal is the file's to work out as it runs, and a name
 // written so is none the header knows.
-fn export(name: &Node, default: &Node, keywords: &[Node]) -> Option<Export> {
+fn read_export(name: &Node, default: &Node, keywords: &[Node]) -> Option<Export> {
     let name = read_name(name)?;
-    let Some(value) = literal(default) else {
+    let Some(value) = read_literal(default) else {
         return Some(Export::Name { name, bare: None });
     };
     let property = Property::new(name.clone(), &value);
@@ -326,14 +326,14 @@ fn export(name: &Node, default: &Node, keywords: &[Node]) -> Option<Export> {
 // `property` with the hint `keywords` spell out, if they spell out one the
 // property's type takes.
 fn with_keyword_hint(property: &Property, keywords: &Node) -> Option<Property> {
-    let (hint, written) = keyword_hint(keywords)?;
+    let (hint, written) = read_keyword_hint(keywords)?;
     let property_hint = hint
-        .property_hint(property.default_value().get_type())
+        .choose_property_hint(property.default_value().get_type())
         .ok()?;
     Some(
         property
             .clone()
-            .with_hint(property_hint, hint.hint_string(&written)?),
+            .with_hint(property_hint, hint.write_hint_string(&written)?),
     )
 }
 
@@ -341,14 +341,14 @@ fn with_keyword_hint(property: &Property, keywords: &Node) -> Option<Property> {
 // the running file would take them: a range's bounds and its step, or the
 // literal the keyword is written with. Keywords the file would refuse, or
 // write as anything but literals, spell out none.
-fn keyword_hint(keywords: &Node) -> Option<(Hint, Variant)> {
+fn read_keyword_hint(keywords: &Node) -> Option<(Hint, Variant)> {
     let mut step = None;
     let mut named = Vec::new();
     for element in keywords.as_keyword_hash_node()?.elements().iter() {
         let pair = element.as_assoc_node()?;
-        let keyword = text(pair.key().as_symbol_node()?.unescaped());
+        let keyword = decode_text(pair.key().as_symbol_node()?.unescaped());
         if keyword == "step" {
-            step = Some(literal(&pair.value())?);
+            step = Some(read_literal(&pair.value())?);
         } else {
             named.push((keyword, pair.value()));
         }
@@ -358,23 +358,23 @@ fn keyword_hint(keywords: &Node) -> Option<(Hint, Variant)> {
     };
     let hint = Hint::from_keyword(keyword).ok()?;
     let written = match (hint, step) {
-        (Hint::Range, step) => bounds(value, step)?,
+        (Hint::Range, step) => read_bounds(value, step)?,
         (_, Some(_)) => return None,
-        (_, None) => literal(value)?,
+        (_, None) => read_literal(value)?,
     };
     Some((hint, written))
 }
 
 // A range's bounds, its step after them when one is written, as a range
 // literal including its end writes them.
-fn bounds(range: &Node, step: Option<Variant>) -> Option<Variant> {
+fn read_bounds(range: &Node, step: Option<Variant>) -> Option<Variant> {
     let range = range.as_range_node()?;
     if range.is_exclude_end() {
         return None;
     }
     let mut bounds = VarArray::new();
-    bounds.push(&literal(&range.left()?)?);
-    bounds.push(&literal(&range.right()?)?);
+    bounds.push(&read_literal(&range.left()?)?);
+    bounds.push(&read_literal(&range.right()?)?);
     if let Some(step) = step {
         bounds.push(&step);
     }
@@ -383,7 +383,7 @@ fn bounds(range: &Node, step: Option<Variant>) -> Option<Variant> {
 
 // The group or subgroup an `export_group` or `export_subgroup` call writes,
 // with the prefix its properties are taken by when one is written.
-fn group(call: &[u8], name: &Node, prefix: &[Node]) -> Option<Heading> {
+fn read_group(call: &[u8], name: &Node, prefix: &[Node]) -> Option<Heading> {
     let name = read_name(name)?;
     let prefix = match prefix {
         [] => String::new(),
@@ -399,7 +399,7 @@ fn group(call: &[u8], name: &Node, prefix: &[Node]) -> Option<Heading> {
 // The value a literal writes, as the engine takes it, following the Ruby
 // value's own class as a value crossing from a running file does. A literal
 // holding anything else, such as a constant or a call, writes none.
-fn literal(node: &Node) -> Option<Variant> {
+fn read_literal(node: &Node) -> Option<Variant> {
     if node.as_true_node().is_some() {
         return Some(true.to_variant());
     }
@@ -407,21 +407,21 @@ fn literal(node: &Node) -> Option<Variant> {
         return Some(false.to_variant());
     }
     if let Some(number) = node.as_integer_node() {
-        return whole(&number.value()).map(|number| number.to_variant());
+        return read_integer(&number.value()).map(|number| number.to_variant());
     }
     if let Some(number) = node.as_float_node() {
         return Some(number.value().to_variant());
     }
     if let Some(string) = node.as_string_node() {
-        return Some(GString::from(&text(string.unescaped())).to_variant());
+        return Some(GString::from(&decode_text(string.unescaped())).to_variant());
     }
     if let Some(symbol) = node.as_symbol_node() {
-        return Some(StringName::from(&text(symbol.unescaped())).to_variant());
+        return Some(StringName::from(&decode_text(symbol.unescaped())).to_variant());
     }
     if let Some(array) = node.as_array_node() {
         let mut copied = VarArray::new();
         for element in array.elements().iter() {
-            copied.push(&literal(&element)?);
+            copied.push(&read_literal(&element)?);
         }
         return Some(copied.to_variant());
     }
@@ -429,7 +429,7 @@ fn literal(node: &Node) -> Option<Variant> {
         let mut copied = VarDictionary::new();
         for element in hash.elements().iter() {
             let entry = element.as_assoc_node()?;
-            copied.set(&literal(&entry.key())?, &literal(&entry.value())?);
+            copied.set(&read_literal(&entry.key())?, &read_literal(&entry.value())?);
         }
         return Some(copied.to_variant());
     }
@@ -438,7 +438,7 @@ fn literal(node: &Node) -> Option<Variant> {
 
 // The number an integer literal writes, unless it is larger than the
 // engine's own integers hold.
-fn whole(number: &Integer) -> Option<i64> {
+fn read_integer(number: &Integer) -> Option<i64> {
     let (negative, digits) = number.to_u32_digits();
     let mut whole: i64 = 0;
     for digit in digits.iter().rev() {
@@ -452,19 +452,20 @@ fn whole(number: &Integer) -> Option<i64> {
 // A name as a call writes it, which is a symbol or a string.
 fn read_name(node: &Node) -> Option<String> {
     if let Some(symbol) = node.as_symbol_node() {
-        return Some(text(symbol.unescaped()));
+        return Some(decode_text(symbol.unescaped()));
     }
-    node.as_string_node().map(|string| text(string.unescaped()))
+    node.as_string_node()
+        .map(|string| decode_text(string.unescaped()))
 }
 
-fn text(bytes: &[u8]) -> String {
+fn decode_text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
 // A superclass the class statement inside `scope` writes, when it is a
 // constant path.
 fn read_superclass(superclass: &Node, scope: &[String]) -> Option<Superclass> {
-    let (names, from_top) = constant_path(superclass)?;
+    let (names, from_top) = read_constant_path(superclass)?;
     Some(Superclass {
         scope: if from_top { Vec::new() } else { scope.to_vec() },
         names,
@@ -474,8 +475,8 @@ fn read_superclass(superclass: &Node, scope: &[String]) -> Option<Superclass> {
 // The whole constant path a `module` or `class` statement inside `scope`
 // defines: `class A::B` in `module Outer` is `Outer::A::B`, `class ::A` is `A`.
 // None for a path whose parent is not a constant.
-fn constant_names(path: &Node, scope: &[String]) -> Option<Vec<String>> {
-    let (names, from_top) = constant_path(path)?;
+fn resolve_constant_names(path: &Node, scope: &[String]) -> Option<Vec<String>> {
+    let (names, from_top) = read_constant_path(path)?;
     Some(if from_top {
         names
     } else {
@@ -485,16 +486,16 @@ fn constant_names(path: &Node, scope: &[String]) -> Option<Vec<String>> {
 
 // A constant path as written, and whether it starts from the top level as
 // `::A` does. None for a path whose parent is not a constant.
-fn constant_path(node: &Node) -> Option<(Vec<String>, bool)> {
+fn read_constant_path(node: &Node) -> Option<(Vec<String>, bool)> {
     if let Some(read) = node.as_constant_read_node() {
-        return Some((vec![text(read.name().as_slice())], false));
+        return Some((vec![decode_text(read.name().as_slice())], false));
     }
     let path = node.as_constant_path_node()?;
     let (mut names, from_top) = match path.parent() {
-        Some(parent) => constant_path(&parent)?,
+        Some(parent) => read_constant_path(&parent)?,
         None => (Vec::new(), true),
     };
-    names.push(text(path.name()?.as_slice()));
+    names.push(decode_text(path.name()?.as_slice()));
     Some((names, from_top))
 }
 
@@ -503,13 +504,13 @@ mod tests {
     use super::{Header, Roots, Signal};
 
     // The superclass's constant path, joined as it is written.
-    fn superclass(header: &Header) -> Option<String> {
+    fn join_superclass(header: &Header) -> Option<String> {
         header
             .superclass()
             .map(|superclass| superclass.names().join("::"))
     }
 
-    fn scope(header: &Header) -> Option<Vec<String>> {
+    fn read_scope(header: &Header) -> Option<Vec<String>> {
         header
             .superclass()
             .map(|superclass| superclass.scope().to_vec())
@@ -522,7 +523,7 @@ mod tests {
 
         let header = Header::from_source("res://enemies/boss.rb", source, &Roots::default());
 
-        assert_eq!(superclass(&header).as_deref(), Some("Godot::Node2D"));
+        assert_eq!(join_superclass(&header).as_deref(), Some("Godot::Node2D"));
     }
 
     // @behavior RH-002
@@ -532,7 +533,7 @@ mod tests {
 
         let header = Header::from_source("res://enemies/boss.rb", source, &Roots::default());
 
-        assert_eq!(superclass(&header).as_deref(), Some("Godot::Node2D"));
+        assert_eq!(join_superclass(&header).as_deref(), Some("Godot::Node2D"));
     }
 
     // @behavior RH-003
@@ -542,7 +543,7 @@ mod tests {
 
         let header = Header::from_source("res://http_client.rb", source, &Roots::default());
 
-        assert_eq!(superclass(&header).as_deref(), Some("Godot::Node"));
+        assert_eq!(join_superclass(&header).as_deref(), Some("Godot::Node"));
     }
 
     // @behavior RH-004
@@ -563,7 +564,7 @@ mod tests {
 
         let header = Header::from_source("res://player.rb", source, &Roots::default());
 
-        assert_eq!(superclass(&header).as_deref(), Some("Godot::Node"));
+        assert_eq!(join_superclass(&header).as_deref(), Some("Godot::Node"));
         assert!(header.has_method("_ready"));
     }
 
@@ -574,7 +575,7 @@ mod tests {
 
         let header = Header::from_source("res://items.rb", source, &Roots::default());
 
-        assert_eq!(superclass(&header), None);
+        assert_eq!(join_superclass(&header), None);
     }
 
     // @behavior RH-007
@@ -584,7 +585,7 @@ mod tests {
 
         let header = Header::from_source("res://point.rb", source, &Roots::default());
 
-        assert_eq!(superclass(&header), None);
+        assert_eq!(join_superclass(&header), None);
     }
 
     // @behavior RH-008
@@ -624,7 +625,7 @@ mod tests {
 
         let header = Header::from_source("res://enemies/boss.rb", source, &Roots::default());
 
-        assert_eq!(scope(&header), Some(vec!["Enemies".to_owned()]));
+        assert_eq!(read_scope(&header), Some(vec!["Enemies".to_owned()]));
     }
 
     // @behavior RH-012
@@ -634,7 +635,7 @@ mod tests {
 
         let header = Header::from_source("res://enemies/boss.rb", source, &Roots::default());
 
-        assert_eq!(scope(&header), Some(Vec::new()));
+        assert_eq!(read_scope(&header), Some(Vec::new()));
     }
 
     // @behavior RH-013

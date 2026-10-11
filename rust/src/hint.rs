@@ -10,7 +10,7 @@ use godot::obj::EngineEnum;
 use godot::register::info::PropertyHint;
 
 /// The name GDScript gives a variant type.
-pub fn type_name(kind: VariantType) -> String {
+pub fn name_type(kind: VariantType) -> String {
     type_string(i64::from(kind.ord())).to_string()
 }
 
@@ -53,7 +53,7 @@ impl Hint {
     /// cannot be read with it. Each takes the types the annotation it
     /// answers to takes, and a type none of them takes is refused in
     /// GDScript's words.
-    pub fn property_hint(self, kind: VariantType) -> Result<PropertyHint, String> {
+    pub fn choose_property_hint(self, kind: VariantType) -> Result<PropertyHint, String> {
         let (hint, takes): (PropertyHint, &[VariantType]) = match self {
             Self::None => return Ok(PropertyHint::NONE),
             Self::Range => (PropertyHint::RANGE, &[VariantType::INT, VariantType::FLOAT]),
@@ -77,8 +77,8 @@ impl Hint {
         Err(format!(
             "\"{}:\" requires a variable of type {}, but type \"{}\" was given instead.",
             self.keyword(),
-            kind_list(takes),
-            type_name(kind)
+            list_kinds(takes),
+            name_type(kind)
         ))
     }
 
@@ -87,14 +87,14 @@ impl Hint {
     /// files to choose among, or the text an empty field shows; `dir:`,
     /// `multiline:` and `file: true` are read with nothing. None when the
     /// value is not the list a range, `enum:` or `flags:` is read from.
-    pub fn hint_string(self, written: &Variant) -> Option<String> {
+    pub fn write_hint_string(self, written: &Variant) -> Option<String> {
         match self {
             Self::Range | Self::Enum | Self::Flags => {
                 let values = written.try_to::<VarArray>().ok()?;
                 Some(
                     values
                         .iter_shared()
-                        .map(|value| text(self, &value))
+                        .map(|value| format_value(self, &value))
                         .collect::<Vec<_>>()
                         .join(","),
                 )
@@ -121,7 +121,7 @@ impl Hint {
 
 // One value of a list the editor reads a hint with: a range's bound as
 // GDScript writes it, where a whole number carries no fraction, or a name.
-fn text(hint: Hint, value: &Variant) -> String {
+fn format_value(hint: Hint, value: &Variant) -> String {
     match value.try_to::<f64>() {
         Ok(number) if hint == Hint::Range && number.fract() == 0.0 => format!("{}", number as i64),
         _ => value.to_string(),
@@ -130,10 +130,10 @@ fn text(hint: Hint, value: &Variant) -> String {
 
 // The types a hint takes, as GDScript lists them in the same refusal: the
 // last is reached through "or", and three or more are separated by commas.
-fn kind_list(kinds: &[VariantType]) -> String {
+fn list_kinds(kinds: &[VariantType]) -> String {
     let names: Vec<String> = kinds
         .iter()
-        .map(|kind| format!("\"{}\"", type_name(*kind)))
+        .map(|kind| format!("\"{}\"", name_type(*kind)))
         .collect();
     match names.split_last() {
         None => String::new(),

@@ -347,7 +347,7 @@ mod tests {
     use super::{Highlight, Role, highlight};
     use crate::language::KEYWORDS;
 
-    fn roles(source: &str) -> Vec<Vec<Highlight>> {
+    fn highlight_roles(source: &str) -> Vec<Vec<Highlight>> {
         highlight(source, |name| name == "Node2D")
     }
 
@@ -368,7 +368,7 @@ mod tests {
             .iter()
             .filter(|word| {
                 !matches!(
-                    read_role(&roles(word), 0, 0),
+                    read_role(&highlight_roles(word), 0, 0),
                     Role::Keyword | Role::ControlFlow
                 )
             })
@@ -380,7 +380,7 @@ mod tests {
     // @behavior RU-003
     #[test]
     fn a_control_flow_keyword_is_coloured_apart_from_the_other_keywords() {
-        let lines = roles("def jump(height)\n  return if height.zero?\nend\n");
+        let lines = highlight_roles("def jump(height)\n  return if height.zero?\nend\n");
 
         assert_eq!(
             [
@@ -395,7 +395,7 @@ mod tests {
     // @behavior RU-004
     #[test]
     fn a_heredoc_body_is_coloured_as_a_string() {
-        let lines = roles("text = <<~TEXT\n  one\n  two\nTEXT\nspeed = 1\n");
+        let lines = highlight_roles("text = <<~TEXT\n  one\n  two\nTEXT\nspeed = 1\n");
 
         assert_eq!(
             [
@@ -410,7 +410,7 @@ mod tests {
     // @behavior RU-005
     #[test]
     fn an_embedded_document_is_coloured_as_a_comment() {
-        let lines = roles("speed = 1\n=begin\nnotes\n=end\nheight = 2\n");
+        let lines = highlight_roles("speed = 1\n=begin\nnotes\n=end\nheight = 2\n");
 
         assert_eq!(
             [1, 2, 3].map(|line| read_role(&lines, line, 0)),
@@ -425,7 +425,7 @@ mod tests {
     // @behavior RU-006
     #[test]
     fn code_interpolated_into_a_string_is_coloured_as_code() {
-        let lines = roles("label = \"hp #{health(10)} left\"\n");
+        let lines = highlight_roles("label = \"hp #{health(10)} left\"\n");
 
         assert_eq!(
             [
@@ -440,7 +440,7 @@ mod tests {
     // @behavior RU-007
     #[test]
     fn a_word_list_is_coloured_as_a_string() {
-        let lines = roles("names = %w[slime bat]\n");
+        let lines = highlight_roles("names = %w[slime bat]\n");
 
         assert_eq!(
             [read_role(&lines, 0, 11), read_role(&lines, 0, 17)],
@@ -451,7 +451,7 @@ mod tests {
     // @behavior RU-008
     #[test]
     fn a_symbol_is_coloured_apart_from_a_string() {
-        let lines = roles("enemy = { kind: :slime }\n");
+        let lines = highlight_roles("enemy = { kind: :slime }\n");
 
         assert_eq!(
             [read_role(&lines, 0, 10), read_role(&lines, 0, 17)],
@@ -462,7 +462,7 @@ mod tests {
     // @behavior RU-009
     #[test]
     fn a_method_name_is_coloured_where_it_is_defined() {
-        let lines = roles("def self.alive?\nend\n");
+        let lines = highlight_roles("def self.alive?\nend\n");
 
         assert_eq!(
             [
@@ -477,7 +477,7 @@ mod tests {
     // @behavior RU-010
     #[test]
     fn an_engine_class_is_coloured_apart_from_the_games_constants() {
-        let lines = roles("class Player < Godot::Node2D\nend\n");
+        let lines = highlight_roles("class Player < Godot::Node2D\nend\n");
 
         assert_eq!(
             [
@@ -492,7 +492,7 @@ mod tests {
     // @behavior RU-011
     #[test]
     fn a_column_counts_characters() {
-        let lines = roles("name = \"勇者\" # hero\n");
+        let lines = highlight_roles("name = \"勇者\" # hero\n");
 
         assert_eq!(read_role(&lines, 0, 12), Role::Comment);
     }
@@ -500,7 +500,7 @@ mod tests {
     // @behavior RU-012
     #[test]
     fn source_that_does_not_parse_is_still_coloured() {
-        let lines = roles("def jump\n  height = (\n  return\nend\n");
+        let lines = highlight_roles("def jump\n  height = (\n  return\nend\n");
 
         assert_eq!(read_role(&lines, 2, 2), Role::ControlFlow);
     }

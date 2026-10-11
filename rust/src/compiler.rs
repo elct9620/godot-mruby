@@ -53,7 +53,7 @@ pub fn run(
 /// What the compiler says of `source` under `name`, compiled and never run.
 /// A new state compiles it, so this belongs to no realm, never waits for one
 /// and prints nothing.
-pub fn diagnostics(name: &CStr, source: &str) -> Diagnostics {
+pub fn diagnose(name: &CStr, source: &str) -> Diagnostics {
     let error = |message: String| CompileError {
         line: 1,
         column: 1,
@@ -121,14 +121,14 @@ fn collect_warnings(context: &Ccontext) -> Vec<Warning> {
 mod tests {
     use super::*;
 
-    fn diagnose(source: &str) -> Diagnostics {
-        diagnostics(c"res://checked.rb", source)
+    fn diagnose_snippet(source: &str) -> Diagnostics {
+        diagnose(c"res://checked.rb", source)
     }
 
     // @behavior RK-001
     #[test]
     fn a_syntax_error_comes_back_at_its_line_and_column() {
-        let checked = diagnose("x = 1\nx = )\n");
+        let checked = diagnose_snippet("x = 1\nx = )\n");
 
         let error = checked.error.map(|error| (error.line, error.column));
         assert_eq!(error, Some((2, 5)));
@@ -137,7 +137,7 @@ mod tests {
     // @behavior RK-007
     #[test]
     fn a_syntax_errors_column_counts_characters() {
-        let checked = diagnose("x = '中文' )\n");
+        let checked = diagnose_snippet("x = '中文' )\n");
 
         let column = checked.error.map(|error| error.column);
         assert_eq!(column, Some(10));
@@ -146,7 +146,7 @@ mod tests {
     // @behavior RK-002
     #[test]
     fn a_compiler_warning_comes_back_at_its_line() {
-        let checked = diagnose("begin\n  :body\nelse\n  :useless\nend\n");
+        let checked = diagnose_snippet("begin\n  :body\nelse\n  :useless\nend\n");
 
         let lines: Vec<u32> = checked
             .warnings
@@ -159,7 +159,7 @@ mod tests {
     // @behavior RK-003
     #[test]
     fn checked_source_never_runs() {
-        let checked = diagnose("raise 'ran'\n");
+        let checked = diagnose_snippet("raise 'ran'\n");
 
         assert!(checked.error.is_none());
     }

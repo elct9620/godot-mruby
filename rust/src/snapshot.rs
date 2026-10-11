@@ -338,7 +338,7 @@ impl Snapshot {
         let mut members: Vec<Member> = Vec::new();
         for (path, source) in files {
             if is_editor_build() {
-                members.push(Member::Heading(category(path)));
+                members.push(Member::Heading(make_category(path)));
             }
             for member in self.merge_file_members(path, source) {
                 let listed = member.property().is_some_and(|property| {
@@ -419,7 +419,7 @@ fn is_editor_build() -> bool {
 // The category the editor heads a class's own members with, as it heads a
 // GDScript's with the script it is written in: the file's name, read with
 // the path it is at.
-fn category(path: &str) -> Heading {
+fn make_category(path: &str) -> Heading {
     Heading::Category {
         name: path.rsplit('/').next().unwrap_or(path).to_owned(),
         path: path.to_owned(),

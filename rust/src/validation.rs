@@ -62,7 +62,7 @@ pub struct EngineClasses<'a> {
 
 /// What checking `source`, typed as the file at `path` among `files`, finds.
 /// The other files are taken as they are, and this one as typed.
-pub fn validation<F: Files + Sync>(
+pub fn validate<F: Files + Sync>(
     files: &F,
     test_directories: &[String],
     template_directory: &str,
@@ -71,7 +71,7 @@ pub fn validation<F: Files + Sync>(
     source: &str,
 ) -> Validation {
     let name = CString::new(path).unwrap_or_default();
-    let diagnostics = compiler::diagnostics(&name, source);
+    let diagnostics = compiler::diagnose(&name, source);
     let typed = DraftFiles {
         files,
         path,
@@ -82,23 +82,23 @@ pub fn validation<F: Files + Sync>(
         kind: Kind::Compiler,
         message: warning.message,
     });
-    let shared_constant = shared_constant_warning(&typed, path);
+    let shared_constant = find_shared_constant_warning(&typed, path);
     let shared_name = match Project::new(
         &typed,
         test_directories.to_vec(),
         template_directory.to_owned(),
         engine.is_node,
     )
-    .announcement(path)
+    .announcement_by_path(path)
     {
         Err(Omission::SharedName { name, others }) => Some(Warning {
             line: 1,
             kind: Kind::SharedName,
-            message: announcement::shared_name_warning(path, &name, &others),
+            message: announcement::describe_shared_name(path, &name, &others),
         }),
         _ => None,
     };
-    let overrides = native_method_overrides(&typed, engine, path, source);
+    let overrides = collect_native_method_overrides(&typed, engine, path, source);
     Validation {
         error: diagnostics.error,
         warnings: compiled
@@ -112,7 +112,7 @@ pub fn validation<F: Files + Sync>(
 // A warning at each method a node script's class defines that its engine
 // class binds, which the engine calls directly rather than through the script,
 // worded as GDScript's NATIVE_METHOD_OVERRIDE.
-fn native_method_overrides(
+fn collect_native_method_overrides(
     files: &impl Files,
     engine: &EngineClasses,
     path: &str,
@@ -149,7 +149,7 @@ fn locate_line(source: &str, offset: usize) -> u32 {
 
 // The warning that other files name the constant the file at `path` names,
 // as the class index warns of them when the realm takes the files in.
-fn shared_constant_warning(files: &impl Files, path: &str) -> Option<Warning> {
+fn find_shared_constant_warning(files: &impl Files, path: &str) -> Option<Warning> {
     let roots = files.roots();
     let key = roots.key_by_path(path);
     let others: Vec<String> = files
@@ -227,7 +227,7 @@ mod tests {
             is_node: &is_node,
             method_declarer: &method_declarer,
         };
-        validation(
+        validate(
             &files,
             &test_directories,
             "res://script_templates",
