@@ -34,11 +34,12 @@ The realm is one `mrb_state`, reached only through `realm::enter`, and it reache
 
 ```
 res://addons/godot_mruby/
-├─ godot_mruby.gdextension    names each platform's library
-├─ bin/                       one library per platform
-├─ runner.tscn                the test runner scene
+├─ godot_mruby.gdextension      names each platform's library
+├─ godot_mruby.gdextension.uid  the uid Godot gives it
+├─ bin/                         one library per platform
+├─ runner.tscn                  the test runner scene
 ├─ LICENSE
-└─ THIRD_PARTY_LICENSES.txt   mruby, the shipped crates, what was changed in them
+└─ THIRD_PARTY_LICENSES.txt     mruby, the shipped crates, what was changed in them
 ```
 
 What ships is the addon folder, placed where Godot expects a non-project asset: `addons/<name>/`, so its files clash with neither the project nor other assets.
@@ -171,6 +172,7 @@ Teardown runs in reverse: Godot stops loading `.rb` files and forgets the langua
 
 ```
 lib.rs    registers Scripting and settings, prepares the realm
+          from game, log and bridge, and each frame runs realm, script
   │
   ▼
 ┌─ Editor ────────────────────────────────────────────────────┐
@@ -226,7 +228,7 @@ Several layers ask the same questions, and each has one owner below them all.
 | `Files::file_by_name` | the `ClassIndex` behind a lookup |
 | `Files::declarations_by_path` | what a file opens, and its node script's superclass |
 
-`game` hands the realm each file's declarations, so the realm holds a node script's class to its superclass. `minitest` uses the realm only for a failure's `Location`.
+`game` hands the realm each file's declarations, so the realm holds a node script's class to its superclass. `minitest` uses the realm only for a failure's `Location`, and writes through `log`.
 
 ### 2.4 Node scripts
 

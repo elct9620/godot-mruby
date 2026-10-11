@@ -234,10 +234,10 @@ static OPENER: Mutex<Option<Opener>> = Mutex::new(None);
 // A thread inside the game's realm enters it again, since Godot calls back
 // into scripts while the Ruby it started still runs.
 static GAME: ReentrantLock<RefCell<Game>> = ReentrantLock::new(RefCell::new(Game::Closed));
-// How many entries one thread nests before the next fails: every entry past
-// the first is Ruby calling the engine calling Ruby, which takes about 12 KiB
-// of a debug build's stack and 5 KiB of a release build's, and 24 of them
-// stay within half of the 512 KiB the smallest thread stack holds.
+// How many entries one thread holds at once before the next fails. Every
+// entry past the first is Ruby calling the engine calling Ruby, which takes
+// about 12 KiB of a debug build's stack and 5 KiB of a release build's, so
+// the 23 of them stay within the 512 KiB the smallest thread stack holds.
 const DEEPEST_ENTRY: usize = 24;
 // Keys let go of on any thread, waiting for the game's realm to take them.
 static RELEASES: Mutex<Vec<Key>> = Mutex::new(Vec::new());
