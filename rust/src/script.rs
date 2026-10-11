@@ -304,12 +304,16 @@ impl RubyScript {
     // The engine node class the file's class extends when it is a node
     // script, or why it is none.
     fn node_class(&self) -> Result<StringName, Break> {
-        let ancestry = self.ancestry()?;
-        let engine_class = ancestry.engine_class();
-        bridge::is_node_class(engine_class)
-            .then(|| StringName::from(engine_class))
-            .ok_or(Break::NoEngineClass)
+        read_node_class(&*self.ancestry()?)
     }
+}
+
+// The node class `ancestry` ends in, or why it ends in none.
+fn read_node_class(ancestry: &Ancestry) -> Result<StringName, Break> {
+    let engine_class = ancestry.engine_class();
+    bridge::is_node_class(engine_class)
+        .then(|| StringName::from(engine_class))
+        .ok_or(Break::NoEngineClass)
 }
 
 #[godot_api]
@@ -372,8 +376,11 @@ impl IScriptExtension for RubyScript {
     // not fit.
     unsafe fn instance_create_rawptr(&self, for_object: Gd<Object>) -> RawPtr<*mut c_void> {
         let path = self.base().get_path();
-        let engine_class = match self.node_class() {
-            Ok(engine_class) => engine_class,
+        let traced = self
+            .ancestry()
+            .and_then(|ancestry| Ok((read_node_class(&ancestry)?, ancestry)));
+        let (engine_class, ancestry) = match traced {
+            Ok(traced) => traced,
             Err(broken) => {
                 error!("{path} {broken}, so it cannot be a node's script");
                 return no_instance();
@@ -387,7 +394,6 @@ impl IScriptExtension for RubyScript {
         let language = self
             .get_language()
             .expect("the Ruby language outlives every Ruby script instance");
-        let ancestry = self.ancestry().expect("a node script has an ancestry");
         let methods = self.methods_by_ancestry(&ancestry);
         let instance = RubyInstance::new(
             self.to_gd().upcast(),

@@ -582,3 +582,15 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | the class a node script defines, whose `initialize` raises |
 | When | Ruby calls `new` on the class |
 | Then | the exception reaches the caller |
+
+## `RS-071` A failure inside the extension as Godot reads a node answers nothing
+
+| Attribute | Value |
+| --- | --- |
+| refines | `RD-028` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose object answers Godot's read of an instance variable with what the extension cannot read |
+| When | Godot reads that property |
+| Then | Godot gets nil |
