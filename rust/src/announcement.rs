@@ -103,7 +103,11 @@ impl<'a, F: Files> Project<'a, F> {
 
     // The header and ancestry of the file at `path`, when it is a node script.
     fn node_script(&self, path: &str) -> Option<(Header, Ancestry)> {
-        let header = Header::from_source(path, &self.files.source(path).ok()?, &self.files.roots());
+        let header = Header::from_source(
+            path,
+            &self.files.source_by_path(path).ok()?,
+            &self.files.roots(),
+        );
         let ancestry = ancestry::trace_ancestry(path, &header, self.files).ok()?;
         (self.is_node)(ancestry.engine_class()).then_some((header, ancestry))
     }
@@ -207,12 +211,12 @@ impl<F: Files> Files for Listing<F> {
         self.files.roots()
     }
 
-    fn source(&self, path: &str) -> Result<String, String> {
-        self.files.source(path)
+    fn source_by_path(&self, path: &str) -> Result<String, String> {
+        self.files.source_by_path(path)
     }
 
-    fn declarations(&self, path: &str) -> Declarations {
-        self.files.declarations(path)
+    fn declarations_by_path(&self, path: &str) -> Declarations {
+        self.files.declarations_by_path(path)
     }
 
     fn file_by_name(&self, scope: &[String], names: &[String]) -> Option<String> {
@@ -467,7 +471,7 @@ mod tests {
             Roots::new(["res://src".to_owned()])
         }
 
-        fn source(&self, path: &str) -> Result<String, String> {
+        fn source_by_path(&self, path: &str) -> Result<String, String> {
             let sources = self.0.lock().unwrap();
             sources
                 .get(path)
@@ -475,7 +479,7 @@ mod tests {
                 .ok_or_else(|| "no such file".to_owned())
         }
 
-        fn declarations(&self, _path: &str) -> Declarations {
+        fn declarations_by_path(&self, _path: &str) -> Declarations {
             Declarations::default()
         }
     }

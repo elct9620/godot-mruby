@@ -43,7 +43,7 @@ impl Roots {
 
     /// The constant path the file at `path` spells, as the index matches it.
     pub fn key_by_path(&self, path: &str) -> Key {
-        self.segments(path)
+        self.split_segments(path)
             .1
             .iter()
             .map(|segment| normalize(segment))
@@ -53,7 +53,7 @@ impl Roots {
     // The nearest root directory `path` sits under, and the segments of its
     // path from there; a path outside `res://`, such as a script's that has
     // no file, has none.
-    fn segments<'a>(&'a self, path: &'a str) -> (&'a str, Vec<&'a str>) {
+    fn split_segments<'a>(&'a self, path: &'a str) -> (&'a str, Vec<&'a str>) {
         let root = self
             .0
             .iter()
@@ -71,7 +71,7 @@ impl Roots {
     /// The constant a path spells as Zeitwerk camelizes it: `http_client` is
     /// `HttpClient`.
     pub fn name_by_path(&self, path: &str) -> String {
-        self.segments(path)
+        self.split_segments(path)
             .1
             .iter()
             .map(|segment| camelize(segment))
@@ -176,7 +176,7 @@ impl ClassIndex {
 
     /// What `key` names, if anything: a file is what a namespace's own file
     /// is too, so it answers before the directory.
-    pub fn entry(&self, key: &[String]) -> Option<Entry> {
+    pub fn entry_by_key(&self, key: &[String]) -> Option<Entry> {
         match self.files.get(key) {
             Some(path) => Some(Entry::File(path.clone())),
             None => self.namespaces.get(key).cloned().map(Entry::Namespace),
@@ -193,7 +193,7 @@ impl ClassIndex {
                 .map(|segment| normalize(segment))
                 .collect();
             key.push(normalize(name));
-            self.entry(&key).map(|entry| (depth, entry))
+            self.entry_by_key(&key).map(|entry| (depth, entry))
         })
     }
 
@@ -217,7 +217,7 @@ impl ClassIndex {
 
     /// What the index names directly inside the namespace `key` spells: its
     /// files, and its directories' modules.
-    pub fn members(&self, key: &[String]) -> Vec<Key> {
+    pub fn members_by_key(&self, key: &[String]) -> Vec<Key> {
         let below = |named: &&Key| named.starts_with(key);
         let start = key.to_vec();
         let files = self.files.range(start.clone()..).map(|(named, _)| named);
@@ -232,7 +232,7 @@ impl ClassIndex {
 
     /// What the index names `name` inside the namespaces below the one
     /// `scope` spells.
-    pub fn keys_below(&self, scope: &[String], name: &str) -> Vec<Key> {
+    pub fn collect_keys_below(&self, scope: &[String], name: &str) -> Vec<Key> {
         self.keys_by_last_name
             .get(&normalize(name))
             .into_iter()
@@ -254,7 +254,7 @@ impl ClassIndex {
     // namespace, which directories under other root directories may spell
     // too, named by the first directory to spell it.
     fn add_namespaces(&mut self, path: &str) {
-        let (root, segments) = self.roots.segments(path);
+        let (root, segments) = self.roots.split_segments(path);
         for depth in 1..segments.len() {
             let key = segments[..depth]
                 .iter()
@@ -336,13 +336,13 @@ fn locate_first_line(path: &str) -> Location {
 mod tests {
     use super::Roots;
 
-    fn roots(directories: &[&str]) -> Roots {
+    fn make_roots(directories: &[&str]) -> Roots {
         Roots::new(directories.iter().map(|directory| (*directory).to_owned()))
     }
 
     #[test]
     fn a_file_is_named_from_the_nearest_root_directory_it_sits_under() {
-        let roots = roots(&["res://src", "res://src/ui/"]);
+        let roots = make_roots(&["res://src", "res://src/ui/"]);
 
         assert_eq!(roots.key_by_path("res://src/ui/hud.rb"), ["hud"]);
         assert_eq!(
@@ -357,7 +357,7 @@ mod tests {
 
     #[test]
     fn a_directory_only_sharing_a_root_directorys_prefix_is_named_from_res() {
-        let roots = roots(&["res://src"]);
+        let roots = make_roots(&["res://src"]);
 
         assert_eq!(
             roots.key_by_path("res://srcs/player.rb"),
@@ -367,14 +367,14 @@ mod tests {
 
     #[test]
     fn res_itself_and_a_directory_outside_it_add_no_root_directory() {
-        let roots = roots(&["res://", "user://saves"]);
+        let roots = make_roots(&["res://", "user://saves"]);
 
         assert_eq!(roots.key_by_path("res://saves/slot.rb"), ["saves", "slot"]);
     }
 
     #[test]
     fn a_path_outside_res_spells_no_constant() {
-        let roots = roots(&["res://src"]);
+        let roots = make_roots(&["res://src"]);
 
         assert!(roots.key_by_path("").is_empty());
         assert!(roots.key_by_path("user://slot.rb").is_empty());

@@ -185,7 +185,7 @@ impl RubyScript {
     /// cannot be read leaves the script as it was.
     pub fn reload_from_disk(mut script: Gd<Self>) {
         let path = script.get_path().to_string();
-        let Ok(source) = FilesOnDisk.source(&path) else {
+        let Ok(source) = FilesOnDisk.source_by_path(&path) else {
             return;
         };
         script.set_source_code(&source);

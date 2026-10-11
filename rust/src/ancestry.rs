@@ -229,10 +229,12 @@ pub fn trace_ancestry(path: &str, header: &Header, files: &impl Files) -> Result
         if passed.contains(&file) {
             return Err(Break::Cycle(file));
         }
-        let source = files.source(&file).map_err(|reason| Break::NoSource {
-            path: file.clone(),
-            reason,
-        })?;
+        let source = files
+            .source_by_path(&file)
+            .map_err(|reason| Break::NoSource {
+                path: file.clone(),
+                reason,
+            })?;
         let ancestor = Header::from_source(&file, &source, &roots);
         superclass = ancestor.superclass().cloned();
         passed.push(file.clone());
@@ -257,21 +259,22 @@ pub mod tests {
             self.0.keys().map(|path| (*path).to_owned()).collect()
         }
 
-        fn source(&self, path: &str) -> Result<String, String> {
+        fn source_by_path(&self, path: &str) -> Result<String, String> {
             self.0
                 .get(path)
                 .map(|source| (*source).to_owned())
                 .ok_or_else(|| "no such file".to_owned())
         }
 
-        fn declarations(&self, _path: &str) -> Declarations {
+        fn declarations_by_path(&self, _path: &str) -> Declarations {
             Declarations::default()
         }
     }
 
     fn ancestry(path: &str, sources: &[(&'static str, &'static str)]) -> Result<Ancestry, Break> {
         let files = Sources(sources.iter().copied().collect());
-        let header = Header::from_source(path, &files.source(path).unwrap(), &files.roots());
+        let header =
+            Header::from_source(path, &files.source_by_path(path).unwrap(), &files.roots());
         trace_ancestry(path, &header, &files)
     }
 

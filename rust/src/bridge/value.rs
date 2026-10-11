@@ -106,9 +106,8 @@ fn to_ruby(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> Value {
             // the engine; a node, the other kind the realm holds, never is.
             Some(object) if object.instance_id().is_ref_counted() => {
                 match object.try_cast::<RubyObject>() {
-                    Ok(held) => {
-                        realm::object(mrb, held.bind().key()).unwrap_or_else(|| qnil().as_value())
-                    }
+                    Ok(held) => realm::object_by_key(mrb, held.bind().key())
+                        .unwrap_or_else(|| qnil().as_value()),
                     Err(object) => object::ruby_object(mrb, data, object),
                 }
             }

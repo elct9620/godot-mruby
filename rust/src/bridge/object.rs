@@ -459,7 +459,7 @@ fn ruby_answer(mrb: &Mrb, data: &BridgeData, answer: &Variant) -> Result<Value, 
 pub(super) fn ruby_object(mrb: &Mrb, data: &BridgeData, object: Gd<Object>) -> Value {
     let id = object.instance_id();
     if !id.is_ref_counted()
-        && let Some(held) = realm::object(mrb, node_key(id))
+        && let Some(held) = realm::object_by_key(mrb, node_key(id))
     {
         return held;
     }

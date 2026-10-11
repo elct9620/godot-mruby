@@ -65,9 +65,9 @@ fn load_hidden(mrb: &Mrb, scope: &[String], name: &str) {
         .map(|segment| index::normalize(segment))
         .collect();
     let index = bookkeeping(mrb).index.borrow();
-    let below = index.keys_below(&key, name);
+    let below = index.collect_keys_below(&key, name);
     key.push(index::normalize(name));
-    let inside = index.members(&key);
+    let inside = index.members_by_key(&key);
     drop(index);
     for inner in inside.into_iter().chain(below) {
         if constant_by_key(mrb, &inner).is_none() && is_hidden(mrb, &inner) {
@@ -92,9 +92,9 @@ fn is_hidden(mrb: &Mrb, inner: &[String]) -> bool {
 // Loads the constant `inner` spells for no caller: a file that raises is
 // reported at its own line, and the outer constant being defined goes on.
 fn load_inner(mrb: &Mrb, inner: &[String]) {
-    let entry = bookkeeping(mrb).index.borrow().entry(inner);
+    let entry = bookkeeping(mrb).index.borrow().entry_by_key(inner);
     let (path, loaded) = match entry {
-        Some(Entry::File(path)) if executor::cycle(mrb, &path).is_none() => {
+        Some(Entry::File(path)) if executor::trace_cycle(mrb, &path).is_none() => {
             let loaded = run_by_name(mrb, &path);
             (Some(path), loaded)
         }
@@ -122,7 +122,7 @@ fn load_inner(mrb: &Mrb, inner: &[String]) {
 pub(super) fn ensure_opened(mrb: &Mrb, path: &str) -> Result<Option<Extends>, Error> {
     ensure_namespaces(mrb, path)?;
     let own = key_by_path(mrb, path);
-    let declarations = bookkeeping(mrb).files.declarations(path);
+    let declarations = bookkeeping(mrb).files.declarations_by_path(path);
     for names in declarations.writes {
         let key: Vec<String> = names.iter().map(|name| index::normalize(name)).collect();
         // Its own class and the namespaces around it are the file's to define,
@@ -133,13 +133,13 @@ pub(super) fn ensure_opened(mrb: &Mrb, path: &str) -> Result<Option<Extends>, Er
         let Some((name, outer)) = names.split_last() else {
             continue;
         };
-        let entry = bookkeeping(mrb).index.borrow().entry(&key);
+        let entry = bookkeeping(mrb).index.borrow().entry_by_key(&key);
         match entry {
             Some(Entry::File(file)) => {
                 load_constant(mrb, &file, outer, name)?;
             }
             Some(Entry::Namespace(namespace)) => {
-                namespace_module(mrb, outer, name, &namespace)?;
+                define_namespace_module(mrb, outer, name, &namespace)?;
             }
             None => {}
         }
@@ -198,7 +198,7 @@ fn ensure_namespaces(mrb: &Mrb, path: &str) -> Result<(), Error> {
         if constant_by_key(mrb, &key[..depth]).is_some() {
             continue;
         }
-        let entry = bookkeeping(mrb).index.borrow().entry(&key[..depth]);
+        let entry = bookkeeping(mrb).index.borrow().entry_by_key(&key[..depth]);
         match entry {
             Some(Entry::File(file)) => run_by_name(mrb, &file)?,
             Some(Entry::Namespace(namespace)) => {
@@ -286,7 +286,7 @@ impl FromValue for Scope {
 impl TryConvert for Scope {
     fn try_convert(value: Value, mrb: &Mrb) -> Result<Self, Error> {
         Scope::from_value(value).ok_or_else(|| {
-            executor::ruby_error(mrb, c"TypeError", "constant look-up for non class/module")
+            executor::make_ruby_error(mrb, c"TypeError", "constant look-up for non class/module")
         })
     }
 }
@@ -332,7 +332,7 @@ fn resolve(mrb: &Mrb, receiver: Value, name: &str) -> Result<Option<Value>, Erro
             load_constant(mrb, &path, &scope[..depth], name).map(Some)
         }
         Some((depth, Entry::Namespace(namespace))) => {
-            namespace_module(mrb, &scope[..depth], name, &namespace).map(Some)
+            define_namespace_module(mrb, &scope[..depth], name, &namespace).map(Some)
         }
         None => Ok(None),
     }
@@ -352,13 +352,13 @@ fn split_path(mrb: &Mrb, receiver: Value) -> Option<Vec<String>> {
 // Runs the file at `path`, which has to have defined `name` in the namespace
 // `outer` spells.
 fn load_constant(mrb: &Mrb, path: &str, outer: &[String], name: &str) -> Result<Value, Error> {
-    if let Some(chain) = executor::cycle(mrb, path) {
+    if let Some(chain) = executor::trace_cycle(mrb, path) {
         let message = format!(
             "{} is needed while its own file is still running: {}",
             join_name(outer, name),
             chain.join(" -> ")
         );
-        return Err(name_error(mrb, &message, name));
+        return Err(make_name_error(mrb, &message, name));
     }
     run_by_name(mrb, path).map_err(|error| with_file(mrb, path, error))?;
     let scope = scope_by_names(mrb, outer)?;
@@ -367,7 +367,7 @@ fn load_constant(mrb: &Mrb, path: &str, outer: &[String], name: &str) -> Result<
         scope.const_get(mrb, symbol)
     } else {
         let message = format!("{path} ran without defining {}", join_name(outer, name));
-        Err(name_error(mrb, &message, name))
+        Err(make_name_error(mrb, &message, name))
     }
 }
 
@@ -381,7 +381,7 @@ fn run_by_name(mrb: &Mrb, path: &str) -> Result<(), Error> {
 }
 
 // A directory's module, which answers only to the name Zeitwerk gives it.
-fn namespace_module(
+fn define_namespace_module(
     mrb: &Mrb,
     outer: &[String],
     name: &str,
@@ -394,7 +394,7 @@ fn namespace_module(
             join_name(outer, &namespace.name),
             join_name(outer, name)
         );
-        return Err(name_error(mrb, &message, name));
+        return Err(make_name_error(mrb, &message, name));
     }
     let scope = scope_by_names(mrb, outer)?;
     define_module(mrb, scope, &namespace.name)
@@ -418,7 +418,7 @@ fn define_module(mrb: &Mrb, scope: Scope, name: &str) -> Result<Value, Error> {
     defined.map(|()| module)
 }
 
-fn name_error(mrb: &Mrb, message: &str, name: &str) -> Error {
+fn make_name_error(mrb: &Mrb, message: &str, name: &str) -> Error {
     let error = mrb.exc_get(c"NameError").and_then(|class| {
         let arguments = [
             mrb.str_new(message.as_bytes()).as_value(),

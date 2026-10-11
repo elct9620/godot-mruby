@@ -65,9 +65,9 @@ pub trait Files: Send {
         Roots::default()
     }
     /// The source of the file at `path`, or why there is none.
-    fn source(&self, path: &str) -> Result<String, String>;
+    fn source_by_path(&self, path: &str) -> Result<String, String>;
     /// What the file at `path` declares before it runs.
-    fn declarations(&self, path: &str) -> Declarations;
+    fn declarations_by_path(&self, path: &str) -> Declarations;
     /// The file the constant path `names`, written inside the namespaces
     /// `scope`, names among these files.
     fn file_by_name(&self, scope: &[String], names: &[String]) -> Option<String> {
@@ -181,7 +181,7 @@ enum Origin {
 fn publish_class(mrb: &Mrb, path: &str, signals: Vec<Signal>, members: Vec<Member>, digest: u64) {
     let methods = methods_by_path(mrb, path);
     let bookkeeping = bookkeeping(mrb);
-    let declarations = bookkeeping.files.declarations(path);
+    let declarations = bookkeeping.files.declarations_by_path(path);
     let mut draft = bookkeeping.snapshot.borrow_mut();
     Arc::make_mut(&mut draft).record_class(
         path,
@@ -397,8 +397,8 @@ pub fn hold_new(mrb: &Mrb, object: Value) -> Result<Key, Error> {
 
 /// The Ruby object `key` holds in the realm `mrb` belongs to, if it holds
 /// one.
-pub fn object(mrb: &Mrb, key: Key) -> Option<Value> {
-    bookkeeping(mrb).registry.object(mrb, key).ok()
+pub fn object_by_key(mrb: &Mrb, key: Key) -> Option<Value> {
+    bookkeeping(mrb).registry.object_by_key(mrb, key).ok()
 }
 
 /// What an extension keeps for the realm `mrb` belongs to, one value of each
@@ -412,7 +412,7 @@ pub fn extension_data<T: Default + Send + 'static>(mrb: &Mrb) -> &T {
 /// constant `names` spells from Object.
 pub fn file_by_constant(mrb: &Mrb, names: &[String]) -> Option<String> {
     let key: Vec<String> = names.iter().map(|name| normalize(name)).collect();
-    match bookkeeping(mrb).index.borrow().entry(&key)? {
+    match bookkeeping(mrb).index.borrow().entry_by_key(&key)? {
         index::Entry::File(path) => Some(path),
         index::Entry::Namespace(_) => None,
     }
@@ -590,7 +590,7 @@ impl Realm {
         let read = |error| RubyError::from_error(&self.mrb, Some(path), &error);
         self.run_as(Origin::Run, || {
             let ran = executor::has_run(&self.mrb, path);
-            if ran && let Some(class) = self.respondent(path, rerun.withdraw).map_err(read)? {
+            if ran && let Some(class) = self.find_respondent(path, rerun.withdraw).map_err(read)? {
                 class
                     .funcall(&self.mrb, rerun.withdraw, &[])
                     .map_err(read)?;
@@ -602,7 +602,7 @@ impl Realm {
                 |extends| constants::keep_extends(&self.mrb, path, extends),
             )
             .map_err(read)?;
-            if ran && let Some(class) = self.respondent(path, rerun.adopt).map_err(read)? {
+            if ran && let Some(class) = self.find_respondent(path, rerun.adopt).map_err(read)? {
                 for object in bookkeeping(&self.mrb).registry.objects(&self.mrb) {
                     if object
                         .funcall(&self.mrb, c"is_a?", &[class])
@@ -622,7 +622,7 @@ impl Realm {
 
     // The class the file at `path` defined, if it answers `message`, even
     // privately.
-    fn respondent(&self, path: &str, message: &CStr) -> Result<Option<Value>, Error> {
+    fn find_respondent(&self, path: &str, message: &CStr) -> Result<Option<Value>, Error> {
         let Some(class) = constants::constant_by_key(&self.mrb, &key_by_path(&self.mrb, path))
         else {
             return Ok(None);
@@ -726,7 +726,7 @@ impl Realm {
         let answer = self.run_as(Origin::Call, || {
             bookkeeping(&self.mrb)
                 .registry
-                .object(&self.mrb, key)
+                .object_by_key(&self.mrb, key)
                 .and_then(|object| {
                     let method = symbol_by_name(&self.mrb, method)?;
                     object.funcall(&self.mrb, method, &args)
@@ -892,7 +892,7 @@ mod tests {
             vec![THING.to_owned()]
         }
 
-        fn source(&self, _path: &str) -> Result<String, String> {
+        fn source_by_path(&self, _path: &str) -> Result<String, String> {
             Ok(concat!(
                 "class Thing\n",
                 "  def answer = 42\n",
@@ -904,7 +904,7 @@ mod tests {
             .to_owned())
         }
 
-        fn declarations(&self, _path: &str) -> Declarations {
+        fn declarations_by_path(&self, _path: &str) -> Declarations {
             Declarations::default()
         }
     }
@@ -919,11 +919,11 @@ mod tests {
             vec![RAISING.to_owned()]
         }
 
-        fn source(&self, _path: &str) -> Result<String, String> {
+        fn source_by_path(&self, _path: &str) -> Result<String, String> {
             Ok("ready = true\nraise \"raised at the top\"\n".to_owned())
         }
 
-        fn declarations(&self, _path: &str) -> Declarations {
+        fn declarations_by_path(&self, _path: &str) -> Declarations {
             Declarations::default()
         }
     }
@@ -948,7 +948,7 @@ mod tests {
             Roots::new(["res://game".to_owned(), "res://mods/".to_owned()])
         }
 
-        fn source(&self, path: &str) -> Result<String, String> {
+        fn source_by_path(&self, path: &str) -> Result<String, String> {
             Ok(match path {
                 SWORD => "module Items\n  class Sword\n  end\nend\n",
                 SHIELD => "module Items\n  class Shield\n  end\nend\n",
@@ -962,13 +962,13 @@ mod tests {
             .to_owned())
         }
 
-        fn declarations(&self, _path: &str) -> Declarations {
+        fn declarations_by_path(&self, _path: &str) -> Declarations {
             Declarations::default()
         }
     }
 
     // The frames an error carries, each as `file:line:method`.
-    fn frames(error: Option<RubyError>) -> Vec<String> {
+    fn format_frames(error: Option<RubyError>) -> Vec<String> {
         error
             .map(|error| error.backtrace)
             .unwrap_or_default()
@@ -1042,7 +1042,7 @@ mod tests {
 
         let sent = enter(|realm| realm.send::<_, i64>(key, "fail", no_args()));
 
-        assert_eq!(frames(sent.err()), ["res://thing.rb:5:fail"]);
+        assert_eq!(format_frames(sent.err()), ["res://thing.rb:5:fail"]);
     }
 
     // @behavior RR-005
@@ -1057,7 +1057,7 @@ mod tests {
             realm.run(RAISING)
         });
 
-        assert_eq!(frames(ran.err()), ["res://raising.rb:2:"]);
+        assert_eq!(format_frames(ran.err()), ["res://raising.rb:2:"]);
     }
 
     // @behavior RL-032

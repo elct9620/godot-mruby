@@ -138,7 +138,7 @@ pub(super) fn is_running(mrb: &Mrb, path: &str) -> bool {
 
 /// The files that led back to the one at `path` while it is still running,
 /// ending with it; nothing when it is not running.
-pub(super) fn cycle(mrb: &Mrb, path: &str) -> Option<Vec<String>> {
+pub(super) fn trace_cycle(mrb: &Mrb, path: &str) -> Option<Vec<String>> {
     let runs = runs(mrb);
     if !matches!(runs.files.borrow().get(path), Some(Run::Running)) {
         return None;
@@ -172,7 +172,7 @@ pub(super) fn record(mrb: &Mrb, scope: Vec<String>, name: String) {
 /// that the same mistake reads the same in both languages.
 pub(super) fn declare(mrb: &Mrb, class: RClass, declared: Declaration) -> Result<(), Error> {
     if let Some(ancestor) = ancestor_by_member(mrb, class, declared.name()) {
-        return Err(ruby_error(
+        return Err(make_ruby_error(
             mrb,
             c"ArgumentError",
             &format!(
@@ -203,7 +203,7 @@ pub(super) fn declare(mrb: &Mrb, class: RClass, declared: Declaration) -> Result
         declared.label()
     );
     drop(frames);
-    Err(ruby_error(mrb, c"ArgumentError", &refusal))
+    Err(make_ruby_error(mrb, c"ArgumentError", &refusal))
 }
 
 // The ancestor of `class` that declared `name`, if one did. Each Ruby
@@ -270,7 +270,8 @@ fn execute<T>(
         if let Some(frame) = runs.frames.borrow_mut().last_mut() {
             frame.digest = snapshot::digest(&source);
         }
-        let name = CString::new(path).map_err(|error| runtime_error(mrb, &error.to_string()))?;
+        let name =
+            CString::new(path).map_err(|error| make_runtime_error(mrb, &error.to_string()))?;
         compile(mrb, &name, &source)?;
         settle(prepared)
     });
@@ -313,8 +314,8 @@ fn split(declared: Vec<Declaration>) -> (Vec<Signal>, Vec<Member>) {
 fn source_by_path(mrb: &Mrb, path: &str) -> Result<String, Error> {
     bookkeeping(mrb)
         .files
-        .source(path)
-        .map_err(|why| runtime_error(mrb, &why))
+        .source_by_path(path)
+        .map_err(|why| make_runtime_error(mrb, &why))
 }
 
 // Removes what `frame` created, the last first, so a constant inside a class
@@ -342,11 +343,11 @@ fn scope_by_names(mrb: &Mrb, scope: &[String]) -> Option<Scope> {
         })
 }
 
-fn runtime_error(mrb: &Mrb, message: &str) -> Error {
-    ruby_error(mrb, c"RuntimeError", message)
+fn make_runtime_error(mrb: &Mrb, message: &str) -> Error {
+    make_ruby_error(mrb, c"RuntimeError", message)
 }
 
-pub(super) fn ruby_error(mrb: &Mrb, class: &CStr, message: &str) -> Error {
+pub(super) fn make_ruby_error(mrb: &Mrb, class: &CStr, message: &str) -> Error {
     match mrb.exc_get(class) {
         Ok(class) => Error::new(mrb, class, message),
         Err(error) => error,

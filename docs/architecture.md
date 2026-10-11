@@ -360,7 +360,7 @@ A gem's methods run with the state, and reach the realm's bookkeeping only throu
 
 | Function | What a gem gets |
 | --- | --- |
-| `hold`, `hold_new`, `object` | an object held under a key, found again |
+| `hold`, `hold_new`, `object_by_key` | an object held under a key, found again |
 | `file_by_constant` | the file the class index names |
 | `extension_data` | its own data, such as a class it found, closed with the realm |
 

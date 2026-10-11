@@ -172,7 +172,7 @@ Holds a Ruby object in the realm an extension's method runs in under a key the r
 pub fn hold_new(mrb: &Mrb, object: Value) -> Result<Key, Error> {}
 ```
 
-## `object`
+## `object_by_key`
 
 The Ruby object a key holds in the realm an extension's method runs in, if it holds one, so an object the realm holds for something outside reaches Ruby as itself.
 
@@ -181,7 +181,7 @@ The Ruby object a key holds in the realm an extension's method runs in, if it ho
 | internal | yes |
 
 ```rust
-pub fn object(mrb: &Mrb, key: Key) -> Option<Value> {}
+pub fn object_by_key(mrb: &Mrb, key: Key) -> Option<Value> {}
 ```
 
 ## `file_by_constant`
@@ -487,7 +487,7 @@ pub trait Files {
 }
 ```
 
-## `Files::source`
+## `Files::source_by_path`
 
 The source of the file at a path, or why there is none.
 
@@ -497,11 +497,11 @@ The source of the file at a path, or why there is none.
 
 ```rust
 pub trait Files {
-    fn source(&self, path: &str) -> Result<String, String>;
+    fn source_by_path(&self, path: &str) -> Result<String, String>;
 }
 ```
 
-## `Files::declarations`
+## `Files::declarations_by_path`
 
 What the file at a path declares before it runs, which the realm keeps as it runs the file.
 
@@ -511,7 +511,7 @@ What the file at a path declares before it runs, which the realm keeps as it run
 
 ```rust
 pub trait Files {
-    fn declarations(&self, path: &str) -> Declarations;
+    fn declarations_by_path(&self, path: &str) -> Declarations;
 }
 ```
 

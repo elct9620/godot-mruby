@@ -194,16 +194,16 @@ impl<F: Files + Sync> Files for DraftFiles<'_, F> {
         self.files.roots()
     }
 
-    fn source(&self, path: &str) -> Result<String, String> {
+    fn source_by_path(&self, path: &str) -> Result<String, String> {
         if path == self.path {
             Ok(self.source.to_owned())
         } else {
-            self.files.source(path)
+            self.files.source_by_path(path)
         }
     }
 
-    fn declarations(&self, path: &str) -> Declarations {
-        self.files.declarations(path)
+    fn declarations_by_path(&self, path: &str) -> Declarations {
+        self.files.declarations_by_path(path)
     }
 }
 

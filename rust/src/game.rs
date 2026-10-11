@@ -40,7 +40,7 @@ impl Files for GameFiles {
     }
 
     // Through `ResourceLoader`, so an exported game follows its remaps.
-    fn source(&self, path: &str) -> Result<String, String> {
+    fn source_by_path(&self, path: &str) -> Result<String, String> {
         ResourceLoader::singleton()
             .load_ex(path)
             .type_hint("Script")
@@ -54,8 +54,8 @@ impl Files for GameFiles {
     // fails where the realm reads its source to run it. Only a node script's
     // class is held to its superclass: Godot is told its ancestry before it
     // runs, and a library file's is Ruby's to look up.
-    fn declarations(&self, path: &str) -> Declarations {
-        let Ok(source) = self.source(path) else {
+    fn declarations_by_path(&self, path: &str) -> Declarations {
+        let Ok(source) = self.source_by_path(path) else {
             return Declarations::default();
         };
         let header = Header::from_source(path, &source, &self.roots());
@@ -96,12 +96,12 @@ impl Files for RealmFiles {
         GameFiles.roots()
     }
 
-    fn source(&self, path: &str) -> Result<String, String> {
-        GameFiles.source(path)
+    fn source_by_path(&self, path: &str) -> Result<String, String> {
+        GameFiles.source_by_path(path)
     }
 
-    fn declarations(&self, path: &str) -> Declarations {
-        GameFiles.declarations(path)
+    fn declarations_by_path(&self, path: &str) -> Declarations {
+        GameFiles.declarations_by_path(path)
     }
 }
 
@@ -170,7 +170,7 @@ impl Files for FilesOnDisk {
         GameFiles.roots()
     }
 
-    fn source(&self, path: &str) -> Result<String, String> {
+    fn source_by_path(&self, path: &str) -> Result<String, String> {
         let source = FileAccess::get_file_as_string(path);
         match FileAccess::get_open_error() {
             Error::OK => Ok(source.to_string()),
@@ -179,7 +179,7 @@ impl Files for FilesOnDisk {
     }
 
     // A scan runs no file.
-    fn declarations(&self, _path: &str) -> Declarations {
+    fn declarations_by_path(&self, _path: &str) -> Declarations {
         Declarations::default()
     }
 }
