@@ -10,7 +10,10 @@ require_relative "godot_cell"
 # libraries hold, and what the extension changed in a crate it builds with.
 # Backs Addon.
 module Notices
-  LICENSE_FILE = /\A(licen[cs]e|copying|notice)/i
+  LICENSE_FILE = /\A(licen[cs]e|copying|notice|legal)/i
+  # How mruby's LEGAL opens: it lists the files compiled in under other
+  # licenses, BSD-2-Clause among them, whose notice a binary has to carry.
+  MRUBY_LEGAL = "LEGAL NOTICE INFORMATION"
   # What the extension changed in a crate, by the crate's name; MPL-2.0 asks
   # that whoever receives the library can obtain the changed source.
   CHANGES = { "godot-cell" => GodotCell.change }.freeze
@@ -83,6 +86,12 @@ module Notices
   # Finds the crates whose change the notices in `text` do not show.
   def find_missing_changes(text)
     CHANGES.reject { |crate, change| text.include?("#{crate} ") && text.include?(change) }.keys
+  end
+
+  # Whether `text` carries mruby's notice of what it compiles in under other
+  # licenses.
+  def carries_mruby_legal?(text)
+    text.include?(MRUBY_LEGAL)
   end
 
   def run!(*command)

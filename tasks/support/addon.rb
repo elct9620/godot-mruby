@@ -82,10 +82,12 @@ module Addon
     project
   end
 
-  # @behavior RA-003
+  # @behavior RA-003 RA-004
   def verify_notices!(path)
-    missing = Notices.find_missing_changes(File.read(path))
+    text = File.read(path)
+    missing = Notices.find_missing_changes(text)
     raise "#{NOTICES} does not show the change to #{missing.join(", ")}" unless missing.empty?
+    raise "#{NOTICES} does not carry mruby's legal notice" unless Notices.carries_mruby_legal?(text)
   end
 
   # Of .godot, the copy keeps only what a fresh checkout has: the extension list.

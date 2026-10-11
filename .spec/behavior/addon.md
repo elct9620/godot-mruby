@@ -31,3 +31,15 @@ How a project comes to run Ruby: the addon under `addons/godot_mruby/` carries t
 | Given | a package built with a crate changed from its published version |
 | When | its third-party notices are read |
 | Then | the crate's section says it was changed and shows the source before and after |
+
+## `RA-004` The package carries mruby's notice of code under other licenses
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RA-003` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a package whose mruby compiles in files its `LEGAL` lists under other licenses |
+| When | its third-party notices are read |
+| Then | mruby's section carries that legal notice |
