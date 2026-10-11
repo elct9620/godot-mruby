@@ -909,14 +909,14 @@ mod tests {
         }
     }
 
-    const RAISING: &str = "res://raising.rb";
+    const TRIPWIRE: &str = "res://tripwire.rb";
 
     // A file whose top level raises on its second line.
     struct Raiser;
 
     impl Files for Raiser {
         fn paths(&self) -> Vec<String> {
-            vec![RAISING.to_owned()]
+            vec![TRIPWIRE.to_owned()]
         }
 
         fn source_by_path(&self, _path: &str) -> Result<String, String> {
@@ -1054,10 +1054,10 @@ mod tests {
 
         let ran = enter(|realm| {
             realm.call::<_, bool>("Integer", c"===", [4_i64])?;
-            realm.run(RAISING)
+            realm.run(TRIPWIRE)
         });
 
-        assert_eq!(format_frames(ran.err()), ["res://raising.rb:2:"]);
+        assert_eq!(format_frames(ran.err()), ["res://tripwire.rb:2:"]);
     }
 
     // @behavior RL-032

@@ -8,7 +8,7 @@ module Unit
         @centered = "mine"
       end
 
-      def covered
+      def cover
         @centered
       end
     end

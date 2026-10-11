@@ -14,8 +14,8 @@ module Godot
       FAILED_PROCESS_LINE = "fault.rb processed"
       IDLE_LINE = "statue.rb ran"
       # What Godot gets for an answer that cannot cross, and the log's reason.
-      REFUSED_ANSWER_LINES = ["looped answered Nil <null>",
-                              "ERROR: #looped answered [[...]]: an Array nested more than 100 deep cannot " \
+      REFUSED_ANSWER_LINES = ["self_loop answered Nil <null>",
+                              "ERROR: #self_loop answered [[...]]: an Array nested more than 100 deep cannot " \
                               "reach the engine"].freeze
       # What the log says of an argument that cannot cross, and the line the
       # method would print were it called.

@@ -178,7 +178,7 @@ class ExportsTest < Minitest::Test
 
     sprite.set(:centered, false)
 
-    assert_equal "mine", sprite.call(:covered)
+    assert_equal "mine", sprite.call(:cover)
   end
 
   # @behavior RD-036
@@ -210,7 +210,7 @@ class ExportsTest < Minitest::Test
   def covered_sprite
     sprite = Godot::Sprite2D.new
     sprite.set_script(Godot::ResourceLoader.load("res://test/unit/declarations/cloak.rb"))
-    sprite.call(:covered)
+    sprite.call(:cover)
     sprite
   end
 end

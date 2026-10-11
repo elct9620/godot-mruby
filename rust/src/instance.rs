@@ -797,7 +797,7 @@ unsafe extern "C" fn property_can_revert(
 ) -> sys::GDExtensionBool {
     // SAFETY: the property name lives for the call, and the instance until
     // Ruby runs.
-    let answer = unsafe { revert_answer(data, property, "_property_can_revert") };
+    let answer = unsafe { ask_revert(data, property, "_property_can_revert") };
     sys::GDExtensionBool::from(answer.try_to::<bool>().unwrap_or(false))
 }
 
@@ -810,7 +810,7 @@ unsafe extern "C" fn property_get_revert(
 ) -> sys::GDExtensionBool {
     // SAFETY: the property name lives for the call, and the instance until
     // Ruby runs.
-    let answer = unsafe { revert_answer(data, property, "_property_get_revert") };
+    let answer = unsafe { ask_revert(data, property, "_property_get_revert") };
     if answer.is_nil() {
         return sys::GDExtensionBool::from(false);
     }
@@ -823,7 +823,7 @@ unsafe extern "C" fn property_get_revert(
 // does not define it.
 //
 // SAFETY: `property` lives for the call, and the instance until Ruby runs.
-unsafe fn revert_answer(
+unsafe fn ask_revert(
     data: sys::GDExtensionScriptInstanceDataPtr,
     property: sys::GDExtensionConstStringNamePtr,
     method: &str,

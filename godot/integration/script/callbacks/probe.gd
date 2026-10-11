@@ -5,8 +5,8 @@ extends Node
 # the type and value Godot got back.
 func _ready() -> void:
 	var answers := get_node("../Answers")
-	var answer: Variant = answers.call("looped")
-	print("looped answered ", type_string(typeof(answer)), " ", answer)
-	var looped := []
-	looped.append(looped)
-	answers.call("take", looped)
+	var answer: Variant = answers.call("self_loop")
+	print("self_loop answered ", type_string(typeof(answer)), " ", answer)
+	var self_loop := []
+	self_loop.append(self_loop)
+	answers.call("take", self_loop)
