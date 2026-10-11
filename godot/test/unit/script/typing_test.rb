@@ -20,14 +20,17 @@ class TypingTest < Minitest::Test
     end
   RUBY
 
+  # Holds the script while its source is edited: Godot frees a resource
+  # nothing holds, and loading the path again would read the file on disk.
   def setup
     Unit::Script::Tuner
-    @source = script.source_code
-    script.source_code = EDITED_SOURCE
+    @script = Godot::ResourceLoader.load(PATH)
+    @source = @script.source_code
+    @script.source_code = EDITED_SOURCE
   end
 
   def teardown
-    script.source_code = @source
+    @script.source_code = @source
   end
 
   # @behavior RS-052
@@ -78,16 +81,12 @@ class TypingTest < Minitest::Test
 
   private
 
-  def script
-    Godot::ResourceLoader.load(PATH)
-  end
-
   def members
-    script.get_script_property_list
+    @script.get_script_property_list
   end
 
   def signals
-    script.get_script_signal_list
+    @script.get_script_signal_list
   end
 
   def signal_names

@@ -205,8 +205,9 @@ class RerunTest < Minitest::Test
   end
 
   def reload(name, source)
-    load_script(name).source_code = source
-    load_script(name).reload(true)
+    script = load_script(name)
+    script.source_code = source
+    script.reload(true)
     wait_process_frames 1
   end
 end
