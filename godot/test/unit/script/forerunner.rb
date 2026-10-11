@@ -8,12 +8,12 @@ module Unit
 
     # The class of the node above.
     class Forerunner < Godot::Node
-      def notified
-        @notified
+      def last_notification
+        @last_notification
       end
 
       def _notification(what)
-        @notified = what
+        @last_notification = what
       end
     end
   end

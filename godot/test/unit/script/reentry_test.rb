@@ -4,14 +4,14 @@ class ReentryTest < Minitest::Test
     echo = autofree(Unit::Script::Echo.new)
 
     assert_equal :pinged, echo.call(:ping)
-    assert_equal 7, echo.notified
+    assert_equal 7, echo.last_notification
   end
 
   # @behavior RS-035
   def test_a_call_arriving_while_a_node_initializes_reaches_the_object_initializing
     sprinter = autofree(Unit::Script::Sprinter.new)
 
-    assert_equal 3, sprinter.notified
+    assert_equal 3, sprinter.last_notification
   end
 
   # @behavior RS-036
@@ -21,7 +21,7 @@ class ReentryTest < Minitest::Test
 
     forerunner.notification(2)
 
-    assert_equal 2, forerunner.call(:notified)
+    assert_equal 2, forerunner.call(:last_notification)
   end
 
   # @behavior RS-037

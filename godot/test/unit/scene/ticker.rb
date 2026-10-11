@@ -3,20 +3,20 @@ module Unit
     # A node class keeping every delta its _process and _physics_process are
     # given.
     class Ticker < Godot::Node
-      def processed
-        @processed ||= []
+      def deltas
+        @deltas ||= []
       end
 
-      def physics_processed
-        @physics_processed ||= []
+      def physics_deltas
+        @physics_deltas ||= []
       end
 
       def _process(delta)
-        processed << delta
+        deltas << delta
       end
 
       def _physics_process(delta)
-        physics_processed << delta
+        physics_deltas << delta
       end
     end
   end

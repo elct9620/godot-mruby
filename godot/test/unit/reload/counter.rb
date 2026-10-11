@@ -13,7 +13,7 @@ module Unit
         "before"
       end
 
-      def dropped
+      def farewell
         "dropped"
       end
     end

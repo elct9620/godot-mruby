@@ -13,7 +13,7 @@ class RerunTest < Minitest::Test
             "after"
           end
 
-          def added
+          def newcomer
             "added"
           end
         end
@@ -103,7 +103,7 @@ class RerunTest < Minitest::Test
     node = with_node(:counter)
     node.call(:answer)
 
-    stub_source(:counter, COUNTER) { assert_equal "added", node.call(:added) }
+    stub_source(:counter, COUNTER) { assert_equal "added", node.call(:newcomer) }
   end
 
   # @behavior RF-003
@@ -119,7 +119,7 @@ class RerunTest < Minitest::Test
     node = with_node(:counter)
     node.call(:answer)
 
-    stub_source(:counter, COUNTER) { assert_equal "dropped", node.call(:dropped) }
+    stub_source(:counter, COUNTER) { assert_equal "dropped", node.call(:farewell) }
   end
 
   # @behavior RF-005

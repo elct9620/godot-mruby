@@ -8,7 +8,7 @@ class NodeClassesTest < Minitest::Test
     beacon.set_rotation(1.5)
     assert_in_delta 1.5, beacon.get_rotation
     beacon.notification(9001)
-    assert_equal 9001, beacon.notified
+    assert_equal 9001, beacon.last_notification
   end
 
   # @behavior RS-032 RS-070
