@@ -91,6 +91,19 @@ The addon adds these settings under `mruby/` in Project Settings.
 | `mruby/test/pattern` | `*_test.rb` | which files are tests |
 | `mruby/loader/root_directories` | none | more roots naming files from the top |
 
+### Limitations
+
+These are what a project meets today, each with what to do about it.
+
+| Limit | What to do |
+|---|---|
+| An exported game ships its `.rb` files as source | keep secrets out of scripts |
+| A node script's callback cannot wait across frames | use a signal or `_process`; tests can wait |
+| The editor's indent type is one setting for every language | set Editor Settings > Text Editor > Behavior > Indent to spaces |
+| Godot 4.7 may keep Plain Text for a `.rb` opened before the addon | choose Ruby once in the script editor's Edit > Syntax Highlighter |
+
+Saving converts indentation to the editor's indent type while Convert Indent On Save is on, so a Ruby project sets spaces. The Plain Text choice is [godotengine/godot#121288](https://github.com/godotengine/godot/issues/121288), with a fix slated for Godot 4.8.
+
 ## Development
 
 Building needs Ruby with Bundler, Rust through rustup, and libclang. `rust-toolchain.toml` pins the compiler.
