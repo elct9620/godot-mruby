@@ -13,9 +13,9 @@ dependencies = [
 
 [[package]]
 name = "beni"
-version = "0.22.0"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b97a94bc7ea113dbc57f6fe35aaf5f00578590e337b73e17c892ace4bcbd37c"
+checksum = "6d5c2c4f6186fd0b75908b4d6eedded1ddf8941f1b4091dae87cc8f6dc8536ec"
 dependencies = [
  "beni-macros",
  "beni-sys",
@@ -24,9 +24,9 @@ dependencies = [
 
 [[package]]
 name = "beni-macros"
-version = "0.22.0"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b54e8056199be04480b69bedea44917740673e5c2858ac7988ac69fd103ac4d3"
+checksum = "e7d8ee4d6811c44a1e20a349ef50ec7594c57df3e0c25cf00f77cded4f2e0f48"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -35,9 +35,9 @@ dependencies = [
 
 [[package]]
 name = "beni-sys"
-version = "0.22.0"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af028c8ec30e0343663360dbb7b0cbcc29ed0f895368e8c8a62c84123386777e"
+checksum = "0346b46e066537a39471be95c2247a4b9b71901afd8939d03e6a17d5a9cb829b"
 dependencies = [
  "bindgen",
  "cc",
