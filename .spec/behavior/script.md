@@ -608,3 +608,16 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | the source Godot holds, unchanged since the run |
 | When | Godot asks the script for its signals |
 | Then | the list leaves the signal out |
+
+## `RS-073` A node built while the game's realm failed to open reports it once
+
+| Attribute | Value |
+| --- | --- |
+| unverifiable | no run can make the game's realm fail to open |
+| relates | `RE-015` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose Ruby object is not built, and the game's realm, which failed to open |
+| When | Godot calls the node again and again |
+| Then | the log carries the failure once for the node |

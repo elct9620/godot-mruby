@@ -289,7 +289,8 @@ pub fn enter<T>(body: impl FnOnce(&Realm) -> Result<T, RubyError>) -> Result<T, 
         }
         Game::Failed => Err(RubyError::from_message(
             "the game's realm failed to open, and opens again only once closed".to_owned(),
-        )),
+        )
+        .into_failed_opening()),
         Game::Closed | Game::Opening => Err(RubyError::from_message(
             "the game's realm was entered while it opens".to_owned(),
         )),
@@ -329,7 +330,7 @@ fn open_game(game: &RefCell<Game>) -> Result<(), RubyError> {
         RubyError::from_message("the game's realm was entered before it was prepared".to_owned())
     })?;
     let opening = Opening::start(game);
-    opening.finish(open()?);
+    opening.finish(open().map_err(RubyError::into_failed_opening)?);
     Ok(())
 }
 
@@ -760,6 +761,7 @@ pub struct RubyError {
     message: String,
     at: Option<Location>,
     backtrace: Vec<Location>,
+    is_failed_opening: bool,
 }
 
 impl RubyError {
@@ -769,7 +771,22 @@ impl RubyError {
             message,
             at: None,
             backtrace: Vec::new(),
+            is_failed_opening: false,
         }
+    }
+
+    // The same error, told as the game's realm failing to open.
+    fn into_failed_opening(self) -> Self {
+        Self {
+            is_failed_opening: true,
+            ..self
+        }
+    }
+
+    /// Whether the game's realm failed to open, so nothing reaches it until
+    /// it is closed.
+    pub fn is_failed_opening(&self) -> bool {
+        self.is_failed_opening
     }
 
     // A syntax error names its own line, the way Godot reports a script that
@@ -787,6 +804,7 @@ impl RubyError {
                 message: parse.message().to_owned(),
                 at: path.map(|path| Location::new(path.to_owned(), parse.line().into())),
                 backtrace: Vec::new(),
+                is_failed_opening: false,
             },
             Error::Exception(_) => {
                 let backtrace = collect_frames(mrb, error);
@@ -798,6 +816,7 @@ impl RubyError {
                         message: error.message(mrb),
                         at: None,
                         backtrace,
+                        is_failed_opening: false,
                     }
                 }
             }
@@ -1148,18 +1167,20 @@ mod tests {
     #[test]
     fn entries_nested_too_deep_on_one_thread_raise_system_stack_error() {
         let (_turn, key) = held_thing();
-        fn nest(depth: usize, key: Key) -> Result<i64, RubyError> {
-            enter(|realm| match depth {
-                0 => realm.send::<_, i64>(key, "answer", no_args()),
-                _ => nest(depth - 1, key),
-            })
-        }
-
-        let deepest = nest(DEEPEST_ENTRY - 1, key);
-        let beyond = nest(DEEPEST_ENTRY, key);
+        let deepest = enter_nested(DEEPEST_ENTRY - 1, key);
+        let beyond = enter_nested(DEEPEST_ENTRY, key);
 
         assert_eq!(deepest.ok(), Some(42));
         assert!(beyond.is_err_and(|error| error.message.starts_with("SystemStackError")));
+    }
+
+    // @behavior RE-016
+    #[test]
+    fn an_entry_nested_too_deep_is_not_told_as_a_failed_opening() {
+        let (_turn, key) = held_thing();
+        let beyond = enter_nested(DEEPEST_ENTRY, key);
+
+        assert!(beyond.is_err_and(|error| !error.is_failed_opening()));
     }
 
     // @behavior RE-002
@@ -1251,6 +1272,15 @@ mod tests {
         assert_eq!(outcome.try_recv().ok(), Some(true));
     }
 
+    // Asks the Thing held under `key` for its answer from `depth` entries
+    // inside the one this makes.
+    fn enter_nested(depth: usize, key: Key) -> Result<i64, RubyError> {
+        enter(|realm| match depth {
+            0 => realm.send::<_, i64>(key, "answer", no_args()),
+            _ => enter_nested(depth - 1, key),
+        })
+    }
+
     // A fresh game's realm whose way of opening counts its tries, opening
     // the realm after it answered `failures` in turn.
     fn prepare_counted(
@@ -1300,6 +1330,27 @@ mod tests {
 
         assert!(entered.is_err());
         assert_eq!(tries.load(Ordering::SeqCst), 1);
+    }
+
+    // @behavior RE-014
+    #[test]
+    fn the_error_a_failing_opening_answers_is_told_as_a_failed_opening() {
+        let (_turn, _tries) = prepare_counted(vec![fail_to_open]);
+
+        let entered = enter(|_| Ok(()));
+
+        assert!(entered.is_err_and(|error| error.is_failed_opening()));
+    }
+
+    // @behavior RE-015
+    #[test]
+    fn an_entry_into_a_realm_that_failed_to_open_is_told_as_a_failed_opening() {
+        let (_turn, _tries) = prepare_counted(vec![fail_to_open]);
+        enter(|_| Ok(())).ok();
+
+        let entered = enter(|_| Ok(()));
+
+        assert!(entered.is_err_and(|error| error.is_failed_opening()));
     }
 
     // @behavior RE-012

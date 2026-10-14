@@ -130,8 +130,9 @@ enum Stage {
     Recorded,
     /// Built and held under the node's own key.
     Built,
-    /// Its file or `initialize` raised, which was reported; the node calls
-    /// nothing from then on, as an engine-made object is never built again.
+    /// Its file or `initialize` raised, or the game's realm failed to open,
+    /// which was reported; the node calls nothing from then on, as an
+    /// engine-made object is never built again.
     Failed,
 }
 
@@ -336,6 +337,8 @@ impl Caller {
     // or has failed.
     // A call arriving while its file runs, before the class exists, finds
     // none and builds nothing.
+    // A realm that failed to open fails the node once; any other entry
+    // refused leaves it to a later call.
     fn ensure_object(&self) -> Option<Key> {
         match self.current_stage() {
             Stage::Built => return Some(self.key()),
@@ -350,7 +353,12 @@ impl Caller {
             })
         });
         built
-            .inspect_err(|failed| failed.write(&GodotLog))
+            .inspect_err(|failed| {
+                failed.write(&GodotLog);
+                if failed.is_failed_opening() {
+                    self.settle(Stage::Failed);
+                }
+            })
             .ok()
             .flatten()
     }

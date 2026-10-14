@@ -126,3 +126,35 @@ How a thread goes into the game's realm: one thread at a time is inside, and a t
 | Given | the realm was prepared since |
 | When | the realm is entered again |
 | Then | the realm opens |
+
+## `RE-014` The error a failing opening answers is told as a failed opening
+
+| Step | Statement |
+| --- | --- |
+| Given | the game's realm, whose way of opening answers an error |
+| When | the realm is entered for the first time |
+| Then | the entry's error says the realm failed to open |
+
+## `RE-015` An entry into a realm that failed to open is told as a failed opening
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RE-011` |
+
+| Step | Statement |
+| --- | --- |
+| Given | the game's realm, which failed to open at an entry |
+| When | the realm is entered again |
+| Then | the entry's error says the realm failed to open |
+
+## `RE-016` An entry nested too deep is not told as a failed opening
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RE-006` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a thread inside the game's realm 24 entries deep |
+| When | it enters the realm once more |
+| Then | the entry's error does not say the realm failed to open |

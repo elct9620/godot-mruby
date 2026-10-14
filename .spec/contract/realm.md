@@ -488,6 +488,20 @@ impl RubyError {
 }
 ```
 
+## `RubyError::is_failed_opening`
+
+Whether the error is the game's realm failing to open, which every entry answers until the realm is closed.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl RubyError {
+    pub fn is_failed_opening(&self) -> bool {}
+}
+```
+
 ## `Files`
 
 The Ruby files a realm runs: which there are, for its class index, and what each one's source is. A realm is given them as it opens, so it never knows where they are kept.
