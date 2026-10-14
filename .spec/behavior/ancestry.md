@@ -72,6 +72,10 @@ How a file's ancestry is read from the headers of the files its class inherits f
 
 ## `RI-009` A class has the files it is and inherits from
 
+| Attribute | Value |
+| --- | --- |
+| refines | `RS-074` |
+
 | Step | Statement |
 | --- | --- |
 | Given | a file whose class extends another file's class, beside a third file |
@@ -79,6 +83,10 @@ How a file's ancestry is read from the headers of the files its class inherits f
 | Then | it has its own file and the file it extends |
 
 ## `RI-010` A class has no file it neither is nor inherits from
+
+| Attribute | Value |
+| --- | --- |
+| refines | `RS-075` |
 
 | Step | Statement |
 | --- | --- |

@@ -621,3 +621,21 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a node whose Ruby object is not built, and the game's realm, which failed to open |
 | When | Godot calls the node again and again |
 | Then | the log carries the failure once for the node |
+
+## `RS-074` A node whose class inherits from a script's class is taken where that script is the type
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class extends another file's class |
+| Given | an array typed by the other file's script |
+| When | a node with the first script is put into the array |
+| Then | the array holds the node |
+
+## `RS-075` A node whose class does not inherit from a script's class is refused where that script is the type
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class extends another file's class |
+| Given | an array typed by the first script |
+| When | a node with the other file's script is put into the array |
+| Then | the array stays empty |
