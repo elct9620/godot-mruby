@@ -355,7 +355,7 @@ impl Caller {
         built
             .inspect_err(|failed| {
                 failed.write(&GodotLog);
-                if failed.is_failed_opening() {
+                if failed.is_from_opener() {
                     self.settle(Stage::Failed);
                 }
             })

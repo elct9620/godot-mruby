@@ -488,7 +488,7 @@ impl RubyError {
 }
 ```
 
-## `RubyError::is_failed_opening`
+## `RubyError::is_from_opener`
 
 Whether the error is the game's realm failing to open, which every entry answers until the realm is closed.
 
@@ -498,7 +498,7 @@ Whether the error is the game's realm failing to open, which every entry answers
 
 ```rust
 impl RubyError {
-    pub fn is_failed_opening(&self) -> bool {}
+    pub fn is_from_opener(&self) -> bool {}
 }
 ```
 

@@ -290,7 +290,7 @@ pub fn enter<T>(body: impl FnOnce(&Realm) -> Result<T, RubyError>) -> Result<T, 
         Game::Failed => Err(RubyError::from_message(
             "the game's realm failed to open, and opens again only once closed".to_owned(),
         )
-        .into_failed_opening()),
+        .into_opener_error()),
         Game::Closed | Game::Opening => Err(RubyError::from_message(
             "the game's realm was entered while it opens".to_owned(),
         )),
@@ -330,7 +330,7 @@ fn open_game(game: &RefCell<Game>) -> Result<(), RubyError> {
         RubyError::from_message("the game's realm was entered before it was prepared".to_owned())
     })?;
     let opening = Opening::start(game);
-    opening.finish(open().map_err(RubyError::into_failed_opening)?);
+    opening.finish(open().map_err(RubyError::into_opener_error)?);
     Ok(())
 }
 
@@ -761,7 +761,7 @@ pub struct RubyError {
     message: String,
     at: Option<Location>,
     backtrace: Vec<Location>,
-    is_failed_opening: bool,
+    is_from_opener: bool,
 }
 
 impl RubyError {
@@ -771,22 +771,22 @@ impl RubyError {
             message,
             at: None,
             backtrace: Vec::new(),
-            is_failed_opening: false,
+            is_from_opener: false,
         }
     }
 
     // The same error, told as the game's realm failing to open.
-    fn into_failed_opening(self) -> Self {
+    fn into_opener_error(self) -> Self {
         Self {
-            is_failed_opening: true,
+            is_from_opener: true,
             ..self
         }
     }
 
     /// Whether the game's realm failed to open, so nothing reaches it until
     /// it is closed.
-    pub fn is_failed_opening(&self) -> bool {
-        self.is_failed_opening
+    pub fn is_from_opener(&self) -> bool {
+        self.is_from_opener
     }
 
     // A syntax error names its own line, the way Godot reports a script that
@@ -804,7 +804,7 @@ impl RubyError {
                 message: parse.message().to_owned(),
                 at: path.map(|path| Location::new(path.to_owned(), parse.line().into())),
                 backtrace: Vec::new(),
-                is_failed_opening: false,
+                is_from_opener: false,
             },
             Error::Exception(_) => {
                 let backtrace = collect_frames(mrb, error);
@@ -816,7 +816,7 @@ impl RubyError {
                         message: error.message(mrb),
                         at: None,
                         backtrace,
-                        is_failed_opening: false,
+                        is_from_opener: false,
                     }
                 }
             }
@@ -1180,7 +1180,7 @@ mod tests {
         let (_turn, key) = held_thing();
         let beyond = enter_nested(DEEPEST_ENTRY, key);
 
-        assert!(beyond.is_err_and(|error| !error.is_failed_opening()));
+        assert!(beyond.is_err_and(|error| !error.is_from_opener()));
     }
 
     // @behavior RE-002
@@ -1289,9 +1289,9 @@ mod tests {
         let turn = TURN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         close();
         let tries = Arc::new(AtomicUsize::new(0));
-        let counted = tries.clone();
+        let opener_tries = tries.clone();
         prepare(move || {
-            let tried = counted.fetch_add(1, Ordering::SeqCst);
+            let tried = opener_tries.fetch_add(1, Ordering::SeqCst);
             match failures.get(tried) {
                 Some(fail) => fail(),
                 None => Realm::open(Thing, Silence, |_| Ok(())),
@@ -1300,18 +1300,18 @@ mod tests {
         (turn, tries)
     }
 
-    fn panic_while_opening() -> Result<Realm, RubyError> {
+    fn opener_panic() -> Result<Realm, RubyError> {
         panic!("the opener panics")
     }
 
-    fn fail_to_open() -> Result<Realm, RubyError> {
+    fn opener_error() -> Result<Realm, RubyError> {
         Err(RubyError::from_message("the opener fails".to_owned()))
     }
 
     // @behavior RE-005
     #[test]
     fn an_entry_after_the_realm_panicked_while_opening_fails_without_opening_it_again() {
-        let (_turn, tries) = prepare_counted(vec![panic_while_opening]);
+        let (_turn, tries) = prepare_counted(vec![opener_panic]);
         panic::catch_unwind(|| enter(|_| Ok(()))).ok();
 
         let entered = enter(|_| Ok(()));
@@ -1323,7 +1323,7 @@ mod tests {
     // @behavior RE-011
     #[test]
     fn an_entry_after_the_realm_failed_to_open_fails_without_opening_it_again() {
-        let (_turn, tries) = prepare_counted(vec![fail_to_open]);
+        let (_turn, tries) = prepare_counted(vec![opener_error]);
         enter(|_| Ok(())).ok();
 
         let entered = enter(|_| Ok(()));
@@ -1335,28 +1335,28 @@ mod tests {
     // @behavior RE-014
     #[test]
     fn the_error_a_failing_opening_answers_is_told_as_a_failed_opening() {
-        let (_turn, _tries) = prepare_counted(vec![fail_to_open]);
+        let (_turn, _tries) = prepare_counted(vec![opener_error]);
 
         let entered = enter(|_| Ok(()));
 
-        assert!(entered.is_err_and(|error| error.is_failed_opening()));
+        assert!(entered.is_err_and(|error| error.is_from_opener()));
     }
 
     // @behavior RE-015
     #[test]
     fn an_entry_into_a_realm_that_failed_to_open_is_told_as_a_failed_opening() {
-        let (_turn, _tries) = prepare_counted(vec![fail_to_open]);
+        let (_turn, _tries) = prepare_counted(vec![opener_error]);
         enter(|_| Ok(())).ok();
 
         let entered = enter(|_| Ok(()));
 
-        assert!(entered.is_err_and(|error| error.is_failed_opening()));
+        assert!(entered.is_err_and(|error| error.is_from_opener()));
     }
 
     // @behavior RE-012
     #[test]
     fn a_realm_that_failed_to_open_opens_again_once_closed() {
-        let (_turn, _tries) = prepare_counted(vec![fail_to_open]);
+        let (_turn, _tries) = prepare_counted(vec![opener_error]);
         enter(|_| Ok(())).ok();
         close();
 
