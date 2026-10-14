@@ -44,6 +44,18 @@ Closes the game's realm unless the calling thread is inside it; the next entry o
 pub fn close() {}
 ```
 
+## `take_in_files`
+
+Takes the files at the given paths that the game's realm does not name yet into its class index, if it is open, so a file added since it opened loads by name.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub fn take_in_files(paths: Vec<String>) {}
+```
+
 ## `Roots`
 
 The root directories a realm names its files from: `res://`, and those inside it whose files are named from the top level too. What reads files outside the realm is given the same roots the realm is, so it names each file as the realm does.

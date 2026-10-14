@@ -9,6 +9,7 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 - `tasks/support/loader/*.rb`
 - `godot/test/unit/loader/**/*_test.rb`
 - `rust/src/realm/index.rs`
+- `rust/src/game.rs`
 
 ## `RL-001` Two files naming one constant are warned about
 
@@ -315,3 +316,50 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 | Given | a project of library files and node scripts extending one base, and one twenty times its size |
 | When | a node is given each node script in each project |
 | Then | the larger project takes at most twice twenty times as long |
+
+## `RL-039` A file added since the realm opened loads by name once the realm takes the project's files in
+
+| Step | Statement |
+| --- | --- |
+| Given | a realm that opened before a file was added to the project |
+| Given | the realm took in the project's files since |
+| When | Ruby first uses the constant the added file's path spells |
+| Then | it gets what the file defined |
+
+## `RL-040` Taking in the files a realm already holds warns of nothing again
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RL-001` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a realm whose class index took in two files naming one constant, which it warned about |
+| When | the realm takes in the same files again |
+| Then | the log carries no new warning |
+
+## `RL-041` A file a listing of the project finds arrives once
+
+| Attribute | Value |
+| --- | --- |
+| refines | `RL-039` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a listing of the project's files, and a file added to the project since |
+| Given | the project was listed again twice |
+| When | the files that arrived since are taken |
+| Then | they are the added file alone |
+
+## `RL-042` A file the editor asked about arrives once
+
+| Attribute | Value |
+| --- | --- |
+| refines | `RL-039` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a listing of the project's files, and a file added to the project since |
+| Given | the editor asked about the added file, then the project was listed again |
+| When | the files that arrived since are taken |
+| Then | they are the added file alone |

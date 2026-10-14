@@ -10,7 +10,7 @@ use godot::obj::Singleton;
 
 use crate::ancestry;
 use crate::header::Header;
-use crate::realm::{ClassIndex, Declarations, Files, Parent, Roots};
+use crate::realm::{self, ClassIndex, Declarations, Files, Parent, Roots};
 use crate::settings;
 
 const ROOT: &str = "res://";
@@ -116,12 +116,15 @@ pub fn is_left_out_in_editor(path: &str, test_directories: &[String]) -> bool {
 /// scans: listing walks every directory, which the editor would otherwise
 /// wait on for each file it asks about. A file asked about joins the listing,
 /// and a removed one leaves it once the project is listed again. The class
-/// index of the listing is kept until the listing changes.
+/// index of the listing is kept until the listing changes, and the files
+/// that joined it are kept until they are taken, so what comes after a
+/// listing costs as many files as joined, not as the project holds.
 pub struct Listing<F: Files> {
     files: F,
     is_listed: fn(&str) -> bool,
     paths: Mutex<Option<Vec<String>>>,
     index: Mutex<Option<Arc<ClassIndex>>>,
+    arrivals: Mutex<Vec<String>>,
 }
 
 impl<F: Files> Listing<F> {
@@ -133,6 +136,7 @@ impl<F: Files> Listing<F> {
             is_listed,
             paths: Mutex::new(None),
             index: Mutex::new(None),
+            arrivals: Mutex::new(Vec::new()),
         }
     }
 
@@ -147,6 +151,7 @@ impl<F: Files> Listing<F> {
         {
             paths.insert(at, path.to_owned());
             self.lock_index().take();
+            self.lock_arrivals().push(path.to_owned());
         }
     }
 
@@ -154,8 +159,20 @@ impl<F: Files> Listing<F> {
     /// no question waits on the walk.
     pub fn relist(&self) {
         let paths = self.files.paths();
-        *self.lock_paths() = Some(paths);
+        let mut listing = self.lock_paths();
+        if let Some(listed) = listing.as_ref() {
+            self.lock_arrivals()
+                .extend(collect_arrivals(listed, &paths));
+        }
+        *listing = Some(paths);
+        drop(listing);
         self.lock_index().take();
+    }
+
+    /// The files that joined the listing since this was last asked, each
+    /// once, as the editor asked about it or a listing found it.
+    pub fn take_arrivals(&self) -> Vec<String> {
+        std::mem::take(&mut *self.lock_arrivals())
     }
 
     // The class index of the listing, built outside the lock once the
@@ -175,6 +192,23 @@ impl<F: Files> Listing<F> {
     fn lock_index(&self) -> MutexGuard<'_, Option<Arc<ClassIndex>>> {
         self.index.lock().unwrap_or_else(PoisonError::into_inner)
     }
+
+    fn lock_arrivals(&self) -> MutexGuard<'_, Vec<String>> {
+        self.arrivals.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+}
+
+// The paths in `paths` that `listed` lacks, walking both sorted lists once.
+fn collect_arrivals(listed: &[String], paths: &[String]) -> Vec<String> {
+    let mut listed = listed.iter().peekable();
+    let mut arrivals = Vec::new();
+    for path in paths {
+        while listed.next_if(|other| *other < path).is_some() {}
+        if listed.next_if(|other| *other == path).is_none() {
+            arrivals.push(path.clone());
+        }
+    }
+    arrivals
 }
 
 impl<F: Files> Files for Listing<F> {
@@ -212,9 +246,16 @@ pub fn listing() -> &'static Listing<FilesOnDisk> {
 }
 
 /// Lists the game's files again, as the editor found the project's files
-/// changed.
+/// changed, and gives the game's realm those added since it opened.
 pub fn relist_files() {
     LISTING.relist();
+    let test_directories = settings::test_directories();
+    let arrivals = LISTING
+        .take_arrivals()
+        .into_iter()
+        .filter(|path| !is_left_out_in_editor(path, &test_directories))
+        .collect();
+    realm::take_in_files(arrivals);
 }
 
 // Whether `GameFiles` lists the file at `path`.
@@ -301,5 +342,75 @@ fn collect_paths(directory: &str, left_out: &[&str], paths: &mut Vec<String>) {
         } else if entry.ends_with(".rb") {
             paths.push(format!("{directory}{entry}"));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Files at sorted paths a test changes, as a project's files on disk.
+    struct Folder(Mutex<Vec<&'static str>>);
+
+    impl Folder {
+        fn add(&self, path: &'static str) {
+            let mut paths = self.0.lock().unwrap();
+            paths.push(path);
+            paths.sort_unstable();
+        }
+    }
+
+    impl Files for &Folder {
+        fn paths(&self) -> Vec<String> {
+            self.0
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|path| (*path).to_owned())
+                .collect()
+        }
+
+        fn source_by_path(&self, _path: &str) -> Result<String, String> {
+            Ok(String::new())
+        }
+
+        fn declarations_by_path(&self, _path: &str) -> Declarations {
+            Declarations::default()
+        }
+    }
+
+    // A listing of `folder` that has listed it once.
+    fn first_listing(folder: &Folder) -> Listing<&Folder> {
+        let listing = Listing::new(folder, |_| true);
+        listing.paths();
+        listing
+    }
+
+    // @behavior RL-041
+    #[test]
+    fn a_file_a_listing_finds_arrives_once() {
+        let folder = Folder(Mutex::new(vec!["res://a.rb", "res://c.rb"]));
+        let listing = first_listing(&folder);
+        folder.add("res://b.rb");
+        listing.relist();
+        listing.relist();
+
+        let arrivals = listing.take_arrivals();
+
+        assert_eq!(arrivals, ["res://b.rb"]);
+    }
+
+    // @behavior RL-042
+    #[test]
+    fn a_file_the_editor_asked_about_arrives_once() {
+        let folder = Folder(Mutex::new(vec!["res://a.rb"]));
+        let listing = first_listing(&folder);
+        folder.add("res://b.rb");
+        listing.take_in("res://b.rb");
+        listing.relist();
+
+        let arrivals = listing.take_arrivals();
+
+        assert_eq!(arrivals, ["res://b.rb"]);
     }
 }

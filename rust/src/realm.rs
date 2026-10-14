@@ -458,6 +458,22 @@ pub fn rerun_queued(rerun: &Rerun) -> bool {
     true
 }
 
+/// Takes the files at `paths` the game's realm does not name yet into its
+/// class index, if it is open, so a file added since it opened loads by name.
+pub fn take_in_files(paths: Vec<String>) {
+    let game = GAME.lock();
+    if let Game::Open(realm) = &*game.borrow() {
+        let added: Vec<String> = {
+            let index = bookkeeping(&realm.mrb).index.borrow();
+            paths
+                .into_iter()
+                .filter(|path| !index.is_named(path))
+                .collect()
+        };
+        realm.index_files(added);
+    }
+}
+
 /// Closes the game's realm, unless this thread is inside it; a key released
 /// for it holds nothing in the next.
 pub fn close() {
@@ -990,6 +1006,49 @@ mod tests {
         }
     }
 
+    // The files at `paths` under `res://` and `res://src`, and a Lamp's file
+    // at any other path, as one added since they were listed.
+    #[derive(Clone)]
+    struct Shelf(Vec<&'static str>);
+
+    impl Files for Shelf {
+        fn paths(&self) -> Vec<String> {
+            self.0.iter().map(|path| (*path).to_owned()).collect()
+        }
+
+        fn roots(&self) -> Roots {
+            Roots::new(["res://src".to_owned()])
+        }
+
+        fn source_by_path(&self, path: &str) -> Result<String, String> {
+            Ok(match path {
+                "res://probe.rb" => {
+                    "class Probe\n  def self.reach(_) = Lamp.to_s == \"Lamp\"\nend\n"
+                }
+                _ => "class Lamp\nend\n",
+            }
+            .to_owned())
+        }
+
+        fn declarations_by_path(&self, _path: &str) -> Declarations {
+            Declarations::default()
+        }
+    }
+
+    // The warnings a realm wrote.
+    #[derive(Clone, Default)]
+    struct Warnings(Arc<Mutex<Vec<String>>>);
+
+    impl Log for Warnings {
+        fn print_line(&self, _text: &str) {}
+        fn print(&self, _text: &str) {}
+        fn record(&self, level: Level, _at: Option<&Location>, text: &str) {
+            if matches!(level, Level::Warn) {
+                self.0.lock().unwrap().push(text.to_owned());
+            }
+        }
+    }
+
     // The frames an error carries, each as `file:line:method`.
     fn format_frames(error: Option<RubyError>) -> Vec<String> {
         error
@@ -1095,6 +1154,39 @@ mod tests {
         });
 
         assert_eq!(format_frames(ran.err()), ["res://tripwire.rb:2:"]);
+    }
+
+    // @behavior RL-039
+    #[test]
+    fn a_file_added_since_the_realm_opened_loads_by_name_once_taken_in() {
+        let _turn = TURN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        close();
+        let shelf = Shelf(vec!["res://probe.rb"]);
+        prepare(move || Realm::open(shelf.clone(), Silence, |_| Ok(())));
+        enter(|_| Ok(())).ok();
+        take_in_files(vec!["res://lamp.rb".to_owned()]);
+
+        let reached = enter(|realm| realm.call::<_, bool>("Probe", c"reach", [0_i64]));
+
+        assert_eq!(reached.map_err(|error| error.message), Ok(true));
+    }
+
+    // @behavior RL-040
+    #[test]
+    fn taking_in_the_files_the_realm_holds_warns_of_nothing_again() {
+        let _turn = TURN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        close();
+        let shelf = Shelf(vec!["res://probe.rb", "res://lamp.rb", "res://src/lamp.rb"]);
+        let warnings = Warnings::default();
+        let (files, log) = (shelf.clone(), warnings.clone());
+        prepare(move || Realm::open(files.clone(), log.clone(), |_| Ok(())));
+        enter(|_| Ok(())).ok();
+        let count_at_open = warnings.0.lock().unwrap().len();
+
+        take_in_files(shelf.paths());
+
+        assert_eq!(count_at_open, 1);
+        assert_eq!(warnings.0.lock().unwrap().len(), count_at_open);
     }
 
     // @behavior RL-032
