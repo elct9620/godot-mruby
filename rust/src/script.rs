@@ -485,6 +485,12 @@ impl IScriptExtension for RubyScript {
         Array::new()
     }
 
+    // The icon the editor shows for a script the project's class list does
+    // not carry, as one sharing its name, as a GDScript answers its `@icon`.
+    fn get_class_icon_path(&self) -> GString {
+        self.header.icon().unwrap_or_default().into()
+    }
+
     fn has_method(&self, method: StringName) -> bool {
         self.lineage()
             .has_method(&snapshot::latest(), &method.to_string())

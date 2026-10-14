@@ -639,3 +639,15 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | an array typed by the first script |
 | When | a node with the other file's script is put into the array |
 | Then | the array stays empty |
+
+## `RS-076` A node script the class list does not carry still shows its icon
+
+| Attribute | Value |
+| --- | --- |
+| unverifiable | Godot reads a script's icon only inside the editor, through no call a headless run makes |
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class calls `icon` and shares its name with another node script |
+| When | the editor shows a node with that script |
+| Then | the node shows the icon the class calls |

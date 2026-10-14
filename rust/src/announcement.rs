@@ -19,7 +19,7 @@ pub struct Announcement {
     /// The nearest announced class the class inherits from, or else its
     /// engine class.
     pub base: String,
-    /// The path `icon` is called with, as written.
+    /// The icon's path from the project's root, as the header carries it.
     pub icon: Option<String>,
     pub is_tool: bool,
     pub is_abstract: bool,
@@ -379,7 +379,7 @@ mod tests {
 
         let announcement = announce_sources("res://enemy.rb", &sources).unwrap();
 
-        assert_eq!(announcement.icon.as_deref(), Some("enemy.svg"));
+        assert_eq!(announcement.icon.as_deref(), Some("res://enemy.svg"));
     }
 
     // @behavior RN-011

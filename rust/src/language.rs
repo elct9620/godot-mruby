@@ -424,11 +424,7 @@ impl IScriptLanguageExtension for RubyLanguage {
             Ok(announcement) => vdict! {
                 "name" => announcement.name,
                 "base_type" => announcement.base,
-                "icon_path" => announcement
-                    .icon
-                    .map(|icon| resolve_icon_path(&path, &icon))
-                    .unwrap_or_default()
-                    .to_string(),
+                "icon_path" => announcement.icon.unwrap_or_default(),
                 "is_abstract" => announcement.is_abstract,
                 "is_tool" => announcement.is_tool,
             }
@@ -465,17 +461,6 @@ fn describe_warning(warning: &Warning) -> VarDictionary {
         "code" => warning.kind as i32,
         "string_code" => warning.kind.code(),
         "message" => warning.message.as_str(),
-    }
-}
-
-// An icon's path from the project's root: one written relative to the file's
-// directory is taken from there, as GDScript's `@icon` is.
-fn resolve_icon_path(script: &GString, icon: &str) -> GString {
-    let icon = GString::from(icon);
-    if icon.is_relative_path() {
-        script.get_base_dir().path_join(&icon).simplify_path()
-    } else {
-        icon.simplify_path()
     }
 }
 

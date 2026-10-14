@@ -67,11 +67,16 @@ impl Header {
         if let Some(program) = result.node().as_program_node() {
             reader.read_body(&program.statements().body(), &[]);
         }
+        let header = reader.header.unwrap_or_default();
         Header {
             written_constants: reader.written_constants,
             digest: snapshot::digest(source),
             is_parsed: result.errors().next().is_none(),
-            ..reader.header.unwrap_or_default()
+            icon: header
+                .icon
+                .as_deref()
+                .map(|icon| resolve_icon_path(path, icon)),
+            ..header
         }
     }
 
@@ -163,7 +168,8 @@ impl Header {
         self.is_abstract
     }
 
-    /// The icon's path, as the string `icon` is called with.
+    /// The icon's path from the project's root, as the string `icon` is
+    /// called with names it.
     pub fn icon(&self) -> Option<&str> {
         self.icon.as_deref()
     }
@@ -462,6 +468,46 @@ fn decode_text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
+// An icon's path from the project's root: one written relative to the file's
+// directory is taken from there, as GDScript's `@icon` is.
+fn resolve_icon_path(file: &str, icon: &str) -> String {
+    if is_absolute_path(icon) {
+        simplify_path(icon)
+    } else {
+        let directory = file.rsplit_once('/').map_or("", |(directory, _)| directory);
+        simplify_path(&format!("{directory}/{icon}"))
+    }
+}
+
+// Whether `path` is absolute as Godot's `String::is_absolute_path` reads it:
+// from the root, or under a scheme such as `res://` or a drive.
+fn is_absolute_path(path: &str) -> bool {
+    path.starts_with(['/', '\\']) || path.contains(":/") || path.contains(":\\")
+}
+
+// `path` as Godot's `String::simplify_path` writes it: its prefix kept, `.`
+// and empty steps dropped, and each `..` taking the step before it.
+fn simplify_path(path: &str) -> String {
+    let path = path.replace('\\', "/");
+    let (prefix, rest) = match path.find(":/") {
+        Some(at) if path[at..].starts_with("://") => path.split_at(at + 3),
+        Some(at) => path.split_at(at + 2),
+        None if path.starts_with('/') => path.split_at(1),
+        None => path.split_at(0),
+    };
+    let mut steps: Vec<&str> = Vec::new();
+    for step in rest.split('/') {
+        match step {
+            "" | "." => {}
+            ".." => {
+                steps.pop();
+            }
+            _ => steps.push(step),
+        }
+    }
+    format!("{prefix}{}", steps.join("/"))
+}
+
 // A superclass the class statement inside `scope` writes, when it is a
 // constant path.
 fn read_superclass(superclass: &Node, scope: &[String]) -> Option<Superclass> {
@@ -645,7 +691,27 @@ mod tests {
 
         let header = Header::from_source("res://enemy.rb", source, &Roots::default());
 
-        assert_eq!(header.icon(), Some("icons/enemy.svg"));
+        assert_eq!(header.icon(), Some("res://icons/enemy.svg"));
+    }
+
+    // @behavior RH-019
+    #[test]
+    fn an_icon_written_relative_to_the_file_is_taken_from_the_files_directory() {
+        let source = "class Enemies::Boss < Godot::Node2D\n  icon \"../icons/./boss.svg\"\nend\n";
+
+        let header = Header::from_source("res://enemies/boss.rb", source, &Roots::default());
+
+        assert_eq!(header.icon(), Some("res://icons/boss.svg"));
+    }
+
+    // @behavior RH-020
+    #[test]
+    fn an_icon_written_from_the_projects_root_keeps_its_path() {
+        let source = "class Enemies::Boss < Godot::Node2D\n  icon \"res://icons//boss.svg\"\nend\n";
+
+        let header = Header::from_source("res://enemies/boss.rb", source, &Roots::default());
+
+        assert_eq!(header.icon(), Some("res://icons/boss.svg"));
     }
 
     // @behavior RH-014

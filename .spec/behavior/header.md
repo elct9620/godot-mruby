@@ -108,7 +108,7 @@ How a file's header is read from its source without running it: the constants it
 | --- | --- |
 | Given | a file whose class body calls `icon` with a string literal |
 | When | its header is read |
-| Then | the header carries that string as the class's icon |
+| Then | the header carries the path that string names as the class's icon |
 
 ## `RH-014` The class's name is the last name its class statement writes
 
@@ -149,3 +149,27 @@ How a file's header is read from its source without running it: the constants it
 | Given | a file whose class body calls `signal` with a local variable |
 | When | its header is read |
 | Then | the header carries no signal |
+
+## `RH-019` An icon written relative to the file is taken from the file's directory
+
+| Attribute | Value |
+| --- | --- |
+| refines | `RS-076`, `RS-025` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose class body calls `icon` with a path relative to the file's directory |
+| When | its header is read |
+| Then | the header carries the icon's path from the project's root |
+
+## `RH-020` An icon written from the project's root keeps its path
+
+| Attribute | Value |
+| --- | --- |
+| refines | `RS-076` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose class body calls `icon` with a `res://` path |
+| When | its header is read |
+| Then | the header carries that path, simplified, as the class's icon |
