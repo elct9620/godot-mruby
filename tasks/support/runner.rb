@@ -11,10 +11,13 @@ module Godot
   # scene and reads what the runs report. Part of Godot.verify!.
   module Runner
     RUNNER_SCENE = "res://addons/godot_mruby/runner.tscn"
-    # A run lasts as many frames as its tests wait; this only stops a runner
-    # that never quits from hanging the check.
-    RUNNER_FRAMES = "600"
+    # A run lasts as many frames as its tests wait, a few hundred for the
+    # project's tests; this, far over that, only stops a runner that never
+    # quits from hanging the check. Godot exits 0 at it, so only the missing
+    # summary tells.
+    RUNNER_FRAMES = "3000"
     TESTS = "res://test"
+    SUMMARY_LINE = /^\d+ runs, \d+ assertions, /
     PASS_LINE = /^(\d+) runs, \d+ assertions, 0 failures, 0 errors, \d+ skips$/
     # What Godot warns at exit, in 4.6's wording and 4.7's alike, of an object
     # nothing freed, such as a node a test made and never freed.
@@ -59,6 +62,9 @@ module Godot
     # @behavior RT-001 RG-020
     def verify_tests!(project)
       output, status = run_tests_once(project)
+      if status.success? && !output.match?(SUMMARY_LINE)
+        raise "The Ruby tests under #{TESTS} were stopped at #{RUNNER_FRAMES} frames before they finished:\n#{output}"
+      end
       return if status.success? && output[PASS_LINE, 1].to_i.positive? && !output.include?(LEAK_LINE) &&
                 !output.include?(NO_SINGLETON)
 
