@@ -39,6 +39,10 @@ module Godot
 
     run/main_run_args="--headless"
   SETTINGS
+  # Every run of Godot a check makes, with what it printed, so a failed check
+  # leaves the whole output however little its message quotes; CI uploads
+  # TEST_REPORT_DIR when a job fails.
+  RUN_LOG = File.join(ENV.fetch("TEST_REPORT_DIR", Dir.tmpdir), "godot-runs.log")
   # The checks, each in the module named after the behaviour it claims.
   CHECKS = [
     Script, Declarations, Report, Runner, Runner::Failures, Runner::Results, Runner::Settings, Loader, Export,
@@ -69,8 +73,33 @@ module Godot
   def verify!(project = PROJECT)
     FileUtils.rm_rf(File.join(project, ".godot", "editor"))
     Runner.forget_runs
-    verify_loaded!(project)
-    CHECKS.each { |check| check.verify!(project) }
+    log_runs do
+      verify_loaded!(project)
+      CHECKS.each { |check| check.verify!(project) }
+    end
+  end
+
+  # Writes the runs the checks in the block make to RUN_LOG, started afresh,
+  # and names it in the error of the check that fails.
+  def log_runs
+    FileUtils.rm_f(RUN_LOG)
+    @logged = true
+    yield
+  rescue StandardError => e
+    raise e.exception("#{e.message}\nEvery run's output is in #{RUN_LOG}")
+  ensure
+    @logged = false
+  end
+
+  # Runs `command` as Open3.capture2e does, adding the run to RUN_LOG inside
+  # log_runs; outside it, as for the bench, a run is timed and kept nowhere.
+  def capture(*command, **)
+    Open3.capture2e(*command, **).tap do |output, status|
+      next unless @logged
+
+      FileUtils.mkdir_p(File.dirname(RUN_LOG))
+      File.write(RUN_LOG, "$ #{command.join(" ")}\n#{output}#{status}\n\n", mode: "a")
+    end
   end
 
   # The project keeps its extension list, so the editor loads the addon at
@@ -104,15 +133,15 @@ module Godot
 
   # Opens the project in the editor for this many frames.
   def run_editor_frames(project, frames)
-    Open3.capture2e(EXECUTABLE, "--headless", "--editor", "--quit-after", frames, "--path", project)
+    capture(EXECUTABLE, "--headless", "--editor", "--quit-after", frames, "--path", project)
   end
 
   # Opens the project in the editor, which scans it, and quits.
   def run_editor(project)
-    Open3.capture2e(EXECUTABLE, "--headless", "--editor", "--quit", "--path", project)
+    capture(EXECUTABLE, "--headless", "--editor", "--quit", "--path", project)
   end
 
   def run_scene(project, scene, *)
-    Open3.capture2e(EXECUTABLE, "--headless", "--path", project, scene, *)
+    capture(EXECUTABLE, "--headless", "--path", project, scene, *)
   end
 end

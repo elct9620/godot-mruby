@@ -177,8 +177,10 @@ jobs:
           version: ${{ matrix.release }}
       - run: bundle exec rake addon:release
         if: matrix.release_check
-      # The Ruby tests' log and results, with the seed and order a flaky
-      # failure needs to be run again.
+        env:
+          TEST_REPORT_DIR: ${{ runner.temp }}/test-report
+      # Every Godot run's output, and the Ruby tests' results with the seed
+      # and order a flaky failure needs to be run again.
       - if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

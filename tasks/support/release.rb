@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "fileutils"
-require "open3"
 require "tmpdir"
 
 require_relative "engine_classes"
@@ -27,11 +26,13 @@ module Godot
 
     def verify!(project = PROJECT)
       template = ENV.fetch(TEMPLATE) { raise "#{TEMPLATE} names no export template's release binary" }
-      Dir.mktmpdir do |dir|
-        FileUtils.cp(template, File.join(dir, GAME))
-        Export.export_pack(project, dir)
-        Export.install_library(project, dir)
-        CHECKS.each { |check| check.verify_release!(dir) }
+      Godot.log_runs do
+        Dir.mktmpdir do |dir|
+          FileUtils.cp(template, File.join(dir, GAME))
+          Export.export_pack(project, dir)
+          Export.install_library(project, dir)
+          CHECKS.each { |check| check.verify_release!(dir) }
+        end
       end
     end
 
@@ -39,7 +40,7 @@ module Godot
     # it ended.
     def play(dir, scene)
       File.write(File.join(dir, "override.cfg"), "[application]\n\nrun/main_scene=#{scene.dump}\n")
-      Open3.capture2e(File.join(dir, GAME), "--headless", "--quit-after", FRAMES, chdir: dir)
+      Godot.capture(File.join(dir, GAME), "--headless", "--quit-after", FRAMES, chdir: dir)
     end
 
     # The messages of the refusals `scene` printed, or the error naming what

@@ -139,24 +139,23 @@ module Godot
 
     # Runs with these options and tells GitHub Actions what the run's
     # results hold, when it runs there. The directory TEST_REPORT_DIR names
-    # keeps the run's log and results, for a failed job to upload.
+    # keeps the results beside RUN_LOG, for a failed job to upload.
     def run_reported(project, *options)
       Dir.mktmpdir do |dir|
         results = File.join(dir, "results.json")
-        run(project, *options, "--results", results).tap do |output, _status|
+        run(project, *options, "--results", results).tap do
           Workflow.report(JSON.parse(File.read(results))) if File.exist?(results)
-          keep_report(output, results, ENV.fetch("TEST_REPORT_DIR", nil))
+          keep_results(results, ENV.fetch("TEST_REPORT_DIR", nil))
         end
       end
     end
 
-    # Copies a run's log and its results file into `dir`, when one is named.
-    def keep_report(output, results, dir)
-      return unless dir
+    # Copies a run's results file into `dir`, when one is named.
+    def keep_results(results, dir)
+      return unless dir && File.exist?(results)
 
       FileUtils.mkdir_p(dir)
-      File.write(File.join(dir, "output.log"), output)
-      FileUtils.cp(results, dir) if File.exist?(results)
+      FileUtils.cp(results, dir)
     end
 
     def run(project, *options)

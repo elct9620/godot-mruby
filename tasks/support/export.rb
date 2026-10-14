@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "fileutils"
-require "open3"
 require "tmpdir"
 
 module Godot
@@ -88,7 +87,7 @@ module Godot
     # is judged by the pack it leaves.
     def export_pack(project, dir)
       pack = File.join(dir, "game.pck")
-      output, = Open3.capture2e(EXECUTABLE, "--headless", "--path", project, "--export-pack", PRESET, pack)
+      output, = Godot.capture(EXECUTABLE, "--headless", "--path", project, "--export-pack", PRESET, pack)
       raise "The project did not export as a pack:\n#{output}" unless File.exist?(pack)
 
       pack
@@ -103,8 +102,8 @@ module Godot
     end
 
     def run(dir, pack, scene, *)
-      Open3.capture2e(EXECUTABLE, "--headless", "--main-pack", pack, scene,
-                      "--quit-after", FRAMES, "--", *, chdir: dir)
+      Godot.capture(EXECUTABLE, "--headless", "--main-pack", pack, scene,
+                    "--quit-after", FRAMES, "--", *, chdir: dir)
     end
   end
 end

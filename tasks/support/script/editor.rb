@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require "open3"
-
 module Godot
   module Script
     # Opens scenes in a headless editor and reads what it printed: a node whose
@@ -118,8 +116,8 @@ module Godot
       end
 
       def open_scene(project, scene)
-        output, status = Open3.capture2e(EXECUTABLE, "--headless", "--editor", "--verbose",
-                                         "--path", project, scene, "--quit-after", FRAMES)
+        output, status = Godot.capture(EXECUTABLE, "--headless", "--editor", "--verbose",
+                                       "--path", project, scene, "--quit-after", FRAMES)
         raise "The editor did not run:\n#{output}" unless status.success?
         raise "The editor did not reach #{scene}:\n#{output}" unless output.include?(format(SCENE_LOAD_LINE, scene))
 
