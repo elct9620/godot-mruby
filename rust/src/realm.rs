@@ -1268,7 +1268,7 @@ mod tests {
 
     // @behavior RE-016
     #[test]
-    fn an_entry_nested_too_deep_is_not_told_as_a_failed_opening() {
+    fn an_entry_nested_too_deep_is_not_told_as_the_openers() {
         let (_turn, key) = held_thing();
         let beyond = enter_nested(DEEPEST_ENTRY, key);
 
@@ -1426,7 +1426,7 @@ mod tests {
 
     // @behavior RE-014
     #[test]
-    fn the_error_a_failing_opening_answers_is_told_as_a_failed_opening() {
+    fn the_error_the_realms_opener_answers_is_told_as_the_openers() {
         let (_turn, _tries) = prepare_counted(vec![opener_error]);
 
         let entered = enter(|_| Ok(()));
@@ -1436,7 +1436,7 @@ mod tests {
 
     // @behavior RE-015
     #[test]
-    fn an_entry_into_a_realm_that_failed_to_open_is_told_as_a_failed_opening() {
+    fn an_entry_into_a_realm_that_failed_to_open_is_told_as_the_openers() {
         let (_turn, _tries) = prepare_counted(vec![opener_error]);
         enter(|_| Ok(())).ok();
 

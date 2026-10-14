@@ -502,7 +502,7 @@ impl RubyError {
 
 ## `RubyError::is_from_opener`
 
-Whether the error is the game's realm failing to open, which every entry answers until the realm is closed.
+Whether the error comes from the opener of the game's realm, which failed and is answered at every entry until the realm is closed.
 
 | Attribute | Value |
 | --- | --- |
