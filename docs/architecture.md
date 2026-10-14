@@ -176,7 +176,7 @@ lib.rs    registers Scripting and settings, prepares the realm
   │
   ▼
 ┌─ Editor ────────────────────────────────────────────────────┐
-│  plugin ──► export, panel, highlighter, game                │
+│  plugin ──► export, panel, highlighter, game, announcement  │
 └──┬──────────────────────────────────────────────────────────┘
    ▼
 ┌─ Scripting ─────────────────────────────┐   ┌─ Testing ────────┐

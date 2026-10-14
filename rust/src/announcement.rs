@@ -182,6 +182,34 @@ pub fn describe_shared_name(path: &str, name: &str, others: &[String]) -> String
     )
 }
 
+/// The files at `paths` whose announcement a file in `changes` may have
+/// changed by arriving or leaving: those sharing its file name, which the
+/// editor does not ask about again by itself. Files under
+/// `test_directories` are never announced, so they neither change one nor
+/// are told.
+pub fn collect_name_sharers(
+    paths: &[String],
+    changes: &[String],
+    test_directories: &[String],
+) -> Vec<String> {
+    let is_announceable = |path: &&String| !settings::is_in_directory(path, test_directories);
+    let names: BTreeSet<String> = changes
+        .iter()
+        .filter(is_announceable)
+        .map(|path| read_file_name(path))
+        .collect();
+    if names.is_empty() {
+        return Vec::new();
+    }
+    let changes: BTreeSet<&String> = changes.iter().collect();
+    paths
+        .iter()
+        .filter(is_announceable)
+        .filter(|path| !changes.contains(path) && names.contains(&read_file_name(path)))
+        .cloned()
+        .collect()
+}
+
 // The last segment of the file at `path`, as the class index matches it.
 fn read_file_name(path: &str) -> String {
     let name = path.rsplit('/').next().unwrap_or(path);
@@ -193,7 +221,7 @@ mod tests {
     use std::collections::BTreeMap;
     use std::sync::Mutex;
 
-    use super::{Announcement, Omission, Project, SharedNames};
+    use super::{Announcement, Omission, Project, SharedNames, collect_name_sharers};
     use crate::ancestry::tests::Sources;
     use crate::game::Listing;
     use crate::realm::{Declarations, Files, Roots};
@@ -415,6 +443,34 @@ mod tests {
         let is_node = |class: &str| class != "Resource";
         listing.take_in(path);
         Project::new(listing, Vec::new(), String::new(), &is_node).announcement_by_path(path)
+    }
+
+    // @behavior RN-016
+    #[test]
+    fn the_files_sharing_a_changed_files_name_outside_test_directories_are_named() {
+        let paths = [
+            "res://boss.rb",
+            "res://enemy.rb",
+            "res://levels/enemy.rb",
+            "res://test/enemy.rb",
+        ]
+        .map(str::to_owned);
+        let changes = ["res://levels/enemy.rb".to_owned()];
+
+        let sharers = collect_name_sharers(&paths, &changes, &["res://test/".to_owned()]);
+
+        assert_eq!(sharers, ["res://enemy.rb"]);
+    }
+
+    // @behavior RN-018
+    #[test]
+    fn a_changed_file_under_a_test_directory_names_no_file_to_announce_again() {
+        let paths = ["res://enemy.rb", "res://test/enemy.rb"].map(str::to_owned);
+        let changes = ["res://test/enemy.rb".to_owned()];
+
+        let sharers = collect_name_sharers(&paths, &changes, &["res://test/".to_owned()]);
+
+        assert!(sharers.is_empty());
     }
 
     // @behavior RN-013

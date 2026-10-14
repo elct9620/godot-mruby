@@ -3,14 +3,18 @@
 use godot::classes::{EditorInterface, EditorPlugin, IEditorPlugin};
 use godot::prelude::*;
 
+use crate::announcement;
 use crate::export::RubyExportPlugin;
 use crate::game;
 use crate::highlighter::RubySyntaxHighlighter;
 use crate::panel::RubyTestPanel;
+use crate::realm::Files;
+use crate::settings;
 
 /// Hands the editor the export plugin, the test panel and the Ruby
 /// highlighter for as long as the editor is open, and lists the game's files
-/// again whenever the editor finds them changed.
+/// again whenever the editor finds them changed, having it ask again of the
+/// files sharing a name with one added or removed.
 #[derive(GodotClass)]
 #[class(tool, init, base = EditorPlugin)]
 pub struct RubyEditorPlugin {
@@ -38,7 +42,10 @@ impl IEditorPlugin for RubyEditorPlugin {
             file_system
                 .signals()
                 .filesystem_changed()
-                .connect_other(&*self, |_| game::relist_files());
+                .connect_other(
+                    &*self,
+                    |_| ask_again_for_name_sharers(&game::relist_files()),
+                );
         }
     }
 
@@ -55,6 +62,25 @@ impl IEditorPlugin for RubyEditorPlugin {
             EditorInterface::singleton().get_script_editor(),
         ) {
             script_editor.unregister_syntax_highlighter(&highlighter);
+        }
+    }
+}
+
+// Has the editor ask again for the class name of each file sharing a file
+// name with one in `changes`, since a file arriving or leaving turns whether
+// its name is shared; it asks only of the changed files by itself.
+fn ask_again_for_name_sharers(changes: &[String]) {
+    if changes.is_empty() {
+        return;
+    }
+    let sharers = announcement::collect_name_sharers(
+        &game::listing().paths(),
+        changes,
+        &settings::test_directories(),
+    );
+    if let Some(mut file_system) = EditorInterface::singleton().get_resource_filesystem() {
+        for path in sharers {
+            file_system.update_file(&path);
         }
     }
 }

@@ -5,6 +5,7 @@ How a node script is announced to the editor, which lists it as a class like a G
 ## Includes
 
 - `rust/src/announcement.rs`
+- `rust/src/game.rs`
 
 ## `RN-001` A node script is announced by its class's name without its namespaces
 
@@ -117,3 +118,49 @@ How a node script is announced to the editor, which lists it as a class like a G
 | Given | a node script extending a class two files named, one of which was removed |
 | When | the project is listed again and the node script is announced |
 | Then | its base is the class the remaining file names |
+
+## `RN-015` A file a listing of the project finds gone departs once
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RN-014` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a listing of the project's files, and a file removed from the project since |
+| Given | the project was listed again twice |
+| When | the files that departed since are taken |
+| Then | they are the removed file alone |
+
+## `RN-016` The files sharing an added or removed file's name are the ones to announce again
+
+| Step | Statement |
+| --- | --- |
+| Given | the project's files, one of which was added or removed |
+| When | the files to announce again are collected |
+| Then | they are the other files of its name, outside the test directories |
+
+## `RN-017` The editor announces again a file whose name an added or removed file shares
+
+| Attribute | Value |
+| --- | --- |
+| unverifiable | no headless run adds a file while the editor scans the project |
+| relates | `RN-016` |
+
+| Step | Statement |
+| --- | --- |
+| Given | an announced node script, and a node script of its name added to the project |
+| When | the editor scans the project |
+| Then | the editor no longer lists the announced script by its name |
+
+## `RN-018` A file added or removed under a test directory names no file to announce again
+
+| Attribute | Value |
+| --- | --- |
+| refines | `RN-016` |
+
+| Step | Statement |
+| --- | --- |
+| Given | the project's files, one under a test directory added or removed, sharing its name with a game file |
+| When | the files to announce again are collected |
+| Then | there are none |

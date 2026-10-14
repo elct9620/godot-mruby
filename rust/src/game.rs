@@ -125,6 +125,7 @@ pub struct Listing<F: Files> {
     paths: Mutex<Option<Vec<String>>>,
     index: Mutex<Option<Arc<ClassIndex>>>,
     arrivals: Mutex<Vec<String>>,
+    departures: Mutex<Vec<String>>,
 }
 
 impl<F: Files> Listing<F> {
@@ -137,6 +138,7 @@ impl<F: Files> Listing<F> {
             paths: Mutex::new(None),
             index: Mutex::new(None),
             arrivals: Mutex::new(Vec::new()),
+            departures: Mutex::new(Vec::new()),
         }
     }
 
@@ -161,8 +163,9 @@ impl<F: Files> Listing<F> {
         let paths = self.files.paths();
         let mut listing = self.lock_paths();
         if let Some(listed) = listing.as_ref() {
-            self.lock_arrivals()
-                .extend(collect_arrivals(listed, &paths));
+            self.lock_arrivals().extend(collect_missing(&paths, listed));
+            self.lock_departures()
+                .extend(collect_missing(listed, &paths));
         }
         *listing = Some(paths);
         drop(listing);
@@ -173,6 +176,12 @@ impl<F: Files> Listing<F> {
     /// once, as the editor asked about it or a listing found it.
     pub fn take_arrivals(&self) -> Vec<String> {
         std::mem::take(&mut *self.lock_arrivals())
+    }
+
+    /// The files that left the listing since this was last asked, each once,
+    /// as a listing found them gone.
+    pub fn take_departures(&self) -> Vec<String> {
+        std::mem::take(&mut *self.lock_departures())
     }
 
     // The class index of the listing, built outside the lock once the
@@ -196,19 +205,25 @@ impl<F: Files> Listing<F> {
     fn lock_arrivals(&self) -> MutexGuard<'_, Vec<String>> {
         self.arrivals.lock().unwrap_or_else(PoisonError::into_inner)
     }
+
+    fn lock_departures(&self) -> MutexGuard<'_, Vec<String>> {
+        self.departures
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+    }
 }
 
-// The paths in `paths` that `listed` lacks, walking both sorted lists once.
-fn collect_arrivals(listed: &[String], paths: &[String]) -> Vec<String> {
-    let mut listed = listed.iter().peekable();
-    let mut arrivals = Vec::new();
+// The paths in `paths` that `others` lacks, walking both sorted lists once.
+fn collect_missing(paths: &[String], others: &[String]) -> Vec<String> {
+    let mut others = others.iter().peekable();
+    let mut missing = Vec::new();
     for path in paths {
-        while listed.next_if(|other| *other < path).is_some() {}
-        if listed.next_if(|other| *other == path).is_none() {
-            arrivals.push(path.clone());
+        while others.next_if(|other| *other < path).is_some() {}
+        if others.next_if(|other| *other == path).is_none() {
+            missing.push(path.clone());
         }
     }
-    arrivals
+    missing
 }
 
 impl<F: Files> Files for Listing<F> {
@@ -247,15 +262,22 @@ pub fn listing() -> &'static Listing<FilesOnDisk> {
 
 /// Lists the game's files again, as the editor found the project's files
 /// changed, and gives the game's realm those added since it opened.
-pub fn relist_files() {
+/// Answers the files that were added or removed.
+pub fn relist_files() -> Vec<String> {
     LISTING.relist();
+    let arrivals = LISTING.take_arrivals();
     let test_directories = settings::test_directories();
-    let arrivals = LISTING
-        .take_arrivals()
+    realm::take_in_files(
+        arrivals
+            .iter()
+            .filter(|path| !is_left_out_in_editor(path, &test_directories))
+            .cloned()
+            .collect(),
+    );
+    arrivals
         .into_iter()
-        .filter(|path| !is_left_out_in_editor(path, &test_directories))
-        .collect();
-    realm::take_in_files(arrivals);
+        .chain(LISTING.take_departures())
+        .collect()
 }
 
 // Whether `GameFiles` lists the file at `path`.
@@ -398,6 +420,24 @@ mod tests {
         let arrivals = listing.take_arrivals();
 
         assert_eq!(arrivals, ["res://b.rb"]);
+    }
+
+    // @behavior RN-015
+    #[test]
+    fn a_file_a_listing_finds_gone_departs_once() {
+        let folder = Folder(Mutex::new(vec!["res://a.rb", "res://b.rb"]));
+        let listing = first_listing(&folder);
+        folder
+            .0
+            .lock()
+            .unwrap()
+            .retain(|path| *path != "res://a.rb");
+        listing.relist();
+        listing.relist();
+
+        let departures = listing.take_departures();
+
+        assert_eq!(departures, ["res://a.rb"]);
     }
 
     // @behavior RL-042
