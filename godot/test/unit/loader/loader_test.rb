@@ -65,6 +65,13 @@ class LoaderTest < Minitest::Test
     assert lamp.lit?
   end
 
+  # @behavior RL-043
+  def test_a_file_opening_inside_its_class_a_constant_of_another_file_runs_after_that_file
+    drawer = Unit::Loader::Cabinet::Drawer.new
+    assert drawer.labelled?
+    assert drawer.shut?
+  end
+
   # @behavior RL-030
   def test_a_library_files_superclass_is_rubys_to_look_up
     superclass = Unit::Loader::Posts::Placard.superclass

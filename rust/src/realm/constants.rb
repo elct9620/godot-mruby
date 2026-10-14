@@ -11,8 +11,9 @@ Module.prepend(Module.new do
   end
 
   # A file that raises takes away what it created, so the realm has to know,
-  # and a namespace's own constant the new one would hide loads now. Private,
-  # as Ruby's own hook is.
+  # and a namespace's own constant the new one would hide loads now, as do
+  # the constants a running file writes inside its own class once it exists.
+  # Private, as Ruby's own hook is.
   def const_added(name)
     __record_constant__(name)
     super

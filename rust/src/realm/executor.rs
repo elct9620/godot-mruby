@@ -9,7 +9,7 @@ use std::ffi::{CStr, CString};
 use std::sync::Arc;
 
 use super::constants::Scope;
-use super::{bookkeeping, compile, file_by_constant, methods};
+use super::{bookkeeping, compile, file_by_constant, key_by_path, methods};
 use crate::snapshot::{self, Heading, Member, Property, Signal};
 use beni::{Class as _, Error, FromValue, Module, Mrb, RClass};
 
@@ -69,6 +69,9 @@ struct Frame {
     constants: Vec<(Vec<String>, String)>,
     declarations: Vec<Declaration>,
     digest: u64,
+    // The constants the file writes inside its own class, which exist only
+    // once that class does.
+    inner_constants: Vec<Vec<String>>,
 }
 
 /// How far each file has run in a realm, and the files running now.
@@ -160,6 +163,26 @@ pub(super) fn trace_cycle(mrb: &Mrb, path: &str) -> Option<Vec<String>> {
             .chain([path.to_owned()])
             .collect(),
     )
+}
+
+/// Keeps `inner_constants`, the constants the file running now writes inside
+/// its own class, until that class is created.
+pub(super) fn keep_inner_constants(mrb: &Mrb, inner_constants: Vec<Vec<String>>) {
+    if let Some(frame) = runs(mrb).frames.borrow_mut().last_mut() {
+        frame.inner_constants = inner_constants;
+    }
+}
+
+/// The constants the file running now writes inside its own class, once,
+/// when `key` is that class's constant path.
+pub(super) fn take_inner_constants(mrb: &Mrb, key: &[String]) -> Vec<Vec<String>> {
+    let mut frames = runs(mrb).frames.borrow_mut();
+    match frames.last_mut() {
+        Some(frame) if key_by_path(mrb, &frame.path) == key => {
+            std::mem::take(&mut frame.inner_constants)
+        }
+        _ => Vec::new(),
+    }
 }
 
 /// Records that the file running now created `name` in the namespace the
@@ -269,6 +292,7 @@ fn execute<T>(
         constants: Vec::new(),
         declarations: Vec::new(),
         digest: 0,
+        inner_constants: Vec::new(),
     });
     let outcome = prepare().and_then(|prepared| {
         let source = source_by_path(mrb, path)?;

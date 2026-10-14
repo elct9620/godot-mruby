@@ -30,6 +30,12 @@ class LoaderFailureTest < Minitest::Test
     assert Unit::Loader.const_defined?(:Shelf)
   end
 
+  # @behavior RL-044
+  def test_a_file_whose_own_class_needs_a_file_that_raises_takes_its_class_with_it
+    assert_raises(RuntimeError) { Unit::Loader::Chest }
+    refute Unit::Loader.const_defined?(:Chest)
+  end
+
   # @behavior RL-023
   def test_the_hook_that_tells_the_loader_of_new_constants_stays_private
     assert_raises(NoMethodError) { Module.const_added(:Unused) }

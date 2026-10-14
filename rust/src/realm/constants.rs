@@ -1,7 +1,8 @@
 //! Ruby's side of loading by name. A module prepended to `Module` asks the
 //! class index from `const_missing`, and from `const_added` tells the realm
 //! what a running file creates and loads the constants the new one would
-//! hide; every other miss and addition is left to Ruby through `super`.
+//! hide, or, for the file's own class, those written inside it; every other
+//! miss and addition is left to Ruby through `super`.
 
 use beni::{
     Class as _, Error, FromValue, IntoId, IntoValue, Module, Mrb, Qtrue, RArray, RClass, RModule,
@@ -35,22 +36,29 @@ fn load_by_name(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error
 }
 
 // Module#__record_constant__(name): the receiver has just been given the constant.
-// A directory's module the realm defines is no file's to take away.
-fn record_constant(mrb: &Mrb, receiver: Value, symbol: Symbol) -> Value {
+// A directory's module the realm defines is no file's to take away. The
+// running file's own class, once created, has the constants written inside
+// it that other files name loaded, as Zeitwerk loads one before the
+// statement opening it.
+fn record_constant(mrb: &Mrb, receiver: Value, symbol: Symbol) -> Result<Value, Error> {
     let (Some(scope), Some(name)) = (split_path(mrb, receiver), symbol.name(mrb)) else {
-        return qnil().as_value();
+        return Ok(qnil().as_value());
     };
     if !bookkeeping(mrb).is_defining_namespace.get() {
         executor::record_created(mrb, scope.clone(), name.clone());
     }
-    let key = scope
+    let key: Vec<String> = scope
         .iter()
         .chain([&name])
         .map(|segment| index::normalize(segment))
         .collect();
+    let inner_constants = executor::take_inner_constants(mrb, &key);
     bookkeeping(mrb).spellings.borrow_mut().insert(key, symbol);
     load_hidden(mrb, &scope, &name);
-    qnil().as_value()
+    for names in inner_constants {
+        ensure_constant(mrb, &names)?;
+    }
+    Ok(qnil().as_value())
 }
 
 // Ruby looks through the namespaces around it before asking const_missing,
@@ -123,28 +131,45 @@ pub(super) fn ensure_opened(mrb: &Mrb, path: &str) -> Result<Option<Parent>, Err
     ensure_namespaces(mrb, path)?;
     let own = key_by_path(mrb, path);
     let declarations = bookkeeping(mrb).files.declarations_by_path(path);
+    let mut inner_constants = Vec::new();
     for names in declarations.written_constants {
         let key: Vec<String> = names.iter().map(|name| index::normalize(name)).collect();
         // Its own class and the namespaces around it are the file's to define,
-        // and nothing inside its class exists before the class does.
-        if own.starts_with(&key) || key.starts_with(&own) || constant_by_key(mrb, &key).is_some() {
+        // and what it opens inside its class loads once the class exists.
+        if own.starts_with(&key) {
             continue;
         }
-        let Some((name, outer)) = names.split_last() else {
+        if key.starts_with(&own) {
+            inner_constants.push(names);
             continue;
-        };
-        let entry = bookkeeping(mrb).index.borrow().definition_by_key(&key);
-        match entry {
-            Some(Definition::File(file)) => {
-                load_constant(mrb, &file, outer, name)?;
-            }
-            Some(Definition::Namespace(namespace)) => {
-                define_namespace_module(mrb, outer, name, &namespace)?;
-            }
-            None => {}
         }
+        ensure_constant(mrb, &names)?;
     }
+    executor::keep_inner_constants(mrb, inner_constants);
     Ok(declarations.parent)
+}
+
+// Makes sure the constant `names` spells, which a statement opens, exists
+// when a file names it: that file runs, or its directory becomes a module.
+fn ensure_constant(mrb: &Mrb, names: &[String]) -> Result<(), Error> {
+    let key: Vec<String> = names.iter().map(|name| index::normalize(name)).collect();
+    if constant_by_key(mrb, &key).is_some() {
+        return Ok(());
+    }
+    let Some((name, outer)) = names.split_last() else {
+        return Ok(());
+    };
+    let entry = bookkeeping(mrb).index.borrow().definition_by_key(&key);
+    match entry {
+        Some(Definition::File(file)) => {
+            load_constant(mrb, &file, outer, name)?;
+        }
+        Some(Definition::Namespace(namespace)) => {
+            define_namespace_module(mrb, outer, name, &namespace)?;
+        }
+        None => {}
+    }
+    Ok(())
 }
 
 /// Holds the class the file at `path` defined to the superclass it declared,

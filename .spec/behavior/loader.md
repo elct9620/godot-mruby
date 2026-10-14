@@ -363,3 +363,27 @@ How a file's constants reach the Ruby that uses them without `require`: a realm'
 | Given | the editor asked about the added file, then the project was listed again |
 | When | the files that arrived since are taken |
 | Then | they are the added file alone |
+
+## `RL-043` A file opening inside its own class a constant another file names runs after that file
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RL-026` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose `class` statement, inside the file's own class, opens a class another file's path names |
+| When | Ruby first uses the constant of the opening file |
+| Then | the inner class has what both files define |
+
+## `RL-044` A file whose own class needs a file that raises takes its class with it
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RL-017` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a file opening inside its own class a constant whose own file raises |
+| When | Ruby first uses the constant of the opening file and the exception is rescued |
+| Then | the opening file's constant is not defined |
