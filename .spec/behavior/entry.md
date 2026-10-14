@@ -41,13 +41,13 @@ How a thread goes into the game's realm: one thread at a time is inside, and a t
 | When | the thread closes the realm |
 | Then | the entry it is inside still reaches the realm |
 
-## `RE-005` An entry after the realm panicked while opening opens it again
+## `RE-005` An entry after the realm panicked while opening fails without opening it again
 
 | Step | Statement |
 | --- | --- |
 | Given | the game's realm, which panicked while opening at an entry |
 | When | the realm is entered again |
-| Then | the realm opens |
+| Then | the way the realm opens is not tried again |
 
 ## `RE-006` Entries nested too deep on one thread raise SystemStackError
 
@@ -96,3 +96,33 @@ How a thread goes into the game's realm: one thread at a time is inside, and a t
 | Given | data whose default asks the realm for data of another type |
 | When | an extension first asks for it |
 | Then | both are made, and the other type keeps what the default set |
+
+## `RE-011` An entry after the realm failed to open fails without opening it again
+
+| Step | Statement |
+| --- | --- |
+| Given | the game's realm, whose opening answered an error at an entry |
+| When | the realm is entered again |
+| Then | the way the realm opens is not tried again |
+
+## `RE-012` A realm that failed to open opens again once closed
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RE-005`, `RE-011` |
+
+| Step | Statement |
+| --- | --- |
+| Given | the game's realm, which failed to open at an entry |
+| Given | the realm was closed |
+| When | the realm is entered again |
+| Then | the realm opens |
+
+## `RE-013` An entry before the realm is prepared leaves it to open once prepared
+
+| Step | Statement |
+| --- | --- |
+| Given | the game's realm, entered before it was prepared |
+| Given | the realm was prepared since |
+| When | the realm is entered again |
+| Then | the realm opens |

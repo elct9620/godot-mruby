@@ -262,10 +262,14 @@ enum Game {
     Closed,
     Opening,
     Open(Realm),
+    // The way it opens failed or panicked; trying again would fail the same
+    // way at every entry, so it stays failed until it is closed.
+    Failed,
 }
 
 /// Runs `body` inside the game's realm, opening the realm first, the way it
-/// was prepared, if this is its first entry. A thread already inside enters
+/// was prepared, if this is its first entry; a realm that failed to open
+/// fails every entry until it is closed. A thread already inside enters
 /// again, unless it is already as deep as its stack allows.
 pub fn enter<T>(body: impl FnOnce(&Realm) -> Result<T, RubyError>) -> Result<T, RubyError> {
     let game = GAME.lock();
@@ -275,21 +279,25 @@ pub fn enter<T>(body: impl FnOnce(&Realm) -> Result<T, RubyError>) -> Result<T, 
         )));
     }
     if matches!(*game.borrow(), Game::Closed) {
-        let opening = Opening::start(&game);
-        opening.finish(open_game()?);
+        open_game(&game)?;
     }
     let game = game.borrow();
-    let Game::Open(realm) = &*game else {
-        return Err(RubyError::from_message(
+    match &*game {
+        Game::Open(realm) => {
+            realm.release_queued();
+            body(realm)
+        }
+        Game::Failed => Err(RubyError::from_message(
+            "the game's realm failed to open, and opens again only once closed".to_owned(),
+        )),
+        Game::Closed | Game::Opening => Err(RubyError::from_message(
             "the game's realm was entered while it opens".to_owned(),
-        ));
-    };
-    realm.release_queued();
-    body(realm)
+        )),
+    }
 }
 
-// The game's realm while it opens. It goes back to closed unless it opened,
-// so an opener that fails or panics leaves the next entry to try again.
+// The game's realm while it opens. It fails unless it opened, so an opener
+// that fails or panics is not tried again until the realm is closed.
 struct Opening<'a>(&'a RefCell<Game>);
 
 impl<'a> Opening<'a> {
@@ -307,19 +315,22 @@ impl Drop for Opening<'_> {
     fn drop(&mut self) {
         let mut game = self.0.borrow_mut();
         if matches!(*game, Game::Opening) {
-            *game = Game::Closed;
+            *game = Game::Failed;
         }
     }
 }
 
 // Opens the game's realm the way it was prepared, holding no borrow of it, so
-// what it opens with may enter and be refused.
-fn open_game() -> Result<Realm, RubyError> {
+// what it opens with may enter and be refused. A realm not prepared yet stays
+// closed, for the entry after it is prepared to open.
+fn open_game(game: &RefCell<Game>) -> Result<(), RubyError> {
     let opener = opener();
     let open = opener.as_ref().ok_or_else(|| {
         RubyError::from_message("the game's realm was entered before it was prepared".to_owned())
     })?;
-    open()
+    let opening = Opening::start(game);
+    opening.finish(open()?);
+    Ok(())
 }
 
 /// Takes `signal` as declared by `class`, whose file is running now in the
@@ -840,7 +851,7 @@ fn parse_location(frame: &str) -> Option<Location> {
 #[cfg(test)]
 mod tests {
     use std::panic;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc;
     use std::sync::{Arc, Mutex, MutexGuard};
     use std::thread;
@@ -1240,24 +1251,80 @@ mod tests {
         assert_eq!(outcome.try_recv().ok(), Some(true));
     }
 
+    // A fresh game's realm whose way of opening counts its tries, opening
+    // the realm after it answered `failures` in turn.
+    fn prepare_counted(
+        failures: Vec<fn() -> Result<Realm, RubyError>>,
+    ) -> (MutexGuard<'static, ()>, Arc<AtomicUsize>) {
+        let turn = TURN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        close();
+        let tries = Arc::new(AtomicUsize::new(0));
+        let counted = tries.clone();
+        prepare(move || {
+            let tried = counted.fetch_add(1, Ordering::SeqCst);
+            match failures.get(tried) {
+                Some(fail) => fail(),
+                None => Realm::open(Thing, Silence, |_| Ok(())),
+            }
+        });
+        (turn, tries)
+    }
+
+    fn panic_while_opening() -> Result<Realm, RubyError> {
+        panic!("the opener panics")
+    }
+
+    fn fail_to_open() -> Result<Realm, RubyError> {
+        Err(RubyError::from_message("the opener fails".to_owned()))
+    }
+
     // @behavior RE-005
     #[test]
-    fn an_entry_after_the_realm_panicked_while_opening_opens_it_again() {
-        let _turn = TURN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        close();
-        let opened = Arc::new(AtomicBool::new(false));
-        let first = opened.clone();
-        prepare(move || {
-            if !first.swap(true, Ordering::SeqCst) {
-                panic!("the opener panics the first time");
-            }
-            Realm::open(Thing, Silence, |_| Ok(()))
-        });
-        let panicked = panic::catch_unwind(|| enter(|_| Ok(()))).is_err();
+    fn an_entry_after_the_realm_panicked_while_opening_fails_without_opening_it_again() {
+        let (_turn, tries) = prepare_counted(vec![panic_while_opening]);
+        panic::catch_unwind(|| enter(|_| Ok(()))).ok();
 
         let entered = enter(|_| Ok(()));
 
-        assert!(panicked);
+        assert!(entered.is_err());
+        assert_eq!(tries.load(Ordering::SeqCst), 1);
+    }
+
+    // @behavior RE-011
+    #[test]
+    fn an_entry_after_the_realm_failed_to_open_fails_without_opening_it_again() {
+        let (_turn, tries) = prepare_counted(vec![fail_to_open]);
+        enter(|_| Ok(())).ok();
+
+        let entered = enter(|_| Ok(()));
+
+        assert!(entered.is_err());
+        assert_eq!(tries.load(Ordering::SeqCst), 1);
+    }
+
+    // @behavior RE-012
+    #[test]
+    fn a_realm_that_failed_to_open_opens_again_once_closed() {
+        let (_turn, _tries) = prepare_counted(vec![fail_to_open]);
+        enter(|_| Ok(())).ok();
+        close();
+
+        let entered = enter(|_| Ok(()));
+
+        assert!(entered.is_ok());
+    }
+
+    // @behavior RE-013
+    #[test]
+    fn an_entry_before_the_realm_is_prepared_leaves_it_to_open_once_prepared() {
+        let _turn = TURN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        close();
+        opener().take();
+        enter(|_| Ok(())).ok();
+        prepare(|| Realm::open(Thing, Silence, |_| Ok(())));
+
+        let entered = enter(|_| Ok(()));
+
         assert!(entered.is_ok());
     }
 
