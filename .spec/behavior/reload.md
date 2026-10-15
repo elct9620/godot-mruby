@@ -33,14 +33,14 @@ How a changed source takes effect while the game runs: what Godot reads of a scr
 | When | the script is reloaded and a frame passes |
 | Then | the node's object still has the value it set |
 
-## `RF-004` A method the changed source no longer defines stays until the game restarts
+## `RF-004` A method the changed source no longer defines is gone once the script reloads
 
 | Step | Statement |
 | --- | --- |
 | Given | a node whose script's file has run |
 | Given | the script's source Godot holds, changed to leave out one of its methods |
 | When | the script is reloaded and a frame passes |
-| Then | the node's object still answers that method |
+| Then | the class no longer defines that method, as a class loaded afresh would not |
 
 ## `RF-005` A changed source that raises leaves the class as it was
 
@@ -113,3 +113,15 @@ How a changed source takes effect while the game runs: what Godot reads of a scr
 | Given | the script's source Godot holds, changed to export that property with another value |
 | When | the script is reloaded, a frame passes, and Godot asks the script for the property's default value |
 | Then | the script answers the value the changed source exports |
+
+## `RF-013` A method another file defined in the class stays when the script reloads
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RF-004` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose script's file has run, and a method another file defined in its class |
+| When | the script is reloaded with its source changed and a frame passes |
+| Then | the class still defines that method |

@@ -474,10 +474,13 @@ pub fn rerun(path: &str) {
 }
 
 /// The messages the class of a file running again is sent, when it answers
-/// them: `withdraw` before, to take back what its last run declared, and
-/// `adopt` after, with each held object of the class, made before the run.
+/// them: `withdraw` before, with the file's path, to take back what its
+/// last run declared; `prune` after a clean run, to remove what the last run
+/// defined and this one did not; then `adopt`, with each held object of the
+/// class, made before the run.
 pub struct Rerun {
     pub withdraw: &'static CStr,
+    pub prune: &'static CStr,
     pub adopt: &'static CStr,
 }
 
@@ -637,8 +640,9 @@ impl Realm {
         self.run_as(Origin::Run, || {
             let ran = executor::has_run(&self.mrb, path);
             if ran && let Some(class) = self.find_respondent(path, rerun.withdraw).map_err(read)? {
+                let path_value = self.mrb.str_new(path.as_bytes()).as_value();
                 class
-                    .funcall(&self.mrb, rerun.withdraw, &[])
+                    .funcall(&self.mrb, rerun.withdraw, &[path_value])
                     .map_err(read)?;
             }
             executor::run_again(
@@ -648,6 +652,9 @@ impl Realm {
                 |parent| constants::keep_parent(&self.mrb, path, parent),
             )
             .map_err(read)?;
+            if ran && let Some(class) = self.find_respondent(path, rerun.prune).map_err(read)? {
+                class.funcall(&self.mrb, rerun.prune, &[]).map_err(read)?;
+            }
             if ran && let Some(class) = self.find_respondent(path, rerun.adopt).map_err(read)? {
                 for object in bookkeeping(&self.mrb).registry.objects(&self.mrb) {
                     if object

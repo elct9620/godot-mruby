@@ -115,11 +115,20 @@ class RerunTest < Minitest::Test
   end
 
   # @behavior RF-004
-  def test_a_method_the_changed_source_no_longer_defines_stays_until_the_game_restarts
-    node = make_node(:counter)
-    node.call(:answer)
+  def test_a_method_the_changed_source_no_longer_defines_is_gone_once_the_script_reloads
+    make_node(:counter).call(:answer)
 
-    stub_source(:counter, COUNTER) { assert_equal "dropped", node.call(:farewell) }
+    stub_source(:counter, COUNTER) { refute Unit::Reload::Counter.method_defined?(:farewell) }
+  end
+
+  # @behavior RF-013
+  def test_a_method_another_file_defined_in_the_class_stays_when_the_script_reloads
+    make_node(:counter).call(:answer)
+    Unit::Reload::Counter.class_eval { def visitor; end }
+
+    stub_source(:counter, COUNTER) { assert Unit::Reload::Counter.method_defined?(:visitor) }
+  ensure
+    Unit::Reload::Counter.__send__(:remove_method, :visitor)
   end
 
   # @behavior RF-005

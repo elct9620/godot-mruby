@@ -273,10 +273,29 @@ module Godot
         @__exports__ ||= {}
       end
 
-      # Takes back what the class exported, before its file runs again and
-      # exports what its source says now.
-      def __withdraw__
+      # Takes back what the class exported, and notes each method the file at
+      # `path` defined in it, before that file runs again and declares what
+      # its source says now.
+      def __withdraw__(path)
         @__exports__ = nil
+        @__file_methods__ = []
+        [self, singleton_class].each do |owner|
+          (owner.instance_methods(false) + owner.private_instance_methods(false)).each do |name|
+            definition = owner.instance_method(name)
+            @__file_methods__ << [owner, name, definition] if definition.source_location&.first == path
+          end
+        end
+      end
+
+      # Removes each method the file's last run defined that its run now did
+      # not define again, as a class loaded afresh would not have it.
+      def __prune__
+        (@__file_methods__ || []).each do |owner, name, definition|
+          next unless owner.method_defined?(name) || owner.private_method_defined?(name)
+
+          owner.__send__(:remove_method, name) if owner.instance_method(name) == definition
+        end
+        @__file_methods__ = nil
       end
 
       # Gives `object`, made before the class's file ran again, the value of

@@ -65,6 +65,7 @@ unsafe impl ExtensionLibrary for GodotMruby {
         realm::release_queued();
         let run_again = realm::rerun_queued(&realm::Rerun {
             withdraw: c"__withdraw__",
+            prune: c"__prune__",
             adopt: c"__adopt__",
         });
         script::run_placed(run_again);

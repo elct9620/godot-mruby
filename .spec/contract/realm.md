@@ -351,7 +351,7 @@ pub fn rerun(path: &str) {}
 
 ## `Rerun`
 
-The messages the class of a file running again is sent, when it answers them: one before the run, to take back what its last run declared, and one after it, with each held object of the class, made before the run.
+The messages the class of a file running again is sent, when it answers them: one before the run, with the file's path, to take back what its last run declared; one after a clean run, to remove what the last run defined and this one did not; and one with each held object of the class, made before the run.
 
 | Attribute | Value |
 | --- | --- |
@@ -360,6 +360,7 @@ The messages the class of a file running again is sent, when it answers them: on
 ```rust
 pub struct Rerun {
     pub withdraw: &'static CStr,
+    pub prune: &'static CStr,
     pub adopt: &'static CStr,
 }
 ```
