@@ -1,13 +1,15 @@
 # A test's way into the scene: each test is given a test root in the tree
 # under the scene the test runner runs, and what the test adds under it or
-# gives to autofree is freed once its teardown has run; a node the test left
-# outside the tree is warned of.
+# gives to autofree is freed once its teardown has run, and what it gives to
+# autoqfree is queued to be freed then, a frame passing before orphans are
+# counted; a node the test left outside the tree is warned of.
 module Minitest
   module TestRoot
     def before_setup
       super
       @orphans = orphan_count
-      @autofreed = []
+      @autofree_objects = []
+      @autoqfree_nodes = []
       @test_root = Godot::Node.new
       Godot::Engine.get_main_loop.current_scene.add_child(@test_root)
     end
@@ -18,13 +20,20 @@ module Minitest
     end
 
     def autofree(object)
-      @autofreed << object
+      @autofree_objects << object
       object
     end
 
+    def autoqfree(node)
+      @autoqfree_nodes << node
+      node
+    end
+
     def after_teardown
-      @autofreed.each { |object| free_unless_freed(object) }
+      @autofree_objects.each { |object| free_unless_freed(object) }
+      @autoqfree_nodes.each { |node| free_unless_freed(node, :queue_free) }
       free_unless_freed(@test_root)
+      wait_process_frames(1) unless @autoqfree_nodes.empty?
       warn_of_orphans
       super
     end
@@ -51,8 +60,8 @@ module Minitest
 
     # Calling a freed engine object raises Godot::CallError, so a node the
     # test freed itself is left alone.
-    def free_unless_freed(object)
-      object.free
+    def free_unless_freed(object, free_method = :free)
+      object.__send__(free_method)
     rescue Godot::CallError
       nil
     end

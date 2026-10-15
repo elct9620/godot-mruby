@@ -41,10 +41,11 @@ module Godot
     SEEDS = %w[1 2 3 4 5].freeze
     SEED = /^Run options: --seed (\d+)$/
     RUN_LINE = /ran (\w+#test_\w+)/
-    # A test directory whose one test leaves an orphan node, and what the run
-    # has to warn of it.
+    # A test directory with a test that leaves an orphan node and one that
+    # queues its node with autoqfree, and what the run has to warn of each.
     ORPHAN = "#{RUNNER_TESTS}/orphan".freeze
     ORPHAN_WARNING = "WARNING: OrphanTest#test_leaves_an_orphan leaves 1 orphan node"
+    AUTOQFREE_WARNING = "AutoqfreeTest#test_queues_its_node leaves"
 
     module_function
 
@@ -107,14 +108,15 @@ module Godot
       raise "No seed of #{SEEDS.join(", ")} ran #{ORDER} out of name order: #{orders}"
     end
 
-    # Runs the orphan directory, whose test has to be warned of and still
-    # pass.
+    # Runs the orphan directory, whose orphan has to be warned of, the node
+    # queued with autoqfree not, and the run still pass.
     # @behavior RT-035
+    # @behavior RT-041
     def verify_orphan!(project)
       output, status = run(project, "--dir", ORPHAN)
-      return if status.success? && output.include?(ORPHAN_WARNING)
+      return if status.success? && output.include?(ORPHAN_WARNING) && !output.include?(AUTOQFREE_WARNING)
 
-      raise "A run of #{ORPHAN} did not warn of its orphan and pass:\n#{output}"
+      raise "A run of #{ORPHAN} did not warn of its orphan alone and pass:\n#{output}"
     end
 
     def scan_order(output)

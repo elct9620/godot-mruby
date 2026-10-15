@@ -217,6 +217,14 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 | When | the run is over |
 | Then | the log warns that the test leaves 1 orphan node, and the run passes |
 
+## `RT-041` A node given to `autoqfree` is freed before orphans are counted
+
+| Step | Statement |
+| --- | --- |
+| Given | a test that gives a node outside the tree to `autoqfree` |
+| When | the run is over |
+| Then | the log warns of no orphan the test leaves |
+
 ## `RT-036` A run writes each test's result where `--results` names
 
 | Step | Statement |
