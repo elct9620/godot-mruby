@@ -206,14 +206,24 @@ fn find_info(class_db: &Gd<ClassDb>, declarer: &StringName, method: &str) -> Opt
         .find(|info| info.get_or_nil("name").to_string() == method)
 }
 
-// The nearest of the engine class `class` and its ancestors whose own
-// methods include `method`.
 /// The engine class that binds `method` among `class` and its ancestors,
 /// nearest first, as GDScript names the native class a method overrides.
 pub fn find_method_declarer(class: &str, method: &str) -> Option<String> {
     find_declarer(&ClassDb::singleton(), class, method).map(|declarer| declarer.to_string())
 }
 
+/// Whether the engine class `class` or one of its ancestors declares a
+/// static method `method`, which the class itself answers.
+pub fn is_static_method(class: &str, method: &str) -> bool {
+    let class_db = ClassDb::singleton();
+    find_declarer(&class_db, class, method)
+        .and_then(|declarer| find_info(&class_db, &declarer, method))
+        .and_then(|info| info.get_or_nil("flags").try_to::<i64>().ok())
+        .is_some_and(|flags| flags as u64 & MethodFlags::STATIC.ord() != 0)
+}
+
+// The nearest of the engine class `class` and its ancestors whose own
+// methods include `method`.
 fn find_declarer(class_db: &Gd<ClassDb>, class: &str, method: &str) -> Option<StringName> {
     let mut current = StringName::from(class);
     while !current.is_empty() {

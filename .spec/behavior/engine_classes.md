@@ -388,3 +388,27 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | an engine method's signature: whether it returns, its argument count, and each type |
 | When | the extension hashes the signature to ask the engine for the method's bind |
 | Then | the hash is the one Godot's extension API lists for that method |
+
+## `RG-049` An engine class refuses its instance method in GDScript's words
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RG-045` |
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine class with no singleton, and a method its objects have that is not static |
+| When | Ruby calls that method on the class |
+| Then | it raises `NoMethodError` with GDScript's words for calling a non-static function on the class directly |
+
+## `RG-050` An engine class does not answer respond_to? for its instance method
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RG-017` |
+
+| Step | Statement |
+| --- | --- |
+| Given | an engine class with no singleton, and a method its objects have that is not static |
+| When | Ruby asks whether the class responds to that method |
+| Then | it answers false |

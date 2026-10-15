@@ -418,6 +418,19 @@ class EngineObjectsTest < Minitest::Test
     assert_equal before.message, after.message
   end
 
+  # @behavior RG-049
+  def test_an_engine_class_refuses_its_instance_method_in_gdscripts_words
+    error = assert_raises(NoMethodError) { Godot::Node.get_name }
+
+    assert_equal 'Cannot call non-static function "get_name()" on the class "Node" directly. Make an instance instead.',
+                 error.message
+  end
+
+  # @behavior RG-050
+  def test_an_engine_class_does_not_answer_respond_to_for_its_instance_method
+    refute Godot::Node.respond_to?(:get_name)
+  end
+
   private
 
   # A Hash whose conversion for the engine frees `object`: its key's `hash`

@@ -138,7 +138,10 @@ module Godot
           __define_singleton_answer__(name) if singleton.respond_to?(name)
           return singleton.__send__(name, *args, &block)
         end
-        return super unless __has_static_method__(name)
+        unless __has_static_method__(name)
+          __refuse_instance_method__(name)
+          return super
+        end
 
         __define_static_answer__(name)
         __call_static__(name, args)
@@ -162,7 +165,7 @@ module Godot
       end
 
       private :__make__, :__make_node__, :__allocate__, :__has_engine_member__, :__singleton__, :__has_static_method__, :__call_static__,
-              :__engine_constant_by_name__, :__declare_signal__, :__declare_export__, :__declare_heading__, :__read_shape__
+              :__refuse_instance_method__, :__engine_constant_by_name__, :__declare_signal__, :__declare_export__, :__declare_heading__, :__read_shape__
 
       private
 

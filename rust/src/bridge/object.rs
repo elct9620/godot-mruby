@@ -17,11 +17,12 @@ use godot::obj::{Gd, InstanceId, Singleton};
 use godot::sys;
 use smallvec::SmallVec;
 
-use super::bound_method::{Arity, BoundMethod};
+use super::bound_method::{Arity, BoundMethod, is_static_method};
 use super::declaration;
 use super::refusal::{
-    describe_count, make_argument_error, make_call_error, make_call_refusal,
-    make_not_implemented_error, make_refusal_error, make_type_error,
+    describe_count, describe_instance_call, make_argument_error, make_call_error,
+    make_call_refusal, make_no_method_error, make_not_implemented_error, make_refusal_error,
+    make_type_error,
 };
 use super::value::{self, RubyCrossing};
 use super::{BridgeData, file_by_class_path, read_engine_name};
@@ -72,6 +73,11 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     object.define_singleton_method(mrb, c"__has_engine_member__", method!(has_engine_member, 1))?;
     object.define_singleton_method(mrb, c"__has_static_method__", method!(has_static_method, 1))?;
     object.define_singleton_method(mrb, c"__call_static__", method!(call_static, 2))?;
+    object.define_singleton_method(
+        mrb,
+        c"__refuse_instance_method__",
+        method!(refuse_instance_method, 1),
+    )?;
     object.define_singleton_method(
         mrb,
         c"__engine_constant_by_name__",
@@ -420,11 +426,27 @@ fn singleton(mrb: &Mrb, class: RClass) -> Value {
 }
 
 // Godot::Object.__has_static_method__(name): whether the receiver's engine class
-// has a method of that name to call on the class.
+// has a static method of that name to call on the class.
 fn has_static_method(mrb: &Mrb, class: RClass, name: Symbol) -> bool {
     let name = name.name(mrb).unwrap_or_default();
     let path = class.path(mrb).unwrap_or_default();
-    ClassDb::singleton().class_has_method(read_engine_name(&path), name.as_str())
+    is_static_method(read_engine_name(&path), &name)
+}
+
+// Godot::Object.__refuse_instance_method__(name): raises NoMethodError in
+// GDScript's words when the receiver's engine class has a method of that
+// name its objects answer rather than the class.
+fn refuse_instance_method(mrb: &Mrb, class: RClass, name: Symbol) -> Result<Value, Error> {
+    let name = name.name(mrb).unwrap_or_default();
+    let path = class.path(mrb).unwrap_or_default();
+    let class = read_engine_name(&path);
+    if ClassDb::singleton().class_has_method(class, name.as_str()) {
+        return Err(make_no_method_error(
+            mrb,
+            &describe_instance_call(&name, class),
+        ));
+    }
+    Ok(qnil().as_value())
 }
 
 // Godot::Object.__call_static__(name, args): calls the static method `name`

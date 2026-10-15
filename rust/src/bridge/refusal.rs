@@ -113,6 +113,14 @@ pub(super) fn describe_count(given: usize, expected: impl fmt::Display) -> Strin
     format!("wrong number of arguments (given {given}, expected {expected})")
 }
 
+/// GDScript's words for calling a method of `class`'s objects on the class.
+pub(super) fn describe_instance_call(method: &str, class: &str) -> String {
+    format!(
+        "Cannot call non-static function \"{method}()\" on the class \"{class}\" directly. \
+         Make an instance instead."
+    )
+}
+
 // GDScript's words for a call given an argument of a type it cannot take.
 fn describe_type_refusal(method: &str, base: &str, argument: &str, from: &str, to: &str) -> String {
     format!(
@@ -157,6 +165,10 @@ pub(super) fn make_zero_division_error(mrb: &Mrb, message: &str) -> Error {
 
 pub(super) fn make_argument_error(mrb: &Mrb, message: &str) -> Error {
     make_error(mrb, c"ArgumentError", message)
+}
+
+pub(super) fn make_no_method_error(mrb: &Mrb, message: &str) -> Error {
+    make_error(mrb, c"NoMethodError", message)
 }
 
 pub(super) fn make_not_implemented_error(mrb: &Mrb, message: &str) -> Error {
