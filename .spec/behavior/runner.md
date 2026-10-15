@@ -217,14 +217,6 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 | When | the run is over |
 | Then | the log warns that the test leaves 1 orphan node, and the run passes |
 
-## `RT-041` A node given to `autoqfree` is freed before orphans are counted
-
-| Step | Statement |
-| --- | --- |
-| Given | a test that gives a node outside the tree to `autoqfree` |
-| When | the run is over |
-| Then | the log warns of no orphan the test leaves |
-
 ## `RT-036` A run writes each test's result where `--results` names
 
 | Step | Statement |
@@ -264,3 +256,11 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 | Given | a test directory whose tests a seed runs out of name order |
 | When | the runner scene runs headless on it with that `--seed` and `--results` naming a file |
 | Then | the file names the seed, the Godot version and the platform, and lists the tests in the order they ran, each with the seconds it took |
+
+## `RT-041` A node given to `autoqfree` is freed before orphans are counted
+
+| Step | Statement |
+| --- | --- |
+| Given | a test that gives a node outside the tree to `autoqfree` |
+| When | the run is over |
+| Then | the log warns of no orphan the test leaves |
