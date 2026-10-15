@@ -43,7 +43,14 @@ impl Declaration {
     // What the declaration says the name is, as a refusal spells it out.
     fn label(&self) -> String {
         match self {
-            Self::Signal(signal) => format!("a signal of ({})", signal.parameters.join(", ")),
+            Self::Signal(signal) => {
+                let names: Vec<&str> = signal
+                    .parameters
+                    .iter()
+                    .map(|parameter| parameter.name.as_str())
+                    .collect();
+                format!("a signal of ({})", names.join(", "))
+            }
             Self::Property(property) => format!("a property of {}", property.default_text()),
             Self::Heading(heading) => format!("a heading named {}", heading.name()),
         }

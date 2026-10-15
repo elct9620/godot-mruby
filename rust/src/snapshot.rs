@@ -14,12 +14,63 @@ use godot::meta::ToGodot;
 use godot::obj::{Gd, Singleton};
 use godot::register::info::{PropertyHint, PropertyUsageFlags};
 
-/// A signal a class declared, with the names its parameters were declared
-/// with.
+/// A signal a class declared, with the parameters it was declared with.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Signal {
     pub name: String,
-    pub parameters: Vec<String>,
+    pub parameters: Vec<Parameter>,
+}
+
+impl Signal {
+    // Whether `other` names the same parameters in the same order, whatever
+    // their types.
+    fn has_parameters_named_as(&self, other: &Self) -> bool {
+        self.parameters
+            .iter()
+            .map(|parameter| &parameter.name)
+            .eq(other.parameters.iter().map(|parameter| &parameter.name))
+    }
+}
+
+/// A value a signal carries, as Godot reads it: its name, and the type it
+/// was declared with, nil for any type and an object's with the name of its
+/// class.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Parameter {
+    pub name: String,
+    pub kind: VariantType,
+    pub class_name: String,
+}
+
+impl Parameter {
+    /// The parameter `name` of the type `kind`, nil being any type, as
+    /// GDScript's untyped parameter is.
+    pub fn new(name: String, kind: VariantType) -> Self {
+        Self {
+            name,
+            kind,
+            class_name: String::new(),
+        }
+    }
+
+    /// The parameter taking objects of the class Godot lists as
+    /// `class_name`.
+    pub fn with_class(self, class_name: String) -> Self {
+        Self {
+            kind: VariantType::OBJECT,
+            class_name,
+            ..self
+        }
+    }
+
+    /// How Godot reads the parameter: one of any type is nil read as any.
+    pub fn usage(&self) -> PropertyUsageFlags {
+        if self.kind == VariantType::NIL {
+            PropertyUsageFlags::NIL_IS_VARIANT
+        } else {
+            PropertyUsageFlags::NONE
+        }
+    }
 }
 
 /// A property a class exported, as Godot reads it: the name it is written
@@ -348,10 +399,11 @@ impl Snapshot {
 
     // The signals the class of the file at `path` declared, answered as
     // `merge_file_members` answers its members: from its source until it has
-    // run, then from the run while the source is the one it ran. A source changed since
-    // answers in the order it writes, taking what the run declared for a
-    // signal whose parameters it does not write out, and keeping what the run
-    // declared through a name no `signal` call spelled.
+    // run, then from the run while the source is the one it ran. A source
+    // changed since answers in the order it writes, taking what the run
+    // declared for a signal whose parameters it does not write out or writes
+    // by the same names, since only a run knows their types, and keeping what
+    // the run declared through a name no `signal` call spelled.
     fn merge_file_signals(&self, path: &str, source: Source) -> Vec<Signal> {
         let Some(class) = self.classes.get(path) else {
             return source.signals.to_vec();
@@ -363,12 +415,15 @@ impl Snapshot {
             .signal_names
             .iter()
             .filter_map(|name| {
-                source
-                    .signals
-                    .iter()
-                    .find(|signal| &signal.name == name)
-                    .or_else(|| class.signal_by_name(name))
-                    .cloned()
+                let ran = class.signal_by_name(name);
+                match source.signals.iter().find(|signal| &signal.name == name) {
+                    Some(written) => match ran {
+                        Some(ran) if ran.has_parameters_named_as(written) => Some(ran),
+                        _ => Some(written),
+                    },
+                    None => ran,
+                }
+                .cloned()
             })
             .collect();
         signals.extend(
@@ -537,7 +592,7 @@ mod tests {
     fn rung_signal() -> Signal {
         Signal {
             name: "rung".to_owned(),
-            parameters: vec!["times".to_owned()],
+            parameters: vec![Parameter::new("times".to_owned(), VariantType::NIL)],
         }
     }
 

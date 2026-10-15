@@ -3,13 +3,13 @@
 
 use std::collections::BTreeMap;
 
-use godot::builtin::{GString, StringName, VarArray, VarDictionary, Variant};
+use godot::builtin::{GString, StringName, VarArray, VarDictionary, Variant, VariantType};
 use godot::meta::ToGodot;
 use ruby_prism::{CallNode, Integer, Node, NodeList};
 
 use crate::hint::Hint;
 use crate::realm::{self, Roots};
-use crate::snapshot::{self, Export, Heading, Member, Property, Signal};
+use crate::snapshot::{self, Export, Heading, Member, Parameter, Property, Signal};
 
 /// A file's header: the constants its `module` and `class` statements write,
 /// the name the class its path names is written with, the superclass written
@@ -296,13 +296,32 @@ impl Reader {
 }
 
 // The signal a `signal` call declares, as it is written: the name it is
-// emitted by and a name for each value it carries. A name written as
-// anything but a symbol or a string is the file's to work out as it runs, so
-// the header carries none of that declaration.
+// emitted by and the keyword naming each value it carries, of any type until
+// the file runs, since only a run knows what class a constant is. A name
+// written as anything but a symbol or a string, or keywords spread from a
+// value, are the file's to work out as it runs, so the header carries none of
+// that declaration.
 fn read_signal(name: &Node, parameters: &[Node]) -> Option<Signal> {
+    let parameters = match parameters {
+        [] => Vec::new(),
+        [keywords] => keywords
+            .as_keyword_hash_node()?
+            .elements()
+            .iter()
+            .map(|element| {
+                let pair = element.as_assoc_node()?;
+                let keyword = pair.key().as_symbol_node()?;
+                Some(Parameter::new(
+                    decode_text(keyword.unescaped()),
+                    VariantType::NIL,
+                ))
+            })
+            .collect::<Option<_>>()?,
+        _ => return None,
+    };
     Some(Signal {
         name: read_name(name)?,
-        parameters: parameters.iter().map(read_name).collect::<Option<_>>()?,
+        parameters,
     })
 }
 
@@ -547,7 +566,7 @@ fn read_constant_path(node: &Node) -> Option<(Vec<String>, bool)> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Header, Roots, Signal};
+    use super::{Header, Parameter, Roots, Signal, VariantType};
 
     // The superclass's constant path, joined as it is written.
     fn join_superclass(header: &Header) -> Option<String> {
@@ -756,7 +775,7 @@ mod tests {
     // @behavior RH-017
     #[test]
     fn signal_called_in_the_class_body_carries_the_signal_it_declares() {
-        let source = "class Bell < Godot::Node2D\n  signal :rung, :times\nend\n";
+        let source = "class Bell < Godot::Node2D\n  signal :rung, times: Integer\nend\n";
 
         let header = Header::from_source("res://bell.rb", source, &Roots::default());
 
@@ -764,7 +783,7 @@ mod tests {
             header.signals(),
             [Signal {
                 name: "rung".to_owned(),
-                parameters: vec!["times".to_owned()],
+                parameters: vec![Parameter::new("times".to_owned(), VariantType::NIL)],
             }]
         );
     }

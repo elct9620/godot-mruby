@@ -8,7 +8,7 @@ What a realm publishes of the classes its files define, and the one place Godot'
 
 ## `Signal`
 
-A signal a class declared, with the names its parameters were declared with.
+A signal a class declared, with the parameters it was declared with.
 
 | Attribute | Value |
 | --- | --- |
@@ -17,7 +17,23 @@ A signal a class declared, with the names its parameters were declared with.
 ```rust
 pub struct Signal {
     pub name: String,
-    pub parameters: Vec<String>,
+    pub parameters: Vec<Parameter>,
+}
+```
+
+## `Parameter`
+
+A value a signal carries, as Godot reads it: its name, and the type it was declared with, nil for any type and an object's with the name of its class.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub struct Parameter {
+    pub name: String,
+    pub kind: VariantType,
+    pub class_name: String,
 }
 ```
 

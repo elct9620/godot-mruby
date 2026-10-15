@@ -11,7 +11,6 @@ use godot::global::Error;
 use godot::meta::conv::RawPtr;
 use godot::obj::EngineEnum;
 use godot::prelude::*;
-use godot::register::info::PropertyUsageFlags;
 use godot::sys::{self, GodotFfi};
 
 use crate::ancestry::{self, Ancestry, Break, Cache, Lineage};
@@ -22,7 +21,7 @@ use crate::language;
 use crate::log::GodotLog;
 use crate::realm::{self, Files};
 use crate::settings;
-use crate::snapshot::{self, Heading, Member, Property, Signal};
+use crate::snapshot::{self, Heading, Member, Parameter, Property, Signal};
 use crate::{announcement, error};
 
 /// The script a `.rb` file loads as, the way a `.gd` file loads as a `GDScript`.
@@ -604,14 +603,10 @@ impl IScriptExtension for RubyScript {
 }
 
 // A declared signal as Godot reads it, which takes a method's shape: the
-// signal's name, and a parameter for each value it carries, of any type as
-// an untyped GDScript signal's parameters are.
+// signal's name, and a parameter for each value it carries.
 fn describe_signal(signal: &Signal) -> AnyDictionary {
-    let arguments: Array<AnyDictionary> = signal
-        .parameters
-        .iter()
-        .map(|parameter| describe_parameter(parameter))
-        .collect();
+    let arguments: Array<AnyDictionary> =
+        signal.parameters.iter().map(describe_parameter).collect();
     let mut info = describe_name(signal.name.as_str());
     info.set("args", &arguments);
     info.upcast_any_dictionary()
@@ -648,10 +643,14 @@ fn describe_property(property: &Property) -> AnyDictionary {
     info.upcast_any_dictionary()
 }
 
-fn describe_parameter(name: &str) -> AnyDictionary {
-    let mut info = describe_name(name);
-    info.set("type", VariantType::NIL.ord());
-    info.set("usage", PropertyUsageFlags::NIL_IS_VARIANT);
+// A signal's parameter as Godot reads it, as GDScript describes a typed
+// parameter: its type, the class an object of it is of, and the usage that
+// reads nil as any type.
+fn describe_parameter(parameter: &Parameter) -> AnyDictionary {
+    let mut info = describe_name(parameter.name.as_str());
+    info.set("type", parameter.kind.ord());
+    info.set("class_name", parameter.class_name.as_str());
+    info.set("usage", parameter.usage());
     info.upcast_any_dictionary()
 }
 

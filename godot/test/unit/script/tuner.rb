@@ -4,11 +4,12 @@ module Unit
     # run, without running it again, as the editor does while it is typed.
     class Tuner < Godot::Node2D
       TREBLE = 3
-      NOTES = %i[pitch].freeze
+      NOTES = { pitch: Godot::Variant }.freeze
 
       signal :hummed
       signal :"#{:str}ummed"
-      signal :sung, *NOTES
+      signal :sung, **NOTES
+      signal :plucked, string: Integer
 
       export :bass, 1
       export :treble, TREBLE

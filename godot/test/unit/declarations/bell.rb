@@ -4,7 +4,7 @@ module Unit
     # the methods it defines as its body runs stand beside the ones written as
     # `def`.
     class Bell < Godot::Node
-      signal :rung, :times
+      signal :rung, times: Integer
 
       attr_reader :last_notification
 

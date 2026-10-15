@@ -7,7 +7,7 @@ module Integration
       class Siren < Godot::Node2D
         puts "siren.rb ran"
 
-        signal :wailed, :times
+        signal :wailed, times: Integer
 
         export :volume, 11
         export :heard_at, Godot::Vector2.new(1, 2)

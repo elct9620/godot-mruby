@@ -1,16 +1,19 @@
 class TypingTest < Minitest::Test
   PATH = "res://test/unit/script/tuner.rb".freeze
   RANGE = 1
+  # @GlobalScope's Variant.Type for int, which Ruby has no name for.
+  INT = 2
   EDITED_SOURCE = <<~RUBY.freeze
     module Unit
       module Script
         class Tuner < Godot::Node2D
           TREBLE = 3
-          NOTES = %i[pitch].freeze
+          NOTES = { pitch: Godot::Variant }.freeze
 
           signal :"\#{:str}ummed"
-          signal :sung, *NOTES
-          signal :rang, :times
+          signal :sung, **NOTES
+          signal :rang, times: Integer
+          signal :plucked, string: Integer
 
           export :treble, TREBLE
           export :"\#{:mid}dle", 2
@@ -77,6 +80,13 @@ class TypingTest < Minitest::Test
     sung = signals.find { |signal| signal["name"] == "sung" }
 
     assert_equal ["pitch"], sung["args"].map { |argument| argument["name"] }
+  end
+
+  # @behavior RS-077
+  def test_a_node_script_keeps_the_types_its_run_gave_a_signal_its_changed_source_writes_alike
+    plucked = signals.find { |signal| signal["name"] == "plucked" }
+
+    assert_equal [INT], plucked["args"].map { |argument| argument["type"] }
   end
 
   private

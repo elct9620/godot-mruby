@@ -235,7 +235,7 @@ fn has_value_type(mrb: &Mrb, _class: Value, name: Symbol) -> bool {
     kind_by_name(&name).is_some()
 }
 
-fn kind_by_name(name: &str) -> Option<VariantType> {
+pub(super) fn kind_by_name(name: &str) -> Option<VariantType> {
     value_types().find(|kind| name_type(*kind) == name)
 }
 

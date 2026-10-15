@@ -65,11 +65,15 @@ module Godot
         @abstract = true
       end
 
-      # A signal of the class, named as Godot names it, with a name for each
-      # value it is emitted with. A node of the class has it as the engine's
-      # own signals, so it is connected to and emitted by their names.
-      def signal(name, *parameters)
-        __declare_signal__(name.to_s, parameters.map { |parameter| parameter.to_s })
+      # A signal of the class, named as Godot names it, with a keyword for
+      # each value it is emitted with, naming the class of that value as
+      # GDScript types a parameter: Godot::Bool for true and false, and
+      # Godot::Variant for any value. A node of the class has it as the
+      # engine's own signals, so it is connected to and emitted by their
+      # names.
+      def signal(name, **parameters)
+        parameter_types = parameters.map { |parameter, type| [parameter.to_s, __check_class__(parameter, type)] }
+        __declare_signal__(name.to_s, parameter_types)
       end
 
       # A property of the class, taking its type from the value it is
@@ -336,15 +340,17 @@ module Godot
         value
       end
 
-      # The class a property names its type by, as the realm spells it. Only
-      # a class names a type, so anything else is refused where it is
-      # written.
+      # The class a property names its type by, as the realm spells it.
       def __read_type_name__(named)
-        unless named.is_a?(::Module)
-          raise ArgumentError, %("type:" needs a class, but #{named.inspect} was given instead.)
-        end
+        __check_class__(:type, named).to_s
+      end
 
-        named.to_s
+      # The class the keyword `keyword` names a type by. Only a class names a
+      # type, so anything else is refused where it is written.
+      def __check_class__(keyword, named)
+        raise ArgumentError, %("#{keyword}:" needs a class, but #{named.inspect} was given instead.) unless named.is_a?(::Module)
+
+        named
       end
 
       # A range hint's bounds, the step included when one is declared. A
@@ -708,5 +714,17 @@ module Godot
     end
 
     __define_engine_names__
+  end
+
+  # What true and false are, as a class names a type, since Ruby has no class
+  # of both; a signal's parameter of it is a bool.
+  module Bool
+  end
+  ::TrueClass.include(Bool)
+  ::FalseClass.include(Bool)
+
+  # A value of any type, as a class names a type; a signal's parameter of it
+  # is untyped, as one GDScript writes without a type.
+  module Variant
   end
 end

@@ -734,3 +734,63 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | Given | a node of a class exporting a value, in a game exported for release |
 | When | the node is asked for its properties |
 | Then | its export is listed and no category is named after the file the class is written in, as GDScript lists none outside the editor |
+
+## `RD-084` A signal parameter declared with a Ruby class is typed as the engine type it converts to
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RD-002` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class declares a signal with a parameter of `Integer` |
+| When | a node of that class is asked for its signals |
+| Then | the parameter is typed `int`, as a GDScript signal's parameter of `int` is |
+
+## `RD-085` A signal parameter of `Godot::Bool` is typed `bool`
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class declares a signal with a parameter of `Godot::Bool` |
+| When | a node of that class is asked for its signals |
+| Then | the parameter is typed `bool`, and `true` and `false` are each a `Godot::Bool` |
+
+## `RD-086` A signal parameter of an engine class takes that class's objects
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class declares a signal with a parameter of `Godot::Node2D` |
+| When | a node of that class is asked for its signals |
+| Then | the parameter is typed as an object of the class `Node2D` |
+
+## `RD-087` A signal parameter of a node script's class takes objects of the name it is announced by
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class declares a signal with a parameter of an announced node script's class, and one of a class announced by no name |
+| When | a node of that class is asked for its signals |
+| Then | the first is typed as an object of the announced name, and the second as one of the engine class it extends, as GDScript names a script without a global name |
+
+## `RD-088` A signal parameter of `Godot::Variant` is of any type
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class declares a signal with a parameter of `Godot::Variant` |
+| When | a node of that class is asked for its signals |
+| Then | the parameter is untyped, as a GDScript signal's parameter written without a type is |
+
+## `RD-089` A signal parameter declared with anything but a class is refused
+
+| Step | Statement |
+| --- | --- |
+| Given | a class body declaring a signal with a parameter of `3` |
+| When | the declaration runs |
+| Then | it raises `ArgumentError` saying the parameter needs a class |
+
+## `RD-090` A signal parameter of a value type's class is typed as that value type
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class declares a signal with a parameter of `Godot::Vector2` |
+| When | a node of that class is asked for its signals |
+| Then | the parameter is typed `Vector2` |

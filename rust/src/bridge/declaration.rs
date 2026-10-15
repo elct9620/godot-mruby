@@ -14,9 +14,10 @@ use super::file_by_class_path;
 use super::object::find_engine_ancestor;
 use super::refusal::make_argument_error;
 use super::value;
+use super::value_type::kind_by_name;
 use crate::hint::{Hint, name_type};
 use crate::realm;
-use crate::snapshot::{Heading, Property, Signal};
+use crate::snapshot::{Heading, Parameter, Property, Signal};
 
 /// Defines the methods Godot::Object's class bodies declare through.
 pub(super) fn define(mrb: &Mrb, object: RClass) -> Result<(), Error> {
@@ -27,8 +28,8 @@ pub(super) fn define(mrb: &Mrb, object: RClass) -> Result<(), Error> {
 }
 
 // Godot::Object.__declare_signal__(name, parameters): takes the signal the
-// class declares as its body runs, for the realm to publish once the file
-// has run.
+// class declares as its body runs, each parameter a name and the class it is
+// declared with, for the realm to publish once the file has run.
 fn declare_signal(
     mrb: &Mrb,
     class: RClass,
@@ -37,10 +38,60 @@ fn declare_signal(
 ) -> Result<Value, Error> {
     let parameters = parameters
         .entries(mrb)
-        .filter_map(String::from_value)
-        .collect();
+        .filter_map(RArray::from_value)
+        .map(|pair| {
+            let mut entries = pair.entries(mrb);
+            let name = entries
+                .next()
+                .and_then(String::from_value)
+                .unwrap_or_default();
+            let class = entries.next().unwrap_or_else(|| qnil().as_value());
+            read_parameter(mrb, name, class).map_err(|reason| make_argument_error(mrb, &reason))
+        })
+        .collect::<Result<_, _>>()?;
     realm::declare_signal(mrb, class, Signal { name, parameters })?;
     Ok(qnil().as_value())
+}
+
+// The parameter `name` of the class `class` names, typed as GDScript types a
+// parameter of that type: a Ruby class as the engine type its values convert
+// to, a class under Godot as its value type or engine class, and a node
+// script's class as an object of the name the editor lists it by, or of the
+// engine class it extends when it is listed by none.
+fn read_parameter(mrb: &Mrb, name: String, class: Value) -> Result<Parameter, String> {
+    let path = class
+        .funcall(mrb, c"to_s", &[])
+        .ok()
+        .and_then(String::from_value)
+        .unwrap_or_default();
+    let builtin = match path.as_str() {
+        "Godot::Variant" => Some(VariantType::NIL),
+        "Godot::Bool" => Some(VariantType::BOOL),
+        "Integer" => Some(VariantType::INT),
+        "Float" => Some(VariantType::FLOAT),
+        "String" => Some(VariantType::STRING),
+        "Symbol" => Some(VariantType::STRING_NAME),
+        "Array" => Some(VariantType::ARRAY),
+        "Hash" => Some(VariantType::DICTIONARY),
+        _ => None,
+    };
+    if let Some(kind) = builtin {
+        return Ok(Parameter::new(name, kind));
+    }
+    if let Some(engine_name) = path.strip_prefix("Godot::") {
+        if let Some(kind) = kind_by_name(engine_name) {
+            return Ok(Parameter::new(name, kind));
+        }
+        if ClassDb::singleton().class_exists(engine_name) {
+            return Ok(Parameter::new(name, VariantType::OBJECT).with_class(engine_name.to_owned()));
+        }
+        return Err(describe_unknown_type(&path));
+    }
+    let engine_class = RClass::from_value(class)
+        .and_then(|class| find_engine_ancestor(mrb, class))
+        .ok_or_else(|| describe_unknown_type(&path))?;
+    let class_name = find_editor_name(mrb, &path).unwrap_or(engine_class);
+    Ok(Parameter::new(name, VariantType::OBJECT).with_class(class_name))
 }
 
 // Godot::Object.__declare_export__(name, default, hint, written): takes the

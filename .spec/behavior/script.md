@@ -651,3 +651,16 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a node script whose class calls `icon` and shares its name with another node script |
 | When | the editor shows a node with that script |
 | Then | the node shows the icon the class calls |
+
+## `RS-077` A node script keeps the types its run gave a signal its changed source writes alike
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RS-065` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose file has run, declaring a signal with a typed parameter |
+| Given | the script's source Godot holds, changed elsewhere, writing that signal's parameters by the same names |
+| When | Godot asks the script for its signals before the file runs again |
+| Then | the list carries that signal with the types its run gave it |

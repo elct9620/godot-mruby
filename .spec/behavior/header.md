@@ -138,9 +138,9 @@ How a file's header is read from its source without running it: the constants it
 
 | Step | Statement |
 | --- | --- |
-| Given | a file whose class body calls `signal` with a name and a parameter name |
+| Given | a file whose class body calls `signal` with a name and a parameter keyword |
 | When | its header is read |
-| Then | the header carries that signal with that parameter name |
+| Then | the header carries that signal with that parameter name, of any type until the file runs |
 
 ## `RH-018` A signal declared with a name that is not written out is not carried
 

@@ -22,13 +22,35 @@ pub struct Godot;
 
 ## `Godot::Object.signal`
 
-A signal of a class extending an engine class, named as Godot names it, with a name for each value it is emitted with. A node of the class has it as it has the engine's own signals, so it is connected to and emitted by those names.
+A signal of a class extending an engine class, named as Godot names it, with a keyword for each value it is emitted with, naming the class of that value as GDScript types a signal's parameter: a Ruby class for the engine type it converts to, a class under `Godot` for that type or engine class, a node script's class for its objects, `Godot::Bool` for `true` and `false`, and `Godot::Variant` for a value of any type. A node of the class has it as it has the engine's own signals, so it is connected to and emitted by those names.
 
 ```ruby
 module Godot
   class Object
-    def self.signal(name, *parameters)
+    def self.signal(name, **parameters)
     end
+  end
+end
+```
+
+## `Godot::Bool`
+
+What `true` and `false` are, as a class names a type: `TrueClass` and `FalseClass` take it in, since Ruby has no class of both.
+
+```ruby
+module Godot
+  module Bool
+  end
+end
+```
+
+## `Godot::Variant`
+
+A value of any type, as a class names a type: a signal's parameter of it is untyped, as one GDScript writes without a type.
+
+```ruby
+module Godot
+  module Variant
   end
 end
 ```

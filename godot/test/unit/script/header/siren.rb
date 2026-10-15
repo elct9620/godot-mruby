@@ -6,7 +6,7 @@ module Unit
       # property built as the file runs is none of the header's, so it answers
       # nothing until then.
       class Siren < Godot::Node2D
-        signal :wailed, :times
+        signal :wailed, times: Integer
 
         export :volume, 11
         export :heard_at, Godot::Vector2.new(1, 2)
