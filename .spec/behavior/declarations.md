@@ -677,3 +677,27 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | Given | a node script whose class exports an object no file holds |
 | When | Godot asks the script for the property's default value |
 | Then | it answers null, as GDScript answers for a value it cannot work out before running |
+
+## `RD-079` A container declared with resources a file holds answers them in its default
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RD-077` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports an array or a hash holding resources loaded from a file |
+| When | Godot asks the script for the property's default value |
+| Then | it answers the container holding the resources those files hold |
+
+## `RD-080` A container holding an object no file holds has no default
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RD-078` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports an array holding an object no file holds beside a resource a file holds |
+| When | Godot asks the script for the property's default value |
+| Then | it answers null, as GDScript answers for a container it cannot work out before running |

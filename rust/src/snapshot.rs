@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::{Arc, LazyLock, OnceLock, PoisonError, RwLock};
 
-use godot::builtin::{PackedByteArray, Variant, VariantType};
+use godot::builtin::{PackedByteArray, VarArray, VarDictionary, Variant, VariantType};
 use godot::classes::{Os, Resource, ResourceLoader};
 use godot::global::{bytes_to_var, var_to_bytes};
 use godot::meta::ToGodot;
@@ -39,12 +39,15 @@ pub struct Property {
 
 // The value a property was declared with, as a snapshot keeps it: a
 // resource a file holds by that file's path, which the engine loads it from
-// again, and any other value as the bytes the engine writes it as, which
-// carry no object, so an object no file holds is kept as nothing, as
-// GDScript keeps no default it cannot work out before running.
+// again, an array or a dictionary by what it holds, and any other value as
+// the bytes the engine writes it as, which carry no object. A value that is
+// or holds an object no file holds is kept as nothing, as GDScript keeps no
+// default it cannot work out before running.
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum DeclaredValue {
     Resource(String),
+    Array(Vec<DeclaredValue>),
+    Dictionary(Vec<(DeclaredValue, DeclaredValue)>),
     Bytes(Vec<u8>),
 }
 
@@ -92,12 +95,7 @@ impl Property {
 
     /// The value the property was declared with.
     pub fn default_value(&self) -> Variant {
-        match &self.default {
-            DeclaredValue::Resource(path) => ResourceLoader::singleton()
-                .load(path.as_str())
-                .map_or_else(Variant::nil, |resource| resource.to_variant()),
-            DeclaredValue::Bytes(bytes) => bytes_to_var(&PackedByteArray::from(bytes.as_slice())),
-        }
+        self.default.to_variant()
     }
 
     /// The value the property was declared with, as Godot prints it, which
@@ -109,17 +107,52 @@ impl Property {
 
 impl DeclaredValue {
     fn from_variant(value: &Variant) -> Self {
-        if value.get_type() != VariantType::OBJECT {
-            return Self::Bytes(var_to_bytes(value).to_vec());
+        Self::read(value).unwrap_or_else(|| Self::Bytes(var_to_bytes(&Variant::nil()).to_vec()))
+    }
+
+    // `value` as kept, or none when it is or holds an object no file holds.
+    fn read(value: &Variant) -> Option<Self> {
+        match value.get_type() {
+            VariantType::OBJECT => {
+                let path = value.try_to::<Gd<Resource>>().ok()?.get_path().to_string();
+                (!path.is_empty()).then_some(Self::Resource(path))
+            }
+            VariantType::ARRAY => value
+                .to::<VarArray>()
+                .iter_shared()
+                .map(|element| Self::read(&element))
+                .collect::<Option<_>>()
+                .map(Self::Array),
+            VariantType::DICTIONARY => value
+                .to::<VarDictionary>()
+                .iter_shared()
+                .map(|(key, entry)| Some((Self::read(&key)?, Self::read(&entry)?)))
+                .collect::<Option<_>>()
+                .map(Self::Dictionary),
+            _ => Some(Self::Bytes(var_to_bytes(value).to_vec())),
         }
-        let path = value
-            .try_to::<Gd<Resource>>()
-            .map(|resource| resource.get_path().to_string())
-            .unwrap_or_default();
-        if path.is_empty() {
-            Self::Bytes(var_to_bytes(&Variant::nil()).to_vec())
-        } else {
-            Self::Resource(path)
+    }
+
+    fn to_variant(&self) -> Variant {
+        match self {
+            Self::Resource(path) => ResourceLoader::singleton()
+                .load(path.as_str())
+                .map_or_else(Variant::nil, |resource| resource.to_variant()),
+            Self::Array(elements) => {
+                let mut array = VarArray::new();
+                for element in elements {
+                    array.push(&element.to_variant());
+                }
+                array.to_variant()
+            }
+            Self::Dictionary(entries) => {
+                let mut dictionary = VarDictionary::new();
+                for (key, entry) in entries {
+                    dictionary.set(&key.to_variant(), &entry.to_variant());
+                }
+                dictionary.to_variant()
+            }
+            Self::Bytes(bytes) => bytes_to_var(&PackedByteArray::from(bytes.as_slice())),
         }
     }
 }

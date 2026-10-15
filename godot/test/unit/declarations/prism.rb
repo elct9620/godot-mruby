@@ -1,9 +1,14 @@
 module Unit
   module Declarations
-    # Exports a resource a file holds and one no file holds.
+    # Exports resources a file holds, alone and inside containers, and
+    # objects no file holds, alone and beside one a file holds.
     class Prism < Godot::Node2D
-      export :sheen, Godot::ResourceLoader.load("res://test/unit/declarations/sheen.tres")
+      SHEEN = Godot::ResourceLoader.load("res://test/unit/declarations/sheen.tres")
+
+      export :sheen, SHEEN
       export :tint, Godot::Gradient.new
+      export :palette, [SHEEN, { "glow" => SHEEN }]
+      export :blend, [SHEEN, Godot::Gradient.new]
     end
   end
 end

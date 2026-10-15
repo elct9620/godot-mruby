@@ -221,6 +221,24 @@ class ExportsTest < Minitest::Test
     assert_nil script.get_property_default_value(:tint)
   end
 
+  # @behavior RD-079
+  def test_a_container_declared_with_resources_a_file_holds_answers_them_in_its_default
+    script = Godot::ResourceLoader.load("res://test/unit/declarations/prism.rb")
+    sheen = Unit::Declarations::Prism::SHEEN
+
+    palette = script.get_property_default_value(:palette)
+
+    assert_equal [sheen, { "glow" => sheen }], palette
+  end
+
+  # @behavior RD-080
+  def test_a_container_holding_an_object_no_file_holds_has_no_default
+    script = Godot::ResourceLoader.load("res://test/unit/declarations/prism.rb")
+    Unit::Declarations::Prism
+
+    assert_nil script.get_property_default_value(:blend)
+  end
+
   private
 
   # A Sprite2D whose Ruby object, of a class extending Node2D, is built and
