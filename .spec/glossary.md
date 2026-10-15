@@ -117,4 +117,4 @@ An object of an engine class, which the engine and Ruby share: Ruby holds the en
 
 ### Value type
 
-One of the engine's own values that are neither Ruby's nor objects, such as `Vector2`, `Color` or `NodePath`: a class under `Godot::Value` whose values the engine builds and computes with, and which never change, since each side holds its own copy.
+One of the engine's own values that are neither Ruby's nor objects, such as `Vector2`, `Color`, `NodePath` or `Array`: a class under `Godot::Value` whose values the engine builds and computes with. One of fixed size never changes, since each side holds its own copy; a container is the engine's own, shared with it.

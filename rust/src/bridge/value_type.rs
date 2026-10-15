@@ -1,9 +1,11 @@
-//! The engine's value types in Ruby: `Vector2`, `Color`, `NodePath` and the
-//! rest are classes under `Godot` descending from `Godot::Value`, whose
-//! values are built, read and computed with by the engine itself, and never
-//! change. A Vector2, held as its components, goes to the engine's typed
-//! operators, which take it as it is; every other type, and whatever those
-//! do not answer, goes to the engine's variant calls, by name.
+//! The engine's value types in Ruby: `Vector2`, `Color`, `NodePath`,
+//! `Array`, `Dictionary` and the rest are classes under `Godot` descending
+//! from `Godot::Value`, whose values are built, read and computed with by
+//! the engine itself. A value of fixed size never changes; a container is
+//! the engine's own, so a change shows wherever the engine holds it. A
+//! Vector2, held as its components, goes to the engine's typed operators,
+//! which take it as it is; every other type, and whatever those do not
+//! answer, goes to the engine's variant calls, by name.
 
 use std::borrow::Cow;
 use std::ptr;
@@ -14,7 +16,10 @@ use beni::{
     Class as _, DataType, Error, FromValue, IntoValue, Module, Mrb, Object as _, RArray, RClass,
     RModule, ReprValue, Symbol, TryConvert, TypedData, Value, method, value::qnil,
 };
-use godot::builtin::{GString, StringName, Variant, VariantOperator, VariantType, Vector2, real};
+use godot::builtin::{
+    AnyArray, AnyDictionary, GString, StringName, Variant, VariantOperator, VariantType, Vector2,
+    real,
+};
 use godot::meta::ToGodot;
 use godot::obj::EngineEnum;
 use godot::sys;
@@ -70,8 +75,8 @@ pub(super) fn value_class(mrb: &Mrb, data: &BridgeData) -> RClass {
 }
 
 /// The engine's value types Ruby holds as `Godot::Value`s: every type that
-/// is neither Ruby's own (nil, booleans, numbers, strings, names,
-/// containers) nor an object.
+/// is neither Ruby's own (nil, booleans, numbers, strings, names, packed
+/// arrays) nor an object.
 fn value_types() -> impl Iterator<Item = VariantType> {
     (VariantType::VECTOR2.ord..=VariantType::COLOR.ord)
         .chain([
@@ -79,6 +84,8 @@ fn value_types() -> impl Iterator<Item = VariantType> {
             VariantType::RID.ord,
             VariantType::CALLABLE.ord,
             VariantType::SIGNAL.ord,
+            VariantType::DICTIONARY.ord,
+            VariantType::ARRAY.ord,
         ])
         .map(<VariantType as EngineEnum>::from_ord)
 }
@@ -103,6 +110,8 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     class.define_private_method(mrb, c"__get__", method!(get, 1))?;
     class.define_private_method(mrb, c"__call__", method!(call, 2))?;
     class.define_private_method(mrb, c"__hash__", method!(hash, 0))?;
+    class.define_private_method(mrb, c"__to_a__", method!(to_a, 0))?;
+    class.define_private_method(mrb, c"__to_hash__", method!(to_hash, 0))?;
     class.define_private_method(mrb, c"initialize_copy", method!(initialize_copy, 1))?;
     class.define_method(mrb, c"+", method!(add, 1))?;
     class.define_method(mrb, c"-", method!(subtract, 1))?;
@@ -179,6 +188,27 @@ impl EngineValue {
         match self {
             Self::Held(variant) => Cow::Borrowed(variant),
             Self::Vector2(vector) => Cow::Owned(vector.to_variant()),
+        }
+    }
+
+    // A copy of the value: a container's own, holding the same elements, as
+    // the engine's `duplicate` makes it; any other value as it is, since it
+    // never changes.
+    fn duplicate(&self) -> Self {
+        match self.kind() {
+            VariantType::ARRAY => Self::Held(
+                self.as_variant()
+                    .to::<AnyArray>()
+                    .duplicate_shallow()
+                    .to_variant(),
+            ),
+            VariantType::DICTIONARY => Self::Held(
+                self.as_variant()
+                    .to::<AnyDictionary>()
+                    .duplicate_shallow()
+                    .to_variant(),
+            ),
+            _ => self.clone(),
         }
     }
 
@@ -413,7 +443,8 @@ fn call(mrb: &Mrb, held: &EngineValue, name: Symbol, args: RArray) -> Result<Val
     let pointers: SmallVec<[_; 4]> = args.iter().map(Variant::var_sys).collect();
     let mut receiver = held.variant();
     // SAFETY: the name and argument pointers live for the call, which runs on
-    // a copy of the value, so the Ruby value never changes.
+    // a copy of the value: a value of fixed size never changes, and a
+    // container's copy holds the container itself, so its methods change it.
     let outcome = super::run_engine_call(|answer, error| unsafe {
         sys::interface_fn!(variant_call)(
             receiver.var_sys_mut(),
@@ -816,10 +847,39 @@ fn evaluate_variants(op: VariantOperator, left: &Variant, right: &Variant) -> (V
 }
 
 // Godot::Value#initialize_copy(original): gives the copy Ruby's dup or
-// clone made the engine's copy of `original`'s value, or the TypeError
-// raised when the copy cannot take it.
+// clone made the engine's copy of `original`'s value, a container's own
+// one, or the TypeError raised when the copy cannot take it.
 fn initialize_copy(mrb: &Mrb, copy: RTypedData, original: Value) -> Result<RTypedData, Error> {
-    super::fill_copy(mrb, copy, original, |_, _: &EngineValue| Ok(()))
+    super::fill_copy(mrb, copy, original, |_, held: &EngineValue| {
+        Ok(held.duplicate())
+    })
+}
+
+// Godot::Value#__to_a__: a Ruby Array of the elements of the Array the value
+// is, each as Ruby is given it.
+fn to_a(mrb: &Mrb, held: &EngineValue) -> Result<Value, Error> {
+    let array = held
+        .as_variant()
+        .try_to::<AnyArray>()
+        .map_err(|_| make_type_error(mrb, &format!("{} is no Array", name_type(held.kind()))))?;
+    Ok(value::make_array(
+        mrb,
+        super::data(mrb),
+        array.iter_shared(),
+    ))
+}
+
+// Godot::Value#__to_hash__: a Ruby Hash of the entries of the Dictionary the
+// value is, each key and value as Ruby is given it.
+fn to_hash(mrb: &Mrb, held: &EngineValue) -> Result<Value, Error> {
+    let dictionary = held.as_variant().try_to::<AnyDictionary>().map_err(|_| {
+        make_type_error(mrb, &format!("{} is no Dictionary", name_type(held.kind())))
+    })?;
+    Ok(value::make_hash(
+        mrb,
+        super::data(mrb),
+        dictionary.iter_shared(),
+    ))
 }
 
 // Godot::Value#__hash__: the engine's hash of the value, which equal values
@@ -836,9 +896,7 @@ fn to_s(mrb: &Mrb, held: &EngineValue) -> Value {
     mrb.str_new(printed.as_bytes()).as_value()
 }
 
-// What the engine answered for a value, as Ruby is given it; a value type's
-// answers hold no container Ruby could not take.
+// What the engine answered for a value, as Ruby is given it.
 fn to_ruby(mrb: &Mrb, answer: &Variant) -> Value {
-    RubyCrossing::try_new(answer)
-        .map_or_else(|_| qnil().as_value(), |answer| answer.into_value(mrb))
+    RubyCrossing(answer).into_value(mrb)
 }

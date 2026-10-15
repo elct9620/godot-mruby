@@ -8,8 +8,8 @@ class SimulateTest < Minitest::Test
     simulate(parent, 3, 0.5)
 
     [parent, child].each do |node|
-      assert_equal [0.5, 0.5, 0.5], node.call(:deltas)
-      assert_equal [0.5, 0.5, 0.5], node.call(:physics_deltas)
+      assert_operator node.call(:deltas), :==, [0.5, 0.5, 0.5]
+      assert_operator node.call(:physics_deltas), :==, [0.5, 0.5, 0.5]
     end
   end
 

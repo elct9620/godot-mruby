@@ -228,7 +228,7 @@ class ExportsTest < Minitest::Test
 
     palette = script.get_property_default_value(:palette)
 
-    assert_equal [sheen, { "glow" => sheen }], palette
+    assert_operator palette, :==, [sheen, { "glow" => sheen }]
   end
 
   # @behavior RD-080

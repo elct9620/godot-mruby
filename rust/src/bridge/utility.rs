@@ -9,7 +9,7 @@ use godot::global;
 use godot::meta::ToGodot;
 
 use super::object::to_arguments;
-use super::refusal::{describe_count, make_argument_error, make_call_error, make_type_error};
+use super::refusal::{describe_count, make_argument_error, make_type_error};
 use super::value::RubyCrossing;
 
 type Utility = fn(&[Variant]) -> Result<Variant, String>;
@@ -215,7 +215,5 @@ fn call_row(
             &format!("Invalid type in utility function '{name}'. {reason}"),
         )
     })?;
-    RubyCrossing::try_new(&answer)
-        .map(|answer| answer.into_value(mrb))
-        .map_err(|reason| make_call_error(mrb, &reason))
+    Ok(RubyCrossing(&answer).into_value(mrb))
 }

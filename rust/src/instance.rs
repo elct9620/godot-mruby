@@ -395,21 +395,13 @@ impl Caller {
         }
     }
 
-    // Calls `method` on the node's Ruby object; an exception, or an argument
-    // that cannot reach Ruby, is reported and answers null, as a callback
-    // that returned nothing does.
+    // Calls `method` on the node's Ruby object; an exception is reported and
+    // answers null, as a callback that returned nothing does.
     fn send(&self, method: &str, args: &[&Variant]) -> Variant {
         let Some(key) = self.ensure_object() else {
             return Variant::nil();
         };
-        let checked = args.iter().map(|arg| RubyCrossing::try_new(arg));
-        let args = match checked.collect::<Result<SmallVec<[_; 4]>, _>>() {
-            Ok(args) => args,
-            Err(reason) => {
-                error!("#{method} was not called: {reason}");
-                return Variant::nil();
-            }
-        };
+        let args: SmallVec<[_; 4]> = args.iter().map(|arg| RubyCrossing(arg)).collect();
         realm::enter(|realm| realm.send::<_, EngineCrossing>(key, method, args))
             .map(|EngineCrossing(answer)| answer)
             .unwrap_or_else(|failed: RubyError| {
@@ -424,18 +416,15 @@ impl Caller {
 // instance variable the object wrote itself. Whether it was written is what
 // Godot takes for an answer, so a refusal leaves the name to the engine.
 fn write(key: Key, name: &str, exported: bool, value: &Variant) -> bool {
-    let Ok(value) = RubyCrossing::try_new(value) else {
-        return false;
-    };
+    let value = RubyCrossing(value);
     let written = if exported {
         let setter = format!("{name}=");
         realm::enter(|realm| realm.send::<_, EngineCrossing>(key, &setter, [value])).map(|_| true)
     } else {
         let variable = StringName::from(name).to_variant();
-        let Ok(variable) = RubyCrossing::try_new(&variable) else {
-            return false;
-        };
-        realm::enter(|realm| realm.send::<_, bool>(key, "__write_variable__", [variable, value]))
+        realm::enter(|realm| {
+            realm.send::<_, bool>(key, "__write_variable__", [RubyCrossing(&variable), value])
+        })
     };
     written.unwrap_or_else(|failed: RubyError| {
         failed.write(&GodotLog);
@@ -452,9 +441,10 @@ fn read(key: Key, name: &str, exported: bool) -> Option<Variant> {
             .map(|EngineCrossing(answer)| Some(answer))
     } else {
         let variable = StringName::from(name).to_variant();
-        let variable = RubyCrossing::try_new(&variable).ok()?;
-        realm::enter(|realm| realm.send::<_, EngineCrossing>(key, "__read_variable__", [variable]))
-            .map(|EngineCrossing(answer)| (!answer.is_nil()).then(|| answer.to::<VarArray>().at(0)))
+        realm::enter(|realm| {
+            realm.send::<_, EngineCrossing>(key, "__read_variable__", [RubyCrossing(&variable)])
+        })
+        .map(|EngineCrossing(answer)| (!answer.is_nil()).then(|| answer.to::<VarArray>().at(0)))
     };
     answered.unwrap_or_else(|failed: RubyError| {
         failed.write(&GodotLog);

@@ -45,13 +45,17 @@ class ValuesTest < Minitest::Test
   end
 
   # @behavior RV-005
-  def test_an_array_and_a_hash_cross_as_copies_of_their_elements
+  def test_an_array_and_a_hash_cross_into_the_engine_as_copies_of_their_elements
     list = [1, "two", [:three], Godot::Vector2.new(1, 2), Godot::Color.new(1, 0, 0)]
     table = { "one" => 1, two: [2.0] }
+    @node.set_meta(:list, list)
+    @node.set_meta(:table, table)
 
-    assert_equal list, round_trip(list)
-    refute_same list, round_trip(list)
-    assert_equal table, round_trip(table)
+    list << 6
+    table[:three] = 3
+
+    assert_operator @node.get_meta(:list), :==, [1, "two", [:three], Godot::Vector2.new(1, 2), Godot::Color.new(1, 0, 0)]
+    assert_operator @node.get_meta(:table), :==, { "one" => 1, two: [2.0] }
   end
 
   # @behavior RV-006
@@ -91,13 +95,71 @@ class ValuesTest < Minitest::Test
     refute_respond_to Godot::RefCounted.new, :is_valid
   end
 
-  # @behavior RV-032
-  def test_an_engine_answer_nested_too_deep_raises_call_error
+  # @behavior RV-009
+  def test_an_engine_container_reaches_ruby_however_deep_it_nests
+    keeper = autofree(Unit::Values::Keeper.new)
+    looped = Godot::Array.new
+    looped << looped
+
+    keeper.call(:keep, looped)
+
+    assert Godot.is_same(looped, keeper.kept)
+  end
+
+  # @behavior RV-009
+  def test_an_engine_answer_reaches_ruby_however_deep_it_nests
     deep = ("[" * 101) + ("]" * 101)
 
-    error = assert_raises(Godot::CallError) { Godot::JSON.parse_string(deep) }
+    answer = Godot::JSON.parse_string(deep)
 
-    assert_equal "an Array nested more than 100 deep cannot reach Ruby", error.message
+    100.times { answer = answer[0] }
+    assert_operator answer, :==, []
+  end
+
+  # @behavior RV-037
+  def test_an_engine_container_reaches_ruby_as_the_one_the_engine_holds
+    @node.set_meta(:list, [1])
+    @node.set_meta(:table, { "one" => 1 })
+
+    @node.get_meta(:list) << 2
+    @node.get_meta(:table)[:two] = 2
+
+    assert_operator @node.get_meta(:list), :==, [1, 2]
+    assert_operator @node.get_meta(:table), :==, { "one" => 1, "two" => 2 }
+  end
+
+  # @behavior RV-038
+  def test_a_containers_copy_is_a_container_of_its_own
+    list = Godot::Array.new([1])
+    table = Godot::Dictionary.new({ "one" => 1 })
+
+    list.dup << 2
+    table.dup["two"] = 2
+
+    assert_operator list, :==, [1]
+    assert_operator table, :==, { "one" => 1 }
+  end
+
+  # @behavior RV-039
+  def test_an_engine_container_equals_rubys_container_of_equal_elements
+    list = Godot::Array.new([1, [2], { "three" => 3 }])
+    table = Godot::Dictionary.new({ "name" => :hero, level: [1] })
+
+    assert_operator list, :==, [1, [2], { three: 3 }]
+    assert_equal 0, list <=> [1, [2], { "three" => 3 }]
+    assert_operator table, :==, { name: :hero, "level" => [1] }
+  end
+
+  # @behavior RV-040
+  def test_a_container_answers_rubys_names_as_ruby_and_the_engines_others_as_the_engine
+    list = Godot::Array.new([1, 2])
+
+    doubled = list.map { |element| element * 2 }
+    list.push_back(3)
+
+    assert_equal [2, 4], doubled
+    assert_operator list, :==, [1, 2, 3]
+    assert_equal [2, 3], list[1..2]
   end
 
   private

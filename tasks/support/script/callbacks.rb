@@ -4,8 +4,8 @@ module Godot
   module Script
     # Runs the integration-test project's scene of node scripts whose classes
     # define callbacks and methods Godot calls, and reads what they print: how
-    # often each object is built, and what the log says of a value that cannot
-    # cross to or from a method. Part of Script.verify!.
+    # often each object is built, and what the log says of an answer that
+    # cannot cross from a method. Part of Script.verify!.
     module Callbacks
       # The scene, what its scripts print, and what they must never print.
       SCENE = "res://integration/script/callbacks/callbacks.tscn"
@@ -17,10 +17,6 @@ module Godot
       REFUSED_ANSWER_LINES = ["self_loop answered Nil <null>",
                               "ERROR: #self_loop answered [[...]]: an Array nested more than 100 deep cannot " \
                               "reach the engine"].freeze
-      # What the log says of an argument that cannot cross, and the line the
-      # method would print were it called.
-      REFUSED_ARGUMENT_LINE = "ERROR: #take was not called: an Array nested more than 100 deep cannot reach Ruby"
-      TAKEN_LINE = "take was called"
 
       module_function
 
@@ -32,7 +28,6 @@ module Godot
         lines = output.lines.map(&:chomp)
         verify_objects_built!(lines, output)
         verify_refused_answer!(lines, output)
-        verify_refused_argument!(lines, output)
       end
 
       # @behavior RS-013 RS-014 RS-015 RS-016
@@ -50,13 +45,6 @@ module Godot
         return if missing.empty?
 
         raise "The callbacks scene's answer that cannot cross did not reach Godot as null #{missing}:\n#{output}"
-      end
-
-      # @behavior RV-009
-      def verify_refused_argument!(lines, output)
-        return if lines.include?(REFUSED_ARGUMENT_LINE) && !lines.include?(TAKEN_LINE)
-
-        raise "The callbacks scene's argument that cannot cross reached Ruby:\n#{output}"
       end
     end
   end

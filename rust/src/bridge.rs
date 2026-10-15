@@ -119,15 +119,16 @@ fn has_ancestor(mrb: &Mrb, class: RClass, ancestor: RClass) -> bool {
     false
 }
 
-// The copy Ruby's dup or clone made of `original`, given a copy of what
-// `original` carries, as a Ruby extension's data fills its copy in
-// initialize_copy; or the TypeError raised when the two differ in class,
-// `admit` refuses what `original` carries, or the copy already carries one.
-fn fill_copy<T: TypedData + Clone>(
+// The copy Ruby's dup or clone made of `original`, given what `make_copy`
+// makes of what `original` carries, as a Ruby extension's data fills its
+// copy in initialize_copy; or the TypeError raised when the two differ in
+// class, `make_copy` refuses what `original` carries, or the copy already
+// carries one.
+fn fill_copy<T: TypedData>(
     mrb: &Mrb,
     copy: RTypedData,
     original: Value,
-    admit: impl FnOnce(RClass, &T) -> Result<(), Error>,
+    make_copy: impl FnOnce(RClass, &T) -> Result<T, Error>,
 ) -> Result<RTypedData, Error> {
     if copy.as_value().is_equal(mrb, original) {
         return Ok(copy);
@@ -141,9 +142,8 @@ fn fill_copy<T: TypedData + Clone>(
         let message = "initialize_copy should take same class object";
         return Err(refusal::make_type_error(mrb, message));
     }
-    let carried = <&T>::try_convert(original, mrb)?;
-    admit(class, carried)?;
-    copy.init(mrb, carried.clone()).map(|()| copy).map_err(|_| {
+    let carried = make_copy(class, <&T>::try_convert(original, mrb)?)?;
+    copy.init(mrb, carried).map(|()| copy).map_err(|_| {
         let path = class.path(mrb).unwrap_or_default();
         refusal::make_type_error(mrb, &format!("{path} is already initialized"))
     })

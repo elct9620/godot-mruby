@@ -110,7 +110,7 @@ class EngineObjectsTest < Minitest::Test
     node.add_child(child)
     node.add_child(Godot::Node.new, false, Godot::Node::INTERNAL_MODE_FRONT)
 
-    assert_equal [child], node.get_children
+    assert_operator node.get_children, :==, [child]
     assert_equal 2, node.get_child_count(true)
   end
 

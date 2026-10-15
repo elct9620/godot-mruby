@@ -6,10 +6,6 @@ module Integration
           looped = []
           looped << looped
         end
-
-        def take(_value)
-          puts "take was called"
-        end
       end
     end
   end

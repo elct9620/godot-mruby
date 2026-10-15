@@ -72,28 +72,14 @@ pub struct Owner(pub InstanceId);
 
 ## `RubyCrossing`
 
-An engine value crossing into Ruby, made only once the value is known to reach Ruby, so a container nested too deep never does.
+An engine value crossing into Ruby, which always reaches it: a container crosses as the one the engine holds, however deep it nests.
 
 | Attribute | Value |
 | --- | --- |
 | internal | yes |
 
 ```rust
-pub struct RubyCrossing;
-```
-
-## `RubyCrossing::try_new`
-
-An engine value for Ruby, or why it cannot reach Ruby.
-
-| Attribute | Value |
-| --- | --- |
-| internal | yes |
-
-```rust
-impl RubyCrossing {
-    pub fn try_new(variant: &Variant) -> Result<Self, String> {}
-}
+pub struct RubyCrossing<'a>(pub &'a Variant);
 ```
 
 ## `EngineCrossing`

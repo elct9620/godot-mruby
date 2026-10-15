@@ -159,7 +159,7 @@ fn allocate(mrb: &Mrb, class: RClass, owner: &EngineObject) -> Result<Value, Err
 // raised when that object is freed or the copy cannot take it.
 fn initialize_copy(mrb: &Mrb, copy: RTypedData, original: Value) -> Result<RTypedData, Error> {
     super::fill_copy(mrb, copy, original, |class, owner: &EngineObject| {
-        check_stands_for(mrb, class, owner)
+        check_stands_for(mrb, class, owner).map(|()| owner.clone())
     })
 }
 
@@ -348,7 +348,7 @@ fn call_bind(
         let base = object.get_class().to_string();
         make_refusal_error(mrb, &error, bound.name(), &base, &args, Some(bound.arity()))
     })?;
-    convert_answer(mrb, data, &answer)
+    Ok(RubyCrossing(&answer).into_ruby(mrb, data))
 }
 
 // Godot::Object.__read_shape__(bound): how many arguments the engine method
@@ -375,7 +375,7 @@ fn call(mrb: &Mrb, held: &EngineObject, name: Symbol, args: RArray) -> Result<Va
         let base = object.get_class().to_string();
         make_call_refusal(mrb, &error, &base, &name.to_string(), args.len())
     })?;
-    convert_answer(mrb, data, &answer)
+    Ok(RubyCrossing(&answer).into_ruby(mrb, data))
 }
 
 /// The engine's name `symbol` spells, made once for a realm, since making
@@ -460,15 +460,7 @@ fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<V
     let answer = ClassDb::singleton()
         .try_class_call_static(class, &name, &args)
         .map_err(|error| make_call_refusal(mrb, &error, class, &name.to_string(), args.len()))?;
-    convert_answer(mrb, data, &answer)
-}
-
-// What the engine answered, as Ruby is given it, or the Godot::CallError an
-// answer that cannot reach Ruby raises.
-fn convert_answer(mrb: &Mrb, data: &BridgeData, answer: &Variant) -> Result<Value, Error> {
-    RubyCrossing::try_new(answer)
-        .map(|answer| answer.into_ruby(mrb, data))
-        .map_err(|reason| make_call_error(mrb, &reason))
+    Ok(RubyCrossing(&answer).into_ruby(mrb, data))
 }
 
 /// The Ruby object for an engine object: the one the realm holds for the

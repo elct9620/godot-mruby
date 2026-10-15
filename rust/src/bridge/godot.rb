@@ -454,10 +454,10 @@ module Godot
       # Each member and method of the value type is the class's own from the
       # moment it is made, so it answers before a method of the name any
       # ancestor gains, as Integer's own methods answer before Numeric's. Its
-      # body is bound at the first call; a name Godot::Value itself answers
-      # stays Godot::Value's.
+      # body is bound at the first call; a name Godot::Value itself answers,
+      # or the class or a module it includes answers in Ruby, stays theirs.
       def __define_engine_names__
-        own = Value.instance_variable_get(:@own_methods)
+        own = Value.instance_variable_get(:@own_methods) + __ruby_names__
         __engine_names__.each do |name|
           next if own.include?(name)
 
@@ -467,6 +467,17 @@ module Godot
             __send__(name, *args, &block)
           end
         end
+      end
+
+      # The names the class and the modules it includes define in Ruby.
+      def __ruby_names__
+        names = []
+        ancestors.each do |ancestor|
+          break if ancestor.equal?(Value)
+
+          names.concat(ancestor.instance_methods(false)).concat(ancestor.private_instance_methods(false))
+        end
+        names
       end
     end
 
@@ -518,5 +529,126 @@ module Godot
     end
 
     @own_methods = (instance_methods + private_instance_methods).freeze
+  end
+
+  # The engine's Array, the very one the engine holds, so a change shows
+  # wherever it is held. Ruby's names for reading and writing an Array, and
+  # those Enumerable and Comparable give, behave as Ruby's; the engine's
+  # other names behave as the engine's.
+  class Array < Value
+    include Comparable
+    include Enumerable
+
+    def each(&block)
+      to_a.each(&block)
+      self
+    end
+
+    def [](index, *length)
+      return to_a[index, *length] unless index.is_a?(Integer) && length.empty?
+
+      index += size if index < 0
+      get(index) if index >= 0 && index < size
+    end
+
+    def []=(index, value)
+      position = index < 0 ? index + size : index
+      raise IndexError, "index #{index} too small for array; minimum: -#{size}" if position < 0
+
+      resize(position + 1) if position >= size
+      set(position, value)
+    end
+
+    def <<(value)
+      push_back(value)
+      self
+    end
+
+    def first(*count)
+      count.empty? ? self[0] : to_a.first(*count)
+    end
+
+    def last(*count)
+      count.empty? ? self[-1] : to_a.last(*count)
+    end
+
+    def length
+      size
+    end
+
+    def empty?
+      is_empty
+    end
+
+    def to_a
+      __to_a__
+    end
+
+    def to_ary
+      to_a
+    end
+
+    # Element by element, each of this Array's elements asked first, so an
+    # element the engine holds meets a Ruby value equal to it.
+    def <=>(other)
+      return unless other.is_a?(::Array) || other.is_a?(Array)
+
+      other = other.to_a
+      each_with_index do |element, index|
+        return 1 if index >= other.size
+
+        order = element <=> other[index]
+        return order unless order == 0
+      end
+      size <=> other.size
+    end
+
+    # Godot::Value's, which Enumerable's would hide.
+    def hash
+      __hash__
+    end
+
+    __define_engine_names__
+  end
+
+  # The engine's Dictionary, the very one the engine holds, so a change
+  # shows wherever it is held. Ruby's names for reading and writing a Hash,
+  # and those Enumerable gives, behave as Ruby's; the engine's other names
+  # behave as the engine's.
+  class Dictionary < Value
+    include Enumerable
+
+    def each(&block)
+      to_hash.each(&block)
+      self
+    end
+
+    def [](key)
+      get(key)
+    end
+
+    def []=(key, value)
+      set(key, value)
+    end
+
+    def to_hash
+      __to_hash__
+    end
+
+    # Entry by entry, each looked up here, where the engine takes a String
+    # and a Symbol spelling one name for the same key.
+    def ==(other)
+      return false unless other.respond_to?(:to_hash)
+
+      other = other.to_hash
+      size == other.size && other.all? { |key, value| has(key) && self[key] == value }
+    end
+
+    # Godot::Value's, which Enumerable's would hide.
+    def hash
+      __hash__
+    end
+
+    __define_engine_names__
   end
 end

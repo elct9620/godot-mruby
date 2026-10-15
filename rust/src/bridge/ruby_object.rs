@@ -10,7 +10,6 @@ use godot::obj::{Base, Gd};
 use godot::prelude::{GodotClass, godot_api};
 
 use super::value::{EngineCrossing, RubyCrossing};
-use crate::error;
 use crate::log::GodotLog;
 use crate::realm::{self, Key};
 
@@ -31,14 +30,7 @@ pub fn make_callable(key: Key, name: String) -> Callable {
 }
 
 fn call(hold: &Hold, args: &[&Variant]) -> Variant {
-    let checked = args.iter().map(|arg| RubyCrossing::try_new(arg));
-    let args = match checked.collect::<Result<Vec<_>, _>>() {
-        Ok(args) => args,
-        Err(reason) => {
-            error!("A Ruby callable was not called: {reason}");
-            return Variant::nil();
-        }
-    };
+    let args: Vec<_> = args.iter().map(|arg| RubyCrossing(arg)).collect();
     realm::enter(|realm| realm.send::<_, EngineCrossing>(hold.0, "call", args))
         .map(|EngineCrossing(answer)| answer)
         .unwrap_or_else(|failed| {

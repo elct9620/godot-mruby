@@ -1,15 +1,16 @@
-//! The values that cross between the engine and Ruby, either way: data is
-//! copied and objects are shared. A container crosses whole or not at all,
-//! and one nested deeper than the engine's own recursive operations go
-//! crosses as nothing.
+//! The values that cross between the engine and Ruby, either way. Ruby's
+//! own data is copied into the engine, whole or not at all, and one nested
+//! deeper than the engine's own recursive operations go crosses as nothing;
+//! the engine's containers and objects reach Ruby as the very ones the
+//! engine holds.
 
 use beni::{
     Error, FromValue, IntoValue, Mrb, Proc, Qfalse, Qtrue, RArray, RHash, RString, ReprValue,
     Symbol, TryConvert, Value, value::qnil,
 };
 use godot::builtin::{
-    AnyArray, AnyDictionary, Color, GString, PackedArray, StringName, VarArray, VarDictionary,
-    Variant, VariantType, Vector2, Vector3, Vector4,
+    Color, GString, PackedArray, StringName, VarArray, VarDictionary, Variant, VariantType,
+    Vector2, Vector3, Vector4,
 };
 use godot::classes::Object;
 use godot::meta::{PackedElement, ToGodot};
@@ -28,17 +29,7 @@ use super::value_type::{self, EngineValue};
 const DEPTH: usize = 100;
 
 /// An engine value crossing into Ruby, as Ruby is given it.
-pub struct RubyCrossing<'a>(&'a Variant);
-
-impl<'a> RubyCrossing<'a> {
-    /// `variant` for Ruby, or why it cannot reach Ruby.
-    pub fn try_new(variant: &'a Variant) -> Result<Self, String> {
-        match find_unreachable_reason(variant) {
-            Some(reason) => Err(reason),
-            None => Ok(Self(variant)),
-        }
-    }
-}
+pub struct RubyCrossing<'a>(pub &'a Variant);
 
 impl RubyCrossing<'_> {
     /// The value for Ruby, made with what the bridge keeps for the realm.
@@ -53,31 +44,6 @@ impl IntoValue for RubyCrossing<'_> {
     }
 }
 
-// Why an engine value cannot reach Ruby, if it cannot: a container nested
-// too deep, or holding itself.
-fn find_unreachable_reason(variant: &Variant) -> Option<String> {
-    fn is_shallow(variant: &Variant, level: usize) -> bool {
-        if level > DEPTH {
-            return false;
-        }
-        match variant.get_type() {
-            VariantType::ARRAY => variant
-                .to::<AnyArray>()
-                .iter_shared()
-                .all(|element| is_shallow(&element, level + 1)),
-            VariantType::DICTIONARY => variant
-                .to::<AnyDictionary>()
-                .iter_shared()
-                .all(|(key, value)| is_shallow(&key, level + 1) && is_shallow(&value, level + 1)),
-            _ => true,
-        }
-    }
-    (!is_shallow(variant, 1)).then(|| {
-        let kind = godot::global::type_string(i64::from(variant.get_type().ord));
-        format!("an {kind} nested more than {DEPTH} deep cannot reach Ruby")
-    })
-}
-
 fn to_ruby(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> Value {
     match variant.get_type() {
         VariantType::BOOL => variant.to::<bool>().into_value(mrb),
@@ -87,15 +53,6 @@ fn to_ruby(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> Value {
             .str_new(variant.to::<GString>().to_string().as_bytes())
             .as_value(),
         VariantType::STRING_NAME => intern_symbol(mrb, &variant.to::<StringName>().to_string()),
-        VariantType::ARRAY => make_array(mrb, data, variant.to::<AnyArray>().iter_shared()),
-        VariantType::DICTIONARY => {
-            let hash = mrb.hash_new();
-            for (key, value) in variant.to::<AnyDictionary>().iter_shared() {
-                hash.set(mrb, to_ruby(mrb, data, &key), to_ruby(mrb, data, &value))
-                    .ok();
-            }
-            hash.as_value()
-        }
         VariantType::OBJECT => match variant
             .try_to::<Gd<Object>>()
             .ok()
@@ -133,11 +90,30 @@ fn intern_symbol(mrb: &Mrb, name: &str) -> Value {
         .map_or_else(|_| qnil().as_value(), |id| Symbol::from(id).as_value())
 }
 
-fn make_array(mrb: &Mrb, data: &BridgeData, elements: impl Iterator<Item = Variant>) -> Value {
+/// A Ruby Array of `elements`, each as Ruby is given it.
+pub(super) fn make_array(
+    mrb: &Mrb,
+    data: &BridgeData,
+    elements: impl Iterator<Item = Variant>,
+) -> Value {
     let values: Vec<Value> = elements
         .map(|element| to_ruby(mrb, data, &element))
         .collect();
     mrb.ary_new_from_values(&values).as_value()
+}
+
+/// A Ruby Hash of `entries`, each key and value as Ruby is given it.
+pub(super) fn make_hash(
+    mrb: &Mrb,
+    data: &BridgeData,
+    entries: impl Iterator<Item = (Variant, Variant)>,
+) -> Value {
+    let hash = mrb.hash_new();
+    for (key, value) in entries {
+        hash.set(mrb, to_ruby(mrb, data, &key), to_ruby(mrb, data, &value))
+            .ok();
+    }
+    hash.as_value()
 }
 
 fn from_packed<T: PackedElement>(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> Value {
