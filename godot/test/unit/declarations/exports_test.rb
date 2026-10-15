@@ -99,7 +99,28 @@ class ExportsTest < Minitest::Test
 
     one.rounds << 3
 
-    assert_equal [1, 2], other.rounds
+    assert_operator other.rounds, :==, [1, 2]
+  end
+
+  # @behavior RD-081
+  def test_an_exported_container_is_the_one_gdscript_reaches
+    crate = autofree(Unit::Declarations::Crate.new)
+
+    appender.append_to(crate)
+
+    assert_operator crate.rounds, :==, [1, 2, 3]
+  end
+
+  # @behavior RD-082
+  def test_an_array_ruby_writes_to_an_exported_property_is_held_as_the_engines_container
+    crate = autofree(Unit::Declarations::Crate.new)
+    written = [7]
+    crate.rounds = written
+
+    appender.append_to(crate)
+
+    assert_operator crate.rounds, :==, [7, 3]
+    assert_equal [7], written
   end
 
   # @behavior RD-025
@@ -248,5 +269,14 @@ class ExportsTest < Minitest::Test
     sprite.set_script(Godot::ResourceLoader.load("res://test/unit/declarations/cloak.rb"))
     sprite.call(:cover)
     sprite
+  end
+
+  # A GDScript object whose `append_to` appends 3 to a node's `rounds`, as
+  # GDScript code reaching the node's property does.
+  def appender
+    script = Godot::GDScript.new
+    script.source_code = "extends RefCounted\nfunc append_to(node):\n\tnode.rounds.append(3)\n"
+    script.reload
+    script.new
   end
 end

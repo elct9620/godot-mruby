@@ -92,7 +92,7 @@ module Godot
         __declare_export__(name.to_s, default, *__read_hint__(keywords))
         __exports__[name.to_sym] = default
         attr_reader name unless method_defined?(name)
-        attr_writer name unless method_defined?(:"#{name}=")
+        __define_export_writer__(name) unless method_defined?(:"#{name}=")
       end
 
       # A heading the editor shows the properties written after it under,
@@ -225,16 +225,39 @@ module Godot
       # `object` with the value each exported property was declared with in
       # the instance variable of its name, written before anything
       # initializes it. A value that can change in place is copied, so no
-      # two objects share one; the engine's own values never change, so they
-      # are shared as they are.
+      # two objects share one; the engine's values of fixed size never
+      # change, so they are shared as they are.
       def __write_defaults__(object)
         __defaults__.each { |name, value| object.instance_variable_set(:"@#{name}", __copy__(value)) }
         object
       end
 
-      # `value`, copied when it can change in place.
+      # `value`, copied when it can change in place: Ruby's Array or Hash
+      # into the engine's container, as an export holds it.
       def __copy__(value)
-        value.is_a?(::Array) || value.is_a?(::Hash) || value.is_a?(::String) ? value.dup : value
+        case value
+        when ::Array, ::Hash then __hold__(value)
+        when ::String, Godot::Dictionary, Godot::Value::Sequence then value.dup
+        else value
+        end
+      end
+
+      # `value` as an exported property holds it: Ruby's Array or Hash as
+      # the engine's container of its elements, so GDScript reaching the
+      # property changes what Ruby reads, and anything else as it is.
+      def __hold__(value)
+        case value
+        when ::Array then Godot::Array.new(value)
+        when ::Hash then Godot::Dictionary.new(value)
+        else value
+        end
+      end
+
+      # Defines the writer of the exported property `name`, which holds what
+      # it is given as `__hold__` says.
+      def __define_export_writer__(name)
+        variable = :"@#{name}"
+        define_method(:"#{name}=") { |value| instance_variable_set(variable, self.class.__send__(:__hold__, value)) }
       end
 
       # The value each property an object of the class is given, what it

@@ -701,3 +701,28 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | Given | a node script whose class exports an array holding an object no file holds beside a resource a file holds |
 | When | Godot asks the script for the property's default value |
 | Then | it answers null, as GDScript answers for a container it cannot work out before running |
+
+## `RD-081` An exported container is the one GDScript reaches
+
+| Attribute | Value |
+| --- | --- |
+| refines | `RD-024` |
+| relates | `RV-037` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a node of a class exporting an array |
+| When | GDScript appends to the array it reads from the node's property |
+| Then | the node's Ruby object reads the appended element, as a GDScript node's exported array is shared |
+
+## `RD-082` An Array Ruby writes to an exported property is held as the engine's container
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RV-005` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a node of a class exporting an array, to which Ruby wrote an Array of its own |
+| When | GDScript appends to the array it reads from the node's property |
+| Then | the node's Ruby object reads the appended element, while the Array Ruby wrote stays as it was |
