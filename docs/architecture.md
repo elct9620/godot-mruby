@@ -341,6 +341,7 @@ lib.rs, script ───┤   each frame: releases, reloads, the editor's placed
                   ▼
 realm::enter(body)
   │  waits while another thread is inside; a thread inside goes on
+  │  warns once of a wait past its patience, naming the holder
   │  opens the realm at the first entry, as prepared
   ▼
 body(&Realm)

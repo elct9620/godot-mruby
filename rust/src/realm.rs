@@ -1,7 +1,8 @@
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, OnceCell, RefCell};
 use std::collections::{BTreeSet, HashMap};
 use std::ffi::CStr;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
+use std::time::Duration;
 
 use beni::{
     Error, FromValue, Gem, IntoValue, Module as _, Mrb, Qtrue, RClass, ReprValue, Symbol,
@@ -25,7 +26,7 @@ mod registry;
 use executor::Declaration;
 use extensions::ExtensionData;
 pub use index::{ClassIndex, Roots, camelize, normalize};
-use reentrant_lock::ReentrantLock;
+use reentrant_lock::{ReentrantLock, ReentrantLockGuard, Watch};
 pub use registry::Key;
 use registry::Registry;
 
@@ -245,6 +246,51 @@ static RELEASES: Mutex<Vec<Key>> = Mutex::new(Vec::new());
 // frame to run them again.
 static SOURCE_CHANGES: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
+/// How the game's realm tells of a thread that has waited `patience` for
+/// it: in `log`, naming each thread as `thread_name` names the one calling.
+pub struct Waits {
+    pub patience: Duration,
+    pub log: Box<dyn Log + Sync>,
+    pub thread_name: fn() -> String,
+}
+
+// How long waits for the game's realm are told of; the first given stays.
+static WAITS: OnceLock<Waits> = OnceLock::new();
+
+thread_local! {
+    // The name this thread goes by when a wait for the realm is told of.
+    static THREAD_NAME: OnceCell<Arc<str>> = const { OnceCell::new() };
+}
+
+/// Has the game's realm tell of a thread waiting long for it as `waits`
+/// says, since a thread waiting for one that waits for it never goes on.
+pub fn watch_waits(waits: Waits) {
+    WAITS.set(waits).ok();
+}
+
+// Takes the game's realm, telling of a wait for it that outlasts the
+// patience it was given.
+fn lock_game() -> ReentrantLockGuard<'static, RefCell<Game>> {
+    let Some(waits) = WAITS.get() else {
+        return GAME.lock();
+    };
+    THREAD_NAME.with(|name| {
+        let name = name.get_or_init(|| Arc::from((waits.thread_name)()));
+        let report = |holder: &str, wait: Duration| {
+            let text = format!(
+                "{name} has waited {:.1} s for the game's realm, which {holder} holds; neither goes on if {holder} waits for {name}",
+                wait.as_secs_f64()
+            );
+            waits.log.record(Level::Warn, None, &text);
+        };
+        GAME.lock_watched(Some(&Watch {
+            name,
+            patience: waits.patience,
+            report: &report,
+        }))
+    })
+}
+
 // The way the game's realm opens, which an opener that panicked leaves as it
 // was, so the lock is taken whether or not that poisoned it.
 fn opener() -> MutexGuard<'static, Option<Opener>> {
@@ -272,7 +318,7 @@ enum Game {
 /// fails every entry until it is closed. A thread already inside enters
 /// again, unless it is already as deep as its stack allows.
 pub fn enter<T>(body: impl FnOnce(&Realm) -> Result<T, RubyError>) -> Result<T, RubyError> {
-    let game = GAME.lock();
+    let game = lock_game();
     if game.depth() > DEEPEST_ENTRY {
         return Err(RubyError::from_message(format!(
             "SystemStackError: the game's realm is already entered {DEEPEST_ENTRY} deep on this thread"
@@ -411,7 +457,7 @@ pub fn release_queued() {
     if RELEASES.lock().unwrap().is_empty() {
         return;
     }
-    let game = GAME.lock();
+    let game = lock_game();
     if let Game::Open(realm) = &*game.borrow() {
         realm.release_queued();
     }
@@ -446,7 +492,7 @@ pub fn rerun_queued(rerun: &Rerun) -> bool {
     if paths.is_empty() {
         return false;
     }
-    let game = GAME.lock();
+    let game = lock_game();
     let Game::Open(realm) = &*game.borrow() else {
         return false;
     };
@@ -461,7 +507,7 @@ pub fn rerun_queued(rerun: &Rerun) -> bool {
 /// Takes the files at `paths` the game's realm does not name yet into its
 /// class index, if it is open, so a file added since it opened loads by name.
 pub fn take_in_files(paths: Vec<String>) {
-    let game = GAME.lock();
+    let game = lock_game();
     if let Game::Open(realm) = &*game.borrow() {
         let added: Vec<String> = {
             let index = bookkeeping(&realm.mrb).index.borrow();
@@ -477,7 +523,7 @@ pub fn take_in_files(paths: Vec<String>) {
 /// Closes the game's realm, unless this thread is inside it; a key released
 /// for it holds nothing in the next.
 pub fn close() {
-    let game = GAME.lock();
+    let game = lock_game();
     if game.is_nested() {
         return;
     }
@@ -1227,6 +1273,53 @@ mod tests {
         leave.send(()).unwrap();
         holder.join().unwrap();
         assert!(returned);
+    }
+
+    // @behavior RE-017
+    #[test]
+    fn a_thread_waiting_long_for_the_realm_is_told_of_once_naming_the_thread_inside() {
+        let (_turn, _key) = held_thing();
+        let warnings = Warnings::default();
+        watch_waits(Waits {
+            patience: Duration::from_millis(20),
+            log: Box::new(warnings.clone()),
+            thread_name: || thread::current().name().unwrap_or_default().to_owned(),
+        });
+        let (inside, entered) = mpsc::channel();
+        let (leave, left) = mpsc::channel::<()>();
+        let holder = thread::Builder::new()
+            .name("holder".to_owned())
+            .spawn(move || {
+                enter(|_| {
+                    inside.send(()).ok();
+                    left.recv().ok();
+                    Ok(())
+                })
+                .ok();
+            })
+            .unwrap();
+        entered.recv().unwrap();
+
+        let waiter = thread::Builder::new()
+            .name("waiter".to_owned())
+            .spawn(|| enter(|_| Ok(())).is_ok())
+            .unwrap();
+        thread::sleep(Duration::from_millis(100));
+        leave.send(()).unwrap();
+        holder.join().unwrap();
+        let entered_after = waiter.join().unwrap();
+
+        let records: Vec<String> = warnings.0.lock().unwrap().clone();
+        let waiter_records: Vec<&String> = records
+            .iter()
+            .filter(|text| text.starts_with("waiter "))
+            .collect();
+        assert!(entered_after);
+        assert_eq!(waiter_records.len(), 1, "{records:?}");
+        assert!(
+            waiter_records[0].contains("which holder holds"),
+            "{records:?}"
+        );
     }
 
     // @behavior RO-003

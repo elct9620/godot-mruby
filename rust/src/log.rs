@@ -7,7 +7,9 @@ use std::cell::RefCell;
 use std::ffi::CStr;
 use std::fmt;
 
+use godot::classes::Os;
 use godot::global::{PrintLevel, PrintRecord, PrintSource, godot_print, print_custom, printraw};
+use godot::obj::Singleton;
 use godot::prelude::ToGodot;
 
 use crate::compiler::Warning;
@@ -41,6 +43,15 @@ impl realm::Log for GodotLog {
             );
         });
     }
+}
+
+/// The thread calling, as the log names it: the main thread, or another by
+/// the id `OS.get_thread_caller_id` gives it.
+pub fn name_thread() -> String {
+    if godot::sys::is_main_thread() {
+        return "the main thread".to_owned();
+    }
+    format!("thread {}", Os::singleton().get_thread_caller_id())
 }
 
 thread_local! {

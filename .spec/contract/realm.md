@@ -20,6 +20,34 @@ Gives the game's realm the way it opens, which its first entry uses; a mod's rea
 pub fn prepare(open: impl Fn() -> Result<Realm, RubyError> + Send + 'static) {}
 ```
 
+## `Waits`
+
+How the game's realm tells of a thread that has waited its patience for it: in the log it is given, naming each thread as the host names the one calling, since a thread waiting for one that waits for it never goes on.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub struct Waits {
+    pub patience: Duration,
+    pub log: Box<dyn Log + Sync>,
+    pub thread_name: fn() -> String,
+}
+```
+
+## `watch_waits`
+
+Has the game's realm tell of long waits for it as the given `Waits` says; the first given stays.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub fn watch_waits(waits: Waits) {}
+```
+
 ## `enter`
 
 Runs the body inside the game's realm, one thread at a time and again on a thread already inside, opening the realm at its first entry the way it was prepared; a realm that failed to open fails every entry until it is closed.

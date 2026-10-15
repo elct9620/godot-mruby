@@ -158,3 +158,11 @@ How a thread goes into the game's realm: one thread at a time is inside, and a t
 | Given | a thread inside the game's realm 24 entries deep |
 | When | it enters the realm once more |
 | Then | the entry's error is not told as the opener's |
+
+## `RE-017` A thread waiting long for the realm is told of once, naming the thread inside
+
+| Step | Statement |
+| --- | --- |
+| Given | a thread inside the game's realm past the patience its waits are watched with |
+| When | another thread enters the realm |
+| Then | the log warns once that it has waited, naming the thread inside, and it enters once that thread leaves |

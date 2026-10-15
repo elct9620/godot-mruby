@@ -28,6 +28,11 @@ mod validation;
 
 struct GodotMruby;
 
+// How long a thread waits for the game's realm before the log tells of it:
+// longer than Ruby holds the realm for a frame's work, short enough that a
+// game stuck on two threads waiting for each other is told of at once.
+const REALM_PATIENCE: std::time::Duration = std::time::Duration::from_secs(5);
+
 #[gdextension]
 unsafe impl ExtensionLibrary for GodotMruby {
     // Scene is the stage a script language has to be registered by.
@@ -37,6 +42,11 @@ unsafe impl ExtensionLibrary for GodotMruby {
             language::register();
             loader::register();
             saver::register();
+            realm::watch_waits(realm::Waits {
+                patience: REALM_PATIENCE,
+                log: Box::new(log::GodotLog),
+                thread_name: log::name_thread,
+            });
             realm::prepare(|| {
                 realm::Realm::open(game::RealmFiles, log::GodotLog, |realm| {
                     realm.install::<bridge::Godot>()
