@@ -529,6 +529,14 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | When | the node is asked for its properties |
 | Then | one category is named after the file the class is written in |
 
+## `RD-083` A release build heads no class's properties with a category
+
+| Step | Statement |
+| --- | --- |
+| Given | a node of a class exporting a value, in a game exported for release |
+| When | the node is asked for its properties |
+| Then | its export is listed and no category is named after the file the class is written in, as GDScript lists none outside the editor |
+
 ## `RD-066` An export naming a class takes no object of another class
 
 | Step | Statement |

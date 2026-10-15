@@ -3,6 +3,7 @@
 require "fileutils"
 require "tmpdir"
 
+require_relative "declarations"
 require_relative "engine_classes"
 require_relative "export"
 require_relative "values"
@@ -20,7 +21,7 @@ module Godot
     GAME = "game"
     # The scenes quit as they finish; this only stops one that never does.
     FRAMES = "60"
-    CHECKS = [EngineClasses, Values].freeze
+    CHECKS = [Declarations, EngineClasses, Values].freeze
 
     module_function
 
