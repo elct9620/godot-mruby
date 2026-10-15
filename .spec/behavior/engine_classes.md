@@ -412,3 +412,16 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | an engine class with no singleton, and a method its objects have that is not static |
 | When | Ruby asks whether the class responds to that method |
 | Then | it answers false |
+
+## `RG-051` A node's engine object reaches an extension's method its node class also defines
+
+| Attribute | Value |
+| --- | --- |
+| unverifiable | the addon registers no method of its own for a test to call |
+| relates | `RG-035` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose node class extends an extension's class and defines a method of a name that class declares, and Ruby holding the node's engine object |
+| When | Ruby calls that name on the engine object |
+| Then | the extension's method runs and the node class's does not, as GDScript's typed call reaches it |

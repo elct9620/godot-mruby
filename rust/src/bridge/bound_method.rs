@@ -1,6 +1,6 @@
 //! An engine method found once by the hash the engine gives its signature,
 //! so a call reaches the method's bind without the engine looking up its
-//! name.
+//! name, or, for an extension's class, by the hash kept for each call.
 
 use std::ffi::c_void;
 
@@ -13,16 +13,30 @@ use godot::register::info::{MethodFlags, PropertyUsageFlags};
 use godot::sys;
 use smallvec::SmallVec;
 
-/// The bind of an engine method a class the engine registered itself
-/// declares, which lives until the engine shuts down; an extension's binds
-/// are freed when it unloads, so none is held.
+/// An engine method found by the hash the engine gives its signature, whose
+/// bind a call reaches without the engine asking the receiver's script.
 pub struct BoundMethod {
-    bind: sys::GDExtensionMethodBindPtr,
-    // The tag of the class declaring the method, which its receiver must be
-    // of or extend, since the bind takes the receiver as that class.
-    declarer_tag: *mut c_void,
+    bind: Bind,
     name: String,
     arity: Arity,
+}
+
+// Where a call finds the method's bind and the tag of the class declaring
+// it, which its receiver must be of or extend, since the bind takes the
+// receiver as that class.
+enum Bind {
+    // A class the engine registered itself, whose bind and tag live until
+    // the engine shuts down.
+    Engine {
+        bind: sys::GDExtensionMethodBindPtr,
+        declarer_tag: *mut c_void,
+    },
+    // An extension's class, whose bind is freed when the extension unloads,
+    // so each call asks the engine for it again.
+    Extension {
+        declarer: String,
+        hash: u32,
+    },
 }
 
 /// How many arguments an engine method takes: those it requires, those
@@ -34,8 +48,9 @@ pub struct Arity {
     pub is_vararg: bool,
 }
 
-// SAFETY: the bind and the class tag are the engine's, unchanged while the
-// engine runs, and a realm is entered by one thread at a time.
+// SAFETY: an engine class's bind and tag are the engine's, unchanged while
+// the engine runs, an extension's are asked for at each call, and a realm is
+// entered by one thread at a time.
 unsafe impl Send for BoundMethod {}
 
 static BOUND_METHOD: DataType<BoundMethod> = DataType::new(c"Godot::BoundMethod");
@@ -60,34 +75,25 @@ unsafe impl TypedData for BoundMethod {
 
 impl BoundMethod {
     /// The method `method` of the engine class `class`, bound where the
-    /// nearest of the class and its ancestors declares it, or none when an
-    /// extension registered that one.
+    /// nearest of the class and its ancestors declares it.
     pub fn find(class: &str, method: &str) -> Option<Self> {
         let class_db = ClassDb::singleton();
         let declarer = find_declarer(&class_db, class, method)?;
-        let api = class_db.class_get_api_type(&declarer);
-        if api != ApiType::CORE && api != ApiType::EDITOR {
-            return None;
-        }
         let info = find_info(&class_db, &declarer, method)?;
         let hash = hash_method(&info)?;
         let arity = Arity::read(&info)?;
-        let name = StringName::from(method);
-        // SAFETY: the interface is initialized while the extension runs, and
-        // the names live for the call.
-        let (bind, tag) = unsafe {
-            (
-                sys::interface_fn!(classdb_get_method_bind)(
-                    declarer.string_sys(),
-                    name.string_sys(),
-                    i64::from(hash),
-                ),
-                sys::interface_fn!(classdb_get_class_tag)(declarer.string_sys()),
-            )
+        let (bind, declarer_tag) = find_bind(&declarer, &StringName::from(method), hash)?;
+        let api = class_db.class_get_api_type(&declarer);
+        let bind = if api == ApiType::CORE || api == ApiType::EDITOR {
+            Bind::Engine { bind, declarer_tag }
+        } else {
+            Bind::Extension {
+                declarer: declarer.to_string(),
+                hash,
+            }
         };
-        (!bind.is_null() && !tag.is_null()).then(|| Self {
+        Some(Self {
             bind,
-            declarer_tag: tag,
             name: method.to_owned(),
             arity,
         })
@@ -112,15 +118,17 @@ impl BoundMethod {
         object: &Gd<Object>,
         args: &[Variant],
     ) -> Result<Variant, sys::GDExtensionCallError> {
-        self.check_receiver(object)?;
+        let (bind, declarer_tag) = self.bind.find(&self.name).ok_or(INVALID_METHOD)?;
+        check_receiver(object, declarer_tag)?;
         self.arity.check(args.len())?;
         let pointers: SmallVec<[_; 4]> = args.iter().map(Variant::var_sys).collect();
-        // SAFETY: the bind is alive while the engine runs, `object` is a live
-        // object of the bind's class or one extending it, as checked, and the
-        // argument pointers live for the call.
+        // SAFETY: the bind is alive while the engine runs or, for an
+        // extension's class, was found just now with nothing run since,
+        // `object` is a live object of the bind's class or one extending it,
+        // as checked, and the argument pointers live for the call.
         super::run_engine_call(|answer, error| unsafe {
             sys::interface_fn!(object_method_bind_call)(
-                self.bind,
+                bind,
                 object.obj_sys(),
                 pointers.as_ptr(),
                 pointers.len() as i64,
@@ -129,23 +137,65 @@ impl BoundMethod {
             );
         })
     }
+}
 
-    // Whether `object` is of the class declaring the method or one extending
-    // it, or the error the engine answers for a method its class lacks.
-    fn check_receiver(&self, object: &Gd<Object>) -> Result<(), sys::GDExtensionCallError> {
-        // SAFETY: the interface is initialized while the extension runs, and
-        // `object` is live.
-        let cast =
-            unsafe { sys::interface_fn!(object_cast_to)(object.obj_sys(), self.declarer_tag) };
-        if cast.is_null() {
-            return Err(sys::GDExtensionCallError {
-                error: sys::GDEXTENSION_CALL_ERROR_INVALID_METHOD,
-                argument: 0,
-                expected: 0,
-            });
+impl Bind {
+    // The method `method`'s bind and its declarer's tag, or none once the
+    // extension declaring it has unloaded.
+    fn find(&self, method: &str) -> Option<(sys::GDExtensionMethodBindPtr, *mut c_void)> {
+        match self {
+            Self::Engine { bind, declarer_tag } => Some((*bind, *declarer_tag)),
+            Self::Extension { declarer, hash } => find_bind(
+                &StringName::from(declarer.as_str()),
+                &StringName::from(method),
+                *hash,
+            ),
         }
-        Ok(())
     }
+}
+
+// The error the engine answers for a method its receiver's class lacks.
+const INVALID_METHOD: sys::GDExtensionCallError = sys::GDExtensionCallError {
+    error: sys::GDEXTENSION_CALL_ERROR_INVALID_METHOD,
+    argument: 0,
+    expected: 0,
+};
+
+// Whether `object` is of the class `declarer_tag` tags or one extending it,
+// or the error the engine answers for a method its class lacks.
+fn check_receiver(
+    object: &Gd<Object>,
+    declarer_tag: *mut c_void,
+) -> Result<(), sys::GDExtensionCallError> {
+    // SAFETY: the interface is initialized while the extension runs, and
+    // `object` is live.
+    let cast = unsafe { sys::interface_fn!(object_cast_to)(object.obj_sys(), declarer_tag) };
+    if cast.is_null() {
+        return Err(INVALID_METHOD);
+    }
+    Ok(())
+}
+
+// The bind the engine registered for `method` of `declarer` under `hash`,
+// with `declarer`'s tag, or none when it has neither.
+fn find_bind(
+    declarer: &StringName,
+    method: &StringName,
+    hash: u32,
+) -> Option<(sys::GDExtensionMethodBindPtr, *mut c_void)> {
+    // SAFETY: the interface is initialized while the extension runs, and the
+    // names live for the call.
+    let (bind, tag) = unsafe {
+        (
+            sys::interface_fn!(classdb_get_method_bind)(
+                declarer.string_sys(),
+                method.string_sys(),
+                i64::from(hash),
+            ),
+            sys::interface_fn!(classdb_get_class_tag)(declarer.string_sys()),
+        )
+    };
+    (!bind.is_null() && !tag.is_null()).then_some((bind, tag))
 }
 
 impl Arity {
