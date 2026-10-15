@@ -345,7 +345,7 @@ class EngineObjectsTest < Minitest::Test
   def test_an_engine_methods_bind_is_refused_a_receiver_freed_while_its_arguments_convert
     node = Godot::Node.new
 
-    error = assert_raises(Godot::CallError) { node.set_meta(:freed, make_freeing_hash(node)) }
+    error = assert_raises(Godot::CallError) { node.set_meta(:freed, make_trap_hash(node)) }
 
     assert_equal "Attempt to call function 'set_meta' in base 'previously freed' on a null instance.", error.message
   end
@@ -354,7 +354,7 @@ class EngineObjectsTest < Minitest::Test
   def test_an_engine_call_by_name_is_refused_a_receiver_freed_while_its_arguments_convert
     control = Godot::Control.new
 
-    error = assert_raises(Godot::CallError) { control.offset_left = make_freeing_hash(control) }
+    error = assert_raises(Godot::CallError) { control.offset_left = make_trap_hash(control) }
 
     assert_equal "Attempt to call function 'set' in base 'previously freed' on a null instance.", error.message
   end
@@ -436,7 +436,7 @@ class EngineObjectsTest < Minitest::Test
   # A Hash whose conversion for the engine frees `object`: its key's `hash`
   # frees it once the Hash is built, and the Hash is large enough that a
   # lookup hashes its keys.
-  def make_freeing_hash(object)
+  def make_trap_hash(object)
     armed = false
     key = Object.new
     key.define_singleton_method(:hash) do

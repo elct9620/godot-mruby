@@ -18,7 +18,7 @@ use crate::snapshot::{self, Export, Heading, Member, Parameter, Property, Signal
 /// body calls.
 #[derive(Debug, Default)]
 pub struct Header {
-    written_constants: Vec<Vec<String>>,
+    constant_paths: Vec<Vec<String>>,
     name: String,
     superclass: Option<Superclass>,
     methods: BTreeMap<String, usize>,
@@ -62,14 +62,14 @@ impl Header {
         let mut reader = Reader {
             key: roots.key_by_path(path),
             header: None,
-            written_constants: Vec::new(),
+            constant_paths: Vec::new(),
         };
         if let Some(program) = result.node().as_program_node() {
             reader.read_body(&program.statements().body(), &[]);
         }
         let header = reader.header.unwrap_or_default();
         Header {
-            written_constants: reader.written_constants,
+            constant_paths: reader.constant_paths,
             digest: snapshot::digest(source),
             is_parsed: result.errors().next().is_none(),
             icon: header
@@ -83,8 +83,8 @@ impl Header {
     /// Each constant a `module` or `class` statement writes, in the order
     /// they are written, as its names from the top level: `module Items` then
     /// `class Potion` inside it write `["Items"]` and `["Items", "Potion"]`.
-    pub fn written_constants(&self) -> &[Vec<String>] {
-        &self.written_constants
+    pub fn constant_paths(&self) -> &[Vec<String>] {
+        &self.constant_paths
     }
 
     /// The class's own name as its class statement writes it, without the
@@ -241,7 +241,7 @@ impl Header {
 struct Reader {
     key: Vec<String>,
     header: Option<Header>,
-    written_constants: Vec<Vec<String>>,
+    constant_paths: Vec<Vec<String>>,
 }
 
 impl Reader {
@@ -264,7 +264,7 @@ impl Reader {
         let Some(names) = resolve_constant_names(&path, scope) else {
             return;
         };
-        self.written_constants.push(names.clone());
+        self.constant_paths.push(names.clone());
         let statements = body
             .and_then(|body| body.as_statements_node())
             .map(|statements| statements.body());
@@ -751,7 +751,7 @@ mod tests {
         let header = Header::from_source("res://enemies/boss.rb", source, &Roots::default());
 
         assert_eq!(
-            header.written_constants(),
+            header.constant_paths(),
             [
                 vec!["Enemies"],
                 vec!["Enemies", "Boss"],
@@ -769,7 +769,7 @@ mod tests {
 
         let header = Header::from_source("res://boss.rb", source, &Roots::default());
 
-        assert_eq!(header.written_constants(), [vec!["Boss"]]);
+        assert_eq!(header.constant_paths(), [vec!["Boss"]]);
     }
 
     // @behavior RH-017

@@ -93,7 +93,7 @@ pub trait Files: Send {
 pub struct Declarations {
     /// The constants its statements write, each as its names from the top
     /// level; the realm loads them before the statements open them.
-    pub written_constants: Vec<Vec<String>>,
+    pub constant_paths: Vec<Vec<String>>,
     /// The superclass its class extends when something relies on it; once the
     /// file has run, a class extending another raises `TypeError`.
     pub parent: Option<Parent>,
@@ -167,11 +167,11 @@ struct Bookkeeping {
 struct OutermostGuard<'a>(Option<&'a Cell<Option<Origin>>>);
 
 impl<'a> OutermostGuard<'a> {
-    fn start(outermost: &'a Cell<Option<Origin>>, started: Origin) -> Self {
+    fn start(outermost: &'a Cell<Option<Origin>>, origin: Origin) -> Self {
         if outermost.get().is_some() {
             return Self(None);
         }
-        outermost.set(Some(started));
+        outermost.set(Some(origin));
         Self(Some(outermost))
     }
 }
@@ -790,8 +790,8 @@ impl Realm {
     }
 
     // Runs `ruby`, which Rust starts; it is the outermost Ruby when none runs.
-    fn run_as<T>(&self, started: Origin, ruby: impl FnOnce() -> T) -> T {
-        let _outermost = OutermostGuard::start(&bookkeeping(&self.mrb).outermost, started);
+    fn run_as<T>(&self, origin: Origin, ruby: impl FnOnce() -> T) -> T {
+        let _outermost = OutermostGuard::start(&bookkeeping(&self.mrb).outermost, origin);
         ruby()
     }
 

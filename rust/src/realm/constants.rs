@@ -132,7 +132,7 @@ pub(super) fn ensure_opened(mrb: &Mrb, path: &str) -> Result<Option<Parent>, Err
     let own = key_by_path(mrb, path);
     let declarations = bookkeeping(mrb).files.declarations_by_path(path);
     let mut inner_constants = Vec::new();
-    for names in declarations.written_constants {
+    for names in declarations.constant_paths {
         let key: Vec<String> = names.iter().map(|name| index::normalize(name)).collect();
         // Its own class and the namespaces around it are the file's to define,
         // and what it opens inside its class loads once the class exists.
