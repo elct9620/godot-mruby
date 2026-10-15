@@ -158,7 +158,7 @@ pub fn digest(source: &str) -> u64 {}
 
 ## `Property`
 
-A property a class exported, as Godot reads it: the name it is written and read by, the type its declared value gave it, that value, kept as bytes since a snapshot is read from any thread, and the hint the editor shows it with.
+A property a class exported, as Godot reads it: the name it is written and read by, the type its declared value gave it, that value, kept apart from any Variant since a snapshot is read from any thread, and the hint the editor shows it with. A resource a file holds is kept by that file's path, and an object no file holds as nothing.
 
 | Attribute | Value |
 | --- | --- |

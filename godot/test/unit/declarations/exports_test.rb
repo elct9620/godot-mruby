@@ -203,6 +203,24 @@ class ExportsTest < Minitest::Test
                  error.message
   end
 
+  # @behavior RD-077
+  def test_a_property_declared_with_a_resource_a_file_holds_answers_it_as_its_default
+    script = Godot::ResourceLoader.load("res://test/unit/declarations/prism.rb")
+    Unit::Declarations::Prism
+
+    sheen = script.get_property_default_value(:sheen)
+
+    assert_equal Godot::ResourceLoader.load("res://test/unit/declarations/sheen.tres"), sheen
+  end
+
+  # @behavior RD-078
+  def test_a_property_declared_with_an_object_no_file_holds_has_no_default
+    script = Godot::ResourceLoader.load("res://test/unit/declarations/prism.rb")
+    Unit::Declarations::Prism
+
+    assert_nil script.get_property_default_value(:tint)
+  end
+
   private
 
   # A Sprite2D whose Ruby object, of a class extending Node2D, is built and

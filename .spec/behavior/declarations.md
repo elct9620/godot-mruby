@@ -653,3 +653,27 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | Given | a node script whose class defines a method as its body runs and makes it private |
 | When | a node of that class is asked whether it has the method |
 | Then | it answers that it has it |
+
+## `RD-077` A property declared with a resource a file holds answers it as its default
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RD-032` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a resource loaded from a file |
+| When | Godot asks the script for the property's default value |
+| Then | it answers the resource that file holds, as GDScript answers a preloaded one |
+
+## `RD-078` A property declared with an object no file holds has no default
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RD-077` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports an object no file holds |
+| When | Godot asks the script for the property's default value |
+| Then | it answers null, as GDScript answers for a value it cannot work out before running |

@@ -8,9 +8,10 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::{Arc, LazyLock, OnceLock, PoisonError, RwLock};
 
 use godot::builtin::{PackedByteArray, Variant, VariantType};
-use godot::classes::Os;
+use godot::classes::{Os, Resource, ResourceLoader};
 use godot::global::{bytes_to_var, var_to_bytes};
-use godot::obj::Singleton;
+use godot::meta::ToGodot;
+use godot::obj::{Gd, Singleton};
 use godot::register::info::{PropertyHint, PropertyUsageFlags};
 
 /// A signal a class declared, with the names its parameters were declared
@@ -23,17 +24,28 @@ pub struct Signal {
 
 /// A property a class exported, as Godot reads it: the name it is written
 /// and read by, the type its declared value gave it, that value, and the
-/// hint the editor shows it with. The value is kept as the bytes the engine
-/// writes it as, since a snapshot is read from any thread while a Variant
-/// belongs to the one holding it.
+/// hint the editor shows it with. The value is kept apart from any Variant,
+/// since a snapshot is read from any thread while a Variant belongs to the
+/// one holding it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Property {
     pub name: String,
     pub kind: VariantType,
     pub hint: PropertyHint,
     pub hint_string: String,
-    default: Vec<u8>,
+    default: DeclaredValue,
     default_text: String,
+}
+
+// The value a property was declared with, as a snapshot keeps it: a
+// resource a file holds by that file's path, which the engine loads it from
+// again, and any other value as the bytes the engine writes it as, which
+// carry no object, so an object no file holds is kept as nothing, as
+// GDScript keeps no default it cannot work out before running.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum DeclaredValue {
+    Resource(String),
+    Bytes(Vec<u8>),
 }
 
 impl Property {
@@ -51,7 +63,7 @@ impl Property {
             kind: default.get_type(),
             hint: PropertyHint::NONE,
             hint_string: String::new(),
-            default: var_to_bytes(default).to_vec(),
+            default: DeclaredValue::from_variant(default),
             default_text: default.to_string(),
         }
     }
@@ -80,13 +92,35 @@ impl Property {
 
     /// The value the property was declared with.
     pub fn default_value(&self) -> Variant {
-        bytes_to_var(&PackedByteArray::from(self.default.as_slice()))
+        match &self.default {
+            DeclaredValue::Resource(path) => ResourceLoader::singleton()
+                .load(path.as_str())
+                .map_or_else(Variant::nil, |resource| resource.to_variant()),
+            DeclaredValue::Bytes(bytes) => bytes_to_var(&PackedByteArray::from(bytes.as_slice())),
+        }
     }
 
     /// The value the property was declared with, as Godot prints it, which
     /// reads without the engine.
     pub fn default_text(&self) -> &str {
         &self.default_text
+    }
+}
+
+impl DeclaredValue {
+    fn from_variant(value: &Variant) -> Self {
+        if value.get_type() != VariantType::OBJECT {
+            return Self::Bytes(var_to_bytes(value).to_vec());
+        }
+        let path = value
+            .try_to::<Gd<Resource>>()
+            .map(|resource| resource.get_path().to_string())
+            .unwrap_or_default();
+        if path.is_empty() {
+            Self::Bytes(var_to_bytes(&Variant::nil()).to_vec())
+        } else {
+            Self::Resource(path)
+        }
     }
 }
 
@@ -482,7 +516,7 @@ mod tests {
             kind: VariantType::FLOAT,
             hint: PropertyHint::NONE,
             hint_string: String::new(),
-            default: Vec::new(),
+            default: DeclaredValue::Bytes(Vec::new()),
             default_text: "0.0".to_owned(),
         }
     }
