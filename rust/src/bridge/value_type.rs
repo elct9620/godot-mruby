@@ -16,10 +16,7 @@ use beni::{
     Class as _, DataType, Error, FromValue, IntoValue, Module, Mrb, Object as _, RArray, RClass,
     RModule, ReprValue, Symbol, TryConvert, TypedData, Value, method, value::qnil,
 };
-use godot::builtin::{
-    AnyArray, AnyDictionary, GString, StringName, Variant, VariantOperator, VariantType, Vector2,
-    real,
-};
+use godot::builtin::{GString, StringName, Variant, VariantOperator, VariantType, Vector2, real};
 use godot::meta::ToGodot;
 use godot::obj::EngineEnum;
 use godot::sys;
@@ -75,19 +72,19 @@ pub(super) fn value_class(mrb: &Mrb, data: &BridgeData) -> RClass {
 }
 
 /// The engine's value types Ruby holds as `Godot::Value`s: every type that
-/// is neither Ruby's own (nil, booleans, numbers, strings, names, packed
-/// arrays) nor an object.
+/// is neither Ruby's own (nil, booleans, numbers, strings, names) nor an
+/// object.
 fn value_types() -> impl Iterator<Item = VariantType> {
     (VariantType::VECTOR2.ord..=VariantType::COLOR.ord)
-        .chain([
-            VariantType::NODE_PATH.ord,
-            VariantType::RID.ord,
-            VariantType::CALLABLE.ord,
-            VariantType::SIGNAL.ord,
-            VariantType::DICTIONARY.ord,
-            VariantType::ARRAY.ord,
-        ])
+        .chain([VariantType::NODE_PATH.ord, VariantType::RID.ord])
+        .chain(VariantType::CALLABLE.ord..=VariantType::PACKED_VECTOR4_ARRAY.ord)
         .map(<VariantType as EngineEnum>::from_ord)
+}
+
+/// Whether the engine's values of `kind` are containers: a Dictionary, an
+/// Array or a packed array, each shared wherever it is held.
+fn is_container(kind: VariantType) -> bool {
+    (VariantType::DICTIONARY.ord..=VariantType::PACKED_VECTOR4_ARRAY.ord).contains(&kind.ord)
 }
 
 /// Whether the engine's values of `kind` reach Ruby as `Godot::Value`s.
@@ -194,22 +191,33 @@ impl EngineValue {
     // A copy of the value: a container's own, holding the same elements, as
     // the engine's `duplicate` makes it; any other value as it is, since it
     // never changes.
-    fn duplicate(&self) -> Self {
-        match self.kind() {
-            VariantType::ARRAY => Self::Held(
-                self.as_variant()
-                    .to::<AnyArray>()
-                    .duplicate_shallow()
-                    .to_variant(),
-            ),
-            VariantType::DICTIONARY => Self::Held(
-                self.as_variant()
-                    .to::<AnyDictionary>()
-                    .duplicate_shallow()
-                    .to_variant(),
-            ),
-            _ => self.clone(),
+    fn duplicate(&self, mrb: &Mrb) -> Result<Self, Error> {
+        if !is_container(self.kind()) {
+            return Ok(self.clone());
         }
+        let name = StringName::from("duplicate");
+        let mut receiver = self.variant();
+        // SAFETY: the name lives for the call, which takes no arguments.
+        let outcome = super::run_engine_call(|copy, error| unsafe {
+            sys::interface_fn!(variant_call)(
+                receiver.var_sys_mut(),
+                name.string_sys(),
+                ptr::null(),
+                0,
+                copy,
+                error,
+            )
+        });
+        outcome.map(Self::Held).map_err(|error| {
+            super::refusal::make_refusal_error(
+                mrb,
+                &error,
+                "duplicate",
+                &name_type(self.kind()),
+                &[],
+                None,
+            )
+        })
     }
 
     fn kind(&self) -> VariantType {
@@ -851,35 +859,23 @@ fn evaluate_variants(op: VariantOperator, left: &Variant, right: &Variant) -> (V
 // one, or the TypeError raised when the copy cannot take it.
 fn initialize_copy(mrb: &Mrb, copy: RTypedData, original: Value) -> Result<RTypedData, Error> {
     super::fill_copy(mrb, copy, original, |_, held: &EngineValue| {
-        Ok(held.duplicate())
+        held.duplicate(mrb)
     })
 }
 
-// Godot::Value#__to_a__: a Ruby Array of the elements of the Array the value
-// is, each as Ruby is given it.
+// Godot::Value#__to_a__: a Ruby Array of the elements of the Array or the
+// packed array the value is, each as Ruby is given it.
 fn to_a(mrb: &Mrb, held: &EngineValue) -> Result<Value, Error> {
-    let array = held
-        .as_variant()
-        .try_to::<AnyArray>()
-        .map_err(|_| make_type_error(mrb, &format!("{} is no Array", name_type(held.kind()))))?;
-    Ok(value::make_array(
-        mrb,
-        super::data(mrb),
-        array.iter_shared(),
-    ))
+    value::make_elements(mrb, super::data(mrb), &held.as_variant())
+        .ok_or_else(|| make_type_error(mrb, &format!("{} is no array", name_type(held.kind()))))
 }
 
 // Godot::Value#__to_hash__: a Ruby Hash of the entries of the Dictionary the
 // value is, each key and value as Ruby is given it.
 fn to_hash(mrb: &Mrb, held: &EngineValue) -> Result<Value, Error> {
-    let dictionary = held.as_variant().try_to::<AnyDictionary>().map_err(|_| {
+    value::make_entries(mrb, super::data(mrb), &held.as_variant()).ok_or_else(|| {
         make_type_error(mrb, &format!("{} is no Dictionary", name_type(held.kind())))
-    })?;
-    Ok(value::make_hash(
-        mrb,
-        super::data(mrb),
-        dictionary.iter_shared(),
-    ))
+    })
 }
 
 // Godot::Value#__hash__: the engine's hash of the value, which equal values

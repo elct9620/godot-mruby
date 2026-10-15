@@ -531,84 +531,100 @@ module Godot
     @own_methods = (instance_methods + private_instance_methods).freeze
   end
 
-  # The engine's Array, the very one the engine holds, so a change shows
-  # wherever it is held. Ruby's names for reading and writing an Array, and
-  # those Enumerable and Comparable give, behave as Ruby's; the engine's
-  # other names behave as the engine's.
-  class Array < Value
-    include Comparable
-    include Enumerable
+  class Value
+    # What an engine array, an Array or a packed array, answers in Ruby: the
+    # very one the engine holds, so a change shows wherever it is held.
+    # Ruby's names for reading and writing an Array, and those Enumerable
+    # and Comparable give, behave as Ruby's; the engine's other names
+    # behave as the engine's.
+    module Sequence
+      include Comparable
+      include Enumerable
 
-    def each(&block)
-      to_a.each(&block)
-      self
-    end
-
-    def [](index, *length)
-      return to_a[index, *length] unless index.is_a?(Integer) && length.empty?
-
-      index += size if index < 0
-      get(index) if index >= 0 && index < size
-    end
-
-    def []=(index, value)
-      position = index < 0 ? index + size : index
-      raise IndexError, "index #{index} too small for array; minimum: -#{size}" if position < 0
-
-      resize(position + 1) if position >= size
-      set(position, value)
-    end
-
-    def <<(value)
-      push_back(value)
-      self
-    end
-
-    def first(*count)
-      count.empty? ? self[0] : to_a.first(*count)
-    end
-
-    def last(*count)
-      count.empty? ? self[-1] : to_a.last(*count)
-    end
-
-    def length
-      size
-    end
-
-    def empty?
-      is_empty
-    end
-
-    def to_a
-      __to_a__
-    end
-
-    def to_ary
-      to_a
-    end
-
-    # Element by element, each of this Array's elements asked first, so an
-    # element the engine holds meets a Ruby value equal to it.
-    def <=>(other)
-      return unless other.is_a?(::Array) || other.is_a?(Array)
-
-      other = other.to_a
-      each_with_index do |element, index|
-        return 1 if index >= other.size
-
-        order = element <=> other[index]
-        return order unless order == 0
+      def each(&block)
+        to_a.each(&block)
+        self
       end
-      size <=> other.size
-    end
 
-    # Godot::Value's, which Enumerable's would hide.
-    def hash
-      __hash__
+      def [](index, *length)
+        return to_a[index, *length] unless index.is_a?(Integer) && length.empty?
+
+        index += size if index < 0
+        get(index) if index >= 0 && index < size
+      end
+
+      def []=(index, value)
+        position = index < 0 ? index + size : index
+        raise IndexError, "index #{index} too small for array; minimum: -#{size}" if position < 0
+
+        resize(position + 1) if position >= size
+        set(position, value)
+      end
+
+      def <<(value)
+        push_back(value)
+        self
+      end
+
+      def first(*count)
+        count.empty? ? self[0] : to_a.first(*count)
+      end
+
+      def last(*count)
+        count.empty? ? self[-1] : to_a.last(*count)
+      end
+
+      def length
+        size
+      end
+
+      def empty?
+        is_empty
+      end
+
+      def to_a
+        __to_a__
+      end
+
+      def to_ary
+        to_a
+      end
+
+      # Element by element, each of this array's elements asked first, so an
+      # element the engine holds meets a Ruby value equal to it.
+      def <=>(other)
+        return unless other.is_a?(::Array) || other.is_a?(Sequence)
+
+        other = other.to_a
+        each_with_index do |element, index|
+          return 1 if index >= other.size
+
+          order = element <=> other[index]
+          return order unless order == 0
+        end
+        size <=> other.size
+      end
+
+      # Godot::Value's, which Enumerable's would hide.
+      def hash
+        __hash__
+      end
     end
+  end
+
+  # The engine's Array; Godot::Value::Sequence says how it answers.
+  class Array < Value
+    include Sequence
 
     __define_engine_names__
+  end
+
+  # The engine's packed arrays, each answering as Godot::Value::Sequence says.
+  %i[PackedByteArray PackedInt32Array PackedInt64Array PackedFloat32Array PackedFloat64Array
+     PackedStringArray PackedVector2Array PackedVector3Array PackedColorArray PackedVector4Array].each do |name|
+    packed = const_set(name, Class.new(Value))
+    packed.include(Value::Sequence)
+    packed.__send__(:__define_engine_names__)
   end
 
   # The engine's Dictionary, the very one the engine holds, so a change

@@ -9,8 +9,8 @@ use beni::{
     Symbol, TryConvert, Value, value::qnil,
 };
 use godot::builtin::{
-    Color, GString, PackedArray, StringName, VarArray, VarDictionary, Variant, VariantType,
-    Vector2, Vector3, Vector4,
+    AnyArray, AnyDictionary, Color, GString, PackedArray, StringName, VarArray, VarDictionary,
+    Variant, VariantType, Vector2, Vector3, Vector4,
 };
 use godot::classes::Object;
 use godot::meta::{PackedElement, ToGodot};
@@ -71,6 +71,20 @@ fn to_ruby(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> Value {
             Some(object) => object::wrap_object(mrb, data, object),
         },
         kind if value_type::is_value_type(kind) => value_type::wrap_variant(mrb, data, variant),
+        _ => qnil().as_value(),
+    }
+}
+
+fn intern_symbol(mrb: &Mrb, name: &str) -> Value {
+    mrb.intern(name.as_bytes())
+        .map_or_else(|_| qnil().as_value(), |id| Symbol::from(id).as_value())
+}
+
+/// A Ruby Array of the elements of `variant`, an Array or a packed array,
+/// each as Ruby is given it; none when `variant` is neither.
+pub(super) fn make_elements(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> Option<Value> {
+    Some(match variant.get_type() {
+        VariantType::ARRAY => make_array(mrb, data, variant.to::<AnyArray>().iter_shared()),
         VariantType::PACKED_BYTE_ARRAY => from_packed::<u8>(mrb, data, variant),
         VariantType::PACKED_INT32_ARRAY => from_packed::<i32>(mrb, data, variant),
         VariantType::PACKED_INT64_ARRAY => from_packed::<i64>(mrb, data, variant),
@@ -81,39 +95,27 @@ fn to_ruby(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> Value {
         VariantType::PACKED_VECTOR3_ARRAY => from_packed::<Vector3>(mrb, data, variant),
         VariantType::PACKED_COLOR_ARRAY => from_packed::<Color>(mrb, data, variant),
         VariantType::PACKED_VECTOR4_ARRAY => from_packed::<Vector4>(mrb, data, variant),
-        _ => qnil().as_value(),
-    }
+        _ => return None,
+    })
 }
 
-fn intern_symbol(mrb: &Mrb, name: &str) -> Value {
-    mrb.intern(name.as_bytes())
-        .map_or_else(|_| qnil().as_value(), |id| Symbol::from(id).as_value())
-}
-
-/// A Ruby Array of `elements`, each as Ruby is given it.
-pub(super) fn make_array(
-    mrb: &Mrb,
-    data: &BridgeData,
-    elements: impl Iterator<Item = Variant>,
-) -> Value {
+fn make_array(mrb: &Mrb, data: &BridgeData, elements: impl Iterator<Item = Variant>) -> Value {
     let values: Vec<Value> = elements
         .map(|element| to_ruby(mrb, data, &element))
         .collect();
     mrb.ary_new_from_values(&values).as_value()
 }
 
-/// A Ruby Hash of `entries`, each key and value as Ruby is given it.
-pub(super) fn make_hash(
-    mrb: &Mrb,
-    data: &BridgeData,
-    entries: impl Iterator<Item = (Variant, Variant)>,
-) -> Value {
+/// A Ruby Hash of the entries of `variant`, a Dictionary, each key and
+/// value as Ruby is given it; none when `variant` is no Dictionary.
+pub(super) fn make_entries(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> Option<Value> {
+    let dictionary = variant.try_to::<AnyDictionary>().ok()?;
     let hash = mrb.hash_new();
-    for (key, value) in entries {
+    for (key, value) in dictionary.iter_shared() {
         hash.set(mrb, to_ruby(mrb, data, &key), to_ruby(mrb, data, &value))
             .ok();
     }
-    hash.as_value()
+    Some(hash.as_value())
 }
 
 fn from_packed<T: PackedElement>(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> Value {

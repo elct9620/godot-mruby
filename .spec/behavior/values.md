@@ -1,6 +1,6 @@
 # Values
 
-How a value crosses between Ruby and the engine, either way. Ruby's own data is copied into the engine, whole or not at all, since the engine's containers cannot hold what Ruby's collector must see; the engine's containers and objects reach Ruby as the very ones the engine holds, as GDScript shares them. The engine's own value types, such as `Vector2`, `Color` and `NodePath`, are classes under `Godot` whose values Ruby builds and computes with as GDScript does; one of fixed size never changes, and a container, `Godot::Array` or `Godot::Dictionary`, is the engine's own.
+How a value crosses between Ruby and the engine, either way. Ruby's own data is copied into the engine, whole or not at all, since the engine's containers cannot hold what Ruby's collector must see; the engine's containers and objects reach Ruby as the very ones the engine holds, as GDScript shares them. The engine's own value types, such as `Vector2`, `Color` and `NodePath`, are classes under `Godot` whose values Ruby builds and computes with as GDScript does; one of fixed size never changes, and a container, `Godot::Array`, `Godot::Dictionary` or a packed array, is the engine's own.
 
 ## Includes
 
@@ -307,7 +307,7 @@ How a value crosses between Ruby and the engine, either way. Ruby's own data is 
 
 | Step | Statement |
 | --- | --- |
-| Given | a `Godot::Array` and a `Godot::Dictionary` |
+| Given | a `Godot::Array`, a `Godot::Dictionary` and a packed array |
 | When | Ruby changes the `dup` of each |
 | Then | the first ones hold what they held, as the engine's `duplicate` copies a container |
 
@@ -326,3 +326,15 @@ How a value crosses between Ruby and the engine, either way. Ruby's own data is 
 | Given | a `Godot::Array` |
 | When | Ruby calls `map` with a block, and the engine's `push_back` |
 | Then | `map` answers an Array as Enumerable does, and `push_back` changes the container as the engine does |
+
+## `RV-041` A packed array reaches Ruby as the one the engine passes
+
+| Attribute | Value |
+| --- | --- |
+| refines | `RV-037` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a GDScript object holding a packed array, which its method answers |
+| When | Ruby takes the packed array through the method, `get` and `call`, and pushes onto each |
+| Then | the object's packed array holds every element pushed, as GDScript shares a packed array it passes |

@@ -290,13 +290,13 @@ The `Godot` gem is all Ruby sees of the engine. An engine object carries the eng
 
 #### 2.6.1 Values
 
-A value type's value is held in one of two ways. Either way the engine computes it as GDScript does, so every supported Godot answers alike. One of fixed size is a copy and never changes. An Array or a Dictionary is the engine's own, as GDScript shares it, while Ruby's Array and Hash reach the engine as copies.
+A value type's value is held in one of two ways. Either way the engine computes it as GDScript does, so every supported Godot answers alike. One of fixed size is a copy and never changes. A container is the engine's own, as GDScript shares it. Ruby's Array and Hash reach the engine as copies.
 
 | Value | Held as | Computed by |
 | --- | --- | --- |
 | `Vector2` | its components | the engine's typed operators; `x`, `y` in place |
 | any other | the engine's variant | variant calls; a member binds the getter |
-| `Array`, `Dictionary` | the engine's variant | variant calls; Ruby's names in `godot.rb` |
+| a container: `Array`, `Dictionary`, packed arrays | the engine's variant | variant calls; Ruby's names in `godot.rb` |
 
 Vector2 is what games build and compute with most. Its division, modulo, power and methods still go through variant calls.
 

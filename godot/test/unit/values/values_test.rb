@@ -162,6 +162,26 @@ class ValuesTest < Minitest::Test
     assert_equal [2, 3], list[1..2]
   end
 
+  # @behavior RV-041
+  def test_a_packed_array_reaches_ruby_as_the_one_the_engine_passes
+    holder = packed_holder_script.new
+
+    holder.packed_answer << 2
+    holder.get(:packed) << 3
+    holder.call(:packed_answer) << 4
+
+    assert_operator holder.get(:packed), :==, [1, 2, 3, 4]
+  end
+
+  # @behavior RV-038
+  def test_a_packed_arrays_copy_is_one_of_its_own
+    packed = Godot::PackedInt32Array.new([1])
+
+    packed.dup << 2
+
+    assert_operator packed, :==, [1]
+  end
+
   private
 
   # A GDScript whose `wait` suspends, so calling it without `await` answers
@@ -177,5 +197,13 @@ class ValuesTest < Minitest::Test
   # metadata entry the node does not have.
   def round_trip(value)
     @node.get_meta(:absent, value)
+  end
+
+  # A GDScript holding a packed array, which its method answers.
+  def packed_holder_script
+    script = Godot::GDScript.new
+    script.source_code = "extends RefCounted\nvar packed := PackedInt32Array([1])\nfunc packed_answer():\n\treturn packed\n"
+    script.reload
+    script
   end
 end
