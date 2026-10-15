@@ -72,6 +72,17 @@ struct Frame {
     // The constants the file writes inside its own class, which exist only
     // once that class does.
     inner_constants: Vec<Vec<String>>,
+    // The names its source's `export` and `signal` calls spell out, read
+    // before it runs and published with what it declared.
+    source_names: SourceNames,
+}
+
+/// The names a file's source spells out in its class body's `export` and
+/// `signal` calls.
+#[derive(Default)]
+pub(super) struct SourceNames {
+    pub exports: Vec<String>,
+    pub signals: Vec<String>,
 }
 
 /// How far each file has run in a realm, and the files running now.
@@ -170,6 +181,14 @@ pub(super) fn trace_cycle(mrb: &Mrb, path: &str) -> Option<Vec<String>> {
 pub(super) fn keep_inner_constants(mrb: &Mrb, inner_constants: Vec<Vec<String>>) {
     if let Some(frame) = runs(mrb).frames.borrow_mut().last_mut() {
         frame.inner_constants = inner_constants;
+    }
+}
+
+/// Keeps `names`, which the source of the file running now spells out, to
+/// publish with what its class declares.
+pub(super) fn keep_source_names(mrb: &Mrb, names: SourceNames) {
+    if let Some(frame) = runs(mrb).frames.borrow_mut().last_mut() {
+        frame.source_names = names;
     }
 }
 
@@ -293,6 +312,7 @@ fn execute<T>(
         declarations: Vec::new(),
         digest: 0,
         inner_constants: Vec::new(),
+        source_names: SourceNames::default(),
     });
     let outcome = prepare().and_then(|prepared| {
         let source = source_by_path(mrb, path)?;
@@ -309,7 +329,14 @@ fn execute<T>(
         (Ok(()), frame) => {
             frame.into_iter().for_each(|frame| {
                 let (signals, members) = split(frame.declarations);
-                methods::publish_class(mrb, &frame.path, signals, members, frame.digest);
+                methods::publish_class(
+                    mrb,
+                    &frame.path,
+                    signals,
+                    members,
+                    frame.source_names,
+                    frame.digest,
+                );
             });
             Run::Done
         }

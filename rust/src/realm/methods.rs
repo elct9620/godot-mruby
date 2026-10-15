@@ -11,6 +11,7 @@ use beni::{
     value::qnil,
 };
 
+use super::executor::SourceNames;
 use super::{bookkeeping, compile, constants, executor, key_by_path};
 use crate::snapshot::{self, Class, Member, Signal};
 
@@ -61,20 +62,21 @@ pub(super) fn methods_by_path(mrb: &Mrb, path: &str) -> Vec<String> {
 }
 
 /// Publishes what the class of the file at `path` has, now that the file has
-/// run from the source of that digest: what its body declared, and the
-/// methods it defines, so a method metaprogramming defined is one the class
-/// has. Ruby itself asks Godot what a class has, so a file's class is read
-/// back while the thread that ran it is still inside the realm.
+/// run from the source of that digest: what its body declared, the names its
+/// source spells out, and the methods it defines, so a method metaprogramming
+/// defined is one the class has. Ruby itself asks Godot what a class has, so
+/// a file's class is read back while the thread that ran it is still inside
+/// the realm.
 pub(super) fn publish_class(
     mrb: &Mrb,
     path: &str,
     signals: Vec<Signal>,
     members: Vec<Member>,
+    source_names: SourceNames,
     digest: u64,
 ) {
     let methods = methods_by_path(mrb, path);
     let bookkeeping = bookkeeping(mrb);
-    let declarations = bookkeeping.files.declarations_by_path(path);
     let mut draft = bookkeeping.snapshot.borrow_mut();
     Arc::make_mut(&mut draft).record_class(
         path,
@@ -83,8 +85,8 @@ pub(super) fn publish_class(
             members,
             methods,
             digest,
-            export_names: declarations.exports,
-            signal_names: declarations.signals,
+            export_names: source_names.exports,
+            signal_names: source_names.signals,
         },
     );
     snapshot::publish(Arc::clone(&draft));

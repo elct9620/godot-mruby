@@ -226,7 +226,7 @@ Several layers ask the same questions, and each has one owner below them all.
 | `Files::roots` | the root directories files are named from |
 | `realm::Roots`, `realm::normalize` | how a path spells a constant |
 | `Files::file_by_name` | the `ClassIndex` behind a lookup |
-| `Files::declarations_by_path` | what a file opens, and its node script's superclass |
+| `Files::declarations_by_path` | what a file opens, its superclass, the names it declares |
 
 `game` hands the realm each file's declarations, so the realm holds a node script's class to its superclass. `minitest` uses the realm only for a failure's `Location`, and writes through `log`.
 

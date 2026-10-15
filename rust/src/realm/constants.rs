@@ -146,6 +146,13 @@ pub(super) fn ensure_opened(mrb: &Mrb, path: &str) -> Result<Option<Parent>, Err
         ensure_constant(mrb, &names)?;
     }
     executor::keep_inner_constants(mrb, inner_constants);
+    executor::keep_source_names(
+        mrb,
+        executor::SourceNames {
+            exports: declarations.exports,
+            signals: declarations.signals,
+        },
+    );
     Ok(declarations.parent)
 }
 
