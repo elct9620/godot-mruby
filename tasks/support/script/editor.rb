@@ -22,6 +22,10 @@ module Godot
       RERUN_LINE = "knob turn hint after reload: 0,20"
       TEST_RUN_LINE = "a test directory's file ran in the editor"
       KEEP_LINE = "shard kept: 7"
+      # A scene whose tool script selects a node script's node and prints each
+      # row of the editor's Signals dock, and the row its typed signal shows.
+      SIGNALS_SCENE = "res://integration/script/signals/signals.tscn"
+      SIGNAL_ROW = "signal row: flared(count: int, lit: bool, at: Vector2, spot: Node2D, foe: Enemy, payload: Variant)"
       # What the scene's tool script prints as its node is given each callback.
       TOOL_CALLBACKS = ["the torch is ready in the editor", "the torch is processed in the editor"].freeze
       # The line the editor prints as it takes the scene in, which is what says
@@ -45,6 +49,7 @@ module Godot
       def verify!(project)
         verify_connected!(project)
         verify_exported!(project)
+        verify_signal_listed!(project)
         output = open_scene(project, EDITOR_SCENE)
         verify_ran!(output)
         verify_ran_again!(output)
@@ -69,6 +74,15 @@ module Godot
         return if output.lines.map(&:chomp).include?(EXPORT_LINE)
 
         raise "The editor's placeholder was not given what a reloaded node script exports:\n#{output}"
+      end
+
+      # @behavior RS-078
+      def verify_signal_listed!(project)
+        output = open_scene(project, SIGNALS_SCENE)
+        return if output.lines.map(&:chomp).include?(SIGNAL_ROW)
+
+        rows = output.lines.grep(/^signal row: /).join
+        raise "The editor's Signals dock did not list a node script's signal with its types:\n#{rows}"
       end
 
       # @behavior RS-056

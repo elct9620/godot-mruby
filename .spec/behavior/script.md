@@ -664,3 +664,15 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | the script's source Godot holds, changed elsewhere, writing that signal's parameters by the same names |
 | When | Godot asks the script for its signals before the file runs again |
 | Then | the list carries that signal with the types its run gave it |
+
+## `RS-078` The editor's Signals dock lists a node script's signal with its parameters' types
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RD-084` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a scene with a node whose script's class declares a signal with typed parameters, open in the editor |
+| When | the node is selected and the Signals dock lists its signals |
+| Then | the signal's row names each parameter's type as GDScript's typed signal's row does |
