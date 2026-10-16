@@ -23,7 +23,7 @@ The addon registers Ruby as a script language, so a `.rb` file is served whereve
 | Scripts | `.rb` node scripts with exports and signals |
 | Engine | classes, singletons and values under `Godot` |
 | Loading | files load by constant name, no `require` |
-| Editor | highlighting, templates, validation, test panel |
+| Editor | highlighting, completion, lookup, help pages, templates, validation, test panel |
 | Tests | Minitest runner, left out of exports |
 
 ## Requirements
@@ -99,6 +99,7 @@ These are what a project meets today, each with what to do about it.
 |---|---|
 | An exported game ships its `.rb` files as source | keep secrets out of scripts |
 | A node script's callback cannot wait across frames | use a signal or `_process`; tests can wait |
+| Completion infers no variable's type | write the name bare, or after `self.` or `Godot::` |
 | The editor's indent type is one setting for every language | set Editor Settings > Text Editor > Behavior > Indent to spaces |
 | Godot 4.7 may keep Plain Text for a `.rb` opened before the addon | choose Ruby once in the script editor's Edit > Syntax Highlighter |
 
