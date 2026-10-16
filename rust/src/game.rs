@@ -30,10 +30,6 @@ impl Files for GameFiles {
         LISTING.file_by_name(scope, names)
     }
 
-    fn collect_definitions_around(&self, path: &str) -> Vec<Definition> {
-        LISTING.collect_definitions_around(path)
-    }
-
     // A test directory is a root directory whether the project lists it as
     // one or not.
     fn roots(&self) -> Roots {

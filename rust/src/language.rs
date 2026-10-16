@@ -245,7 +245,7 @@ impl IScriptLanguageExtension for RubyLanguage {
     ) -> AnyDictionary {
         let code = code.to_string();
         let script = completion::read_script_names(
-            &GameFiles,
+            game::listing(),
             &snapshot::latest(),
             &path.to_string(),
             &code,
@@ -276,7 +276,7 @@ impl IScriptLanguageExtension for RubyLanguage {
             members: &collect_engine_members,
         };
         let target = lookup::find_target(
-            &GameFiles,
+            game::listing(),
             &snapshot::latest(),
             &path,
             &code.to_string(),
