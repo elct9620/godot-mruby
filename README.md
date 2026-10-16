@@ -99,6 +99,7 @@ These are what a project meets today, each with what to do about it.
 |---|---|
 | An exported game ships its `.rb` files as source | keep secrets out of scripts |
 | Breakpoints and stepping are not available | trace with `print` or `push_error` |
+| Ruby and the engine call into each other at most 24 deep | defer a call with `call_deferred` |
 | Completion infers no variable's type | write the name bare, or after `self.` or `Godot::` |
 | The editor's indent type is one setting for every language | set Editor Settings > Text Editor > Behavior > Indent to spaces |
 | Godot 4.7 may keep Plain Text for a `.rb` opened before the addon | choose Ruby once in the script editor's Edit > Syntax Highlighter |
