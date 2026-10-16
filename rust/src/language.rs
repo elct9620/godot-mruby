@@ -2,7 +2,9 @@ use std::ffi::c_void;
 use std::sync::{Mutex, PoisonError};
 
 use godot::classes::native::ScriptLanguageExtensionProfilingInfo;
-use godot::classes::script_language_extension::{CodeCompletionKind, CodeCompletionLocation};
+use godot::classes::script_language_extension::{
+    CodeCompletionKind, CodeCompletionLocation, LookupResultType,
+};
 use godot::classes::{
     ClassDb, EditorInterface, Engine, IScriptLanguageExtension, Object, ProjectSettings,
     ResourceLoader, Script, ScriptLanguageExtension,
@@ -16,6 +18,7 @@ use crate::announcement::{self, Omission, SharedNames};
 use crate::compiler::CompileError;
 use crate::completion::{self, Candidate};
 use crate::game::{self, GameFiles};
+use crate::lookup::{self, Member, Target};
 use crate::realm::{Files, Location};
 use crate::script::RubyScript;
 use crate::template;
@@ -262,12 +265,29 @@ impl IScriptLanguageExtension for RubyLanguage {
     // Godot reads these keys unconditionally and logs an error when one is missing.
     fn lookup_code(
         &self,
-        _code: GString,
-        _symbol: GString,
-        _path: GString,
+        code: GString,
+        symbol: GString,
+        path: GString,
         _owner: Option<Gd<Object>>,
     ) -> AnyDictionary {
-        vdict! { "result" => Error::ERR_UNAVAILABLE, "type" => 0 }.upcast_any_dictionary()
+        let path = path.to_string();
+        let engine = completion::EngineNames {
+            classes: &collect_class_names,
+            members: &collect_engine_members,
+        };
+        let target = lookup::find_target(
+            &GameFiles,
+            &snapshot::latest(),
+            &path,
+            &code.to_string(),
+            &symbol.to_string(),
+            &engine,
+        );
+        match target {
+            Some(target) => describe_target(&target, &path),
+            None => vdict! { "result" => Error::ERR_UNAVAILABLE, "type" => LookupResultType::SCRIPT_LOCATION },
+        }
+        .upcast_any_dictionary()
     }
 
     fn auto_indent_code(&self, code: GString, _from_line: i32, _to_line: i32) -> GString {
@@ -492,6 +512,47 @@ fn describe_option(candidate: &Candidate) -> VarDictionary {
         "icon" => &Variant::nil(),
         "default_value" => &Variant::nil(),
         "location" => location,
+    }
+}
+
+// Where the script editor goes for a name, as it takes it: a line of
+// another file opens that file's script, and one of the file at `path` stays
+// in its editor.
+fn describe_target(target: &Target, path: &str) -> VarDictionary {
+    match target {
+        Target::Line { path: file, line } => {
+            let script = (file != path)
+                .then(|| ResourceLoader::singleton().load(file.as_str()))
+                .flatten();
+            vdict! {
+                "result" => Error::OK,
+                "type" => LookupResultType::SCRIPT_LOCATION,
+                "location" => i64::from(*line),
+                "script" => &script.to_variant(),
+            }
+        }
+        Target::EngineClass { class } => vdict! {
+            "result" => Error::OK,
+            "type" => LookupResultType::CLASS,
+            "class_name" => class.as_str(),
+        },
+        Target::EngineMember {
+            class,
+            member,
+            name,
+        } => {
+            let kind = match member {
+                Member::Method => LookupResultType::CLASS_METHOD,
+                Member::Property => LookupResultType::CLASS_PROPERTY,
+                Member::Constant => LookupResultType::CLASS_CONSTANT,
+            };
+            vdict! {
+                "result" => Error::OK,
+                "type" => kind,
+                "class_name" => class.as_str(),
+                "class_member" => name.as_str(),
+            }
+        }
     }
 }
 

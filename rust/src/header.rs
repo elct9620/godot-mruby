@@ -20,6 +20,7 @@ use crate::snapshot::{self, Export, Heading, Member, Parameter, Property, Signal
 pub struct Header {
     constant_paths: Vec<Vec<String>>,
     name: String,
+    name_offset: usize,
     superclass: Option<Superclass>,
     methods: BTreeMap<String, usize>,
     signals: Vec<Signal>,
@@ -91,6 +92,12 @@ impl Header {
     /// namespaces around it: `HTTPClient` for `class Net::HTTPClient`.
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    /// The byte offset in the source of the `module` or `class` statement
+    /// writing the class's own name.
+    pub fn name_offset(&self) -> usize {
+        self.name_offset
     }
 
     pub fn superclass(&self) -> Option<&Superclass> {
@@ -271,6 +278,7 @@ impl Reader {
         if self.header.is_none() && self.is_own_constant(&names) {
             let mut header = Header {
                 name: names.last().cloned().unwrap_or_default(),
+                name_offset: node.location().start_offset(),
                 superclass: class
                     .and_then(|class| class.superclass())
                     .and_then(|superclass| read_superclass(&superclass, scope)),
@@ -293,6 +301,12 @@ impl Reader {
                 .zip(&self.key)
                 .all(|(name, segment)| realm::normalize(name) == *segment)
     }
+}
+
+/// The line, counted from 1, that the byte at `offset` of `source` is on.
+pub fn locate_line(source: &str, offset: usize) -> u32 {
+    let before = source.get(..offset).unwrap_or(source);
+    u32::try_from(before.matches('\n').count() + 1).unwrap_or(u32::MAX)
 }
 
 // The signal a `signal` call declares, as it is written: the name it is

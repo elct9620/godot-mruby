@@ -16,6 +16,7 @@ mod language;
 mod lexer;
 mod loader;
 mod log;
+mod lookup;
 mod minitest;
 mod panel;
 mod plugin;

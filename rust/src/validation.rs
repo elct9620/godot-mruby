@@ -8,7 +8,7 @@ use std::ffi::CString;
 use crate::ancestry;
 use crate::announcement::{self, Omission, Project};
 use crate::compiler::{self, CompileError};
-use crate::header::Header;
+use crate::header::{Header, locate_line};
 use crate::realm::{Declarations, Files, Roots};
 
 /// What checking a file found: the error that stops it compiling, if any,
@@ -139,12 +139,6 @@ fn collect_native_method_overrides(
             })
         })
         .collect()
-}
-
-// The line, counted from 1, that the byte at `offset` of `source` is on.
-fn locate_line(source: &str, offset: usize) -> u32 {
-    let before = source.get(..offset).unwrap_or(source);
-    u32::try_from(before.matches('\n').count() + 1).unwrap_or(u32::MAX)
 }
 
 // The warning that other files name the constant the file at `path` names,

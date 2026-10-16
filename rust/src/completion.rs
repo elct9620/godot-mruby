@@ -133,30 +133,32 @@ pub fn read_script_names(
             .into_iter()
             .map(|property| property.name)
             .collect(),
-        constants: collect_constant_names(files, path),
+        constants: collect_constants(files, path)
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect(),
     }
 }
 
-// The constants a name written in the file at `path` reaches without a
-// namespace, each as the file defining it spells it, or as its directory's
-// module is named.
-fn collect_constant_names(files: &impl Files, path: &str) -> Vec<String> {
+/// The constants a name written in the file at `path` reaches without a
+/// namespace, each with what defines it: named as the file defining it
+/// spells it, or as its directory's module is named.
+pub fn collect_constants(files: &impl Files, path: &str) -> Vec<(String, Definition)> {
     let roots = files.roots();
     files
         .collect_definitions_around(path)
         .into_iter()
-        .map(|definition| match definition {
-            Definition::Namespace(namespace) => namespace.name,
-            Definition::File(file) => files
-                .source_by_path(&file)
-                .map(|source| {
-                    Header::from_source(&file, &source, &roots)
-                        .name()
-                        .to_owned()
-                })
-                .ok()
-                .filter(|name| !name.is_empty())
-                .unwrap_or_else(|| roots.name_by_path(&file)),
+        .map(|definition| {
+            let name = match &definition {
+                Definition::Namespace(namespace) => namespace.name.clone(),
+                Definition::File(file) => files
+                    .source_by_path(file)
+                    .map(|source| Header::from_source(file, &source, &roots).name().to_owned())
+                    .ok()
+                    .filter(|name| !name.is_empty())
+                    .unwrap_or_else(|| roots.name_by_path(file)),
+            };
+            (name, definition)
         })
         .collect()
 }
@@ -436,12 +438,12 @@ mod tests {
     }
 
     const BOSS: &str = "res://enemies/boss.rb";
-    const TYPED_BOSS: &str = "module Enemies\n  class Boss < Enemy\n    def roar\n      st\u{FFFF}\n    end\n  end\nend\n";
+    const BOSS_DRAFT: &str = "module Enemies\n  class Boss < Enemy\n    def roar\n      st\u{FFFF}\n    end\n  end\nend\n";
 
     // @behavior RQ-013
     #[test]
     fn a_files_names_include_its_own_and_its_ancestors_methods() {
-        let names = read_project_names(BOSS, TYPED_BOSS);
+        let names = read_project_names(BOSS, BOSS_DRAFT);
         assert_eq!(
             (names.engine_class, names.methods),
             (
@@ -455,7 +457,7 @@ mod tests {
     #[test]
     fn the_constants_around_a_file_are_spelled_as_their_files_write_them() {
         assert_eq!(
-            read_project_names(BOSS, TYPED_BOSS).constants,
+            read_project_names(BOSS, BOSS_DRAFT).constants,
             ["HTTPClient", "Enemies", "Boss", "Enemy", "Drops"]
         );
     }
