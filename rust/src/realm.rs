@@ -25,7 +25,9 @@ mod registry;
 
 use executor::Declaration;
 use extensions::ExtensionData;
-pub use index::{ClassIndex, Definition, Roots, camelize, normalize};
+pub use index::{
+    ClassIndex, Definition, Roots, camelize, join_inner_path, normalize, split_inner_path,
+};
 use reentrant_lock::{ReentrantLock, ReentrantLockGuard, Watch};
 pub use registry::Key;
 use registry::Registry;
@@ -401,11 +403,11 @@ pub fn declare_export(mrb: &Mrb, class: RClass, property: Property) -> Result<()
     executor::declare(mrb, class, Declaration::Property(property))
 }
 
-/// Takes `heading` as written by the file running now in the realm `mrb`
-/// belongs to: a heading names no member, so nothing is refused for having
-/// been written before.
-pub fn declare_heading(mrb: &Mrb, heading: Heading) {
-    executor::declare_heading(mrb, heading);
+/// Takes `heading` as written by `class` in the file running now in the
+/// realm `mrb` belongs to: a heading names no member, so nothing is refused
+/// for having been written before.
+pub fn declare_heading(mrb: &Mrb, class: RClass, heading: Heading) {
+    executor::declare_heading(mrb, class, heading);
 }
 
 /// Whether this thread is inside the game's realm. Something outside asks
@@ -780,10 +782,11 @@ impl Realm {
         }
     }
 
-    /// Runs the file at `path` once, and holds under `key` the object `make`
-    /// answers with `args` on the class its path names, unless `key` holds
-    /// one already or the file, still running, has not defined the class
-    /// yet. Answers which, so its caller initializes only what it made.
+    /// Runs the file `path` names once, and holds under `key` the object
+    /// `make` answers with `args` on the class its path names, an inner
+    /// script's path naming the class inside the file's class, unless `key`
+    /// holds one already or the file, still running, has not defined the
+    /// class yet. Answers which, so its caller initializes only what it made.
     pub fn build<A: IntoValue>(
         &self,
         path: &str,
@@ -791,7 +794,8 @@ impl Realm {
         make: &CStr,
         args: impl IntoIterator<Item = A>,
     ) -> Result<Build, RubyError> {
-        self.run(path)?;
+        let (file, _) = split_inner_path(path);
+        self.run(file)?;
         let _scope = self.mrb.arena_scope();
         let registry = &bookkeeping(&self.mrb).registry;
         let read = |error| RubyError::from_error(&self.mrb, Some(path), &error);
@@ -800,7 +804,7 @@ impl Realm {
         }
         let Some(class) = constants::constant_by_key(&self.mrb, &key_by_path(&self.mrb, path))
         else {
-            if executor::is_running(&self.mrb, path) {
+            if executor::is_running(&self.mrb, file) {
                 return Ok(Build::Pending);
             }
             return Err(RubyError::from_message(format!(

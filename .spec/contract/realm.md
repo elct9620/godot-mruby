@@ -151,6 +151,31 @@ A constant's name as the class index matches it against a path's segment: withou
 pub fn normalize(segment: &str) -> String {}
 ```
 
+## `join_inner_path`
+
+The path of the script standing for a class inside a file's class: the file's path followed by the inner names, each after `::`, as GDScript names an inner class.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub fn join_inner_path(file: &str, names: &[String]) -> String {}
+```
+
+## `split_inner_path`
+
+The file a script's path names, and the names of the class inside that file's class the script stands for, none for the file's own class.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+| relates | `join_inner_path` |
+
+```rust
+pub fn split_inner_path(path: &str) -> (&str, Vec<&str>) {}
+```
+
 ## `camelize`
 
 A path segment as the constant the loader names it by, as Zeitwerk camelizes it: `http_client` is `HttpClient`.
@@ -316,7 +341,7 @@ pub fn extension_data<T: Default + Send + 'static>(mrb: &Mrb) -> &T {}
 
 ## `declare_signal`
 
-Takes a signal as declared by the class of the file running now in the realm an extension's method runs in, which the realm publishes once that file has run; a name a class or one of its ancestors declared already answers the refusal, and a declaration made while no file runs belongs to no class and is not taken.
+Takes a signal as declared by a class of the file running now in the realm an extension's method runs in, which the realm publishes for the file's class or the class inside it once that file has run; a name a class or one of its ancestors declared already answers the refusal, and a declaration made while no file runs belongs to no class and is not taken.
 
 | Attribute | Value |
 | --- | --- |
@@ -328,7 +353,7 @@ pub fn declare_signal(mrb: &Mrb, class: RClass, signal: Signal) -> Result<(), Er
 
 ## `declare_export`
 
-Takes a property as exported by the class of the file running now in the realm an extension's method runs in, which the realm publishes once that file has run; a name a class or one of its ancestors declared already answers the refusal, and a declaration made while no file runs belongs to no class and is not taken.
+Takes a property as exported by a class of the file running now in the realm an extension's method runs in, which the realm publishes for the file's class or the class inside it once that file has run; a name a class or one of its ancestors declared already answers the refusal, and a declaration made while no file runs belongs to no class and is not taken.
 
 | Attribute | Value |
 | --- | --- |
@@ -340,7 +365,7 @@ pub fn declare_export(mrb: &Mrb, class: RClass, property: Property) -> Result<()
 
 ## `declare_heading`
 
-Takes a heading as written by the file running now in the realm an extension's method runs in, which the realm publishes with the properties after it; a heading names no member, so none is refused.
+Takes a heading as written by a class in the file running now in the realm an extension's method runs in, which the realm publishes with the properties after it; a heading names no member, so none is refused.
 
 | Attribute | Value |
 | --- | --- |
@@ -348,7 +373,7 @@ Takes a heading as written by the file running now in the realm an extension's m
 | relates | `declare_export` |
 
 ```rust
-pub fn declare_heading(mrb: &Mrb, heading: Heading) {}
+pub fn declare_heading(mrb: &Mrb, class: RClass, heading: Heading) {}
 ```
 
 ## `release`

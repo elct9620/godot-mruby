@@ -25,7 +25,7 @@ use super::refusal::{
     make_type_error,
 };
 use super::value::{self, RubyCrossing};
-use super::{BridgeData, file_by_class_path, read_engine_name};
+use super::{BridgeData, read_engine_name};
 use crate::realm::{self, Key};
 
 /// The engine object a Ruby object of an engine class stands for. Holding
@@ -116,9 +116,7 @@ fn make_node(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
     let path = class.path(mrb);
     let script = path
         .as_ref()
-        .and_then(|path| file_by_class_path(mrb, path))
-        .and_then(|file| ResourceLoader::singleton().load(&file))
-        .and_then(|resource| resource.try_cast::<Script>().ok())
+        .and_then(|path| script_by_class_path(mrb, path))
         .filter(|script| !script.get_instance_base_type().is_empty());
     let class_name = || {
         path.clone()
@@ -143,6 +141,23 @@ fn make_node(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
     let object = mrb.wrap_as(EngineObject(node.clone()), class).as_value();
     realm::hold(mrb, derive_node_key(node.instance_id()), object)?;
     Ok(object)
+}
+
+// The script of the class the constant path `path` names: the script its
+// file loads as, or for a class inside a file's class, the inner script
+// named by that file's path followed by the inner names.
+fn script_by_class_path(mrb: &Mrb, path: &str) -> Option<Gd<Script>> {
+    let names: Vec<String> = path.split("::").map(str::to_owned).collect();
+    let script_path = (1..=names.len()).rev().find_map(|outer| {
+        let file = realm::file_by_constant(mrb, &names[..outer])?;
+        Some(match &names[outer..] {
+            [] => file,
+            inner => realm::join_inner_path(&file, inner),
+        })
+    })?;
+    ResourceLoader::singleton()
+        .load(&script_path)
+        .and_then(|resource| resource.try_cast::<Script>().ok())
 }
 
 // Godot::Object.__allocate__(owner): the receiver's object for the engine

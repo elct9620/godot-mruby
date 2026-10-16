@@ -51,8 +51,8 @@ impl Roots {
     }
 
     // The nearest root directory `path` sits under, and the segments of its
-    // path from there; a path outside `res://`, such as a script's that has
-    // no file, has none.
+    // path from there, followed by an inner script's names; a path outside
+    // `res://`, such as a script's that has no file, has none.
     fn split_segments<'a>(&'a self, path: &'a str) -> (&'a str, Vec<&'a str>) {
         let root = self
             .0
@@ -61,10 +61,15 @@ impl Roots {
             .filter(|root| path.starts_with(root))
             .max_by_key(|root| root.len())
             .unwrap_or(ROOT);
-        let Some(rest) = path.strip_prefix(root) else {
+        let (file, inner) = split_inner_path(path);
+        let Some(rest) = file.strip_prefix(root) else {
             return (root, Vec::new());
         };
-        let segments = rest.trim_end_matches(".rb").split('/').collect();
+        let segments = rest
+            .trim_end_matches(".rb")
+            .split('/')
+            .chain(inner)
+            .collect();
         (root, segments)
     }
 
@@ -79,6 +84,23 @@ impl Roots {
             .join("::")
     }
 }
+
+/// The path of the script standing for the class `names` spells inside the
+/// class of the file at `file`, named as GDScript names an inner class.
+pub fn join_inner_path(file: &str, names: &[String]) -> String {
+    format!("{file}{INNER}{}", names.join(INNER))
+}
+
+/// The file a script's path names, and the names of the class inside that
+/// file's class the script stands for, none for the file's own class.
+pub fn split_inner_path(path: &str) -> (&str, Vec<&str>) {
+    match path.split_once(INNER) {
+        Some((file, inner)) => (file, inner.split(INNER).collect()),
+        None => (path, Vec::new()),
+    }
+}
+
+const INNER: &str = "::";
 
 /// A constant path as the index matches it: one segment per namespace, each
 /// without underscores and in lower case.

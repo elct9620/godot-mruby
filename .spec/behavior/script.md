@@ -270,7 +270,7 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 
 | Step | Statement |
 | --- | --- |
-| Given | a class extending an engine node class that no file of the game defines |
+| Given | a class extending an engine node class that no file of the game defines, as its class or inside it |
 | When | Ruby calls `new` on the class |
 | Then | it raises `NotImplementedError` |
 
@@ -693,3 +693,43 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a project listing a node script defining a method as a singleton node, and a main scene whose GDScript node calls that method through the singleton node's name |
 | When | the scene runs |
 | Then | the GDScript node gets the method's answer |
+
+## `RS-081` A class inside a node script's class makes a node carrying a script of its own
+
+| Step | Statement |
+| --- | --- |
+| Given | a class extending an engine node class, written inside the class a node script defines |
+| When | Ruby calls `new` on the inner class |
+| Then | Ruby gets an object of the inner class that answers the engine methods of the node class it extends |
+
+## `RS-082` Godot calls an inner class's method on its node
+
+| Step | Statement |
+| --- | --- |
+| Given | a node an inner class made, whose class defines a method |
+| When | Godot calls that method on the node |
+| Then | it gets what the inner class's method answers |
+
+## `RS-083` An inner class's node has the properties the inner class exported
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script's class and the class inside it, each exporting a property |
+| When | Godot lists the properties of a node the inner class made |
+| Then | the list has the inner class's property and not the outer class's |
+
+## `RS-084` A node script's node has none of its inner class's properties
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script's class and the class inside it, each exporting a property |
+| When | Godot lists the properties of a node the outer class made |
+| Then | the list has the outer class's property and not the inner class's |
+
+## `RS-085` An inner class's node has the signals the inner class declared
+
+| Step | Statement |
+| --- | --- |
+| Given | a class inside a node script's class, declaring a signal |
+| When | Godot asks a node the inner class made for that signal |
+| Then | the node has it |

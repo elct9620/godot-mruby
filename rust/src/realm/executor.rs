@@ -8,8 +8,10 @@ use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
 
-use super::constants::Scope;
-use super::{bookkeeping, compile, file_by_constant, key_by_path, methods};
+use super::constants::{self, Scope};
+use super::{
+    bookkeeping, compile, file_by_constant, join_inner_path, key_by_path, methods, normalize,
+};
 use crate::snapshot::{self, Heading, Member, Property, Signal};
 use beni::{Class as _, Error, FromValue, Module, Mrb, RClass};
 
@@ -69,12 +71,13 @@ impl PartialEq for Declaration {
 }
 
 /// A file running now, the constants it has created so far, each as the
-/// names of its namespace and its own, what its class has declared, and the
+/// names of its namespace and its own, what its class and the classes inside
+/// it have declared, by the path of the script each stands for, and the
 /// digest of the source it runs.
 struct Frame {
     path: String,
     constants: Vec<(Vec<String>, String)>,
-    declarations: Vec<Declaration>,
+    declarations: Vec<(String, Declaration)>,
     digest: u64,
     // The constants the file writes inside its own class, which exist only
     // once that class does.
@@ -250,12 +253,13 @@ pub(super) fn declare(mrb: &Mrb, class: RClass, declared: Declaration) -> Result
     let Some(frame) = frames.last_mut() else {
         return Ok(());
     };
-    let Some(standing) = frame
+    let script = script_path_by_class(mrb, class, &frame.path);
+    let Some((_, standing)) = frame
         .declarations
         .iter()
-        .find(|standing| standing.name() == declared.name())
+        .find(|(path, standing)| *path == script && standing.name() == declared.name())
     else {
-        frame.declarations.push(declared);
+        frame.declarations.push((script, declared));
         return Ok(());
     };
     if standing == &declared {
@@ -298,13 +302,62 @@ fn ancestor_by_member(mrb: &Mrb, class: RClass, name: &str) -> Option<String> {
     }
 }
 
-/// Records `heading`, written by the file running now, which names
-/// no member of the class, so it is written as often as the class writes
-/// one. A heading written while no file runs belongs to no class.
-pub(super) fn declare_heading(mrb: &Mrb, heading: Heading) {
+/// Records `heading`, written by `class` in the file running now, which
+/// names no member of the class, so it is written as often as the class
+/// writes one. A heading written while no file runs belongs to no class.
+pub(super) fn declare_heading(mrb: &Mrb, class: RClass, heading: Heading) {
     if let Some(frame) = runs(mrb).frames.borrow_mut().last_mut() {
-        frame.declarations.push(Declaration::Heading(heading));
+        let script = script_path_by_class(mrb, class, &frame.path);
+        frame
+            .declarations
+            .push((script, Declaration::Heading(heading)));
     }
+}
+
+// The path of the script `class` stands for while the file at `path` runs:
+// the file's own, or for a class inside the file's class, the inner
+// script's. Any other class the file writes declares for the file's class.
+fn script_path_by_class(mrb: &Mrb, class: RClass, path: &str) -> String {
+    let names: Vec<String> = class
+        .path(mrb)
+        .map(|written| written.split("::").map(str::to_owned).collect())
+        .unwrap_or_default();
+    match inner_names(mrb, path, &names) {
+        Some(inner @ [_, ..]) => join_inner_path(path, inner),
+        _ => path.to_owned(),
+    }
+}
+
+// The paths of the scripts standing for the classes `frame` created inside
+// its file's class, in the order it created them.
+fn inner_script_paths(mrb: &Mrb, frame: &Frame) -> Vec<String> {
+    frame
+        .constants
+        .iter()
+        .filter_map(|(scope, name)| {
+            let inner = inner_names(mrb, &frame.path, scope)?;
+            let mut names = inner.to_vec();
+            names.push(name.clone());
+            Some(join_inner_path(&frame.path, &names))
+        })
+        .filter(|path| {
+            constants::constant_by_key(mrb, &key_by_path(mrb, path))
+                .and_then(RClass::from_value)
+                .is_some()
+        })
+        .collect()
+}
+
+// What `names` spells after the constant path of the file at `path`'s
+// class, if it begins with that path.
+fn inner_names<'n>(mrb: &Mrb, path: &str, names: &'n [String]) -> Option<&'n [String]> {
+    let file_key = key_by_path(mrb, path);
+    let is_inside = names.len() >= file_key.len()
+        && names
+            .iter()
+            .zip(&file_key)
+            .all(|(name, segment)| normalize(name) == *segment);
+    is_inside.then(|| &names[file_key.len()..])
 }
 
 fn runs(mrb: &Mrb) -> &Runs {
@@ -345,17 +398,9 @@ fn execute<T>(
     let frame = runs.frames.borrow_mut().pop();
     let run = match (&outcome, frame) {
         (Ok(()), frame) => {
-            frame.into_iter().for_each(|frame| {
-                let (signals, members) = split(frame.declarations);
-                methods::publish_class(
-                    mrb,
-                    &frame.path,
-                    signals,
-                    members,
-                    frame.source_names,
-                    frame.digest,
-                );
-            });
+            frame
+                .into_iter()
+                .for_each(|frame| publish_frame(mrb, frame));
             Run::Done
         }
         (Err(_), frame) => {
@@ -370,6 +415,44 @@ fn execute<T>(
         methods::publish_changed(mrb);
     }
     outcome
+}
+
+// Publishes what the file `frame` ran declared: its class's, with the names
+// its source spells out, and each class's inside it.
+fn publish_frame(mrb: &Mrb, mut frame: Frame) {
+    let inner_paths = inner_script_paths(mrb, &frame);
+    let (signals, members) = split(take_declarations(&mut frame.declarations, &frame.path));
+    methods::publish_class(
+        mrb,
+        &frame.path,
+        signals,
+        members,
+        frame.source_names,
+        frame.digest,
+    );
+    for path in inner_paths {
+        let (signals, members) = split(take_declarations(&mut frame.declarations, &path));
+        methods::publish_class(
+            mrb,
+            &path,
+            signals,
+            members,
+            SourceNames::default(),
+            frame.digest,
+        );
+    }
+}
+
+// What `declarations` holds for the script at `path`, taken out of it.
+fn take_declarations(
+    declarations: &mut Vec<(String, Declaration)>,
+    path: &str,
+) -> Vec<Declaration> {
+    let (taken, kept) = std::mem::take(declarations)
+        .into_iter()
+        .partition(|(script, _)| script == path);
+    *declarations = kept;
+    taken.into_iter().map(|(_, declared)| declared).collect()
 }
 
 // What a frame declared, as the two kinds a class publishes: its signals,

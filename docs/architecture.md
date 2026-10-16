@@ -111,6 +111,7 @@ Names follow the naming chapter of [`convention.md`](convention.md#1-naming).
 | `ResourceFormatLoaderRubyScript` in `loader.rs` | `ResourceFormatLoader` |
 | `ResourceFormatSaverRubyScript` in `saver.rs` | `ResourceFormatSaver` |
 | `RubyScript` in `script.rs`, answered from `header.rs` and `ancestry.rs` | `ScriptExtension` |
+| An inner `RubyScript`, as `res://kennel.rb::Hound` | A GDScript inner class |
 | `RubyInstance` in `instance.rs` | A script instance |
 | `RubyTestRunner` in `runner.rs` | A `Node` in `runner.tscn` |
 | `RubyEditorPlugin` in `plugin.rs`, `RubyExportPlugin` in `export.rs` | `EditorPlugin`, `EditorExportPlugin` |

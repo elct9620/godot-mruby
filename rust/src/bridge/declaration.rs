@@ -137,7 +137,7 @@ fn declare_export(
 // Godot::Object.__declare_heading__(name, prefix, kind): takes the heading
 // the class writes as its body runs, which the properties written after it
 // are shown under, for the realm to publish once the file has run.
-fn declare_heading(mrb: &Mrb, _class: RClass, name: String, prefix: String, kind: String) -> Value {
+fn declare_heading(mrb: &Mrb, class: RClass, name: String, prefix: String, kind: String) -> Value {
     let heading = match kind.as_str() {
         // A category the body writes is headed by no file.
         "category" => Heading::Category {
@@ -147,7 +147,7 @@ fn declare_heading(mrb: &Mrb, _class: RClass, name: String, prefix: String, kind
         "subgroup" => Heading::Subgroup { name, prefix },
         _ => Heading::Group { name, prefix },
     };
-    realm::declare_heading(mrb, heading);
+    realm::declare_heading(mrb, class, heading);
     qnil().as_value()
 }
 

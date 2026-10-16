@@ -13,6 +13,7 @@ use godot::obj::{EngineBitfield, EngineEnum};
 use godot::prelude::*;
 use godot::register::info::PropertyUsageFlags;
 use godot::sys::{self, GodotFfi};
+use rustc_hash::FxHashMap;
 
 use crate::ancestry::{self, Ancestry, Break, Cache, Lineage};
 use crate::game::{self, FilesOnDisk, GameFiles};
@@ -61,6 +62,10 @@ pub struct RubyScript {
     // with what their script variables held, given the script again when a
     // later superclass fits them, as GDScript keeps their reload state.
     refusals: Mutex<Vec<(InstanceId, ScriptVariables)>>,
+    // The scripts standing for the classes inside the file's class that Ruby
+    // made a node of, by path, kept as a GDScript keeps its inner classes and
+    // given the file's source whenever it changes.
+    inner_scripts: Mutex<FxHashMap<String, Gd<RubyScript>>>,
 }
 
 // What a node's script variables hold, by name.
@@ -234,6 +239,7 @@ impl RubyScript {
             last_exports_digest: Mutex::default(),
             is_from_template: AtomicBool::new(false),
             refusals: Mutex::default(),
+            inner_scripts: Mutex::default(),
             source,
         })
     }
@@ -246,6 +252,25 @@ impl RubyScript {
             .is_from_template
             .store(true, Ordering::Relaxed);
         script
+    }
+
+    /// The script standing for the class `names` spells inside the file's
+    /// class, made the first time it is asked for, its path the file's
+    /// followed by those names, as a GDScript's inner class is named.
+    pub fn inner_script_by_names(&self, names: &[String]) -> Gd<RubyScript> {
+        let path = realm::join_inner_path(&self.base().get_path().to_string(), names);
+        let mut inner_scripts = self
+            .inner_scripts
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        inner_scripts
+            .entry(path)
+            .or_insert_with_key(|path| {
+                let mut script = Self::from_source(path, self.source.clone());
+                script.take_over_path(path);
+                script
+            })
+            .clone()
     }
 
     /// Whether the script is a template made for a new file, which it stops
@@ -558,6 +583,16 @@ impl IScriptExtension for RubyScript {
         let path = self.base().get_path().to_string();
         let header = Header::from_source(&path, &code.to_string(), &GameFiles.roots());
         self.header = Arc::new(header);
+        let inner_scripts: Vec<Gd<RubyScript>> = self
+            .inner_scripts
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .values()
+            .cloned()
+            .collect();
+        for mut inner in inner_scripts {
+            inner.set_source_code(&code);
+        }
         self.source = code;
         ancestry::expire();
     }
