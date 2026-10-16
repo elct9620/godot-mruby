@@ -207,7 +207,7 @@ lib.rs    registers Scripting and settings, prepares the realm
 └────────────────────────────────────┘
 ```
 
-Each layer uses only its own and the layers below it, as `saver` uses `language` and `bridge` uses `log`. Only `language` and `script` refer to each other, as GDExtension languages do. The realm uses only `compiler` and `snapshot`, the shape it publishes. A property's default keeps its printed text, so the realm handles no engine value. What it needs from Godot, `game` and `log` implement, so it neither parses a file nor knows the engine.
+Each layer uses only its own and the layers below it, as `saver` uses `language` and `bridge` uses `log`. Only `language` and `script` refer to each other, since Godot asks each for the other. The realm uses only `compiler` and `snapshot`, the shape it publishes. A property's default keeps its printed text, so the realm handles no engine value. What it needs from Godot, `game` and `log` implement, so it neither parses a file nor knows the engine.
 
 #### 2.3.1 Shared Answers
 
@@ -287,7 +287,7 @@ tool, abstract, icon               from the header
 the editor's class list, saved for exported games
 ```
 
-A node script is listed like a GDScript's `class_name`. The list is flat, as it is for C#, so a name drops its namespaces. Node scripts sharing one are none of them listed, and the scan order never picks one.
+A node script is listed like a GDScript's `class_name`. Godot keeps the list flat, so a name drops its namespaces. Node scripts sharing one are none of them listed, and the scan order never picks one.
 
 Godot asks every language for its stack as it prints, so the language never prints while it answers. It reads the files from disk, as GDScript does, and writes the warning by a deferred call, once while the clash lasts. Other threads wait while one holds the language, and the game runs and traces a file at a time. So `game` keeps one listing of the project and its class index rather than walking every directory per file. A file asked about joins it, and the editor plugin lists the files again when the editor finds them changed. The rules are in `.spec/behavior/announcement.md`, and what the editor shows in `.spec/behavior/script.md`.
 
