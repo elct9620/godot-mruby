@@ -9,14 +9,15 @@ use godot::classes::{
 };
 use godot::global::Error;
 use godot::meta::conv::RawPtr;
-use godot::obj::EngineEnum;
+use godot::obj::{EngineBitfield, EngineEnum};
 use godot::prelude::*;
+use godot::register::info::PropertyUsageFlags;
 use godot::sys::{self, GodotFfi};
 
 use crate::ancestry::{self, Ancestry, Break, Cache, Lineage};
 use crate::game::{self, FilesOnDisk, GameFiles};
 use crate::header::Header;
-use crate::instance::{Methods, RubyInstance};
+use crate::instance::{self, Methods, RubyInstance};
 use crate::language;
 use crate::log::GodotLog;
 use crate::realm::{self, Files};
@@ -56,7 +57,14 @@ pub struct RubyScript {
     // path only as it is first saved. Taken without binding the script
     // mutably, since another thread may be reading it then.
     is_from_template: AtomicBool,
+    // The nodes whose class a new superclass no longer let the script fit,
+    // with what their script variables held, given the script again when a
+    // later superclass fits them, as GDScript keeps their reload state.
+    refusals: Mutex<Vec<(InstanceId, ScriptVariables)>>,
 }
+
+// What a node's script variables hold, by name.
+type ScriptVariables = Vec<(StringName, Variant)>;
 
 // What a header and ancestry define, kept with the two.
 type KeptMethods = (Arc<Header>, Arc<Ancestry>, Arc<Methods>);
@@ -140,6 +148,72 @@ fn tell_placed() {
     }
 }
 
+/// Gives each node of the scripts at `paths`, whose classes were made
+/// afresh, a new instance, as GDScript's reload does when a script's base
+/// changes: what the node's script variables hold is kept, its script taken
+/// away and the objects of the class gone let go, then the script is set
+/// again and the values written back. A node the new superclass does not fit
+/// is left without the script until a later one does.
+pub fn remake_instances(paths: &[String]) {
+    let loader = ResourceLoader::singleton();
+    let mut owners_by_script = Vec::new();
+    for path in paths {
+        let Some(script) = loader
+            .get_cached_ref(path)
+            .and_then(|resource| resource.try_cast::<RubyScript>().ok())
+        else {
+            continue;
+        };
+        let mut owners = std::mem::take(&mut *script.bind().refusals());
+        for id in instance::owners_by_path(path) {
+            let Ok(mut owner) = Gd::<Object>::try_from_instance_id(id) else {
+                continue;
+            };
+            let variables = read_script_variables(&owner);
+            owner.set_script(None::<&Gd<Script>>);
+            owners.push((id, variables));
+        }
+        owners_by_script.push((script, owners));
+    }
+    realm::release_queued();
+    for (script, owners) in owners_by_script {
+        let base_script = script.clone().upcast::<Script>();
+        for (id, variables) in owners {
+            let Ok(mut owner) = Gd::<Object>::try_from_instance_id(id) else {
+                continue;
+            };
+            owner.set_script(&base_script);
+            if owner.get_script().is_none() {
+                script.bind().refusals().push((id, variables));
+                continue;
+            }
+            for (name, value) in variables {
+                owner.set(&name, &value);
+            }
+        }
+    }
+}
+
+// What `owner`'s script variables hold.
+fn read_script_variables(owner: &Gd<Object>) -> ScriptVariables {
+    owner
+        .get_property_list()
+        .iter_shared()
+        .filter(|property| {
+            property
+                .get("usage")
+                .and_then(|usage| usage.try_to::<i64>().ok())
+                .is_some_and(|usage| usage & PropertyUsageFlags::SCRIPT_VARIABLE.ord() as i64 != 0)
+        })
+        .filter_map(|property| property.get("name")?.try_to::<GString>().ok())
+        .map(|name| StringName::from(&name))
+        .map(|name| {
+            let value = owner.get(&name);
+            (name, value)
+        })
+        .collect()
+}
+
 /// A placeholder Godot made of a script, which only Godot frees.
 struct Placeholder(sys::GDExtensionScriptInstancePtr);
 
@@ -159,6 +233,7 @@ impl RubyScript {
             placeholders: Mutex::default(),
             last_exports_digest: Mutex::default(),
             is_from_template: AtomicBool::new(false),
+            refusals: Mutex::default(),
             source,
         })
     }
@@ -206,6 +281,10 @@ impl RubyScript {
         if !path.is_empty() && !unrun.contains(&path) {
             unrun.push(path);
         }
+    }
+
+    fn refusals(&self) -> MutexGuard<'_, Vec<(InstanceId, ScriptVariables)>> {
+        self.refusals.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
     fn placeholders(&self) -> MutexGuard<'_, Vec<Placeholder>> {

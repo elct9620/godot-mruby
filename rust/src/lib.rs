@@ -63,12 +63,13 @@ unsafe impl ExtensionLibrary for GodotMruby {
     // placeholders what the files run declared.
     fn on_main_loop_frame() {
         realm::release_queued();
-        let run_again = realm::rerun_queued(&realm::Rerun {
+        let reruns = realm::rerun_queued(&realm::Rerun {
             withdraw: c"__withdraw__",
             prune: c"__prune__",
             adopt: c"__adopt__",
         });
-        script::run_placed(run_again);
+        script::remake_instances(&reruns.remake_paths);
+        script::run_placed(reruns.has_run);
     }
 
     fn on_stage_deinit(stage: InitStage) {

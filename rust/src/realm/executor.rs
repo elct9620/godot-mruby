@@ -136,6 +136,17 @@ pub(super) fn has_run(mrb: &Mrb, path: &str) -> bool {
     matches!(runs(mrb).files.borrow().get(path), Some(Run::Done))
 }
 
+/// The files that have run cleanly.
+pub(super) fn run_paths(mrb: &Mrb) -> Vec<String> {
+    runs(mrb)
+        .files
+        .borrow()
+        .iter()
+        .filter(|(_, run)| matches!(run, Run::Done))
+        .map(|(path, _)| path.clone())
+        .collect()
+}
+
 /// Runs the file at `path` for a name it defines, unless it has run cleanly
 /// or is running now. A file that raised runs again, as a failed `require`
 /// does in Ruby: it took away what it created, so it starts over.

@@ -2,6 +2,12 @@
 
 How a changed source takes effect while the game runs: what Godot reads of a script follows the source it now holds, and a reloaded file runs again in the same realm, so the objects already made keep their state and take the new methods.
 
+A changed source naming another superclass makes its class afresh, as Zeitwerk loads a class it removed: the classes inheriting it are made afresh too, and each node of their scripts gets a new object holding the values its exports had.
+
+### What it does not see
+
+- An object another object held from before its class was made afresh stays an object of the old class, as a stale reference does after Zeitwerk reloads.
+
 ## Includes
 
 - `godot/test/unit/reload/**/*_test.rb`
@@ -125,3 +131,56 @@ How a changed source takes effect while the game runs: what Godot reads of a scr
 | Given | a node whose script's file has run, and a method another file defined in its class |
 | When | the script is reloaded with its source changed and a frame passes |
 | Then | the class still defines that method |
+
+## `RF-014` A node script whose changed source names another superclass takes it
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose script's file has run |
+| Given | the script's source Godot holds, changed to extend another engine class the node's own class reaches |
+| When | the script is reloaded and a frame passes |
+| Then | the node's object is of a class extending the new superclass |
+
+## `RF-015` A node whose class took another superclass keeps its exported values
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose script's object holds a value for a property it exports |
+| Given | the script's source Godot holds, changed to extend another engine class and export the property still |
+| When | the script is reloaded and a frame passes |
+| Then | the node answers the value it held |
+
+## `RF-016` A class inheriting a class that took another superclass is made afresh on it
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose script's class inherits another file's class, both files run |
+| Given | the other file's source Godot holds, changed to extend another engine class |
+| When | that script is reloaded and a frame passes |
+| Then | the node's object is of a class whose superclass is the other file's new class |
+
+## `RF-017` A changed source naming another superclass that raises leaves the class as it was
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose script's file has run |
+| Given | the script's source Godot holds, changed to extend another engine class and raise inside it |
+| When | the script is reloaded and a frame passes |
+| Then | the class extends the superclass it had, and the node's object answers as it did before |
+
+## `RF-018` A node whose class took a superclass its own class does not reach loses its script
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose script's file has run |
+| Given | the script's source Godot holds, changed to extend an engine class the node's own class does not reach |
+| When | the script is reloaded and a frame passes |
+| Then | the node has no script, as a GDScript extending another native type is refused |
+
+## `RF-019` A node that lost its script to a superclass gets it back with its values
+
+| Step | Statement |
+| --- | --- |
+| Given | a node left without its script by a superclass its own class does not reach, its object having held a value for an exported property |
+| When | the script's source extends a class the node's own class reaches again, the script is reloaded and a frame passes |
+| Then | the node has the script and answers the value it held, as GDScript keeps a refused node's reload state |

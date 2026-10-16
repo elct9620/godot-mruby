@@ -52,6 +52,21 @@ pub struct RubyInstance {
     display: GString,
 }
 
+// The script path of each node's instance, by the node: a script whose
+// class is made afresh gives each of its nodes a new instance.
+static OWNERS: LazyLock<Mutex<FxHashMap<InstanceId, Arc<str>>>> = LazyLock::new(Mutex::default);
+
+/// The nodes holding an instance of the script at `path`.
+pub fn owners_by_path(path: &str) -> Vec<InstanceId> {
+    OWNERS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .iter()
+        .filter(|(_, owned)| &***owned == path)
+        .map(|(owner, _)| *owner)
+        .collect()
+}
+
 /// The methods a node's class has, by the StringName Godot calls each with,
 /// for every instance of one header and ancestry: worked out again whenever
 /// another snapshot is published, so a call finds its method's name without
@@ -145,9 +160,14 @@ impl RubyInstance {
         language: Gd<ScriptLanguage>,
         owner: &Gd<Object>,
     ) -> Self {
+        let path = script.get_path().to_string();
+        OWNERS
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(owner.instance_id(), Arc::from(path.as_str()));
         Self {
             caller: Arc::new(Caller {
-                path: script.get_path().to_string(),
+                path,
                 owner: owner.instance_id(),
                 header,
                 ancestry,
@@ -250,6 +270,10 @@ impl RubyInstance {
 // or when the node's script is set, even while a call into it runs.
 impl Drop for RubyInstance {
     fn drop(&mut self) {
+        OWNERS
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(&self.caller.owner);
         if matches!(self.caller.current_stage(), Stage::Built) {
             realm::release(self.caller.key());
         }

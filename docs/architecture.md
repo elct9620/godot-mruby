@@ -149,9 +149,10 @@ the first entry
   │  the game's realm opens as prepared
   ▼
 every frame
-  │  realm::release_queued  objects of nodes freed since
-  │  realm::rerun_queued    files of scripts reloaded since
-  │  script::run_placed     in the editor, files of its placeholders
+  │  realm::release_queued     objects of nodes freed since
+  │  realm::rerun_queued       files of scripts reloaded since
+  │  script::remake_instances  nodes of classes made afresh
+  │  script::run_placed        in the editor, files of its placeholders
   ▼
 Scene stage ends
   │  saver::unregister
@@ -356,7 +357,7 @@ a Rust value, or a RubyError ──► RubyError::write, at its Ruby line
 
 The realm is the one way into Ruby. A component hands `realm::enter` a body, which is given the realm, never its `mrb_state`. What comes back is a Rust value, or a `RubyError` the component writes to a log with its backtrace. While it is written, that backtrace answers as the language's stack (`.spec/behavior/report.md`). Since nothing outside holds a Ruby value, the realm's inside changes without its callers changing.
 
-There is one realm, the game's, entered by one thread at a time. That thread enters again when the engine calls back into scripts, up to 24 entries deep, which the smallest thread stack holds. Freeing a node never waits: its key goes into a queue the next entry or frame empties. A reloaded script's file runs again at the next frame among the objects it made. Its operations are in `.spec/contract/realm.md`.
+There is one realm, the game's, entered by one thread at a time. That thread enters again when the engine calls back into scripts, up to 24 entries deep, which the smallest thread stack holds. Freeing a node never waits: its key goes into a queue the next entry or frame empties. A reloaded script's file runs again at the next frame, as `.spec/behavior/reload.md` lays out. Its operations are in `.spec/contract/realm.md`.
 
 ### 3.2 Internals
 

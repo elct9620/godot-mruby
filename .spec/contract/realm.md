@@ -365,16 +365,31 @@ pub struct Rerun {
 }
 ```
 
-## `rerun_queued`
+## `Reruns`
 
-Runs again each file whose source changed, if the game's realm is open: the class of a file that ran cleanly is sent what the `Rerun` names, and the file keeps what it changes if it raises; one that raised runs again all or nothing. What a file raises is written to the realm's log. It answers whether any file ran again, so what Godot was told of the classes can be told anew; the extension calls it every frame.
+What running changed files again did in a frame: whether any file ran, so what Godot was told of the classes can be told anew, and the files whose classes were made afresh, whose nodes need objects of the new classes.
 
 | Attribute | Value |
 | --- | --- |
 | internal | yes |
 
 ```rust
-pub fn rerun_queued(rerun: &Rerun) -> bool {}
+pub struct Reruns {
+    pub has_run: bool,
+    pub remake_paths: Vec<String>,
+}
+```
+
+## `rerun_queued`
+
+Runs again each file whose source changed, if the game's realm is open: the class of a file that ran cleanly is sent what the `Rerun` names, and the file keeps what it changes if it raises; one that raised runs again all or nothing. A class whose source declares another superclass is made afresh, or put back if the file raises, and the classes inheriting it are made afresh after it. What a file raises is written to the realm's log; the extension calls it every frame.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub fn rerun_queued(rerun: &Rerun) -> Reruns {}
 ```
 
 ## `Realm`

@@ -199,10 +199,7 @@ pub(super) fn keep_parent(mrb: &Mrb, path: &str, parent: Option<Parent>) -> Resu
     let superclass = RClass::from_value(class)
         .and_then(|class| class.superclass(mrb))
         .and_then(|superclass| split_path(mrb, superclass.as_value()));
-    let extended: Option<Vec<String>> = superclass
-        .as_ref()
-        .map(|names| names.iter().map(|name| index::normalize(name)).collect());
-    if extended.as_ref() == Some(&expected) {
+    if superclass.as_deref().map(normalize_path) == Some(expected) {
         return Ok(());
     }
     let own = split_path(mrb, class).unwrap_or_default().join("::");
@@ -216,6 +213,73 @@ pub(super) fn keep_parent(mrb: &Mrb, path: &str, parent: Option<Parent>) -> Resu
         Ok(type_error) => Err(Error::new(mrb, type_error, &message)),
         Err(error) => Err(error),
     }
+}
+
+/// A file's class taken away to be made afresh, kept to be put back should
+/// the file raise.
+pub(super) struct FormerClass {
+    scope: Scope,
+    name: String,
+    class: Value,
+}
+
+impl FormerClass {
+    pub(super) fn class(&self) -> Value {
+        self.class
+    }
+}
+
+/// Takes away the class the file at `path` defined when its source now
+/// declares another superclass, by name or, where the declared one is here,
+/// by object: Ruby refuses to open a class again on another superclass, so
+/// the file makes it afresh, as Zeitwerk loads a class it took away.
+pub(super) fn take_class_for_remake(mrb: &Mrb, path: &str) -> Result<Option<FormerClass>, Error> {
+    let Some(parent) = bookkeeping(mrb).files.declarations_by_path(path).parent else {
+        return Ok(None);
+    };
+    let Some(class) = constant_by_key(mrb, &key_by_path(mrb, path)) else {
+        return Ok(None);
+    };
+    let Some(superclass) = RClass::from_value(class).and_then(|class| class.superclass(mrb)) else {
+        return Ok(None);
+    };
+    let expected = match &parent {
+        Parent::File(file) => key_by_path(mrb, file),
+        Parent::Constant(names) => normalize_path(names),
+    };
+    let is_named = split_path(mrb, superclass.as_value())
+        .as_deref()
+        .map(normalize_path)
+        == Some(expected.clone());
+    let is_same = constant_by_key(mrb, &expected)
+        .is_none_or(|declared| declared.is_equal(mrb, superclass.as_value()));
+    if is_named && is_same {
+        return Ok(None);
+    }
+    let Some(mut names) = split_path(mrb, class) else {
+        return Ok(None);
+    };
+    let name = names.pop().unwrap_or_default();
+    let scope = match constant_by_key(mrb, &normalize_path(&names)) {
+        Some(scope) if !names.is_empty() => Scope::try_convert(scope, mrb)?,
+        _ => Scope::Class(mrb.object_class()),
+    };
+    scope.const_remove(mrb, &name)?;
+    Ok(Some(FormerClass { scope, name, class }))
+}
+
+/// Puts back a class taken away to be made afresh, in place of whatever the
+/// file that raised left under its name.
+pub(super) fn put_back(mrb: &Mrb, former: FormerClass) -> Result<(), Error> {
+    if former.scope.const_defined_at(mrb, former.name.as_str()) {
+        former.scope.const_remove(mrb, &former.name)?;
+    }
+    former.scope.const_set(mrb, &former.name, former.class)
+}
+
+// The names of a constant path as the class index matches them.
+fn normalize_path(names: &[String]) -> Vec<String> {
+    names.iter().map(|name| index::normalize(name)).collect()
 }
 
 // Makes sure each namespace the file at `path` sits in exists, when the class

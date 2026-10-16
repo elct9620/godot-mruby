@@ -1,12 +1,12 @@
 use std::cell::{Cell, OnceCell, RefCell};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::ffi::CStr;
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::time::Duration;
 
 use beni::{
-    Error, FromValue, Gem, IntoValue, Module as _, Mrb, Qtrue, RClass, ReprValue, Symbol,
-    TryConvert, Value,
+    Class as _, Error, FromValue, Gem, IntoValue, Module as _, Mrb, Qtrue, RClass, ReprValue,
+    Symbol, TryConvert, Value,
 };
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
@@ -484,27 +484,52 @@ pub struct Rerun {
     pub adopt: &'static CStr,
 }
 
+/// What running changed files again did in a frame.
+#[derive(Default)]
+pub struct Reruns {
+    /// Whether any file ran again, so what was told of the classes is told
+    /// anew.
+    pub has_run: bool,
+    /// The files whose classes were made afresh, the ones inheriting a class
+    /// made afresh included, whose objects are of a class gone.
+    pub remake_paths: Vec<String>,
+}
+
 /// Runs again each file whose source changed, if the game's realm is open;
 /// one that has not run is left to run when it is needed. The class of a
 /// file that ran cleanly is sent what `rerun` names, and what a file raises
-/// is written to the realm's log. Answers whether any file was run again, so
-/// what was told of the classes can be told anew. The extension calls it
+/// is written to the realm's log. A class whose source declares another
+/// superclass is made afresh, and the files of the classes inheriting it run
+/// again after it, so they are made afresh on it. The extension calls it
 /// every frame.
-pub fn rerun_queued(rerun: &Rerun) -> bool {
-    let paths = std::mem::take(&mut *SOURCE_CHANGES.lock().unwrap());
+pub fn rerun_queued(rerun: &Rerun) -> Reruns {
+    let mut paths: VecDeque<String> = std::mem::take(&mut *SOURCE_CHANGES.lock().unwrap()).into();
     if paths.is_empty() {
-        return false;
+        return Reruns::default();
     }
     let game = lock_game();
     let Game::Open(realm) = &*game.borrow() else {
-        return false;
+        return Reruns::default();
     };
-    for path in &paths {
-        if let Err(error) = realm.run_again(path, rerun) {
-            error.write(bookkeeping(&realm.mrb).log.as_ref());
+    let mut remake_paths = Vec::new();
+    while let Some(path) = paths.pop_front() {
+        match realm.run_again(&path, rerun) {
+            Ok(Some(heirs)) => {
+                for heir in heirs {
+                    if !paths.contains(&heir) {
+                        paths.push_back(heir);
+                    }
+                }
+                remake_paths.push(path);
+            }
+            Ok(None) => {}
+            Err(error) => error.write(bookkeeping(&realm.mrb).log.as_ref()),
         }
     }
-    true
+    Reruns {
+        has_run: true,
+        remake_paths,
+    }
 }
 
 /// Takes the files at `paths` the game's realm does not name yet into its
@@ -633,8 +658,11 @@ impl Realm {
     }
 
     // Runs the file at `path` again, its class sent what `rerun` names
-    // around the run when the file ran cleanly before it.
-    fn run_again(&self, path: &str, rerun: &Rerun) -> Result<(), RubyError> {
+    // around the run when the file ran cleanly before it. A class whose
+    // source declares another superclass is made afresh, or put back when
+    // the file raises; answers then the files of the classes inheriting the
+    // one it took the place of.
+    fn run_again(&self, path: &str, rerun: &Rerun) -> Result<Option<Vec<String>>, RubyError> {
         let _scope = self.mrb.arena_scope();
         let read = |error| RubyError::from_error(&self.mrb, Some(path), &error);
         self.run_as(Origin::Run, || {
@@ -645,13 +673,23 @@ impl Realm {
                     .funcall(&self.mrb, rerun.withdraw, &[path_value])
                     .map_err(read)?;
             }
-            executor::run_again(
+            let former = if ran {
+                constants::take_class_for_remake(&self.mrb, path).map_err(read)?
+            } else {
+                None
+            };
+            let run = executor::run_again(
                 &self.mrb,
                 path,
                 || constants::ensure_opened(&self.mrb, path),
                 |parent| constants::keep_parent(&self.mrb, path, parent),
-            )
-            .map_err(read)?;
+            );
+            if let Err(error) = run {
+                if let Some(former) = former {
+                    constants::put_back(&self.mrb, former).map_err(read)?;
+                }
+                return Err(read(error));
+            }
             if ran && let Some(class) = self.find_respondent(path, rerun.prune).map_err(read)? {
                 class.funcall(&self.mrb, rerun.prune, &[]).map_err(read)?;
             }
@@ -669,8 +707,22 @@ impl Realm {
                     }
                 }
             }
-            Ok(())
+            Ok(former.map(|former| self.find_heirs(path, former.class())))
         })
+    }
+
+    // The files other than `path` whose classes extend `class` directly.
+    fn find_heirs(&self, path: &str, class: Value) -> Vec<String> {
+        executor::run_paths(&self.mrb)
+            .into_iter()
+            .filter(|heir| heir != path)
+            .filter(|heir| {
+                constants::constant_by_key(&self.mrb, &key_by_path(&self.mrb, heir))
+                    .and_then(RClass::from_value)
+                    .and_then(|heir| heir.superclass(&self.mrb))
+                    .is_some_and(|superclass| superclass.as_value().is_equal(&self.mrb, class))
+            })
+            .collect()
     }
 
     // The class the file at `path` defined, if it answers `message`, even
