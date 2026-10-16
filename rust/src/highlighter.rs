@@ -129,8 +129,8 @@ impl HighlightCache {
     /// the edited line itself can be resumed at turns on the newline before
     /// it, which Prism judges by looking into the edited line.
     pub fn drop_from(&mut self, line: usize) {
-        let kept = &self.lines[..line.min(self.lines.len())];
-        let last_resumable = kept.iter().rposition(|line| line.is_resumable);
+        let lines_before = &self.lines[..line.min(self.lines.len())];
+        let last_resumable = lines_before.iter().rposition(|line| line.is_resumable);
         self.lines.truncate(last_resumable.unwrap_or(0));
     }
 
@@ -151,15 +151,15 @@ impl HighlightCache {
             let start = self.lines.len();
             let end = (line + ahead).min(line_count);
             let source: String = (start..end).map(|at| read_line(at) + "\n").collect();
-            let mut lexed = highlight(&source, &is_engine_class);
-            lexed.truncate(end - start);
+            let mut slice_lines = highlight(&source, &is_engine_class);
+            slice_lines.truncate(end - start);
             // A line after the last resumable one may stop inside a string
             // the cut ends, so it is lexed again with what follows it.
             if end < line_count {
-                let last_resumable = lexed.iter().rposition(|line| line.is_resumable);
-                lexed.truncate(last_resumable.unwrap_or(0));
+                let last_resumable = slice_lines.iter().rposition(|line| line.is_resumable);
+                slice_lines.truncate(last_resumable.unwrap_or(0));
             }
-            self.lines.extend(lexed);
+            self.lines.extend(slice_lines);
             ahead *= 2;
         }
         &self.lines[line].highlights
