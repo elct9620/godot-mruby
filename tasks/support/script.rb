@@ -4,6 +4,7 @@ require_relative "script/announcement"
 require_relative "script/callbacks"
 require_relative "script/editor"
 require_relative "script/header"
+require_relative "script/singleton_node"
 
 module Godot
   # Runs the integration-test project's scenes of node scripts and reads what
@@ -39,6 +40,7 @@ module Godot
       Callbacks.verify!(project)
       Editor.verify!(project)
       Announcement.verify!(project)
+      SingletonNode.verify!(project)
     end
 
     # Runs the prints scene for a few frames and counts the lines its Ruby

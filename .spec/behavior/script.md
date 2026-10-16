@@ -10,6 +10,7 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 - `tasks/support/script/callbacks.rb`
 - `tasks/support/script/editor.rb`
 - `tasks/support/script/header.rb`
+- `tasks/support/script/singleton_node.rb`
 - `tasks/support/script.rb`
 - `rust/src/snapshot.rs`
 
@@ -676,3 +677,19 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a scene with a node whose script's class declares a signal with typed parameters, open in the editor |
 | When | the node is selected and the Signals dock lists its signals |
 | Then | the signal's row names each parameter's type as GDScript's typed signal's row does |
+
+## `RS-079` A node script listed as a singleton node is ready at the root before the main scene
+
+| Step | Statement |
+| --- | --- |
+| Given | a project listing a node script as a singleton node, and a main scene whose node reads it in `_ready` |
+| When | the scene runs |
+| Then | the singleton node's `_ready` runs at `/root/<name>` before the scene's node reads it |
+
+## `RS-080` GDScript reaches a node script listed as a singleton node by its name
+
+| Step | Statement |
+| --- | --- |
+| Given | a project listing a node script defining a method as a singleton node, and a main scene whose GDScript node calls that method through the singleton node's name |
+| When | the scene runs |
+| Then | the GDScript node gets the method's answer |
