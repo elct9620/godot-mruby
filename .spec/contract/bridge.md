@@ -120,7 +120,7 @@ pub fn release_collected() {}
 
 ## `Owner`
 
-A node as Ruby is given it, for the node script's class to make the node's Ruby object from.
+A scripted object's engine object as Ruby is given it, for its script's class to make the object's Ruby object from.
 
 | Attribute | Value |
 | --- | --- |
