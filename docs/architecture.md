@@ -183,10 +183,12 @@ lib.rs    registers Scripting and settings, prepares the realm
 ┌─ Scripting ─────────────────────────────┐   ┌─ Testing ────────┐
 │  loader, saver ──► script ◄──► language │   │  export, panel   │
 │  script ──► instance                    │   │    ──► runner    │
-│  language ──► validation, template      │   │  runner          │
-│  script, language, validation           │   │    ──► minitest  │
-│    ──► announcement                     │   └──┬───────────────┘
-│  highlighter ──► language, Prism        │      │
+│  language ──► validation, template,     │   │  runner          │
+│    completion                           │   │    ──► minitest  │
+│  script, language, validation           │   └──┬───────────────┘
+│    ──► announcement                     │      │
+│  highlighter ──► language, lexer        │      │
+│  completion ──► lexer ──► Prism         │      │
 └──┬──────────────────────────────────────┘      │
    ▼                                             ▼
 ┌─ Given to the realm ────────────────────────────────────────┐

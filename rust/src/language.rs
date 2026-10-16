@@ -2,6 +2,7 @@ use std::ffi::c_void;
 use std::sync::{Mutex, PoisonError};
 
 use godot::classes::native::ScriptLanguageExtensionProfilingInfo;
+use godot::classes::script_language_extension::{CodeCompletionKind, CodeCompletionLocation};
 use godot::classes::{
     ClassDb, EditorInterface, Engine, IScriptLanguageExtension, Object, ProjectSettings,
     ResourceLoader, Script, ScriptLanguageExtension,
@@ -12,6 +13,7 @@ use godot::prelude::*;
 
 use crate::announcement::{self, Omission, SharedNames};
 use crate::compiler::CompileError;
+use crate::completion::{self, Candidate};
 use crate::game::{self, GameFiles};
 use crate::realm::{Files, Location};
 use crate::script::RubyScript;
@@ -233,11 +235,18 @@ impl IScriptLanguageExtension for RubyLanguage {
     // Godot reads these keys unconditionally and logs an error when one is missing.
     fn complete_code(
         &self,
-        _code: GString,
+        code: GString,
         _path: GString,
         _owner: Option<Gd<Object>>,
     ) -> AnyDictionary {
-        vdict! { "result" => Error::ERR_UNAVAILABLE, "force" => false, "call_hint" => "" }
+        let engine = completion::EngineNames {
+            classes: &collect_class_names,
+        };
+        let options: VarArray = completion::collect_candidates(&code.to_string(), &engine)
+            .iter()
+            .map(|candidate| describe_option(candidate).to_variant())
+            .collect();
+        vdict! { "result" => Error::OK, "force" => false, "call_hint" => "", "options" => &options }
             .upcast_any_dictionary()
     }
 
@@ -451,6 +460,34 @@ fn describe_error(error: &CompileError, path: &GString) -> VarDictionary {
         "column" => error.column,
         "message" => error.message.as_str(),
     }
+}
+
+// A name the script editor offers, as it takes each: every key is read.
+fn describe_option(candidate: &Candidate) -> VarDictionary {
+    let kind = match candidate.kind {
+        completion::Kind::Class => CodeCompletionKind::CLASS,
+    };
+    vdict! {
+        "kind" => kind,
+        "display" => candidate.name.as_str(),
+        "insert_text" => candidate.name.as_str(),
+        "font_color" => Color::WHITE,
+        "icon" => &Variant::nil(),
+        "default_value" => &Variant::nil(),
+        "location" => CodeCompletionLocation::OTHER,
+    }
+}
+
+// The names of the classes under `Godot`: every class the engine registers
+// and its value types, as Ruby names them there.
+fn collect_class_names() -> Vec<String> {
+    ClassDb::singleton()
+        .get_class_list()
+        .as_slice()
+        .iter()
+        .map(GString::to_string)
+        .chain(bridge::collect_value_type_names())
+        .collect()
 }
 
 // A warning as the script editor takes it, listed under its kind.

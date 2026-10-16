@@ -4,6 +4,7 @@ require "fileutils"
 require "open3"
 require "tmpdir"
 
+require_relative "completion"
 require_relative "declarations"
 require_relative "export"
 require_relative "highlighting"
@@ -46,7 +47,7 @@ module Godot
   # The checks, each in the module named after the behaviour it claims.
   CHECKS = [
     Script, Declarations, Report, Runner, Runner::Failures, Runner::Results, Runner::Settings, Loader, Export,
-    Panel, Template, Highlighting
+    Panel, Template, Highlighting, Completion
   ].freeze
 
   module_function

@@ -30,6 +30,7 @@ mod value_type;
 pub use bound_method::find_method_declarer;
 pub use object::{Owner, derive_node_key};
 pub use value::{EngineCrossing, RubyCrossing};
+pub use value_type::collect_value_type_names;
 
 const FILE: &std::ffi::CStr = c"godot_mruby/bridge/godot.rb";
 

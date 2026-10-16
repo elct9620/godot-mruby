@@ -81,6 +81,12 @@ fn value_types() -> impl Iterator<Item = VariantType> {
         .map(<VariantType as EngineEnum>::from_ord)
 }
 
+/// The names of the engine's value types, as their classes under `Godot`
+/// are named.
+pub fn collect_value_type_names() -> Vec<String> {
+    value_types().map(name_type).collect()
+}
+
 /// Whether the engine's values of `kind` are containers: a Dictionary, an
 /// Array or a packed array, each shared wherever it is held.
 fn is_container(kind: VariantType) -> bool {
