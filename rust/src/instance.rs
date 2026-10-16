@@ -50,6 +50,9 @@ pub struct RubyInstance {
     language: Gd<ScriptLanguage>,
     // What the node prints as while its script says nothing about it.
     display: GString,
+    // The strings the class's `_validate_property` last wrote, which Godot
+    // copies once the callback returns.
+    validated: Mutex<Option<(StringName, StringName, GString)>>,
 }
 
 // The script path of each node's instance, by the node: a script whose
@@ -179,6 +182,7 @@ impl RubyInstance {
             class_name: StringName::from(&owner.get_class()),
             language,
             display: GString::from(&owner.to_string()),
+            validated: Mutex::default(),
         }
     }
 
@@ -510,6 +514,22 @@ fn describe_property(property: &Property) -> sys::GDExtensionPropertyInfo {
     }
 }
 
+// A property the class's `_get_property_list` lists as Godot describes one,
+// a dictionary of its name, type, class name, hint, hint string and usage.
+fn describe_listed(info: &Variant) -> Option<sys::GDExtensionPropertyInfo> {
+    let info = info.try_to::<VarDictionary>().ok()?;
+    let read = |key: &str| info.get(key).unwrap_or_default();
+    let read_int = |key: &str, default: i64| read(key).try_to::<i64>().unwrap_or(default);
+    Some(sys::GDExtensionPropertyInfo {
+        type_: read_int("type", 0) as sys::GDExtensionVariantType,
+        name: into_raw(StringName::from(&read("name").to_string())),
+        class_name: into_raw(StringName::from(&read("class_name").to_string())),
+        hint: read_int("hint", 0) as u32,
+        hint_string: into_raw(GString::from(&read("hint_string").to_string())),
+        usage: read_int("usage", PropertyUsageFlags::DEFAULT.ord() as i64) as u32,
+    })
+}
+
 // A method as Godot reads it from an instance: its name, which is all a Ruby
 // class says about it, and an answer of any type, as an untyped GDScript
 // method's is.
@@ -574,7 +594,7 @@ static INFO: sys::GDExtensionScriptInstanceInfo3 = sys::GDExtensionScriptInstanc
     get_method_list_func: Some(get_method_list),
     free_method_list_func: Some(free_method_list),
     get_property_type_func: None,
-    validate_property_func: None,
+    validate_property_func: Some(validate_property),
     has_method_func: Some(has_method),
     get_method_argument_count_func: None,
     call_func: Some(call),
@@ -683,7 +703,8 @@ unsafe extern "C" fn set(
             is_deferred,
         }) = (unsafe { reach_property(data, &name) })
         else {
-            return sys::GDExtensionBool::from(false);
+            // SAFETY: Godot hands a live instance.
+            return sys::GDExtensionBool::from(unsafe { ask_set(data, &name, value) });
         };
         let key = if is_deferred {
             None
@@ -691,7 +712,11 @@ unsafe extern "C" fn set(
             caller.ensure_object()
         };
         let is_written = match key {
-            Some(key) => write(key, &name, exported, value),
+            Some(key) if exported => write(key, &name, true, value),
+            // SAFETY: Godot hands a live instance.
+            Some(key) => {
+                (unsafe { ask_set(data, &name, value) }) || write(key, &name, false, value)
+            }
             None if is_deferred || caller.is_failed() => {
                 caller.keep(&name, value);
                 true
@@ -717,7 +742,15 @@ unsafe extern "C" fn get(
             is_deferred,
         }) = (unsafe { reach_property(data, &name) })
         else {
-            return sys::GDExtensionBool::from(false);
+            // SAFETY: Godot hands a live instance.
+            let asked =
+                unsafe { ask_virtual(data, &GET, &[&StringName::from(&name).to_variant()]) };
+            let Some(value) = asked else {
+                return sys::GDExtensionBool::from(false);
+            };
+            // SAFETY: Godot hands a variant of its own to write the answer into.
+            unsafe { *answer.cast::<Variant>() = value };
+            return sys::GDExtensionBool::from(true);
         };
         let key = if is_deferred {
             None
@@ -729,7 +762,9 @@ unsafe extern "C" fn get(
             None if is_deferred || caller.is_failed() => caller.answer_from_stash(&name),
             None => None,
         };
-        let Some(value) = value else {
+        let Some(value) = value.or_else(|| unsafe {
+            ask_virtual(data, &GET, &[&StringName::from(&name).to_variant()])
+        }) else {
             return sys::GDExtensionBool::from(false);
         };
         // SAFETY: Godot hands a variant of its own to write the answer into.
@@ -759,7 +794,19 @@ unsafe extern "C" fn get_property_list(
         catch_panic("get_property_list", Box::default(), || {
             // SAFETY: Godot hands a live instance.
             let members = unsafe { borrow_instance(data, RubyInstance::members) };
-            members.iter().map(describe_member).collect()
+            // SAFETY: Godot hands a live instance.
+            let listed = unsafe { ask_virtual(data, &GET_PROPERTY_LIST, &[]) }
+                .and_then(|listed| listed.try_to::<VarArray>().ok())
+                .unwrap_or_default();
+            members
+                .iter()
+                .map(describe_member)
+                .chain(
+                    listed
+                        .iter_shared()
+                        .filter_map(|info| describe_listed(&info)),
+                )
+                .collect()
         });
     // SAFETY: Godot hands a count to fill.
     unsafe { *count = infos.len() as u32 };
@@ -959,6 +1006,129 @@ unsafe extern "C" fn call(
 
 // The name Godot forwards every notification to a script by.
 static NOTIFICATION: LazyLock<StringName> = LazyLock::new(|| StringName::from("_notification"));
+// The methods a class defines to answer for properties Godot does not find
+// among its members, as a GDScript's virtuals do, and to print as.
+static GET: LazyLock<StringName> = LazyLock::new(|| StringName::from("_get"));
+static SET: LazyLock<StringName> = LazyLock::new(|| StringName::from("_set"));
+static GET_PROPERTY_LIST: LazyLock<StringName> =
+    LazyLock::new(|| StringName::from("_get_property_list"));
+static VALIDATE_PROPERTY: LazyLock<StringName> =
+    LazyLock::new(|| StringName::from("_validate_property"));
+static TO_S: LazyLock<StringName> = LazyLock::new(|| StringName::from("to_s"));
+
+// What calls `method` on the node's object, when its class defines it and
+// Ruby may run for it now: a node with no object yet, asked on a thread
+// outside the realm, leaves Ruby to a later call.
+//
+// SAFETY: Godot hands a live instance.
+unsafe fn find_caller(
+    data: sys::GDExtensionScriptInstanceDataPtr,
+    method: &StringName,
+) -> Option<Arc<Caller>> {
+    unsafe {
+        borrow_instance(data, |instance| {
+            let may_run = !instance.is_recorded() || realm::is_inside();
+            (may_run && instance.method_name_by_string_name(method).is_some())
+                .then(|| instance.caller())
+        })
+    }
+}
+
+// What the node's class answers `method` with when it defines it, or none
+// when it answers nil, as a GDScript virtual's null answers nothing.
+//
+// SAFETY: Godot hands a live instance.
+unsafe fn ask_virtual(
+    data: sys::GDExtensionScriptInstanceDataPtr,
+    method: &StringName,
+    args: &[&Variant],
+) -> Option<Variant> {
+    let caller = unsafe { find_caller(data, method) }?;
+    let answer = caller.send(&method.to_string(), args);
+    (!answer.is_nil()).then_some(answer)
+}
+
+// Whether the node's class took `value` for the property `name` through
+// `_set`, which answers true when it did.
+//
+// SAFETY: Godot hands a live instance.
+unsafe fn ask_set(
+    data: sys::GDExtensionScriptInstanceDataPtr,
+    name: &str,
+    value: &Variant,
+) -> bool {
+    unsafe { ask_virtual(data, &SET, &[&StringName::from(name).to_variant(), value]) }
+        .is_some_and(|taken| taken.try_to::<bool>().unwrap_or(false))
+}
+
+// Godot lets a class change how each property is shown as it lists them:
+// the class's `_validate_property` is given the property as a dictionary,
+// changes it in place, and Godot reads it back.
+unsafe extern "C" fn validate_property(
+    data: sys::GDExtensionScriptInstanceDataPtr,
+    property: *mut sys::GDExtensionPropertyInfo,
+) -> sys::GDExtensionBool {
+    catch_panic(
+        "validate_property",
+        sys::GDExtensionBool::from(false),
+        || {
+            // SAFETY: Godot hands a live instance.
+            let Some(caller) = (unsafe { find_caller(data, &VALIDATE_PROPERTY) }) else {
+                return sys::GDExtensionBool::from(false);
+            };
+            // SAFETY: Godot hands a property whose strings live for the call.
+            let info = unsafe { &mut *property };
+            let described = unsafe { describe_info(info) };
+            caller.send("_validate_property", &[&described.to_variant()]);
+            let read = |key: &str| described.get(key).unwrap_or_default();
+            let read_int = |key: &str| read(key).try_to::<i64>().unwrap_or(0);
+            info.type_ = read_int("type") as sys::GDExtensionVariantType;
+            info.hint = read_int("hint") as u32;
+            info.usage = read_int("usage") as u32;
+            let strings = (
+                StringName::from(&read("name").to_string()),
+                StringName::from(&read("class_name").to_string()),
+                GString::from(&read("hint_string").to_string()),
+            );
+            // SAFETY: Godot hands a live instance, which keeps the strings
+            // until the next validation, after Godot has copied them.
+            unsafe {
+                borrow_instance(data, |instance| {
+                    let mut validated = instance
+                        .validated
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner);
+                    let (name, class_name, hint_string) = validated.insert(strings);
+                    info.name = name.string_sys().cast_mut();
+                    info.class_name = class_name.string_sys().cast_mut();
+                    info.hint_string = hint_string.string_sys().cast_mut();
+                });
+            }
+            sys::GDExtensionBool::from(true)
+        },
+    )
+}
+
+// A property Godot hands as the dictionary GDScript gives `_validate_property`.
+//
+// SAFETY: the property's strings are live.
+unsafe fn describe_info(info: &sys::GDExtensionPropertyInfo) -> VarDictionary {
+    let (name, class_name, hint_string) = unsafe {
+        (
+            (*info.name.cast::<StringName>()).clone(),
+            (*info.class_name.cast::<StringName>()).clone(),
+            (*info.hint_string.cast::<GString>()).clone(),
+        )
+    };
+    let mut described = VarDictionary::new();
+    described.set("name", &name.to_variant());
+    described.set("class_name", &class_name.to_variant());
+    described.set("type", &(info.type_ as i64).to_variant());
+    described.set("hint", &(info.hint as i64).to_variant());
+    described.set("hint_string", &hint_string.to_variant());
+    described.set("usage", &(info.usage as i64).to_variant());
+    described
+}
 
 unsafe extern "C" fn notification(
     data: sys::GDExtensionScriptInstanceDataPtr,
@@ -988,10 +1158,16 @@ unsafe extern "C" fn to_string(
     out: sys::GDExtensionStringPtr,
 ) {
     catch_panic("to_string", (), || {
+        // A class defining `to_s` prints as it answers, as a GDScript's
+        // `_to_string` does; any other prints as its node did as it was made.
+        // SAFETY: Godot hands a live instance.
+        let printed = unsafe { find_caller(data, &TO_S) }
+            .map(|caller| GString::from(&caller.send("to_s", &[]).to_string()));
         // SAFETY: Godot hands a live instance, an initialized String, which
         // `GString` lays out as, and a flag.
         unsafe {
-            *out.cast::<GString>() = borrow_instance(data, |instance| instance.display.clone());
+            *out.cast::<GString>() = printed
+                .unwrap_or_else(|| borrow_instance(data, |instance| instance.display.clone()));
             *valid = sys::GDExtensionBool::from(true);
         }
     })

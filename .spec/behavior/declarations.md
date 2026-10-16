@@ -938,3 +938,43 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | Given | a node script whose class exports a value of `nil` naming an object script's class extending `Resource` |
 | When | Godot lists the script's properties |
 | Then | that property carries the resource hint, read with the name that class is announced under |
+
+## `RD-109` Godot reads a property the class answers through `_get`
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose class defines `_get`, answering a name no export declares |
+| When | Godot reads that property |
+| Then | it gets what `_get` answers, as a GDScript's `_get` answers |
+
+## `RD-110` Godot writes a property the class takes through `_set`
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose class defines `_set`, taking a name no export declares |
+| When | Godot writes that property |
+| Then | `_set` is given the value and answers true, so Godot takes it as written |
+
+## `RD-111` A node lists the properties its class lists
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose class defines `_get_property_list` |
+| When | Godot lists the node's properties |
+| Then | the list has each property `_get_property_list` answers |
+
+## `RD-112` A node lists a property as its class validates it
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose class defines `_validate_property`, which changes a property of its node |
+| When | Godot lists the node's properties |
+| Then | that property is listed as `_validate_property` left it |
+
+## `RD-113` A node prints as its class's `to_s` answers
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose class defines `to_s` |
+| When | Godot turns the node into a string |
+| Then | it gets what `to_s` answers, as a GDScript's `_to_string` answers |
