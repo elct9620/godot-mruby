@@ -68,16 +68,28 @@ module Godot
 end
 ```
 
-## `derive_node_key`
+## `derive_object_key`
 
-The key a realm holds a node's Ruby object under: the node's instance id, so the object is found from the node alone.
+The key a realm holds a scripted object's Ruby object under: the object's instance id, so the Ruby object is found from the engine object alone.
 
 | Attribute | Value |
 | --- | --- |
 | internal | yes |
 
 ```rust
-pub fn derive_node_key(node: InstanceId) -> Key {}
+pub fn derive_object_key(object: InstanceId) -> Key {}
+```
+
+## `release_collected`
+
+Lets go of the reference-counted engine objects Ruby let go of since the last call, which the collector leaves for it, since freeing one may call its script; the extension calls it every frame and once the realm closes.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub fn release_collected() {}
 ```
 
 ## `Owner`

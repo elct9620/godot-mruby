@@ -274,9 +274,7 @@ impl Drop for RubyInstance {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .remove(&self.caller.owner);
-        if matches!(self.caller.current_stage(), Stage::Built) {
-            realm::release(self.caller.key());
-        }
+        realm::release(self.caller.key());
     }
 }
 
@@ -313,7 +311,7 @@ impl Caller {
 
     // The key the realm holds the node's object under.
     fn key(&self) -> Key {
-        bridge::derive_node_key(self.owner)
+        bridge::derive_object_key(self.owner)
     }
 
     // Whether building the node's object failed, so it never has one.
@@ -582,7 +580,7 @@ static INFO: sys::GDExtensionScriptInstanceInfo3 = sys::GDExtensionScriptInstanc
     call_func: Some(call),
     notification_func: Some(notification),
     to_string_func: Some(to_string),
-    refcount_incremented_func: None,
+    refcount_incremented_func: Some(refcount_incremented),
     refcount_decremented_func: Some(refcount_decremented),
     get_script_func: Some(get_script),
     is_placeholder_func: None,
@@ -976,7 +974,9 @@ unsafe extern "C" fn notification(
                     .map(|_| instance.caller())
             })
         };
-        if let Some(caller) = caller {
+        if let Some(caller) = caller
+            && !realm::is_collected(caller.key())
+        {
             caller.send("_notification", &[&what.to_variant()]);
         }
     })
@@ -997,12 +997,75 @@ unsafe extern "C" fn to_string(
     })
 }
 
-// The node may be freed once nothing else refers to it: its Ruby object
-// holds it through its key, not a reference.
+// Godot tells a reference-counted object's instance when its count reaches
+// one or two. Its Ruby object, if the realm holds one, holds one reference,
+// so more than one means the engine holds it too, and the realm holds the
+// Ruby object firmly.
+unsafe extern "C" fn refcount_incremented(data: sys::GDExtensionScriptInstanceDataPtr) {
+    catch_panic("refcount_incremented", (), || {
+        // SAFETY: Godot hands a live instance.
+        let caller = unsafe { borrow_instance(data, RubyInstance::caller) };
+        if read_reference_count(caller.owner).is_some_and(|count| count > 1) {
+            realm::tighten(caller.key());
+        }
+    })
+}
+
+// When the count falls back to one, only the Ruby object holds it, so the
+// realm holds that loosely and the collector may free both once Ruby no
+// longer reaches it. The object may be freed once nothing refers to it.
 unsafe extern "C" fn refcount_decremented(
-    _data: sys::GDExtensionScriptInstanceDataPtr,
+    data: sys::GDExtensionScriptInstanceDataPtr,
 ) -> sys::GDExtensionBool {
+    catch_panic("refcount_decremented", (), || {
+        // SAFETY: Godot hands a live instance.
+        let caller = unsafe { borrow_instance(data, RubyInstance::caller) };
+        if read_reference_count(caller.owner) == Some(1) {
+            realm::loosen(caller.key());
+        }
+    });
     sys::GDExtensionBool::from(true)
+}
+
+// The count of the reference-counted object `owner`, read through its
+// pointer: taking a reference to read it would call back into its instance.
+fn read_reference_count(owner: InstanceId) -> Option<i64> {
+    // RefCounted.get_reference_count, as the 4.6 API hashes it.
+    const HASH: i64 = 3_905_245_786;
+    static BIND: LazyLock<usize> = LazyLock::new(|| {
+        let (class, method) = (
+            StringName::from("RefCounted"),
+            StringName::from("get_reference_count"),
+        );
+        // SAFETY: the interface is initialized while the extension runs, and
+        // the names live for the call.
+        unsafe {
+            sys::interface_fn!(classdb_get_method_bind)(
+                class.string_sys(),
+                method.string_sys(),
+                HASH,
+            ) as usize
+        }
+    });
+    if !owner.is_ref_counted() || *BIND == 0 {
+        return None;
+    }
+    // SAFETY: the bind takes no argument and writes an int; the object is
+    // looked up without a reference and is live while its instance is.
+    unsafe {
+        let object = sys::interface_fn!(object_get_instance_from_id)(owner.to_i64() as u64);
+        if object.is_null() {
+            return None;
+        }
+        let mut count: i64 = 0;
+        sys::interface_fn!(object_method_bind_ptrcall)(
+            *BIND as sys::GDExtensionMethodBindPtr,
+            object,
+            std::ptr::null(),
+            (&raw mut count).cast(),
+        );
+        Some(count)
+    }
 }
 
 unsafe extern "C" fn get_script(

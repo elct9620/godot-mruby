@@ -29,8 +29,8 @@ pub use index::{
     ClassIndex, Definition, Roots, camelize, join_inner_path, normalize, split_inner_path,
 };
 use reentrant_lock::{ReentrantLock, ReentrantLockGuard, Watch};
-pub use registry::Key;
 use registry::Registry;
+pub use registry::{Key, is_collected, note_collected};
 
 /// Where the game's Ruby runs: an `mrb_state`, the bookkeeping kept beside
 /// it, and the extensions installed into it. It opens at the first entry, one
@@ -249,6 +249,10 @@ static GAME: ReentrantLock<RefCell<Game>> = ReentrantLock::new(RefCell::new(Game
 const DEEPEST_ENTRY: usize = 24;
 // Keys let go of on any thread, waiting for the game's realm to take them.
 static RELEASES: Mutex<Vec<Key>> = Mutex::new(Vec::new());
+// Keys whose object is to be held loosely or firmly, as its reference-counted
+// engine object's count last said, waiting for the game's realm; true holds
+// it firmly.
+static HOLDINGS: Mutex<Vec<(Key, bool)>> = Mutex::new(Vec::new());
 // Paths of files whose source changed, waiting for the game's realm's next
 // frame to run them again.
 static SOURCE_CHANGES: Mutex<Vec<String>> = Mutex::new(Vec::new());
@@ -458,10 +462,53 @@ pub fn release(key: Key) {
     RELEASES.lock().unwrap().push(key);
 }
 
-/// Lets go of the objects released keys hold, entering the game's realm only
-/// when a key is waiting; the extension calls it every frame.
+/// Holds the object `key` holds loosely at the realm's next entry or frame,
+/// never waiting for the realm: only Ruby holds its reference-counted engine
+/// object now, so the collector may free both once Ruby no longer reaches it.
+pub fn loosen(key: Key) {
+    queue_holding(key, false);
+}
+
+/// Holds the object `key` holds as firmly as any other, since the engine
+/// holds its reference-counted engine object again. Inside the game's realm
+/// it is held now, since Ruby running there may collect it next; outside, at
+/// the realm's next entry or frame.
+pub fn tighten(key: Key) {
+    if !is_inside() {
+        queue_holding(key, true);
+        return;
+    }
+    HOLDINGS
+        .lock()
+        .unwrap()
+        .retain(|(waiting, _)| *waiting != key);
+    let game = lock_game();
+    if let Game::Open(realm) = &*game.borrow() {
+        bookkeeping(&realm.mrb)
+            .registry
+            .tighten(&realm.mrb, key)
+            .ok();
+    }
+}
+
+// Replaces what `key` waits for with `is_firm`, the count's last word.
+fn queue_holding(key: Key, is_firm: bool) {
+    let mut holdings = HOLDINGS.lock().unwrap();
+    holdings.retain(|(waiting, _)| *waiting != key);
+    holdings.push((key, is_firm));
+}
+
+/// Holds `object` under `key` loosely in the realm `mrb` belongs to, for an
+/// object standing for a reference-counted engine object only Ruby holds.
+pub fn hold_loose(mrb: &Mrb, key: Key, object: Value) {
+    bookkeeping(mrb).registry.hold_loose(key, object);
+}
+
+/// Lets go of the objects released keys hold, and holds loosely those whose
+/// engine object only Ruby holds, entering the game's realm only when a key
+/// is waiting; the extension calls it every frame.
 pub fn release_queued() {
-    if RELEASES.lock().unwrap().is_empty() {
+    if RELEASES.lock().unwrap().is_empty() && HOLDINGS.lock().unwrap().is_empty() {
         return;
     }
     let game = lock_game();
@@ -564,6 +611,7 @@ pub fn close() {
     }
     *game.borrow_mut() = Game::Closed;
     RELEASES.lock().unwrap().clear();
+    HOLDINGS.lock().unwrap().clear();
     SOURCE_CHANGES.lock().unwrap().clear();
     snapshot::publish(Arc::default());
 }
@@ -774,11 +822,23 @@ impl Realm {
         })
     }
 
+    // The objects it takes out of the registry stay in the arena only for the
+    // call, or the collector would keep each one as long as the realm stays
+    // entered.
     fn release_queued(&self) {
+        let _scope = self.mrb.arena_scope();
         let keys = std::mem::take(&mut *RELEASES.lock().unwrap());
         let registry = &bookkeeping(&self.mrb).registry;
         for key in keys {
             registry.release(&self.mrb, key);
+        }
+        let holdings = std::mem::take(&mut *HOLDINGS.lock().unwrap());
+        for (key, is_firm) in holdings {
+            if is_firm {
+                registry.tighten(&self.mrb, key).ok();
+            } else {
+                registry.loosen(&self.mrb, key).ok();
+            }
         }
     }
 

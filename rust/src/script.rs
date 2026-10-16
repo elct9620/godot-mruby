@@ -421,17 +421,17 @@ impl RubyScript {
         }
     }
 
-    // The engine node class the file's class extends when it is a node
+    // The engine class the file's class extends when it is a script
     // script, or why it is none.
-    fn node_class(&self) -> Result<StringName, Break> {
-        read_node_class(&*self.ancestry()?)
+    fn engine_class(&self) -> Result<StringName, Break> {
+        read_engine_class(&*self.ancestry()?)
     }
 }
 
-// The node class `ancestry` ends in, or why it ends in none.
-fn read_node_class(ancestry: &Ancestry) -> Result<StringName, Break> {
+// The engine class `ancestry` ends in, or why it ends in none.
+fn read_engine_class(ancestry: &Ancestry) -> Result<StringName, Break> {
     let engine_class = ancestry.engine_class();
-    game::is_node_class(engine_class)
+    game::is_engine_class(engine_class)
         .then(|| StringName::from(engine_class))
         .ok_or(Break::NoEngineClass)
 }
@@ -488,25 +488,25 @@ impl IScriptExtension for RubyScript {
     }
 
     fn get_instance_base_type(&self) -> StringName {
-        self.node_class().unwrap_or_default()
+        self.engine_class().unwrap_or_default()
     }
 
-    // Only a node script makes an instance, and only for a node of the engine
-    // class it extends, as a GDScript refuses an object its native type does
-    // not fit.
+    // Only a script whose class extends an engine class makes an instance,
+    // and only for an object of that class, as a GDScript refuses an object
+    // its native type does not fit.
     unsafe fn instance_create_rawptr(&self, for_object: Gd<Object>) -> RawPtr<*mut c_void> {
         let path = self.base().get_path();
+        let object_class = StringName::from(&for_object.get_class());
         let traced = self
             .ancestry()
-            .and_then(|ancestry| Ok((read_node_class(&ancestry)?, ancestry)));
+            .and_then(|ancestry| Ok((read_engine_class(&ancestry)?, ancestry)));
         let (engine_class, ancestry) = match traced {
             Ok(traced) => traced,
             Err(broken) => {
-                error!("{path} {broken}, so it cannot be a node's script");
+                error!("{path} {broken}, so it cannot be the script of a {object_class}");
                 return no_instance();
             }
         };
-        let object_class = StringName::from(&for_object.get_class());
         if !ClassDb::singleton().is_parent_class(&object_class, &engine_class) {
             error!("{path} extends {engine_class}, so it cannot be the script of a {object_class}");
             return no_instance();

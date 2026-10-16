@@ -23,12 +23,12 @@ module Godot
     # file spells, and the errors refusing each.
     ATTACHMENT_SCENE = "res://integration/script/attachment/attachment.tscn"
     REFUSALS = [
-      "ERROR: res://integration/script/attachment/library.rb defines no class extending an engine node class, " \
-      "so it cannot be a node's script",
+      "ERROR: res://integration/script/attachment/library.rb defines no class extending an engine class, " \
+      "so it cannot be the script of a Node",
       "ERROR: res://integration/script/attachment/plane.rb extends Node2D, so it cannot be the script of a Node",
       'ERROR: Node "Blueprint" previously had a class of type "Blueprint", but that class is now abstract.',
       "ERROR: res://integration/script/attachment/orphan.rb extends Missing, which no one file names, " \
-      "so it cannot be a node's script"
+      "so it cannot be the script of a Node"
     ].freeze
 
     module_function

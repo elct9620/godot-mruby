@@ -1,6 +1,6 @@
 //! A file's ancestry: the files its class inherits from, read from their
 //! headers without running any of them, so a class extending an engine class
-//! through other files is known as a node script before it runs.
+//! through other files is known as a script before it runs.
 
 use std::fmt;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -182,8 +182,8 @@ pub enum Break {
     NoFile(String),
     /// The file at this path comes back as its own ancestor.
     Cycle(String),
-    /// No engine node class is reached: a file on the way writes no superclass
-    /// that is a constant, or the engine class reached is no node's.
+    /// No engine class is reached: a file on the way writes no superclass
+    /// that is a constant, or the class reached is none the engine has.
     NoEngineClass,
     /// The source of the file at `path` could not be read.
     NoSource { path: String, reason: String },
@@ -198,7 +198,7 @@ impl fmt::Display for Break {
                 f,
                 "inherits from {path} again on the way to an engine class"
             ),
-            Self::NoEngineClass => write!(f, "defines no class extending an engine node class"),
+            Self::NoEngineClass => write!(f, "defines no class extending an engine class"),
             Self::NoSource { path, reason } => {
                 write!(f, "inherits from {path}, which cannot be read: {reason}")
             }

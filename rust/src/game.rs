@@ -52,7 +52,7 @@ impl Files for GameFiles {
     }
 
     // Read from the source, so a file that cannot be read declares nothing and
-    // fails where the realm reads its source to run it. Only a node script's
+    // fails where the realm reads its source to run it. Only a script's
     // class is held to its superclass: Godot is told its ancestry before it
     // runs, and a library file's is Ruby's to look up.
     fn declarations_by_path(&self, path: &str) -> Declarations {
@@ -62,7 +62,7 @@ impl Files for GameFiles {
         let header = Header::from_source(path, &source, &self.roots());
         let parent = ancestry::trace_ancestry(path, &header, self)
             .ok()
-            .filter(|ancestry| is_node_class(ancestry.engine_class()))
+            .filter(|ancestry| is_engine_class(ancestry.engine_class()))
             .map(|ancestry| match ancestry.files().first() {
                 Some((file, _)) => Parent::File(file.clone()),
                 None => {
@@ -330,10 +330,10 @@ impl Files for FilesOnDisk {
     }
 }
 
-/// Whether the engine class `class` is a node class, which only a node
-/// script's class extends.
-pub fn is_node_class(class: &str) -> bool {
-    ClassDb::singleton().is_parent_class(class, "Node")
+/// Whether the engine has a class named `class`, which a script's class may
+/// extend, as a GDScript may extend any of them.
+pub fn is_engine_class(class: &str) -> bool {
+    ClassDb::singleton().class_exists(class)
 }
 
 /// Whether this is an exported game: Godot runs one on an export template's

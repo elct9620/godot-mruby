@@ -32,7 +32,7 @@ pub enum Kind {
     Compiler,
     /// Another file names the same constant, so neither loads by name.
     SharedConstant,
-    /// Another node script shares the class's name, so none is listed by it.
+    /// Another script shares the class's name, so none is listed by it.
     SharedName,
     /// The class defines a method its engine class binds, which the engine
     /// never calls.
@@ -53,8 +53,8 @@ impl Kind {
 
 /// What the engine says of its classes, which checking a file asks.
 pub struct EngineClasses<'a> {
-    /// Whether the engine class of that name is a node class.
-    pub is_node: &'a dyn Fn(&str) -> bool,
+    /// Whether the engine has a class of that name.
+    pub is_engine_class: &'a dyn Fn(&str) -> bool,
     /// The engine class binding a method of that name, among the engine
     /// class of the first name and its ancestors.
     pub method_declarer: &'a dyn Fn(&str, &str) -> Option<String>,
@@ -87,7 +87,7 @@ pub fn validate<F: Files + Sync>(
         &typed,
         test_directories.to_vec(),
         template_directory.to_owned(),
-        engine.is_node,
+        engine.is_engine_class,
     )
     .announcement_by_path(path)
     {
@@ -109,7 +109,7 @@ pub fn validate<F: Files + Sync>(
     }
 }
 
-// A warning at each method a node script's class defines that its engine
+// A warning at each method a script's class defines that its engine
 // class binds, which the engine calls directly rather than through the script,
 // worded as GDScript's NATIVE_METHOD_OVERRIDE.
 fn collect_native_method_overrides(
@@ -123,7 +123,7 @@ fn collect_native_method_overrides(
         return Vec::new();
     };
     let engine_class = ancestry.engine_class();
-    if !(engine.is_node)(engine_class) {
+    if !(engine.is_engine_class)(engine_class) {
         return Vec::new();
     }
     header
@@ -213,12 +213,12 @@ mod tests {
     ) -> Validation {
         let files = Sources(sources.iter().copied().collect());
         let test_directories = ["res://test".to_owned()];
-        let is_node = |class: &str| class != "Resource";
+        let is_engine_class = |_: &str| true;
         let method_declarer = |class: &str, method: &str| {
             (class == "Node2D" && method == "get_name").then(|| "Node".to_owned())
         };
         let engine = EngineClasses {
-            is_node: &is_node,
+            is_engine_class: &is_engine_class,
             method_declarer: &method_declarer,
         };
         validate(
@@ -275,7 +275,7 @@ mod tests {
             warnings_by_kind(&checked, Kind::SharedName),
             vec![(
                 1,
-                "res://enemy.rb and res://bosses/enemy.rb define node scripts named Enemy, so none is listed by that name"
+                "res://enemy.rb and res://bosses/enemy.rb define scripts named Enemy, so none is listed by that name"
             )]
         );
     }

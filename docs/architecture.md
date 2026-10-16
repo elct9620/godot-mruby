@@ -126,7 +126,7 @@ Names follow the naming chapter of [`convention.md`](convention.md#1-naming).
 
 Each class Godot knows answers what Godot already asks of a script language; none opens another way for Godot to reach Ruby.
 
-`ResourceFormatLoaderRubyScript` reads a file's source and runs nothing, and `ResourceFormatSaverRubyScript` writes it back. The script answers Godot from its header, which Prism reads from that source, and its ancestry. Only a node script makes an instance (2.4), and the language announces it (2.5).
+`ResourceFormatLoaderRubyScript` reads a file's source and runs nothing, and `ResourceFormatSaverRubyScript` writes it back. The script answers Godot from its header, which Prism reads from that source, and its ancestry. Only a script of an engine class makes an instance (2.4), and the language announces it (2.5).
 
 The runner is an ordinary node the addon ships, refused in an exported game, whose export leaves out the tests and the runner scene. The test panel plays it with the run file's options. `RealmFiles`, `GodotLog` and the `Godot` gem are what the game's realm is given. They are the files under `res://`, less the test directories in the editor and an exported game, Godot's log, and the engine (2.6). The names Godot knows are in `.spec/contract/godot.md`, and the settings in `.spec/contract/project_settings.md`.
 
@@ -255,6 +255,18 @@ node freed (any thread) ──► release(key) ──► let go at the next entr
 Before the file runs, the header and ancestry answer Godot on any thread with the engine node class and what the source writes out. Then the snapshot answers (2.7). Only such a node gets an instance, and in the editor only a tool whose source parses. Any other node there gets Godot's placeholder, its file run at the next frame unless under a test directory.
 
 The instance holds no Ruby value. The realm holds the node's object under its instance id, so a node made by `new` or by Godot meets the same object. The instance goes to Godot through the extension interface rather than gdext's `ScriptInstance`. A call copies what it needs before Ruby runs, since the engine may call back or take the script away before Ruby returns. Freeing a node queues its key and never waits for the realm. The rules are in `.spec/behavior/script.md` and `.spec/behavior/held_objects.md`.
+
+#### 2.4.1 Object scripts
+
+A script extending `Resource`, `RefCounted` or `Object` makes instances the same way. A reference-counted object's count decides whether the realm holds its Ruby object firmly or loosely.
+
+```
+count > 1   engine holds it too ──► registry holds the Ruby object firmly
+count == 1  only Ruby holds it   ──► held loosely, unmarked, from the next frame
+collected   Ruby object freed    ──► engine object let go at the next frame
+```
+
+mruby has no weak references, so a loosely held object is found by key only until the collector frees it. An engine object is never let go of inside the collector, since freeing it may call its script.
 
 ### 2.5 Announcement
 

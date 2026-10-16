@@ -1,4 +1,4 @@
-//! How a node script is announced to the editor, which lists it by name as
+//! How a script is announced to the editor, which lists it by name as
 //! it lists a GDScript's `class_name`: read from headers and ancestries, so
 //! the editor scans a project without running any of it.
 
@@ -10,7 +10,7 @@ use crate::header::Header;
 use crate::realm::{self, Files};
 use crate::settings;
 
-/// What the editor lists a node script by.
+/// What the editor lists a script by.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Announcement {
     /// The class's own name, without its namespaces, since the editor's list
@@ -33,21 +33,20 @@ pub enum Omission {
     /// A script template of the project's, which the editor fills in as text.
     InTemplateDirectory,
     /// A library file, or one whose ancestry is broken.
-    NotNodeScript,
-    /// Node scripts in other files share the name, so no one of them is
+    NotScript,
+    /// Scripts in other files share the name, so no one of them is
     /// listed by it, whatever order the editor scans them in.
     SharedName { name: String, others: Vec<String> },
 }
 
-/// The project a node script is announced in: its files, its test
-/// directories and template directory, and which engine classes are node
-/// classes.
+/// The project a script is announced in: its files, its test directories
+/// and template directory, and which names are engine classes.
 pub struct Project<'a, F: Files> {
     files: &'a F,
     paths: Vec<String>,
     test_directories: Vec<String>,
     template_directory: String,
-    is_node: &'a dyn Fn(&str) -> bool,
+    is_engine_class: &'a dyn Fn(&str) -> bool,
 }
 
 impl<'a, F: Files> Project<'a, F> {
@@ -55,14 +54,14 @@ impl<'a, F: Files> Project<'a, F> {
         files: &'a F,
         test_directories: Vec<String>,
         template_directory: String,
-        is_node: &'a dyn Fn(&str) -> bool,
+        is_engine_class: &'a dyn Fn(&str) -> bool,
     ) -> Self {
         Self {
             files,
             paths: files.paths(),
             test_directories,
             template_directory,
-            is_node,
+            is_engine_class,
         }
     }
 
@@ -74,7 +73,7 @@ impl<'a, F: Files> Project<'a, F> {
         if self.is_in_template_directory(path) {
             return Err(Omission::InTemplateDirectory);
         }
-        let (header, ancestry) = self.read_node_script(path).ok_or(Omission::NotNodeScript)?;
+        let (header, ancestry) = self.read_script(path).ok_or(Omission::NotScript)?;
         let others = self.find_name_sharers(path);
         if !others.is_empty() {
             return Err(Omission::SharedName {
@@ -101,27 +100,25 @@ impl<'a, F: Files> Project<'a, F> {
         })
     }
 
-    // The header and ancestry of the file at `path`, when it is a node script.
-    fn read_node_script(&self, path: &str) -> Option<(Header, Ancestry)> {
+    // The header and ancestry of the file at `path`, when it is a script.
+    fn read_script(&self, path: &str) -> Option<(Header, Ancestry)> {
         let header = Header::from_source(
             path,
             &self.files.source_by_path(path).ok()?,
             &self.files.roots(),
         );
         let ancestry = ancestry::trace_ancestry(path, &header, self.files).ok()?;
-        (self.is_node)(ancestry.engine_class()).then_some((header, ancestry))
+        (self.is_engine_class)(ancestry.engine_class()).then_some((header, ancestry))
     }
 
-    // The other game files whose node scripts share the name of the file at
+    // The other game files whose scripts share the name of the file at
     // `path`: only a file whose last segment spells the same name can.
     fn find_name_sharers(&self, path: &str) -> Vec<String> {
         let name = read_file_name(path);
         self.paths
             .iter()
             .filter(|other| other.as_str() != path && read_file_name(other) == name)
-            .filter(|other| {
-                !self.is_in_test_directory(other) && self.read_node_script(other).is_some()
-            })
+            .filter(|other| !self.is_in_test_directory(other) && self.read_script(other).is_some())
             .cloned()
             .collect()
     }
@@ -144,12 +141,12 @@ pub fn announcement_by_path(path: &str) -> Result<Announcement, Omission> {
         listing,
         settings::test_directories(),
         settings::template_directory(),
-        &game::is_node_class,
+        &game::is_engine_class,
     )
     .announcement_by_path(path)
 }
 
-/// The names node scripts share, each with the files sharing it, already
+/// The names scripts share, each with the files sharing it, already
 /// warned of: the editor scans the project again and again and asks of every
 /// file, and each shared name is warned of once while it lasts.
 pub struct SharedNames(BTreeSet<(String, Vec<String>)>);
@@ -159,25 +156,25 @@ impl SharedNames {
         Self(BTreeSet::new())
     }
 
-    /// Notes that the node scripts in `files` share `name`, answering whether
+    /// Notes that the scripts in `files` share `name`, answering whether
     /// that is news.
     pub fn note(&mut self, name: &str, files: &[String]) -> bool {
         self.0.insert((name.to_owned(), files.to_vec()))
     }
 
     /// Forgets the shared names the file at `path` was in, once it is
-    /// announced or no node script: a shared name coming back is news again.
+    /// announced or no script: a shared name coming back is news again.
     pub fn forget(&mut self, path: &str) {
         self.0
             .retain(|(_, files)| !files.iter().any(|file| file == path));
     }
 }
 
-/// The warning that node scripts in `others` share `name` with the file at
+/// The warning that scripts in `others` share `name` with the file at
 /// `path`.
 pub fn describe_shared_name(path: &str, name: &str, others: &[String]) -> String {
     format!(
-        "{path} and {} define node scripts named {name}, so none is listed by that name",
+        "{path} and {} define scripts named {name}, so none is listed by that name",
         others.join(" and ")
     )
 }
@@ -232,10 +229,15 @@ mod tests {
     ) -> Result<Announcement, Omission> {
         let files = Sources(sources.iter().copied().collect());
         let test_directories = vec!["res://test".to_owned()];
-        let is_node = |class: &str| class != "Resource";
+        let is_engine_class = |_: &str| true;
         let template_directory = "res://script_templates".to_owned();
-        Project::new(&files, test_directories, template_directory, &is_node)
-            .announcement_by_path(path)
+        Project::new(
+            &files,
+            test_directories,
+            template_directory,
+            &is_engine_class,
+        )
+        .announcement_by_path(path)
     }
 
     const ENEMY: (&str, &str) = ("res://enemy.rb", "class Enemy < Godot::Node2D\nend\n");
@@ -297,11 +299,24 @@ mod tests {
     // @behavior RN-005
     #[test]
     fn a_library_file_is_not_announced() {
-        let sources = [("res://save.rb", "class Save < Godot::Resource\nend\n")];
+        let sources = [("res://save.rb", "class Save\nend\n")];
 
         let omission = announce_sources("res://save.rb", &sources).unwrap_err();
 
-        assert_eq!(omission, Omission::NotNodeScript);
+        assert_eq!(omission, Omission::NotScript);
+    }
+
+    // @behavior RN-019
+    #[test]
+    fn an_object_script_is_announced_with_its_engine_class_as_base() {
+        let sources = [("res://save.rb", "class Save < Godot::Resource\nend\n")];
+
+        let announcement = announce_sources("res://save.rb", &sources).unwrap();
+
+        assert_eq!(
+            (announcement.name.as_str(), announcement.base.as_str()),
+            ("Save", "Resource")
+        );
     }
 
     // @behavior RN-006
@@ -440,9 +455,10 @@ mod tests {
     }
 
     fn announce<F: Files>(listing: &Listing<F>, path: &str) -> Result<Announcement, Omission> {
-        let is_node = |class: &str| class != "Resource";
+        let is_engine_class = |_: &str| true;
         listing.take_in(path);
-        Project::new(listing, Vec::new(), String::new(), &is_node).announcement_by_path(path)
+        Project::new(listing, Vec::new(), String::new(), &is_engine_class)
+            .announcement_by_path(path)
     }
 
     // @behavior RN-016

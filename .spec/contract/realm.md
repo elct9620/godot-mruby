@@ -388,9 +388,73 @@ Lets go of the object a key of the game's realm holds, at the realm's next entry
 pub fn release(key: Key) {}
 ```
 
+## `hold_loose`
+
+Holds a Ruby object under a key loosely in the realm an extension's method runs in, for an object standing for a reference-counted engine object only Ruby holds: the collector frees it once Ruby no longer reaches it.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+| relates | `hold` |
+
+```rust
+pub fn hold_loose(mrb: &Mrb, key: Key, object: Value) {}
+```
+
+## `loosen`
+
+Holds the object a key of the game's realm holds loosely from the realm's next entry or frame, since only Ruby holds its reference-counted engine object; it never waits for the realm.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+| relates | `hold_loose` |
+
+```rust
+pub fn loosen(key: Key) {}
+```
+
+## `tighten`
+
+Holds the object a key of the game's realm holds as firmly as any other, since the engine holds its reference-counted engine object again: at once inside the realm, where Ruby may collect it next, and otherwise at the realm's next entry or frame.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+| relates | `loosen` |
+
+```rust
+pub fn tighten(key: Key) {}
+```
+
+## `note_collected`
+
+Notes that the collector freed the object a key held loosely, so the realm never reaches the memory it was in.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub fn note_collected(key: Key) {}
+```
+
+## `is_collected`
+
+Whether the collector freed the object a key held loosely.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+| relates | `note_collected` |
+
+```rust
+pub fn is_collected(key: Key) -> bool {}
+```
+
 ## `release_queued`
 
-Enters the game's realm, if a key is waiting to be released, and lets go of what those keys hold; the extension calls it every frame.
+Enters the game's realm, if a key is waiting to be released or held loosely, and lets go of or loosens what those keys hold; the extension calls it every frame.
 
 | Attribute | Value |
 | --- | --- |

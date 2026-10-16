@@ -59,13 +59,15 @@ unsafe impl ExtensionLibrary for GodotMruby {
         }
     }
 
-    // Lets go of the Ruby objects of nodes freed since the last frame, even
-    // when no Ruby runs to take them, and runs again the files of scripts
+    // Lets go of the reference-counted objects Ruby let go of, and the Ruby
+    // objects of objects freed since the last frame, even when no Ruby runs
+    // to take them, and runs again the files of scripts
     // reloaded since: each class takes back its exports, then gives the
     // objects it made before the ones it exports anew. In the editor, runs
     // the files of the scripts it made placeholders of, and tells the
     // placeholders what the files run declared.
     fn on_main_loop_frame() {
+        bridge::release_collected();
         realm::release_queued();
         let reruns = realm::rerun_queued(&realm::Rerun {
             withdraw: c"__withdraw__",
@@ -82,6 +84,7 @@ unsafe impl ExtensionLibrary for GodotMruby {
             loader::unregister();
             language::unregister();
             realm::close();
+            bridge::release_collected();
         }
     }
 }

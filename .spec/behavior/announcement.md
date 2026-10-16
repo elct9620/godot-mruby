@@ -1,6 +1,6 @@
 # Announcement
 
-How a node script is announced to the editor, which lists it as a class like a GDScript's `class_name`, read from headers and ancestries without running any file.
+How a node script or an object script is announced to the editor, which lists it as a class like a GDScript's `class_name`, read from headers and ancestries without running any file.
 
 ## Includes
 
@@ -43,7 +43,7 @@ How a node script is announced to the editor, which lists it as a class like a G
 
 | Step | Statement |
 | --- | --- |
-| Given | a file whose class extends no engine node class |
+| Given | a file whose class extends no engine class |
 | When | it is announced |
 | Then | there is no announcement |
 
@@ -164,3 +164,11 @@ How a node script is announced to the editor, which lists it as a class like a G
 | Given | the project's files, one under a test directory added or removed, sharing its name with a game file |
 | When | the files to announce again are collected |
 | Then | there are none |
+
+## `RN-019` An object script is announced with its engine class as base
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose class extends an engine class that is not a node class |
+| When | it is announced |
+| Then | the announcement names its class and that engine class as its base |

@@ -115,20 +115,21 @@ module Godot
         __declare_heading__(name.to_s, "", "category")
       end
 
-      # An engine class makes the engine's object; a node script's class
-      # makes a node carrying its script, freed if it fails to initialize.
+      # An engine class makes the engine's object; a script's class makes an
+      # object carrying its script, freed if it fails to initialize: a
+      # reference-counted one once nothing holds it.
       def new(*args, **kwargs, &block)
         raise NotImplementedError, "#{self} is an abstract class and cannot be instantiated." if @abstract == true
         return __make__ if @engine_class == true
 
-        node = __write_defaults__(__make_node__)
+        object = __write_defaults__(__make_scripted__)
         begin
-          node.__send__(:initialize, *args, **kwargs, &block)
+          object.__send__(:initialize, *args, **kwargs, &block)
         rescue Exception # rubocop:disable Lint/RescueException
-          node.free
+          object.free unless object.is_a?(Godot::RefCounted)
           raise
         end
-        node
+        object
       end
 
       # An engine class answers its singleton's methods, or its static ones,
@@ -168,7 +169,7 @@ module Godot
         engine_class.const_set(name, value)
       end
 
-      private :__make__, :__make_node__, :__allocate__, :__has_engine_member__, :__singleton__, :__has_static_method__, :__call_static__,
+      private :__make__, :__make_scripted__, :__allocate__, :__has_engine_member__, :__singleton__, :__has_static_method__, :__call_static__,
               :__refuse_instance_method__, :__engine_constant_by_name__, :__declare_signal__, :__declare_export__, :__declare_heading__, :__read_shape__
 
       private

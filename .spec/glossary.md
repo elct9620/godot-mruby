@@ -99,17 +99,21 @@ The files a class inherits from through the superclasses their headers write, ne
 
 A file whose class, the one its path names, extends an engine node class, itself or through its ancestry. It is the only kind of file a node takes as its script.
 
+### Object script
+
+A file whose class, the one its path names, extends an engine class that is not a node class, such as `Resource` or `RefCounted`, itself or through its ancestry. Ruby makes its objects with `new`, and a resource Godot loads takes it as its script.
+
 ### Announcement
 
-What a node script tells the editor to list it by, as `class_name` does for a GDScript: the name its class is written with, without its namespaces, the nearest announced class it inherits from or else its engine class, and its icon, `tool` and `abstract`. A file under a test directory is never announced, and neither is any of the node scripts sharing a name.
+What a node script or an object script tells the editor to list it by, as `class_name` does for a GDScript: the name its class is written with, without its namespaces, the nearest announced class it inherits from or else its engine class, and its icon, `tool` and `abstract`. A file under a test directory is never announced, and neither is any of the node scripts sharing a name.
 
 ### Library file
 
-A file that is not a node script: it loads by name and is never a node's script.
+A file whose class extends no engine class: it loads by name and is never a script.
 
 ### Engine class
 
-A class the engine registers, and the Ruby class under `Godot` that stands for it, made at its first use and inheriting as the engine's does, up to `Godot::Object`. A node script's class extends one, itself or through its ancestry.
+A class the engine registers, and the Ruby class under `Godot` that stands for it, made at its first use and inheriting as the engine's does, up to `Godot::Object`. A node script's or an object script's class extends one, itself or through its ancestry.
 
 ### Engine object
 

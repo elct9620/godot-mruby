@@ -3,6 +3,8 @@
 //! methods by their names.
 
 use std::fmt;
+use std::mem::ManuallyDrop;
+use std::sync::{Mutex, PoisonError};
 
 use beni::typed_data::RTypedData;
 use beni::{
@@ -29,9 +31,68 @@ use super::{BridgeData, read_engine_name};
 use crate::realm::{self, Key};
 
 /// The engine object a Ruby object of an engine class stands for. Holding
-/// it keeps a reference-counted object alive until Ruby lets go of it.
-#[derive(Clone)]
-pub struct EngineObject(Gd<Object>);
+/// it keeps a reference-counted object alive until Ruby lets go of it, and
+/// a reference-counted one Ruby lets go of is let go of at the next frame,
+/// since freeing it may call its script, which the collector cannot run.
+pub struct EngineObject(ManuallyDrop<Gd<Object>>, Standing);
+
+// Whether a Ruby object is the one its engine object's script made, which
+// the realm holds under the engine object's key.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Standing {
+    Plain,
+    Scripted,
+}
+
+// The reference-counted engine objects Ruby let go of, waiting for the next
+// frame.
+static RELEASED: Mutex<Vec<EngineObject>> = Mutex::new(Vec::new());
+
+impl EngineObject {
+    fn new(object: Gd<Object>) -> Self {
+        Self(ManuallyDrop::new(object), Standing::Plain)
+    }
+
+    // The object a script made, which the realm holds under its key.
+    fn scripted(object: Gd<Object>) -> Self {
+        Self(ManuallyDrop::new(object), Standing::Scripted)
+    }
+}
+
+impl Clone for EngineObject {
+    fn clone(&self) -> Self {
+        Self::new((*self.0).clone())
+    }
+}
+
+impl Drop for EngineObject {
+    fn drop(&mut self) {
+        // SAFETY: taken once, as the value goes.
+        let object = unsafe { ManuallyDrop::take(&mut self.0) };
+        let id = object.instance_id_unchecked();
+        if !id.is_ref_counted() {
+            return;
+        }
+        if self.1 == Standing::Scripted {
+            realm::note_collected(derive_object_key(id));
+        }
+        RELEASED
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(Self::new(object));
+    }
+}
+
+/// Lets go of the reference-counted engine objects Ruby let go of since the
+/// last call; the extension calls it every frame and once the realm closes.
+pub fn release_collected() {
+    let released = std::mem::take(&mut *RELEASED.lock().unwrap_or_else(PoisonError::into_inner));
+    for mut object in released {
+        // SAFETY: taken once; the emptied value is forgotten, never dropped.
+        drop(unsafe { ManuallyDrop::take(&mut object.0) });
+        std::mem::forget(object);
+    }
+}
 
 // SAFETY: a realm is entered by one thread at a time, so no two threads
 // reach the object together, and the engine's objects are shared across
@@ -67,7 +128,7 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     object.set_instance_data_tt(mrb)?;
     object.undef_default_alloc_func(mrb);
     object.define_singleton_method(mrb, c"__make__", method!(make, 0))?;
-    object.define_singleton_method(mrb, c"__make_node__", method!(make_node, 0))?;
+    object.define_singleton_method(mrb, c"__make_scripted__", method!(make_scripted, 0))?;
     object.define_singleton_method(mrb, c"__allocate__", method!(allocate, 1))?;
     object.define_singleton_method(mrb, c"__singleton__", method!(singleton, 0))?;
     object.define_singleton_method(mrb, c"__has_engine_member__", method!(has_engine_member, 1))?;
@@ -106,13 +167,14 @@ fn make(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
         return Err(make_not_implemented_error(mrb, &message));
     }
     let object = class_db.instantiate(name).to::<Gd<Object>>();
-    Ok(mrb.wrap_as(EngineObject(object), class).as_value())
+    Ok(mrb.wrap_as(EngineObject::new(object), class).as_value())
 }
 
-// Godot::Object.__make_node__: a new node of the engine class the
-// receiver's file extends, carrying that file's script, and the receiver's
-// object for it, uninitialized and held under the node's key.
-fn make_node(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
+// Godot::Object.__make_scripted__: a new object of the engine class the
+// receiver's script extends, carrying that script, and the receiver's object
+// for it, uninitialized and held under the object's key: loosely for a
+// reference-counted object, which only Ruby holds yet.
+fn make_scripted(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
     let path = class.path(mrb);
     let script = path
         .as_ref()
@@ -123,24 +185,31 @@ fn make_node(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
             .unwrap_or_else(|| "an unnamed class".to_owned())
     };
     let Some(script) = script else {
-        let message = format!(
-            "no node script defines {}, so it makes no node",
-            class_name()
-        );
+        let message = format!("no script defines {}, so it makes no object", class_name());
         return Err(make_not_implemented_error(mrb, &message));
     };
-    let mut node = ClassDb::singleton()
+    let mut object = ClassDb::singleton()
         .instantiate(&script.get_instance_base_type())
         .to::<Gd<Object>>();
-    node.set_script(&script);
-    if node.get_script().is_none() {
-        node.free();
-        let message = format!("{}'s script refused its node here", class_name());
+    let id = object.instance_id();
+    object.set_script(&script);
+    if object.get_script().is_none() {
+        if !id.is_ref_counted() {
+            object.free();
+        }
+        let message = format!("{}'s script refused its object here", class_name());
         return Err(make_not_implemented_error(mrb, &message));
     }
-    let object = mrb.wrap_as(EngineObject(node.clone()), class).as_value();
-    realm::hold(mrb, derive_node_key(node.instance_id()), object)?;
-    Ok(object)
+    let held = mrb
+        .wrap_as(EngineObject::scripted(object), class)
+        .as_value();
+    let key = derive_object_key(id);
+    if id.is_ref_counted() {
+        realm::hold_loose(mrb, key, held);
+    } else {
+        realm::hold(mrb, key, held)?;
+    }
+    Ok(held)
 }
 
 // The script of the class the constant path `path` names: the script its
@@ -166,7 +235,8 @@ fn script_by_class_path(mrb: &Mrb, path: &str) -> Option<Gd<Script>> {
 // methods the receiver calls on it.
 fn allocate(mrb: &Mrb, class: RClass, owner: &EngineObject) -> Result<Value, Error> {
     check_stands_for(mrb, class, owner)?;
-    Ok(mrb.wrap_as(owner.clone(), class).as_value())
+    let object = EngineObject::scripted((*owner.0).clone());
+    Ok(mrb.wrap_as(object, class).as_value())
 }
 
 // Godot::Object#initialize_copy(original): gives the copy Ruby's dup or
@@ -193,10 +263,11 @@ fn check_stands_for(mrb: &Mrb, class: RClass, owner: &EngineObject) -> Result<()
     Err(make_type_error(mrb, &message))
 }
 
-/// The key a realm holds a node's Ruby object under: its instance id, which
-/// is positive, since only a reference-counted object's id is negative.
-pub fn derive_node_key(node: InstanceId) -> Key {
-    Key::from(node.to_i64())
+/// The key a realm holds a scripted object's Ruby object under: its instance
+/// id, which no key the realm names itself is: those count down from -1,
+/// while a reference-counted object's negative id is far below them.
+pub fn derive_object_key(object: InstanceId) -> Key {
+    Key::from(object.to_i64())
 }
 
 /// A node's engine object as Ruby is given it, for its class to make the
@@ -206,7 +277,7 @@ pub struct Owner(pub InstanceId);
 impl IntoValue for Owner {
     fn into_value(self, mrb: &Mrb) -> Value {
         match Gd::<Object>::try_from_instance_id(self.0) {
-            Ok(owner) => mrb.wrap(EngineObject(owner)).as_value(),
+            Ok(owner) => mrb.wrap(EngineObject::new(owner)).as_value(),
             Err(_) => qnil().as_value(),
         }
     }
@@ -436,7 +507,7 @@ fn singleton(mrb: &Mrb, class: RClass) -> Value {
     }
     engine
         .get_singleton(name)
-        .map(|object| mrb.wrap_as(EngineObject(object), class).as_value())
+        .map(|object| mrb.wrap_as(EngineObject::new(object), class).as_value())
         .unwrap_or_else(|| qnil().as_value())
 }
 
@@ -478,21 +549,16 @@ fn call_static(mrb: &Mrb, class: RClass, name: Symbol, args: RArray) -> Result<V
     Ok(RubyCrossing(&answer).into_ruby(mrb, data))
 }
 
-/// The Ruby object for an engine object: the one the realm holds for the
-/// node, or an object of its engine class under Godot, or of Godot::Object
-/// when that name holds no engine class. Only a node is held
-/// under its instance id, and a reference-counted object, never a node, is
-/// not looked for: its id is negative, as the keys the realm names itself.
+/// The Ruby object for an engine object: the one the realm holds for its
+/// script, or an object of its engine class under Godot, or of Godot::Object
+/// when that name holds no engine class.
 pub(super) fn wrap_object(mrb: &Mrb, data: &BridgeData, object: Gd<Object>) -> Value {
-    let id = object.instance_id();
-    if !id.is_ref_counted()
-        && let Some(held) = realm::object_by_key(mrb, derive_node_key(id))
-    {
+    if let Some(held) = realm::object_by_key(mrb, derive_object_key(object.instance_id())) {
         return held;
     }
     let class = class_by_name(mrb, data, find_exposed_class(&object))
         .unwrap_or_else(|| object_class(mrb, data));
-    mrb.wrap_as(EngineObject(object), class).as_value()
+    mrb.wrap_as(EngineObject::new(object), class).as_value()
 }
 
 // The class under Godot of the engine class `name`, found once for a realm
@@ -596,7 +662,7 @@ impl EngineObject {
         method: &(impl fmt::Display + ?Sized),
     ) -> Result<&Gd<Object>, Error> {
         if self.0.is_instance_valid() {
-            Ok(&self.0)
+            Ok(&*self.0)
         } else {
             let message = format!(
                 "Attempt to call function '{method}' in base 'previously freed' on a null instance."

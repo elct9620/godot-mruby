@@ -162,7 +162,7 @@ impl IScriptLanguageExtension for RubyLanguage {
             &test_directories,
             &settings::template_directory(),
             &validation::EngineClasses {
-                is_node: &game::is_node_class,
+                is_engine_class: &game::is_engine_class,
                 method_declarer: &bridge::find_method_declarer,
             },
             &path.to_string(),
@@ -628,7 +628,7 @@ fn describe_warning(warning: &Warning) -> VarDictionary {
     }
 }
 
-// Warns that the node scripts in `files`, in order, share `name`, at the
+// Warns that the scripts in `files`, in order, share `name`, at the
 // first of them. Written once the language is no longer in a call: Godot asks
 // the language for its stack as it prints a warning, which cannot happen
 // while it answers.

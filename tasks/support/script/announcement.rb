@@ -18,10 +18,10 @@ module Godot
       ].freeze
       TWINS = "res://integration/script/announcement"
       TWINS_WARNING = "WARNING: #{TWINS}/left/twin.rb and #{TWINS}/right/twin.rb " \
-                      "define node scripts named Twin, so none is listed by that name".freeze
+                      "define scripts named Twin, so none is listed by that name".freeze
       # The twins are the project's only node scripts meant to share a name, so
       # any other pair sharing one is a file that took a name already spelled.
-      SHARED_NAME = /define node scripts named (?<name>\w+), so none is listed/
+      SHARED_NAME = /define scripts named (?<name>\w+), so none is listed/
       # A node script the editor cannot read, and what a scan must never print
       # while the language answers for it.
       UNREADABLE_FILE = "unreadable.rb"

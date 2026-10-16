@@ -733,3 +733,51 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a class inside a node script's class, declaring a signal |
 | When | Godot asks a node the inner class made for that signal |
 | Then | the node has it |
+
+## `RS-086` An object script's class makes an object carrying its script
+
+| Step | Statement |
+| --- | --- |
+| Given | the class an object script defines, extending a reference-counted engine class and defining a method |
+| When | Ruby calls `new` on the class, and Godot calls that method on the object |
+| Then | Godot gets what the class's method answers |
+
+## `RS-087` An object script's reference-counted object lives while Ruby holds it
+
+| Step | Statement |
+| --- | --- |
+| Given | an object an object script's class made, held by Ruby alone |
+| When | the collector runs and a frame passes |
+| Then | the object still answers its class's methods with the state Ruby gave it |
+
+## `RS-088` An object script's reference-counted object is freed once neither Ruby nor the engine holds it
+
+| Step | Statement |
+| --- | --- |
+| Given | an object an object script's class made, which the engine held and let go of, and then Ruby lets go of |
+| When | frames pass with the collector running |
+| Then | the engine object has been freed |
+
+## `RS-089` An object script's object the engine alone holds keeps its Ruby state
+
+| Step | Statement |
+| --- | --- |
+| Given | an object an object script's class made, put in an engine container and let go of by Ruby |
+| When | the collector runs, a frame passes, and Ruby takes it back from the container |
+| Then | Ruby gets the same object, with the state it gave it |
+
+## `RS-090` An object script's resource keeps its exports through a save and a load
+
+| Step | Statement |
+| --- | --- |
+| Given | a resource an object script's class made, with an exported property written |
+| When | Godot saves it to a file and loads it back from that file |
+| Then | the loaded resource's property holds what was written |
+
+## `RS-091` An object script extending Object makes an object Ruby frees
+
+| Step | Statement |
+| --- | --- |
+| Given | the class an object script defines, extending `Object` and defining a method |
+| When | Ruby calls `new` on the class and then the method |
+| Then | Ruby gets what the method answers, from an object it frees with `free` |
