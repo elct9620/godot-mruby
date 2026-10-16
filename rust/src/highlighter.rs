@@ -1,5 +1,5 @@
 //! The script editor's colours for a Ruby file, from the tokens Prism reads
-//! in the whole file.
+//! from the nearest line lexing can resume at.
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -41,14 +41,26 @@ pub struct Highlight {
     pub role: Role,
 }
 
-/// Each line's highlights, in the order the line reads. A role runs until
-/// the next highlight, or to the end of its line.
-pub fn highlight(source: &str, is_engine_class: impl Fn(&str) -> bool) -> Vec<Vec<Highlight>> {
+/// A line's highlights, in the order the line reads: a role runs until the
+/// next highlight, or to the end of the line.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Line {
+    pub highlights: Vec<Highlight>,
+    // Whether lexing from this line's start reads what lexing from the
+    // source's start does: it follows the end of a statement, inside no
+    // string, heredoc or embedded document.
+    is_resumable: bool,
+}
+
+/// Each line of the source, coloured.
+pub fn highlight(source: &str, is_engine_class: impl Fn(&str) -> bool) -> Vec<Line> {
     let line_starts: Vec<usize> = std::iter::once(0)
         .chain(source.match_indices('\n').map(|(at, _)| at + 1))
         .collect();
+    let tokens = lex(source);
+    let resumable_starts = find_resumable_starts(&tokens);
     let mut marks = vec![BTreeMap::new(); line_starts.len()];
-    for (start, end, role) in assign_roles(source, &lex(source), is_engine_class) {
+    for (start, end, role) in assign_roles(source, &tokens, is_engine_class) {
         let mut line = line_starts.partition_point(|&at| at <= start) - 1;
         while line < line_starts.len() && line_starts[line] < end.max(start + 1) {
             let line_start = line_starts[line];
@@ -69,16 +81,89 @@ pub fn highlight(source: &str, is_engine_class: impl Fn(&str) -> bool) -> Vec<Ve
     }
     marks
         .into_iter()
-        .map(|line| {
+        .zip(line_starts)
+        .map(|(line, start)| {
             let mut highlights: Vec<Highlight> = Vec::new();
             for (column, role) in line {
                 if highlights.last().is_none_or(|last| last.role != role) {
                     highlights.push(Highlight { column, role });
                 }
             }
-            highlights
+            Line {
+                highlights,
+                is_resumable: start == 0 || resumable_starts.contains(&start),
+            }
         })
         .collect()
+}
+
+// The offsets lexing can resume at: after a newline ending a statement, once
+// every token before it has ended. Prism hands a heredoc's body over before
+// the rest of the line that opens it, so the line after the opener is not one.
+fn find_resumable_starts(tokens: &[Token]) -> Vec<usize> {
+    let mut lexed_to = 0;
+    let mut starts = Vec::new();
+    for token in tokens {
+        lexed_to = lexed_to.max(token.end);
+        if token.kind == ruby_prism_sys::PM_TOKEN_NEWLINE && token.end == lexed_to {
+            starts.push(token.end);
+        }
+    }
+    starts
+}
+
+/// A text's highlighted lines from its first down, lexed only as far as they
+/// are read. An edit drops the lines from the last one lexing can resume at
+/// before it, so lexing again costs what the edit reaches, not the text.
+#[derive(Default)]
+pub struct HighlightCache {
+    lines: Vec<Line>,
+}
+
+impl HighlightCache {
+    // About a screen of lines, so the lines the editor reads after the first
+    // come from the same lex.
+    const LINES_AHEAD: usize = 100;
+
+    /// Drops the highlights an edit from `line` down may change. Whether
+    /// the edited line itself can be resumed at turns on the newline before
+    /// it, which Prism judges by looking into the edited line.
+    pub fn drop_from(&mut self, line: usize) {
+        let kept = &self.lines[..line.min(self.lines.len())];
+        let last_resumable = kept.iter().rposition(|line| line.is_resumable);
+        self.lines.truncate(last_resumable.unwrap_or(0));
+    }
+
+    /// The highlights of `line` of a text with `line_count` lines, lexing
+    /// from the last kept line on, as `read_line` reads them.
+    pub fn read_highlights(
+        &mut self,
+        line: usize,
+        line_count: usize,
+        read_line: impl Fn(usize) -> String,
+        is_engine_class: impl Fn(&str) -> bool,
+    ) -> &[Highlight] {
+        if line >= line_count {
+            return &[];
+        }
+        let mut ahead = Self::LINES_AHEAD;
+        while self.lines.len() <= line {
+            let start = self.lines.len();
+            let end = (line + ahead).min(line_count);
+            let source: String = (start..end).map(|at| read_line(at) + "\n").collect();
+            let mut lexed = highlight(&source, &is_engine_class);
+            lexed.truncate(end - start);
+            // A line after the last resumable one may stop inside a string
+            // the cut ends, so it is lexed again with what follows it.
+            if end < line_count {
+                let last_resumable = lexed.iter().rposition(|line| line.is_resumable);
+                lexed.truncate(last_resumable.unwrap_or(0));
+            }
+            self.lines.extend(lexed);
+            ahead *= 2;
+        }
+        &self.lines[line].highlights
+    }
 }
 
 struct Token {
@@ -230,10 +315,10 @@ fn role_by_kind(kind: pm_token_type_t, text: &str, is_engine_class: impl Fn(&str
 #[class(base = EditorSyntaxHighlighter, init, tool)]
 pub struct RubySyntaxHighlighter {
     palette: Palette,
-    // The whole text's colours, kept until its lines are edited: the editor
-    // asks line by line, and a line's colours turn on the lines before it.
-    lines: RefCell<Option<Vec<Vec<Highlight>>>>,
-    // The text edit whose edits drop the kept colours.
+    // The text's highlights, kept until its lines are edited: the editor
+    // asks line by line, and a line's highlights turn on the lines before it.
+    cache: RefCell<HighlightCache>,
+    // The text edit whose edits drop the kept highlights.
     text_edit: Option<InstanceId>,
     base: Base<EditorSyntaxHighlighter>,
 }
@@ -306,7 +391,7 @@ impl IEditorSyntaxHighlighter for RubySyntaxHighlighter {
 
     fn update_cache(&mut self) {
         self.palette = Palette::from_settings();
-        self.lines.take();
+        self.cache.take();
         let Some(text_edit) = self.base().get_text_edit() else {
             return;
         };
@@ -315,8 +400,9 @@ impl IEditorSyntaxHighlighter for RubySyntaxHighlighter {
             text_edit
                 .signals()
                 .lines_edited_from()
-                .connect_other(&*self, |this, _, _| {
-                    this.lines.take();
+                .connect_other(&*self, |this, from, to| {
+                    let line = usize::try_from(from.min(to)).unwrap_or(0);
+                    this.cache.borrow_mut().drop_from(line);
                 });
         }
     }
@@ -326,15 +412,18 @@ impl IEditorSyntaxHighlighter for RubySyntaxHighlighter {
         let Some(text_edit) = self.base().get_text_edit() else {
             return colors.upcast_any_dictionary();
         };
-        let mut lines = self.lines.borrow_mut();
-        let lines = lines.get_or_insert_with(|| {
-            let class_db = ClassDb::singleton();
-            highlight(&text_edit.get_text().to_string(), |name| {
-                class_db.class_exists(name)
-            })
-        });
-        let highlights = usize::try_from(line).ok().and_then(|line| lines.get(line));
-        for highlight in highlights.into_iter().flatten() {
+        let Ok(line) = usize::try_from(line) else {
+            return colors.upcast_any_dictionary();
+        };
+        let class_db = ClassDb::singleton();
+        let mut cache = self.cache.borrow_mut();
+        let highlights = cache.read_highlights(
+            line,
+            usize::try_from(text_edit.get_line_count()).unwrap_or(0),
+            |at| text_edit.get_line(at as i32).to_string(),
+            |name| class_db.class_exists(name),
+        );
+        for highlight in highlights {
             let color = self.palette.color_by_role(highlight.role);
             colors.set(highlight.column as i64, &vdict! { "color" => color });
         }
@@ -344,11 +433,27 @@ impl IEditorSyntaxHighlighter for RubySyntaxHighlighter {
 
 #[cfg(test)]
 mod tests {
-    use super::{Highlight, Role, highlight};
+    use std::cell::Cell;
+
+    use super::{Highlight, HighlightCache, Role, highlight};
     use crate::language::KEYWORDS;
 
     fn highlight_roles(source: &str) -> Vec<Vec<Highlight>> {
         highlight(source, |name| name == "Node2D")
+            .into_iter()
+            .map(|line| line.highlights)
+            .collect()
+    }
+
+    // Every line's highlights as the editor reads them, one line at a time.
+    fn read_every_line(cache: &mut HighlightCache, lines: &[&str]) -> Vec<Vec<Highlight>> {
+        (0..lines.len())
+            .map(|line| {
+                cache
+                    .read_highlights(line, lines.len(), |at| lines[at].to_owned(), |_| false)
+                    .to_vec()
+            })
+            .collect()
     }
 
     // The role at a column of a line, as the editor reads it: the last
@@ -503,5 +608,52 @@ mod tests {
         let lines = highlight_roles("def jump\n  height = (\n  return\nend\n");
 
         assert_eq!(read_role(&lines, 2, 2), Role::ControlFlow);
+    }
+
+    // @behavior RU-015
+    #[test]
+    fn a_line_below_an_edit_is_coloured_as_the_whole_file_colours_it() {
+        let mut lines = vec!["speed = 1"; 5];
+        lines.extend(["text = format(<<~TEXT, speed)", "  fast #{speed}", "TEXT"]);
+        lines.extend(["speed = 2", "jump", "  .high", "=begin", "note", "=end"]);
+        // Lexing again from the heredoc's opener stops inside this string.
+        lines.resize(103, "done = true");
+        lines.extend(["name = \"spans", "the lex's", "last line\"", "done = true"]);
+        let mut cache = HighlightCache::default();
+        read_every_line(&mut cache, &lines);
+
+        lines[8] = "speed = :fast";
+        cache.drop_from(8);
+        let read = read_every_line(&mut cache, &lines);
+
+        let whole: Vec<_> = highlight(&(lines.join("\n") + "\n"), |_| false)
+            .into_iter()
+            .take(lines.len())
+            .map(|line| line.highlights)
+            .collect();
+        assert_eq!(read, whole);
+    }
+
+    // @behavior RU-016
+    #[test]
+    fn an_edit_lexes_again_from_the_nearest_line_lexing_can_start_from() {
+        let mut lines = vec!["speed = 1"; 4000];
+        let mut cache = HighlightCache::default();
+        cache.read_highlights(3999, lines.len(), |at| lines[at].to_owned(), |_| false);
+
+        lines[3990] = "speed = 2";
+        cache.drop_from(3990);
+        let reads = Cell::new(0);
+        cache.read_highlights(
+            3991,
+            lines.len(),
+            |at| {
+                reads.set(reads.get() + 1);
+                lines[at].to_owned()
+            },
+            |_| false,
+        );
+
+        assert_eq!(reads.get(), lines.len() - 3989);
     }
 }

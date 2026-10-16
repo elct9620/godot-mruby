@@ -1,10 +1,11 @@
 # Syntax highlighting
 
-How the script editor colours a Ruby file: a highlighter of the extension's own colours each line from the tokens Prism reads in the whole file, in the colours the editor's theme gives each kind of word, and the language names Ruby's keywords and string delimiters for the editor's standard highlighter.
+How the script editor colours a Ruby file: a highlighter of the extension's own colours each line from the tokens Prism reads up to it, starting again after an edit from the nearest line lexing can start from, in the colours the editor's theme gives each kind of word, and the language names Ruby's keywords and string delimiters for the editor's standard highlighter.
 
 ### What it does not see
 
 - A line above an edit keeps its colours until it is edited or the file is opened again, as in every Godot highlighter: the editor asks again only from the edited line down.
+- A line lexed again after an edit does not know the local variables assigned above where lexing started, so a local read as `x /2` there is coloured as a method call with a regexp until the file is opened again.
 
 ## Includes
 
@@ -123,3 +124,19 @@ How the script editor colours a Ruby file: a highlighter of the extension's own 
 | Given | a Ruby script open in the script editor whose second line starts with `def` |
 | When | the second line is replaced by an assignment |
 | Then | its first column no longer takes the keyword colour |
+
+## `RU-015` A line below an edit is coloured as the whole file colours it
+
+| Step | Statement |
+| --- | --- |
+| Given | the coloured lines of a file with a heredoc, a string, a continued line and an embedded document |
+| When | the line after the heredoc is edited and every line is coloured again |
+| Then | each line takes the colours the whole edited file gives it |
+
+## `RU-016` An edit lexes again from the nearest line lexing can start from
+
+| Step | Statement |
+| --- | --- |
+| Given | the coloured lines of a long file |
+| When | a line near its end is edited and the line below it is coloured |
+| Then | only the lines from the last statement before the edit are read again |
