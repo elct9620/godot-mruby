@@ -194,7 +194,7 @@ lib.rs    registers Scripting and settings, prepares the realm
 └──┬──────────────────────────────────────┘      │
    ▼                                             ▼
 ┌─ Given to the realm ────────────────────────────────────────┐
-│  game: files, listing, node classes    bridge    log        │
+│  game: files, listing, engine classes  bridge    log        │
 │  settings                                                   │
 └──┬──────────────────────────────────────────────────────────┘
    ▼
