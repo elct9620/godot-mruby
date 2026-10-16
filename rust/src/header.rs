@@ -387,18 +387,13 @@ fn read_export(name: &Node, default: &Node, keywords: &[Node]) -> Option<Export>
     })
 }
 
-// `property` with the hint `keywords` spell out, if they spell out one the
-// property's type takes.
+// `property` as the hint `keywords` spell out declares it, if they spell out
+// one the property's type takes.
 fn with_keyword_hint(property: &Property, keywords: &Node) -> Option<Property> {
     let (hint, written) = read_keyword_hint(keywords)?;
-    let property_hint = hint
-        .choose_property_hint(property.default_value().get_type())
-        .ok()?;
-    Some(
-        property
-            .clone()
-            .with_hint(property_hint, hint.write_hint_string(&written)?),
-    )
+    hint.write_hint_string(&written)?;
+    hint.declare(property.name.clone(), &property.default_value(), &written)
+        .ok()
 }
 
 // The one hint an export's keywords name and the value it is read with, as
@@ -407,12 +402,15 @@ fn with_keyword_hint(property: &Property, keywords: &Node) -> Option<Property> {
 // write as anything but literals, spell out none.
 fn read_keyword_hint(keywords: &Node) -> Option<(Hint, Variant)> {
     let mut step = None;
+    let mut extra = None;
     let mut named = Vec::new();
     for element in keywords.as_keyword_hash_node()?.elements().iter() {
         let pair = element.as_assoc_node()?;
         let keyword = decode_text(pair.key().as_symbol_node()?.unescaped());
         if keyword == "step" {
             step = Some(read_literal(&pair.value())?);
+        } else if keyword == "extra_hints" {
+            extra = Some(read_literal(&pair.value())?);
         } else {
             named.push((keyword, pair.value()));
         }
@@ -421,17 +419,18 @@ fn read_keyword_hint(keywords: &Node) -> Option<(Hint, Variant)> {
         return None;
     };
     let hint = Hint::from_keyword(keyword).ok()?;
-    let written = match (hint, step) {
-        (Hint::Range, step) => read_bounds(value, step)?,
-        (_, Some(_)) => return None,
-        (_, None) => read_literal(value)?,
+    let written = match (hint, step, extra) {
+        (Hint::Range, step, extra) => read_bounds(value, step, extra)?,
+        (_, None, None) => read_literal(value)?,
+        _ => return None,
     };
     Some((hint, written))
 }
 
-// A range's bounds, its step after them when one is written, as a range
-// literal including its end writes them.
-fn read_bounds(range: &Node, step: Option<Variant>) -> Option<Variant> {
+// A range's bounds, its step after them when one is written or extra hints
+// follow, and the extra hints, as a range literal including its end writes
+// them.
+fn read_bounds(range: &Node, step: Option<Variant>, extra: Option<Variant>) -> Option<Variant> {
     let range = range.as_range_node()?;
     if range.is_exclude_end() {
         return None;
@@ -439,8 +438,18 @@ fn read_bounds(range: &Node, step: Option<Variant>) -> Option<Variant> {
     let mut bounds = VarArray::new();
     bounds.push(&read_literal(&range.left()?)?);
     bounds.push(&read_literal(&range.right()?)?);
-    if let Some(step) = step {
+    if let Some(step) = step
+        .clone()
+        .or_else(|| extra.as_ref().map(|_| 1.to_variant()))
+    {
         bounds.push(&step);
+    }
+    match extra.map(|extra| extra.try_to::<VarArray>()) {
+        Some(Ok(hints)) => hints
+            .iter_shared()
+            .for_each(|hint| bounds.push(&hint.to_string().to_variant())),
+        Some(Err(_)) => return None,
+        None => {}
     }
     Some(bounds.to_variant())
 }

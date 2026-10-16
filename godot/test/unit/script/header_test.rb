@@ -1,6 +1,8 @@
 class HeaderTest < Minitest::Test
   DIRECTORY = "res://test/unit/script/header".freeze
   RANGE = 1
+  TOOL_BUTTON = 39
+  CALLABLE = 25
   GROUP = 64
 
   # @behavior RS-008
@@ -90,6 +92,17 @@ class HeaderTest < Minitest::Test
   # @behavior RS-061
   def test_a_node_script_answers_the_name_the_editor_lists_it_by_as_its_global_name
     assert_equal :Turret, Godot::ResourceLoader.load("res://src/turret.rb").get_global_name
+  end
+
+  # @behavior RS-092
+  def test_a_node_script_lists_extra_hints_and_a_tool_button_before_its_file_runs
+    listed = load_script(:fader).get_script_property_list
+    level = listed.find { |property| property["name"] == "level" }
+    reset = listed.find { |property| property["name"] == "reset" }
+
+    assert_equal ["0,10,1,or_greater", CALLABLE, TOOL_BUTTON],
+                 [level["hint_string"], reset["type"], reset["hint"]]
+    refute ran?(:Fader)
   end
 
   private

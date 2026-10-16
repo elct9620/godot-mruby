@@ -51,6 +51,27 @@ module Godot
   class Object
     @engine_class = true
 
+    # What a tool button's property holds for each object: a Callable of the
+    # object's own method of that name.
+    class ButtonMethod
+      attr_reader :name
+
+      def initialize(name)
+        @name = name
+      end
+    end
+
+    # What a typed container's property holds for each object: a copy of
+    # the declared container, typed as the engine types it.
+    class TypedContainer
+      attr_reader :value, :types
+
+      def initialize(value, types)
+        @value = value
+        @types = types
+      end
+    end
+
     # What a class extending an engine class calls in its body. Godot reads
     # `tool` and `icon` from the file's source, so they do nothing as the
     # body runs; `abstract` marks only the class calling it, as Active
@@ -82,21 +103,28 @@ module Godot
       # A name every Ruby object answers is refused, since the accessors
       # would take that answer away. A keyword tells the editor how to show
       # the property, each one named as the `@export_*` annotation it
-      # answers to: `range:` with a Range and an optional `step:`, `enum:`
-      # and `flags:` with the names a value may take, `file:` with the
-      # files to choose among, `dir:` and `multiline:` with `true`, and
-      # `placeholder:` with the text an empty field shows. `type:` names the
-      # class of an object Godot fills in, in place of a value naming the
-      # type itself.
+      # answers to and taking what that annotation takes: `range:` with a
+      # Range, an optional `step:` and `extra_hints:`; `enum:`, `flags:`,
+      # `exp_easing:` and `node_path:` with a list; `file:`, `file_path:`
+      # and `global_file:` with their filters; `placeholder:` and
+      # `tool_button:` with their text, a tool button declared with the name
+      # of the method it calls; `custom:` with a hint, what it is read with
+      # and its usage; and the others with `true`. `type:` names the class of
+      # an object Godot fills in, or in an array or a hash the classes a
+      # typed container holds.
       def export(name, default, **keywords)
         if ::Object.method_defined?(name)
           raise ArgumentError, "#{name} is a method every object answers, so it cannot be exported"
         end
 
-        __declare_export__(name.to_s, default, *__read_hint__(keywords))
-        __exports__[name.to_sym] = default
+        hint, written = __read_hint__(keywords)
+        if hint == "tool_button" && !default.is_a?(::Symbol)
+          raise ArgumentError, %("tool_button:" needs the name of a method, but #{default.inspect} was given instead.)
+        end
+        types = __declare_export__(name.to_s, hint == "tool_button" ? nil : default, hint, written)
+        __exports__[name.to_sym] = __read_default__(default, hint, types)
         attr_reader name unless method_defined?(name)
-        __define_export_writer__(name) unless method_defined?(:"#{name}=")
+        __define_export_writer__(name, types) unless method_defined?(:"#{name}=")
       end
 
       # A heading the editor shows the properties written after it under,
@@ -233,14 +261,18 @@ module Godot
       # two objects share one; the engine's values of fixed size never
       # change, so they are shared as they are.
       def __write_defaults__(object)
-        __defaults__.each { |name, value| object.instance_variable_set(:"@#{name}", __copy__(value)) }
+        __defaults__.each { |name, value| object.instance_variable_set(:"@#{name}", __copy__(value, object)) }
         object
       end
 
-      # `value`, copied when it can change in place: Ruby's Array or Hash
-      # into the engine's container, as an export holds it.
-      def __copy__(value)
+      # `value`, copied for `object` when it can change in place: Ruby's
+      # Array or Hash into the engine's container, as an export holds it, a
+      # typed container typed again, and a tool button's method as the
+      # object's own.
+      def __copy__(value, object)
         case value
+        when ButtonMethod then object.method(value.name)
+        when TypedContainer then __type__(__copy__(value.value, object), value.types)
         when ::Array, ::Hash then __hold__(value)
         when ::String, Godot::Dictionary, Godot::Value::Sequence then value.dup
         else value
@@ -250,19 +282,51 @@ module Godot
       # `value` as an exported property holds it: Ruby's Array or Hash as
       # the engine's container of its elements, so GDScript reaching the
       # property changes what Ruby reads, and anything else as it is.
-      def __hold__(value)
-        case value
-        when ::Array then Godot::Array.new(value)
-        when ::Hash then Godot::Dictionary.new(value)
-        else value
+      def __hold__(value, types = nil)
+        held = case value
+               when ::Array then Godot::Array.new(value)
+               when ::Hash then Godot::Dictionary.new(value)
+               else value
+               end
+        types.nil? ? held : __type__(held, types)
+      end
+
+      # `container` typed as `types` say, each a type, an engine class and a
+      # script: one for an array's elements, or a dictionary's keys and
+      # values. One typed so already is the same container.
+      def __type__(container, types)
+        return container if container.is_typed && __typed_as__(container) == types.inject(:+)
+        return Godot::Array.new(container, *types.first) if types.size == 1
+
+        Godot::Dictionary.new(container, *types[0], *types[1])
+      end
+
+      # The types `container` is typed with, as `__type__` takes them.
+      def __typed_as__(container)
+        if container.is_a?(Godot::Array)
+          return [container.get_typed_builtin, container.get_typed_class_name, container.get_typed_script]
         end
+
+        [container.get_typed_key_builtin, container.get_typed_key_class_name, container.get_typed_key_script,
+         container.get_typed_value_builtin, container.get_typed_value_class_name, container.get_typed_value_script]
+      end
+
+      # What each object's property starts from: the declared value, a typed
+      # container's types beside it, or a tool button's method.
+      def __read_default__(default, hint, types)
+        return ButtonMethod.new(default) if hint == "tool_button"
+        return TypedContainer.new(default, types) unless types.nil?
+
+        default
       end
 
       # Defines the writer of the exported property `name`, which holds what
-      # it is given as `__hold__` says.
-      def __define_export_writer__(name)
+      # it is given as `__hold__` says, typed as `types` say.
+      def __define_export_writer__(name, types = nil)
         variable = :"@#{name}"
-        define_method(:"#{name}=") { |value| instance_variable_set(variable, self.class.__send__(:__hold__, value)) }
+        define_method(:"#{name}=") do |value|
+          instance_variable_set(variable, self.class.__send__(:__hold__, value, types))
+        end
       end
 
       # The value each property an object of the class is given, what it
@@ -309,7 +373,7 @@ module Godot
         __exports__.each do |name, value|
           next if object.instance_variable_defined?(:"@#{name}")
 
-          object.instance_variable_set(:"@#{name}", __copy__(value))
+          object.instance_variable_set(:"@#{name}", __copy__(value, object))
         end
       end
 
@@ -319,16 +383,31 @@ module Godot
       # the range it steps through rather than being a hint of its own.
       def __read_hint__(keywords)
         step = keywords[:step]
-        named = keywords.keys.reject { |keyword| keyword == :step }
+        extra = keywords[:extra_hints]
+        named = keywords.keys.reject { |keyword| %i[step extra_hints].include?(keyword) }
         raise ArgumentError, %("#{named.last}:" cannot be used with another hint.) if named.size > 1
 
         hint = named.first
-        return ["range", __read_bounds__(keywords[:range], step)] if hint == :range
+        return ["range", __read_bounds__(keywords[:range], step, extra)] if hint == :range
         raise ArgumentError, %("step:" needs a "range:" to step through.) unless step.nil?
-        return ["type", __read_type_name__(keywords[:type])] if hint == :type
+        raise ArgumentError, %("extra_hints:" needs a "range:" to add to.) unless extra.nil?
+        return __read_type__(keywords[:type]) if hint == :type
         return ["none", nil] if hint.nil?
 
         [hint.to_s, __check_hint_value__(hint, keywords[hint])]
+      end
+
+      # The type `type:` names: a class, or the classes a typed container
+      # holds, one in an array or a key's and a value's in a hash.
+      def __read_type__(named)
+        return ["type", __read_type_name__(named)] unless named.is_a?(::Array) || named.is_a?(::Hash)
+
+        classes = named.is_a?(::Hash) ? named.keys + named.values : named
+        unless (named.is_a?(::Array) ? 1 : 2) == classes.size && named.size == 1
+          raise ArgumentError, %("type:" needs one class in an array or one pair in a hash, but #{named.inspect} was given instead.)
+        end
+
+        ["typed", classes.map { |element| __check_class__(:type, element) }]
       end
 
       # The value a hint is read with, a list where the hint takes the names
@@ -336,6 +415,10 @@ module Godot
       def __check_hint_value__(hint, value)
         if %i[enum flags].include?(hint) && !value.is_a?(::Array)
           raise ArgumentError, %("#{hint}:" needs a list of names, but #{value.inspect} was given instead.)
+        end
+        return value.map { |named| __check_class__(hint, named).to_s } if hint == :node_path && value.is_a?(::Array)
+        if hint == :custom && !value.is_a?(::Array)
+          raise ArgumentError, %("custom:" needs a hint and what it is read with, but #{value.inspect} was given instead.)
         end
 
         value
@@ -357,13 +440,16 @@ module Godot
       # A range hint's bounds, the step included when one is declared. A
       # range leaving out its end names no highest value, so it is refused
       # where it is written.
-      def __read_bounds__(range, step)
+      def __read_bounds__(range, step, extra = nil)
         unless range.is_a?(::Range) && !range.exclude_end?
           raise ArgumentError,
                 %("range:" needs a range that includes its end, but #{range.inspect} was given instead.)
         end
 
-        step.nil? ? [range.begin, range.end] : [range.begin, range.end, step]
+        bounds = [range.begin, range.end]
+        return step.nil? ? bounds : bounds << step if extra.nil?
+
+        bounds + [step || 1] + (extra.is_a?(::Array) ? extra : [extra]).map(&:to_s)
       end
 
       # The engine's singleton of this engine class, kept once asked for.

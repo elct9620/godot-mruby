@@ -794,3 +794,147 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | Given | a node script whose class declares a signal with a parameter of `Godot::Vector2` |
 | When | a node of that class is asked for its signals |
 | Then | the parameter is typed `Vector2` |
+
+## `RD-091` A color hint without alpha is declared without a filter
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a color with `color_no_alpha:` |
+| When | Godot lists the script's properties |
+| Then | that property carries the color-without-alpha hint, read with nothing |
+
+## `RD-092` An easing hint names the options it was declared with
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a float with `exp_easing:` and a list of options |
+| When | Godot lists the script's properties |
+| Then | that property carries the easing hint, read with those options |
+
+## `RD-093` A file path hint carries the filter it was declared with
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a string with `file_path:` and a filter |
+| When | Godot lists the script's properties |
+| Then | that property carries the file path hint, read with that filter |
+
+## `RD-094` A global file hint carries the filter it was declared with
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a string with `global_file:` and a filter |
+| When | Godot lists the script's properties |
+| Then | that property carries the global file hint, read with that filter |
+
+## `RD-095` A global directory hint is declared without a filter
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a string with `global_dir:` |
+| When | Godot lists the script's properties |
+| Then | that property carries the global directory hint, read with nothing |
+
+## `RD-096` A layer hint is the layers its keyword names
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports integers with `flags_2d_physics:` and `flags_avoidance:` |
+| When | Godot lists the script's properties |
+| Then | each property carries the layer hint its keyword names |
+
+## `RD-097` A node path hint names the node classes it was declared with
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a node path with `node_path:` and a list of node classes |
+| When | Godot lists the script's properties |
+| Then | that property carries the node path hint, read with those classes' names |
+
+## `RD-098` A stored property is kept in a saved scene and not shown
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a property with `storage:` |
+| When | Godot lists the script's properties |
+| Then | that property is used for storage alone |
+
+## `RD-099` A tool button is shown with its text and not stored
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports the name of a method with `tool_button:` and a text |
+| When | Godot lists the script's properties |
+| Then | that property is a Callable carrying the tool button hint, read with the text, and used for the editor alone |
+
+## `RD-100` A tool button's property calls the object's method
+
+| Step | Statement |
+| --- | --- |
+| Given | an object of a class exporting the name of a method with `tool_button:` |
+| When | Godot reads that property and calls it |
+| Then | it gets what the object's method answers |
+
+## `RD-101` A custom hint carries the hint, text and usage it was declared with
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a property with `custom:`, a hint, its text and a usage |
+| When | Godot lists the script's properties |
+| Then | that property carries that hint, read with that text and used as that usage says |
+
+## `RD-102` A range hint carries the extra hints it was declared with
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a number with `range:` and `extra_hints:` |
+| When | Godot lists the script's properties |
+| Then | that property's range is read with its bounds, a step, and those hints |
+
+## `RD-103` A typed array names its elements' type
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports arrays with `type:` and a class in an array |
+| When | Godot lists the script's properties |
+| Then | each property is read as an array of that class's type |
+
+## `RD-104` A typed dictionary names its keys' and values' types
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a dictionary with `type:` and a pair of classes in a hash |
+| When | Godot lists the script's properties |
+| Then | that property is read as a dictionary of those types |
+
+## `RD-105` An object's typed container is typed as declared
+
+| Step | Statement |
+| --- | --- |
+| Given | an object of a class exporting a typed array and a typed dictionary |
+| When | Ruby reads those properties |
+| Then | each is the engine's container typed as declared |
+
+## `RD-106` An array written to a typed property is held typed
+
+| Step | Statement |
+| --- | --- |
+| Given | an object of a class exporting a typed array |
+| When | Ruby writes one of its arrays to that property |
+| Then | the property holds the engine's array typed as declared |
+
+## `RD-107` A typed container declared with another value is refused
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a number with `type:` and a class in an array |
+| When | the class's file runs |
+| Then | the export raises `ArgumentError` in GDScript's words for a value of another type |
+
+## `RD-108` An export naming a Ruby resource class is read as a resource of it
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a value of `nil` naming an object script's class extending `Resource` |
+| When | Godot lists the script's properties |
+| Then | that property carries the resource hint, read with the name that class is announced under |

@@ -781,3 +781,11 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | the class an object script defines, extending `Object` and defining a method |
 | When | Ruby calls `new` on the class and then the method |
 | Then | Ruby gets what the method answers, from an object it frees with `free` |
+
+## `RS-092` A node script lists an export's extra hints and a tool button before its file runs
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class exports a range with `extra_hints:` and a tool button, whose file has not run |
+| When | Godot lists the script's properties |
+| Then | the range is read with its extra hints and the tool button is a Callable with its hint |

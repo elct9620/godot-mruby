@@ -60,6 +60,15 @@ class TypesTest < Minitest::Test
     assert_equal %(The class "Unit::Loader::Items::Potion" was not found in the global scope.), error.message
   end
 
+  # @behavior RD-108
+  def test_an_export_naming_a_ruby_resource_class_is_read_as_a_resource_of_it
+    Unit::Declarations::Almanac
+    script = Godot::ResourceLoader.load("res://test/unit/declarations/almanac.rb")
+    page = script.get_script_property_list.find { |property| property["name"] == "page" }
+
+    assert_equal [RESOURCE_TYPE, "LedgerPage"], [page["hint"], page["hint_string"]]
+  end
+
   private
 
   # The property of that name among the ones the sight class exported.

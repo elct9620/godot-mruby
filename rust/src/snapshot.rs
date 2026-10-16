@@ -84,6 +84,8 @@ pub struct Property {
     pub kind: VariantType,
     pub hint: PropertyHint,
     pub hint_string: String,
+    // What the property is used for besides being a script variable.
+    usage: PropertyUsageFlags,
     default: DeclaredValue,
     default_text: String,
 }
@@ -103,10 +105,10 @@ enum DeclaredValue {
 }
 
 impl Property {
-    /// The usage of a script's own variable, which the editor shows and a
-    /// scene stores.
+    /// The usage of a script's own variable: one the editor shows and a
+    /// scene stores, unless it was declared to be used otherwise.
     pub fn usage(&self) -> PropertyUsageFlags {
-        PropertyUsageFlags::DEFAULT | PropertyUsageFlags::SCRIPT_VARIABLE
+        self.usage | PropertyUsageFlags::SCRIPT_VARIABLE
     }
 
     /// The property `name`, taking its type from the value it is declared
@@ -117,6 +119,7 @@ impl Property {
             kind: default.get_type(),
             hint: PropertyHint::NONE,
             hint_string: String::new(),
+            usage: PropertyUsageFlags::DEFAULT,
             default: DeclaredValue::from_variant(default),
             default_text: default.to_string(),
         }
@@ -130,6 +133,17 @@ impl Property {
             hint_string,
             ..self
         }
+    }
+
+    /// The property used as `usage` says besides being a script variable.
+    pub fn with_usage(self, usage: PropertyUsageFlags) -> Self {
+        Self { usage, ..self }
+    }
+
+    /// The property of type `kind` whatever value it is declared with, as a
+    /// tool button is a Callable each object makes of its own method.
+    pub fn with_kind(self, kind: VariantType) -> Self {
+        Self { kind, ..self }
     }
 
     /// The property as an object of the class `class` names, which Godot
@@ -604,6 +618,7 @@ mod tests {
             kind: VariantType::FLOAT,
             hint: PropertyHint::NONE,
             hint_string: String::new(),
+            usage: PropertyUsageFlags::DEFAULT,
             default: DeclaredValue::Bytes(Vec::new()),
             default_text: "0.0".to_owned(),
         }

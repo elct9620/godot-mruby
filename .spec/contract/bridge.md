@@ -57,7 +57,7 @@ end
 
 ## `Godot::Object.export`
 
-A property of a class extending an engine class, taking its type from the value it is declared with. A node of the class has it as it has the engine's own properties, so the editor and the engine read and write it by that name, and the class reads and writes it as the instance variable of that name. A keyword tells the editor how to show it, each one named as the `@export_*` annotation it answers to: `range:` with a Range and an optional `step:`, `enum:` and `flags:` with the names a value may take, `file:` with the files to choose among, `dir:` and `multiline:` with `true`, and `placeholder:` with the text an empty field shows. `type:` names the class of an object Godot fills in, in place of a value naming the type itself.
+A property of a class extending an engine class, taking its type from the value it is declared with. A node of the class has it as it has the engine's own properties, so the editor and the engine read and write it by that name, and the class reads and writes it as the instance variable of that name. A keyword tells the editor how to show it, each one named as the `@export_*` annotation it answers to and taking what that annotation takes: `range:` with a Range, an optional `step:` and `extra_hints:`; `enum:`, `flags:`, `exp_easing:` and `node_path:` with a list; `file:`, `file_path:` and `global_file:` with their filters; `placeholder:` and `tool_button:` with their text, a tool button declared with the name of the method it calls; `custom:` with a hint, what it is read with and its usage; and the others with `true`. `type:` names the class of an object Godot fills in, or in an array or a hash the classes a typed container holds.
 
 ```ruby
 module Godot
