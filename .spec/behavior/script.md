@@ -797,3 +797,43 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a node script whose class declares an rpc with literal words, whose file has not run |
 | When | Godot reads the script's rpc config |
 | Then | the config lists that rpc as the file would declare it |
+
+## `RS-094` A method Godot calls returns as it awaits
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose class's method calls `await` on a signal |
+| When | Godot calls that method |
+| Then | Godot gets nil at once, as it gets a GDScript coroutine's state, and the method has run up to its `await` |
+
+## `RS-095` An awaiting method resumes once its signal is emitted
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose method Godot called is awaiting a signal |
+| When | the signal is emitted |
+| Then | the method runs on from its `await` |
+
+## `RS-096` `await` answers what the signal was emitted with
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose method Godot called is awaiting a signal |
+| When | the signal is emitted with values |
+| Then | `await` answers nil for none, the value for one, and the values in an array for more, as GDScript's does |
+
+## `RS-097` A block Godot calls back may await
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose class connected a block calling `await` to a signal |
+| When | the signal reaches the block, and then the one it awaits is emitted |
+| Then | the block runs on from its `await`, as a GDScript lambda may await |
+
+## `RS-098` `await` outside what Godot calls raises
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose class's method calls `await` |
+| When | Ruby calls that method itself, outside anything Godot called |
+| Then | `await` raises `FiberError` |

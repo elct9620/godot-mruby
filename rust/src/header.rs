@@ -1,11 +1,11 @@
 //! Reads a Ruby file's source with Prism and never runs it, so what the file
 //! says is known on any thread before its file has run.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use godot::builtin::{GString, StringName, VarArray, VarDictionary, Variant, VariantType};
 use godot::meta::ToGodot;
-use ruby_prism::{CallNode, Integer, Node, NodeList};
+use ruby_prism::{CallNode, Integer, Node, NodeList, Visit};
 
 use crate::hint::Hint;
 use crate::realm::{self, Roots};
@@ -23,6 +23,9 @@ pub struct Header {
     name_offset: usize,
     superclass: Option<Superclass>,
     methods: BTreeMap<String, usize>,
+    // The methods whose bodies call `await`, which Godot runs where they may
+    // wait.
+    awaiting: BTreeSet<String>,
     signal_offsets: BTreeMap<String, usize>,
     export_offsets: BTreeMap<String, usize>,
     signals: Vec<Signal>,
@@ -109,6 +112,12 @@ impl Header {
 
     pub fn has_method(&self, name: &str) -> bool {
         self.methods.contains_key(name)
+    }
+
+    /// Whether the body of the method `name` calls `await`, so it may wait
+    /// for a signal as a GDScript coroutine does.
+    pub fn is_awaiting(&self, name: &str) -> bool {
+        self.awaiting.contains(name)
     }
 
     /// The names of the methods the file's class defines, as its `def`
@@ -214,9 +223,11 @@ impl Header {
             if let Some(def) = node.as_def_node() {
                 if def.receiver().is_none() {
                     let offset = def.location().start_offset();
-                    self.methods
-                        .entry(decode_text(def.name().as_slice()))
-                        .or_insert(offset);
+                    let name = decode_text(def.name().as_slice());
+                    if def.body().is_some_and(|body| calls_await(&body)) {
+                        self.awaiting.insert(name.clone());
+                    }
+                    self.methods.entry(name).or_insert(offset);
                 }
             } else if let Some(call) = node.as_call_node() {
                 self.read_call(&call);
@@ -406,6 +417,23 @@ fn with_keyword_hint(property: &Property, keywords: &Node) -> Option<Property> {
     hint.write_hint_string(&written)?;
     hint.declare(property.name.clone(), &property.default_value(), &written)
         .ok()
+}
+
+// Whether `body` calls `await` without a receiver anywhere in it, a block's
+// included, as a method that may wait does.
+fn calls_await(body: &Node) -> bool {
+    struct Finder(bool);
+    impl<'pr> Visit<'pr> for Finder {
+        fn visit_call_node(&mut self, node: &CallNode<'pr>) {
+            if node.receiver().is_none() && node.name().as_slice() == b"await" {
+                self.0 = true;
+            }
+            ruby_prism::visit_call_node(self, node);
+        }
+    }
+    let mut finder = Finder(false);
+    finder.visit(body);
+    finder.0
 }
 
 // The rpc an `rpc` call declares with a method's name and literal keywords

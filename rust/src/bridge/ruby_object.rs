@@ -23,7 +23,7 @@ impl Drop for Hold {
     }
 }
 
-/// A Callable calling `call` on the Proc or Method `key` holds.
+/// A Callable calling the Proc or Method `key` holds where it may await.
 pub fn make_callable(key: Key, name: String) -> Callable {
     let hold = Hold(key);
     Callable::from_sync_fn(name, move |args: &[&Variant]| call(&hold, args))
@@ -31,7 +31,7 @@ pub fn make_callable(key: Key, name: String) -> Callable {
 
 fn call(hold: &Hold, args: &[&Variant]) -> Variant {
     let args: Vec<_> = args.iter().map(|arg| RubyCrossing(arg)).collect();
-    realm::enter(|realm| realm.send::<_, EngineCrossing>(hold.0, "call", args))
+    realm::enter(|realm| realm.send::<_, EngineCrossing>(hold.0, "__call_awaiting__", args))
         .map(|EngineCrossing(answer)| answer)
         .unwrap_or_else(|failed| {
             failed.write(&GodotLog);

@@ -558,10 +558,61 @@ module Godot
       inspected.pop if inspected.last.equal?(self)
     end
 
+    # Waits until `signal` is emitted, in a method Godot runs that calls
+    # `await`, and answers what it was emitted with: nil, its one value, or
+    # its values in an array, as GDScript's `await` does. `signal` is a
+    # Godot::Signal, or an object followed by the name of its signal.
+    def await(signal, name = nil)
+      signal = Godot::Signal.new(signal, name) unless name.nil?
+      Coroutine.wait_for(signal)
+    end
+
     private
 
     def __refuse_copy__(verb)
       raise TypeError, "can't #{verb} #{self.class}" unless self.class.instance_variable_get(:@engine_class) == true
+    end
+
+    # Runs the method `method`, which calls `await`, as Godot calls it.
+    def __call_awaiting__(method, *args)
+      Coroutine.run { __send__(method, *args) }
+    end
+  end
+
+  # Where a method Godot runs may wait: each runs in a fiber of its own,
+  # which yields as it awaits a signal and is resumed when the signal is
+  # emitted, so Godot goes on while it waits, as with a GDScript coroutine.
+  module Coroutine
+    # The fibers running now that may wait.
+    @running = {}
+
+    # Runs `body` in a fiber of its own, answering what it returns, or nil
+    # once it waits.
+    def self.run(&body)
+      resume(Fiber.new(&body))
+    end
+
+    # Resumes `fiber` with `values`, answering what it returns once it has,
+    # or nil when it waits again.
+    def self.resume(fiber, *values)
+      @running[fiber] = true
+      answer = fiber.resume(*values)
+      fiber.alive? ? nil : answer
+    ensure
+      @running.delete(fiber)
+    end
+
+    # Yields the fiber running now until `signal` is emitted, answering what
+    # it was emitted with. Only a fiber `run` made yields: any other Ruby is
+    # Godot's to wait for.
+    def self.wait_for(signal)
+      fiber = Fiber.current
+      unless @running.key?(fiber)
+        raise FiberError, "await waits only in a method Godot calls, or a block or method Godot calls back"
+      end
+
+      signal.connect(proc { |*args| resume(fiber, args.size > 1 ? args : args.first) }, Godot::Object::CONNECT_ONE_SHOT)
+      Fiber.yield
     end
   end
 
@@ -819,5 +870,17 @@ module Godot
   # A value of any type, as a class names a type; a signal's parameter of it
   # is untyped, as one GDScript writes without a type.
   module Variant
+  end
+end
+
+# A block or method Godot calls back runs where it may await, as a GDScript
+# lambda may.
+[::Proc, ::Method].each do |callable|
+  callable.class_eval do
+    private
+
+    def __call_awaiting__(*args)
+      Godot::Coroutine.run { call(*args) }
+    end
   end
 end

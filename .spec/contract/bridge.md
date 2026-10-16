@@ -68,6 +68,19 @@ module Godot
 end
 ```
 
+## `Godot::Object#await`
+
+Waits until a signal is emitted, in a method Godot calls whose body calls `await` or in a block or method Godot calls back, and answers what the signal was emitted with: nil, its one value, or its values in an array, as GDScript's `await` does. Godot gets nil from the call at once, and the method runs on once the signal is emitted. The signal is a `Godot::Signal`, or an object followed by the name of its signal; anywhere else, `await` raises `FiberError`.
+
+```ruby
+module Godot
+  class Object
+    def await(signal, name = nil)
+    end
+  end
+end
+```
+
 ## `Godot::Object.export`
 
 A property of a class extending an engine class, taking its type from the value it is declared with. A node of the class has it as it has the engine's own properties, so the editor and the engine read and write it by that name, and the class reads and writes it as the instance variable of that name. A keyword tells the editor how to show it, each one named as the `@export_*` annotation it answers to and taking what that annotation takes: `range:` with a Range, an optional `step:` and `extra_hints:`; `enum:`, `flags:`, `exp_easing:` and `node_path:` with a list; `file:`, `file_path:` and `global_file:` with their filters; `placeholder:` and `tool_button:` with their text, a tool button declared with the name of the method it calls; `custom:` with a hint, what it is read with and its usage; and the others with `true`. `type:` names the class of an object Godot fills in, or in an array or a hash the classes a typed container holds.

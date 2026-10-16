@@ -974,10 +974,11 @@ unsafe extern "C" fn call(
         let found = unsafe {
             borrow_instance(data, |instance| {
                 let method = instance.method_name_by_string_name(method)?;
-                Some((method, instance.caller()))
+                let is_awaiting = instance.lineage().is_awaiting(&method);
+                Some((method, is_awaiting, instance.caller()))
             })
         };
-        let Some((method, caller)) = found else {
+        let Some((method, is_awaiting, caller)) = found else {
             // SAFETY: Godot hands an error to fill.
             unsafe { (*error).error = sys::GDEXTENSION_CALL_ERROR_INVALID_METHOD };
             return true;
@@ -989,7 +990,17 @@ unsafe extern "C" fn call(
             // as, alive for the call.
             unsafe { std::slice::from_raw_parts(args.cast::<&Variant>(), count as usize) }
         };
-        let answered = caller.send(&method, args);
+        // A method that may wait runs in a fiber of its own, which the signal
+        // it waits for resumes; Godot gets nil while it waits, as it gets a
+        // GDScript coroutine's state.
+        let answered = if is_awaiting {
+            let name = StringName::from(&*method).to_variant();
+            let awaited: SmallVec<[&Variant; 4]> =
+                std::iter::once(&name).chain(args.iter().copied()).collect();
+            caller.send("__call_awaiting__", &awaited)
+        } else {
+            caller.send(&method, args)
+        };
         // SAFETY: Godot hands an initialized variant and an error to fill, both
         // its own, so they outlive the instance.
         unsafe {
