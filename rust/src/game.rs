@@ -10,7 +10,7 @@ use godot::obj::Singleton;
 
 use crate::ancestry;
 use crate::header::Header;
-use crate::realm::{self, ClassIndex, Declarations, Files, Parent, Roots};
+use crate::realm::{self, ClassIndex, Declarations, Definition, Files, Parent, Roots};
 use crate::settings;
 
 const ROOT: &str = "res://";
@@ -28,6 +28,10 @@ impl Files for GameFiles {
 
     fn file_by_name(&self, scope: &[String], names: &[String]) -> Option<String> {
         LISTING.file_by_name(scope, names)
+    }
+
+    fn collect_definitions_around(&self, path: &str) -> Vec<Definition> {
+        LISTING.collect_definitions_around(path)
     }
 
     // A test directory is a root directory whether the project lists it as
@@ -249,6 +253,10 @@ impl<F: Files> Files for Listing<F> {
 
     fn file_by_name(&self, scope: &[String], names: &[String]) -> Option<String> {
         self.index().file_by_name(scope, names)
+    }
+
+    fn collect_definitions_around(&self, path: &str) -> Vec<Definition> {
+        self.index().collect_definitions_around(path)
     }
 }
 

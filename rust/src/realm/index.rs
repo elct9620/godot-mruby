@@ -92,6 +92,7 @@ pub enum Definition {
     Namespace(Namespace),
 }
 
+/// A directory a constant path names without a file of its own.
 #[derive(Clone)]
 pub struct Namespace {
     /// The directory, as `res://ui/`.
@@ -235,6 +236,17 @@ impl ClassIndex {
             .chain(namespaces.take_while(below))
             .filter(|named| named.len() == key.len() + 1)
             .cloned()
+            .collect()
+    }
+
+    /// What the index names directly inside each namespace the file at
+    /// `path` is named in, from the top level inward: the constants a name
+    /// written in that file may reach without a namespace.
+    pub fn collect_definitions_around(&self, path: &str) -> Vec<Definition> {
+        let key = self.key_by_path(path);
+        (0..key.len())
+            .flat_map(|depth| self.members_by_key(&key[..depth]))
+            .filter_map(|named| self.definition_by_key(&named))
             .collect()
     }
 

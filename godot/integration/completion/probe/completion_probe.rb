@@ -8,7 +8,7 @@ module Integration
         tool
 
         PATH = "res://integration/completion/probe/signpost.rb".freeze
-        BLANK_LINE = 5
+        BLANK_LINE = 6
         OPEN_AT = 30
         LOOK_AT = 40
 
@@ -29,6 +29,10 @@ module Integration
           code = Godot::EditorInterface.get_script_editor.get_current_editor.get_base_editor
           puts "engine class offered: #{collect_offers(code, '        Godot::Nod').include?('Node2D')}"
           puts "value type offered: #{collect_offers(code, '        Godot::Vec').include?('Vector2')}"
+          puts "own method offered: #{collect_offers(code, '        self.poi').include?('point')}"
+          puts "export offered: #{collect_offers(code, '        self.wid').include?('width')}"
+          puts "engine method offered: #{collect_offers(code, '        self.add_ch').include?('add_child(…)')}"
+          puts "project constant offered: #{collect_offers(code, '        Batt').include?('Battle')}"
         end
 
         # The names the editor offers once `text` is typed on the blank line.

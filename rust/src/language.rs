@@ -10,6 +10,7 @@ use godot::classes::{
 use godot::global::Error;
 use godot::meta::conv::RawPtr;
 use godot::prelude::*;
+use godot::register::info::PropertyUsageFlags;
 
 use crate::announcement::{self, Omission, SharedNames};
 use crate::compiler::CompileError;
@@ -19,7 +20,7 @@ use crate::realm::{Files, Location};
 use crate::script::RubyScript;
 use crate::template;
 use crate::validation::{self, Warning};
-use crate::{bridge, log, settings, warn};
+use crate::{bridge, log, settings, snapshot, warn};
 
 /// The Ruby script language, registered with the engine for `.rb` files.
 ///
@@ -236,13 +237,21 @@ impl IScriptLanguageExtension for RubyLanguage {
     fn complete_code(
         &self,
         code: GString,
-        _path: GString,
+        path: GString,
         _owner: Option<Gd<Object>>,
     ) -> AnyDictionary {
+        let code = code.to_string();
+        let script = completion::read_script_names(
+            &GameFiles,
+            &snapshot::latest(),
+            &path.to_string(),
+            &code,
+        );
         let engine = completion::EngineNames {
             classes: &collect_class_names,
+            members: &collect_engine_members,
         };
-        let options: VarArray = completion::collect_candidates(&code.to_string(), &engine)
+        let options: VarArray = completion::collect_candidates(&code, &script, &engine)
             .iter()
             .map(|candidate| describe_option(candidate).to_variant())
             .collect();
@@ -466,16 +475,73 @@ fn describe_error(error: &CompileError, path: &GString) -> VarDictionary {
 fn describe_option(candidate: &Candidate) -> VarDictionary {
     let kind = match candidate.kind {
         completion::Kind::Class => CodeCompletionKind::CLASS,
+        completion::Kind::Method { .. } => CodeCompletionKind::FUNCTION,
+        completion::Kind::Property => CodeCompletionKind::MEMBER,
+        completion::Kind::Constant => CodeCompletionKind::CONSTANT,
+    };
+    let location = match candidate.origin {
+        completion::Origin::Script => CodeCompletionLocation::LOCAL,
+        completion::Origin::Project => CodeCompletionLocation::OTHER_USER_CODE,
+        completion::Origin::Engine => CodeCompletionLocation::OTHER,
     };
     vdict! {
         "kind" => kind,
-        "display" => candidate.name.as_str(),
-        "insert_text" => candidate.name.as_str(),
+        "display" => candidate.display(),
+        "insert_text" => candidate.insert_text(),
         "font_color" => Color::WHITE,
         "icon" => &Variant::nil(),
         "default_value" => &Variant::nil(),
-        "location" => CodeCompletionLocation::OTHER,
+        "location" => location,
     }
+}
+
+// The methods, properties and integer constants of the engine class
+// `class`, its ancestors' included, as Ruby reaches them on its objects; a
+// property list's groups and indexed properties name nothing Ruby calls.
+fn collect_engine_members(class: &str) -> Vec<Candidate> {
+    let class_db = ClassDb::singleton();
+    let member = |kind, name: String| Candidate {
+        kind,
+        origin: completion::Origin::Engine,
+        name,
+    };
+    let methods = class_db.class_get_method_list(class);
+    let methods = methods.iter_shared().map(|method| {
+        let has_arguments = method
+            .get("args")
+            .and_then(|arguments| arguments.try_to::<AnyArray>().ok())
+            .is_some_and(|arguments| !arguments.is_empty());
+        member(
+            completion::Kind::Method {
+                has_arguments: Some(has_arguments),
+            },
+            method
+                .get("name")
+                .map(|name| name.to_string())
+                .unwrap_or_default(),
+        )
+    });
+    let group_usage =
+        PropertyUsageFlags::CATEGORY | PropertyUsageFlags::GROUP | PropertyUsageFlags::SUBGROUP;
+    let properties = class_db.class_get_property_list(class);
+    let properties = properties
+        .iter_shared()
+        .filter(|property| {
+            let usage = property
+                .get("usage")
+                .and_then(|usage| usage.try_to::<i64>().ok())
+                .unwrap_or_default();
+            usage.cast_unsigned() & group_usage.ord() == 0
+        })
+        .filter_map(|property| property.get("name").map(|name| name.to_string()))
+        .filter(|name| !name.contains('/'))
+        .map(|name| member(completion::Kind::Property, name));
+    let constants = class_db.class_get_integer_constant_list(class);
+    let constants = constants
+        .as_slice()
+        .iter()
+        .map(|name| member(completion::Kind::Constant, name.to_string()));
+    methods.chain(properties).chain(constants).collect()
 }
 
 // The names of the classes under `Godot`: every class the engine registers

@@ -25,7 +25,7 @@ mod registry;
 
 use executor::Declaration;
 use extensions::ExtensionData;
-pub use index::{ClassIndex, Roots, camelize, normalize};
+pub use index::{ClassIndex, Definition, Roots, camelize, normalize};
 use reentrant_lock::{ReentrantLock, ReentrantLockGuard, Watch};
 pub use registry::Key;
 use registry::Registry;
@@ -85,6 +85,11 @@ pub trait Files: Send {
     /// `scope`, names among these files.
     fn file_by_name(&self, scope: &[String], names: &[String]) -> Option<String> {
         ClassIndex::with_files(self.paths(), self.roots()).file_by_name(scope, names)
+    }
+    /// What these files' class index names directly inside each namespace
+    /// the file at `path` is named in, from the top level inward.
+    fn collect_definitions_around(&self, path: &str) -> Vec<Definition> {
+        ClassIndex::with_files(self.paths(), self.roots()).collect_definitions_around(path)
     }
 }
 

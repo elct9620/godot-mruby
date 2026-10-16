@@ -204,6 +204,44 @@ impl ClassIndex {
 }
 ```
 
+## `ClassIndex::collect_definitions_around`
+
+What a name written in a file may reach without a namespace: what the index names directly inside each namespace the file is named in, the top level included.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl ClassIndex {
+    pub fn collect_definitions_around(&self, path: &str) -> Vec<Definition> {}
+}
+```
+
+## `Definition`
+
+What a constant path names in the index: the file defining it, or a directory's module, so what lists constants can name each as its definition spells it.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub enum Definition {}
+```
+
+## `Namespace`
+
+A directory a constant path names without a file of its own, with the module's name Zeitwerk gives it.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub struct Namespace;
+```
+
 ## `is_inside`
 
 Whether this thread is inside the game's realm, which something outside asks before reaching for what only the realm can answer, since entering it from another thread waits for the one inside.
@@ -637,6 +675,20 @@ The file a constant path written inside namespaces names among these files, as `
 ```rust
 pub trait Files {
     fn file_by_name(&self, scope: &[String], names: &[String]) -> Option<String> {}
+}
+```
+
+## `Files::collect_definitions_around`
+
+What these files' class index names around a file, as `ClassIndex::collect_definitions_around` finds it; files kept between questions keep their index too.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub trait Files {
+    fn collect_definitions_around(&self, path: &str) -> Vec<Definition> {}
 }
 ```
 
