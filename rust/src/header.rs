@@ -23,6 +23,8 @@ pub struct Header {
     name_offset: usize,
     superclass: Option<Superclass>,
     methods: BTreeMap<String, usize>,
+    signal_offsets: BTreeMap<String, usize>,
+    export_offsets: BTreeMap<String, usize>,
     signals: Vec<Signal>,
     signal_names: Vec<String>,
     exports: Vec<Export>,
@@ -122,6 +124,22 @@ impl Header {
             .map(|(name, offset)| (name.as_str(), *offset))
     }
 
+    /// Each signal the class declares, with the byte offset of its `signal`
+    /// call in the source.
+    pub fn signal_offsets(&self) -> impl Iterator<Item = (&str, usize)> {
+        self.signal_offsets
+            .iter()
+            .map(|(name, offset)| (name.as_str(), *offset))
+    }
+
+    /// Each property the class exports, with the byte offset of its `export`
+    /// call in the source.
+    pub fn export_offsets(&self) -> impl Iterator<Item = (&str, usize)> {
+        self.export_offsets
+            .iter()
+            .map(|(name, offset)| (name.as_str(), *offset))
+    }
+
     /// The signals the class declares, in the order it declares them, as the
     /// `signal` calls of its body write them; a call writing a name it does
     /// not spell out declares none the header can read.
@@ -203,6 +221,7 @@ impl Header {
         if call.receiver().is_some() || call.block().is_some() {
             return;
         }
+        let offset = call.location().start_offset();
         let arguments: Vec<Node> = call
             .arguments()
             .map(|arguments| arguments.arguments().iter().collect())
@@ -216,12 +235,18 @@ impl Header {
                 }
             }
             (b"signal", [name, parameters @ ..]) => {
-                self.signal_names.extend(read_name(name));
+                if let Some(name) = read_name(name) {
+                    self.signal_offsets.entry(name.clone()).or_insert(offset);
+                    self.signal_names.push(name);
+                }
                 if let Some(signal) = read_signal(name, parameters) {
                     self.signals.push(signal);
                 }
             }
             (b"export", [name, default, keywords @ ..]) => {
+                if let Some(name) = read_name(name) {
+                    self.export_offsets.entry(name).or_insert(offset);
+                }
                 if let Some(export) = read_export(name, default, keywords) {
                     self.exports.push(export);
                 }

@@ -199,7 +199,7 @@ impl IScriptLanguageExtension for RubyLanguage {
     }
 
     fn supports_documentation(&self) -> bool {
-        false
+        true
     }
 
     fn can_inherit_from_file(&self) -> bool {

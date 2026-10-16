@@ -23,7 +23,7 @@ use crate::log::GodotLog;
 use crate::realm::{self, Files};
 use crate::settings;
 use crate::snapshot::{self, Heading, Member, Parameter, Property, Signal};
-use crate::{announcement, error};
+use crate::{announcement, documentation, error};
 
 /// The script a `.rb` file loads as, the way a `.gd` file loads as a `GDScript`.
 ///
@@ -322,6 +322,23 @@ impl RubyScript {
         }
     }
 
+    // The name the script's page goes by in the editor's help and the page
+    // it inherits from: the names the editor lists the class and its base
+    // by, or for a script it does not announce, its path quoted, as a
+    // GDScript without `class_name` is named, and its engine class.
+    fn read_doc_names(&self) -> (String, String) {
+        let path = self.base().get_path().to_string();
+        match announcement::announcement_by_path(&path) {
+            Ok(announcement) => (announcement.name, announcement.base),
+            Err(_) => (
+                format!("\"{}\"", path.trim_start_matches("res://")),
+                self.ancestry()
+                    .map(|ancestry| ancestry.engine_class().to_owned())
+                    .unwrap_or_default(),
+            ),
+        }
+    }
+
     fn lineage(&self) -> Lineage<'_> {
         let path = self.base().get_path().to_string();
         Lineage::new(path, &self.header, self.ancestry().ok())
@@ -556,11 +573,32 @@ impl IScriptExtension for RubyScript {
     }
 
     fn get_doc_class_name(&self) -> StringName {
-        StringName::default()
+        StringName::from(&self.read_doc_names().0)
     }
 
+    // The class's page in the editor's help, from what the source's comments
+    // say of the class and its members, as a GDScript's `##` comments give
+    // its page.
     fn get_documentation(&self) -> Array<AnyDictionary> {
-        Array::new()
+        let path = self.base().get_path().to_string();
+        let documentation =
+            documentation::read_documentation(&self.source.to_string(), &self.header);
+        let (name, inherits) = self.read_doc_names();
+        let describe = |entries: &[documentation::Entry]| -> Array<AnyDictionary> {
+            entries.iter().map(describe_entry).collect()
+        };
+        let class = vdict! {
+            "name" => name,
+            "inherits" => inherits,
+            "brief_description" => documentation.brief,
+            "description" => documentation.description,
+            "methods" => &describe(&documentation.methods),
+            "properties" => &describe(&documentation.properties),
+            "signals" => &describe(&documentation.signals),
+            "is_script_doc" => true,
+            "script_path" => path,
+        };
+        std::iter::once(class.upcast_any_dictionary()).collect()
     }
 
     // The icon the editor shows for a script the project's class list does
@@ -679,6 +717,15 @@ impl IScriptExtension for RubyScript {
     fn get_rpc_config(&self) -> Variant {
         Variant::nil()
     }
+}
+
+// A member of a class's page in the editor's help.
+fn describe_entry(entry: &documentation::Entry) -> AnyDictionary {
+    vdict! {
+        "name" => entry.name.as_str(),
+        "description" => entry.description.as_str(),
+    }
+    .upcast_any_dictionary()
 }
 
 // A declared signal as Godot reads it, which takes a method's shape: the

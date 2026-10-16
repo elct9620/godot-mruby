@@ -6,6 +6,7 @@ mod announcement;
 mod bridge;
 mod compiler;
 mod completion;
+mod documentation;
 mod export;
 mod game;
 mod header;
