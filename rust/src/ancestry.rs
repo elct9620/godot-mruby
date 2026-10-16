@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use crate::header::Header;
 use crate::realm::Files;
-use crate::snapshot::{Member, Property, Signal, Snapshot, Source};
+use crate::snapshot::{Member, Property, Rpc, Signal, Snapshot, Source};
 
 /// The files a class inherits from, nearest first, and the engine class the
 /// farthest of them extends.
@@ -118,6 +118,11 @@ impl<'a> Lineage<'a> {
         snapshot.collect_signals(self.sources())
     }
 
+    /// The rpcs the class declared, its ancestors' included, nearest first.
+    pub fn collect_rpcs(&self, snapshot: &Snapshot) -> Vec<Rpc> {
+        snapshot.collect_rpcs(self.sources())
+    }
+
     /// The properties the class exported, its ancestors' included, nearest
     /// first: what each file declared as it ran, or what its header writes
     /// while it has not run.
@@ -147,6 +152,7 @@ impl<'a> Lineage<'a> {
                 path,
                 Source {
                     signals: header.signals(),
+                    rpcs: header.rpcs(),
                     signal_names: header.signal_names(),
                     exports: header.exports(),
                     digest: header.digest(),

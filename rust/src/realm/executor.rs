@@ -12,7 +12,7 @@ use super::constants::{self, Scope};
 use super::{
     bookkeeping, compile, file_by_constant, join_inner_path, key_by_path, methods, normalize,
 };
-use crate::snapshot::{self, Heading, Member, Property, Signal};
+use crate::snapshot::{self, Heading, Member, Property, Rpc, Signal};
 use beni::{Class as _, Error, FromValue, Module, Mrb, RClass};
 
 /// How far a file has run in a realm.
@@ -31,6 +31,7 @@ pub(super) enum Declaration {
     Signal(Signal),
     Property(Property),
     Heading(Heading),
+    Rpc(Rpc),
 }
 
 impl Declaration {
@@ -39,6 +40,7 @@ impl Declaration {
             Self::Signal(signal) => &signal.name,
             Self::Property(property) => &property.name,
             Self::Heading(heading) => heading.name(),
+            Self::Rpc(rpc) => &rpc.method,
         }
     }
 
@@ -55,6 +57,7 @@ impl Declaration {
             }
             Self::Property(property) => format!("a property of {}", property.default_text()),
             Self::Heading(heading) => format!("a heading named {}", heading.name()),
+            Self::Rpc(rpc) => format!("an rpc of {}", rpc.method),
         }
     }
 }
@@ -421,25 +424,11 @@ fn execute<T>(
 // its source spells out, and each class's inside it.
 fn publish_frame(mrb: &Mrb, mut frame: Frame) {
     let inner_paths = inner_script_paths(mrb, &frame);
-    let (signals, members) = split(take_declarations(&mut frame.declarations, &frame.path));
-    methods::publish_class(
-        mrb,
-        &frame.path,
-        signals,
-        members,
-        frame.source_names,
-        frame.digest,
-    );
+    let declared = split(take_declarations(&mut frame.declarations, &frame.path));
+    methods::publish_class(mrb, &frame.path, declared, frame.source_names, frame.digest);
     for path in inner_paths {
-        let (signals, members) = split(take_declarations(&mut frame.declarations, &path));
-        methods::publish_class(
-            mrb,
-            &path,
-            signals,
-            members,
-            SourceNames::default(),
-            frame.digest,
-        );
+        let declared = split(take_declarations(&mut frame.declarations, &path));
+        methods::publish_class(mrb, &path, declared, SourceNames::default(), frame.digest);
     }
 }
 
@@ -455,19 +444,27 @@ fn take_declarations(
     taken.into_iter().map(|(_, declared)| declared).collect()
 }
 
-// What a frame declared, as the two kinds a class publishes: its signals,
-// and what the editor shows, which keeps the order it was declared in.
-fn split(declared: Vec<Declaration>) -> (Vec<Signal>, Vec<Member>) {
-    let mut signals = Vec::new();
-    let mut members = Vec::new();
+// What a frame declared, as the kinds a class publishes: its signals, what
+// the editor shows, which keeps the order it was declared in, and its rpcs.
+fn split(declared: Vec<Declaration>) -> Declared {
+    let mut split = Declared::default();
     for one in declared {
         match one {
-            Declaration::Signal(signal) => signals.push(signal),
-            Declaration::Property(property) => members.push(Member::Property(property)),
-            Declaration::Heading(heading) => members.push(Member::Heading(heading)),
+            Declaration::Signal(signal) => split.signals.push(signal),
+            Declaration::Property(property) => split.members.push(Member::Property(property)),
+            Declaration::Heading(heading) => split.members.push(Member::Heading(heading)),
+            Declaration::Rpc(rpc) => split.rpcs.push(rpc),
         }
     }
-    (signals, members)
+    split
+}
+
+/// What a class's body declared, by kind.
+#[derive(Default)]
+pub(super) struct Declared {
+    pub signals: Vec<Signal>,
+    pub members: Vec<Member>,
+    pub rpcs: Vec<Rpc>,
 }
 
 // The source the realm's files give for the file at `path`.

@@ -12,7 +12,7 @@ use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 
 use crate::compiler;
-use crate::snapshot::{self, Heading, Property, Signal, Snapshot};
+use crate::snapshot::{self, Heading, Property, Rpc, Signal, Snapshot};
 
 mod constants;
 mod executor;
@@ -405,6 +405,13 @@ pub fn declare_signal(mrb: &Mrb, class: RClass, signal: Signal) -> Result<(), Er
 /// class and is not taken.
 pub fn declare_export(mrb: &Mrb, class: RClass, property: Property) -> Result<(), Error> {
     executor::declare(mrb, class, Declaration::Property(property))
+}
+
+/// Takes `rpc` as declared by a class of the file running now in the realm
+/// `mrb` belongs to, refusing a name the class declared already as another
+/// member; a declaration made while no file runs is not taken.
+pub fn declare_rpc(mrb: &Mrb, class: RClass, rpc: Rpc) -> Result<(), Error> {
+    executor::declare(mrb, class, Declaration::Rpc(rpc))
 }
 
 /// Takes `heading` as written by `class` in the file running now in the

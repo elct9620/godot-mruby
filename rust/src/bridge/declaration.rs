@@ -18,13 +18,14 @@ use super::value::{self, RubyCrossing};
 use super::value_type::kind_by_name;
 use crate::hint::{Hint, name_type};
 use crate::realm;
-use crate::snapshot::{Heading, Parameter, Property, Signal};
+use crate::snapshot::{Heading, Parameter, Property, Rpc, Signal};
 
 /// Defines the methods Godot::Object's class bodies declare through.
 pub(super) fn define(mrb: &Mrb, object: RClass) -> Result<(), Error> {
     object.define_singleton_method(mrb, c"__declare_signal__", method!(declare_signal, 2))?;
     object.define_singleton_method(mrb, c"__declare_export__", method!(declare_export, 4))?;
     object.define_singleton_method(mrb, c"__declare_heading__", method!(declare_heading, 3))?;
+    object.define_singleton_method(mrb, c"__declare_rpc__", method!(declare_rpc, 3))?;
     Ok(())
 }
 
@@ -162,6 +163,30 @@ fn name_node_types(mrb: &Mrb, written: &Variant) -> Variant {
         })
         .collect::<VarArray>()
         .to_variant()
+}
+
+// Godot::Object.__declare_rpc__(method, words, channel): takes the rpc the
+// class declares for its method as its body runs, its mode, sync and
+// transfer mode as `@rpc` words them, for the realm to publish once the file
+// has run.
+fn declare_rpc(
+    mrb: &Mrb,
+    class: RClass,
+    method: String,
+    words: RArray,
+    channel: i64,
+) -> Result<Value, Error> {
+    let words: Vec<String> = words.entries(mrb).filter_map(String::from_value).collect();
+    let [mode, sync, transfer_mode] = words.as_slice() else {
+        return Err(make_argument_error(
+            mrb,
+            "an rpc takes a mode, a sync and a transfer mode",
+        ));
+    };
+    let rpc = Rpc::read(method, mode, sync, transfer_mode, channel)
+        .map_err(|reason| make_argument_error(mrb, &reason))?;
+    realm::declare_rpc(mrb, class, rpc)?;
+    Ok(qnil().as_value())
 }
 
 // Godot::Object.__declare_heading__(name, prefix, kind): takes the heading

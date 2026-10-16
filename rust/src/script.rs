@@ -749,8 +749,14 @@ impl IScriptExtension for RubyScript {
         Engine::singleton().is_editor_hint() && !self.header.is_parsed()
     }
 
+    // The methods the class lets peers call, its ancestors' included, as
+    // GDScript's `@rpc` config has them, by method name.
     fn get_rpc_config(&self) -> Variant {
-        Variant::nil()
+        let mut config = VarDictionary::new();
+        for rpc in self.lineage().collect_rpcs(&snapshot::latest()) {
+            config.set(&StringName::from(&rpc.method), &rpc.describe());
+        }
+        config.to_variant()
     }
 }
 

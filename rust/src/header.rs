@@ -9,7 +9,7 @@ use ruby_prism::{CallNode, Integer, Node, NodeList};
 
 use crate::hint::Hint;
 use crate::realm::{self, Roots};
-use crate::snapshot::{self, Export, Heading, Member, Parameter, Property, Signal};
+use crate::snapshot::{self, Export, Heading, Member, Parameter, Property, Rpc, Signal};
 
 /// A file's header: the constants its `module` and `class` statements write,
 /// the name the class its path names is written with, the superclass written
@@ -28,6 +28,7 @@ pub struct Header {
     signals: Vec<Signal>,
     signal_names: Vec<String>,
     exports: Vec<Export>,
+    rpcs: Vec<Rpc>,
     digest: u64,
     is_tool: bool,
     is_abstract: bool,
@@ -143,6 +144,12 @@ impl Header {
     /// The signals the class declares, in the order it declares them, as the
     /// `signal` calls of its body write them; a call writing a name it does
     /// not spell out declares none the header can read.
+    /// The rpcs the class body declares with literals, as the file would
+    /// declare them as it runs.
+    pub fn rpcs(&self) -> &[Rpc] {
+        &self.rpcs
+    }
+
     pub fn signals(&self) -> &[Signal] {
         &self.signals
     }
@@ -241,6 +248,11 @@ impl Header {
                 }
                 if let Some(signal) = read_signal(name, parameters) {
                     self.signals.push(signal);
+                }
+            }
+            (b"rpc", [name, keywords @ ..]) => {
+                if let Some(rpc) = read_rpc(name, keywords) {
+                    self.rpcs.push(rpc);
                 }
             }
             (b"export", [name, default, keywords @ ..]) => {
@@ -394,6 +406,34 @@ fn with_keyword_hint(property: &Property, keywords: &Node) -> Option<Property> {
     hint.write_hint_string(&written)?;
     hint.declare(property.name.clone(), &property.default_value(), &written)
         .ok()
+}
+
+// The rpc an `rpc` call declares with a method's name and literal keywords
+// for what `@rpc` takes, the ones it leaves out at `@rpc`'s defaults; none
+// for words the file would refuse or keywords written as anything else.
+fn read_rpc(name: &Node, keywords: &[Node]) -> Option<Rpc> {
+    let method = read_name(name)?;
+    let (mut mode, mut sync, mut transfer_mode, mut channel) = (
+        "authority".to_owned(),
+        "call_remote".to_owned(),
+        "reliable".to_owned(),
+        0,
+    );
+    if let Some(keywords) = keywords.first() {
+        for element in keywords.as_keyword_hash_node()?.elements().iter() {
+            let pair = element.as_assoc_node()?;
+            let keyword = decode_text(pair.key().as_symbol_node()?.unescaped());
+            let value = pair.value();
+            match keyword.as_str() {
+                "mode" => mode = read_name(&value)?,
+                "sync" => sync = read_name(&value)?,
+                "transfer_mode" => transfer_mode = read_name(&value)?,
+                "transfer_channel" => channel = read_literal(&value)?.try_to::<i64>().ok()?,
+                _ => return None,
+            }
+        }
+    }
+    Rpc::read(method, &mode, &sync, &transfer_mode, channel).ok()
 }
 
 // The one hint an export's keywords name and the value it is read with, as

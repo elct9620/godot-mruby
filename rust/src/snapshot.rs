@@ -14,6 +14,80 @@ use godot::meta::ToGodot;
 use godot::obj::{Gd, Singleton};
 use godot::register::info::{PropertyHint, PropertyUsageFlags};
 
+/// A method a class lets peers call over the network, as a GDScript's
+/// `@rpc` does: who may call it, whether it runs on the caller too, how it
+/// travels and on which channel.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Rpc {
+    pub method: String,
+    mode: i64,
+    is_call_local: bool,
+    transfer_mode: i64,
+    channel: i64,
+}
+
+impl Rpc {
+    /// The rpc of `method` the words `mode`, `sync` and `transfer_mode` and
+    /// the `channel` describe, as `@rpc` takes them, or GDScript's refusal of
+    /// a word it does not take.
+    pub fn read(
+        method: String,
+        mode: &str,
+        sync: &str,
+        transfer_mode: &str,
+        channel: i64,
+    ) -> Result<Self, String> {
+        // MultiplayerAPI.RPCMode and MultiplayerPeer.TransferMode.
+        let mode = match mode {
+            "any_peer" => 1,
+            "authority" => 2,
+            _ => return Err(describe_rpc_refusal(mode)),
+        };
+        let is_call_local = match sync {
+            "call_local" => true,
+            "call_remote" => false,
+            _ => return Err(describe_rpc_refusal(sync)),
+        };
+        let transfer_mode = match transfer_mode {
+            "unreliable" => 0,
+            "unreliable_ordered" => 1,
+            "reliable" => 2,
+            _ => return Err(describe_rpc_refusal(transfer_mode)),
+        };
+        Ok(Self {
+            method,
+            mode,
+            is_call_local,
+            transfer_mode,
+            channel,
+        })
+    }
+
+    /// The rpc as Godot reads it from a script's rpc config: its mode, and
+    /// whatever it sets apart from the defaults, as GDScript's config has it.
+    pub fn describe(&self) -> VarDictionary {
+        let mut described = VarDictionary::new();
+        described.set("rpc_mode", self.mode);
+        if self.is_call_local {
+            described.set("call_local", true);
+        }
+        if self.transfer_mode != 2 {
+            described.set("transfer_mode", self.transfer_mode);
+        }
+        if self.channel != 0 {
+            described.set("channel", self.channel);
+        }
+        described
+    }
+}
+
+// GDScript's words for an `@rpc` argument it does not take.
+fn describe_rpc_refusal(word: &str) -> String {
+    format!(
+        "Invalid RPC argument \"{word}\". Must be one of: \"call_local\"/\"call_remote\" (sync), \"any_peer\"/\"authority\" (mode), \"reliable\"/\"unreliable\"/\"unreliable_ordered\" (transfer mode)."
+    )
+}
+
 /// A signal a class declared, with the parameters it was declared with.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Signal {
@@ -289,6 +363,7 @@ impl Member {
 pub struct Class {
     pub signals: Vec<Signal>,
     pub members: Vec<Member>,
+    pub rpcs: Vec<Rpc>,
     pub methods: Vec<String>,
     pub digest: u64,
     pub export_names: Vec<String>,
@@ -323,6 +398,7 @@ impl Class {
 #[derive(Clone, Copy, Debug)]
 pub struct Source<'a> {
     pub signals: &'a [Signal],
+    pub rpcs: &'a [Rpc],
     pub signal_names: &'a [String],
     pub exports: &'a [Export],
     pub digest: u64,
@@ -390,6 +466,28 @@ impl Snapshot {
         self.members_by_path(path)
             .iter()
             .filter_map(Member::property)
+    }
+
+    /// The rpcs the classes of the files at `files` declared, the first
+    /// file's first and one to a method: what each file declared as it ran
+    /// from the source Godot holds, or what that source writes.
+    pub fn collect_rpcs<'a>(
+        &self,
+        files: impl IntoIterator<Item = (&'a str, Source<'a>)>,
+    ) -> Vec<Rpc> {
+        let mut rpcs: Vec<Rpc> = Vec::new();
+        for (path, source) in files {
+            let declared = match self.classes.get(path) {
+                Some(class) if class.digest == source.digest => &class.rpcs[..],
+                _ => source.rpcs,
+            };
+            for rpc in declared {
+                if !rpcs.iter().any(|kept| kept.method == rpc.method) {
+                    rpcs.push(rpc.clone());
+                }
+            }
+        }
+        rpcs
     }
 
     /// The signals the classes of the files at `files` declared, the first
@@ -641,6 +739,7 @@ mod tests {
         let names = ["rung".to_owned()];
         let source = Source {
             signals: &written,
+            rpcs: &[],
             signal_names: &names,
             exports: &[],
             digest: 0,

@@ -11,9 +11,9 @@ use beni::{
     value::qnil,
 };
 
-use super::executor::SourceNames;
+use super::executor::{Declared, SourceNames};
 use super::{bookkeeping, compile, constants, executor, key_by_path};
-use crate::snapshot::{self, Class, Member, Signal};
+use crate::snapshot::{self, Class};
 
 pub(super) fn define(mrb: &Mrb) -> Result<(), Error> {
     let module = mrb.class_get(c"Module")?;
@@ -70,8 +70,7 @@ pub(super) fn methods_by_path(mrb: &Mrb, path: &str) -> Vec<String> {
 pub(super) fn publish_class(
     mrb: &Mrb,
     path: &str,
-    signals: Vec<Signal>,
-    members: Vec<Member>,
+    declared: Declared,
     source_names: SourceNames,
     digest: u64,
 ) {
@@ -81,8 +80,9 @@ pub(super) fn publish_class(
     Arc::make_mut(&mut draft).record_class(
         path,
         Class {
-            signals,
-            members,
+            signals: declared.signals,
+            members: declared.members,
+            rpcs: declared.rpcs,
             methods,
             digest,
             export_names: source_names.exports,

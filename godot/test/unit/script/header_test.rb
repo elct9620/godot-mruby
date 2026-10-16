@@ -105,6 +105,14 @@ class HeaderTest < Minitest::Test
     refute ran?(:Fader)
   end
 
+  # @behavior RS-093
+  def test_a_node_script_lists_its_rpcs_before_its_file_runs
+    config = load_script(:fader).get_rpc_config
+
+    assert_operator config[:restart], :==, { "rpc_mode" => 1 }
+    refute ran?(:Fader)
+  end
+
   private
 
   def load_script(name)

@@ -978,3 +978,27 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | Given | a node whose class defines `to_s` |
 | When | Godot turns the node into a string |
 | Then | it gets what `to_s` answers, as a GDScript's `_to_string` answers |
+
+## `RD-114` A script's rpc config names its rpcs as GDScript's does
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class declares an rpc at `@rpc`'s defaults and one with each word set |
+| When | Godot reads the script's rpc config |
+| Then | each method is listed by its name with its mode and what it sets apart from the defaults, as a GDScript's `@rpc` config lists it |
+
+## `RD-115` A node calling an rpc that runs locally runs it
+
+| Step | Statement |
+| --- | --- |
+| Given | a node in the tree whose class declares an rpc with `sync: :call_local` |
+| When | Godot calls that rpc on the node |
+| Then | the node's method runs |
+
+## `RD-116` An rpc with a word `@rpc` does not take is refused
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class declares an rpc with a mode `@rpc` does not take |
+| When | the class's file runs |
+| Then | the declaration raises `ArgumentError` in GDScript's words for an invalid rpc argument |

@@ -351,6 +351,19 @@ Takes a signal as declared by a class of the file running now in the realm an ex
 pub fn declare_signal(mrb: &Mrb, class: RClass, signal: Signal) -> Result<(), Error> {}
 ```
 
+## `declare_rpc`
+
+Takes an rpc as declared by a class of the file running now in the realm an extension's method runs in, which the realm publishes for that class once the file has run; a name the class declared already as another member answers the refusal, and a declaration made while no file runs is not taken.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+| relates | `declare_signal` |
+
+```rust
+pub fn declare_rpc(mrb: &Mrb, class: RClass, rpc: Rpc) -> Result<(), Error> {}
+```
+
 ## `declare_export`
 
 Takes a property as exported by a class of the file running now in the realm an extension's method runs in, which the realm publishes for the file's class or the class inside it once that file has run; a name a class or one of its ancestors declared already answers the refusal, and a declaration made while no file runs belongs to no class and is not taken.

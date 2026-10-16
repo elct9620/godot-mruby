@@ -97,6 +97,12 @@ module Godot
         __declare_signal__(name.to_s, parameter_types)
       end
 
+      # Lets peers call the method `name` over the network, as GDScript's
+      # `@rpc` does, taking the words and channel it takes.
+      def rpc(name, mode: :authority, sync: :call_remote, transfer_mode: :reliable, transfer_channel: 0)
+        __declare_rpc__(name.to_s, [mode.to_s, sync.to_s, transfer_mode.to_s], transfer_channel)
+      end
+
       # A property of the class, taking its type from the value it is
       # declared with. The engine and the editor read and write it by that
       # name, and the class keeps it in the instance variable of that name.

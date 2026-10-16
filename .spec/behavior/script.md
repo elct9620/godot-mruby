@@ -789,3 +789,11 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a node script whose class exports a range with `extra_hints:` and a tool button, whose file has not run |
 | When | Godot lists the script's properties |
 | Then | the range is read with its extra hints and the tool button is a Callable with its hint |
+
+## `RS-093` A node script lists its rpcs before its file runs
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose class declares an rpc with literal words, whose file has not run |
+| When | Godot reads the script's rpc config |
+| Then | the config lists that rpc as the file would declare it |
