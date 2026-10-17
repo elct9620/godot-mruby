@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::cell::{Cell, OnceCell, RefCell};
 use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::ffi::CStr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::time::Duration;
 
@@ -262,6 +263,9 @@ static RELEASES: Mutex<Vec<Key>> = Mutex::new(Vec::new());
 // engine object's count last said, waiting for the game's realm; true holds
 // it firmly.
 static HOLDINGS: Mutex<Vec<(Key, bool)>> = Mutex::new(Vec::new());
+// Whether a key may be waiting in either queue, set once one is queued, so
+// an entry finding nothing queued takes neither lock.
+static QUEUED: AtomicBool = AtomicBool::new(false);
 // Paths of files whose source changed, waiting for the game's realm's next
 // frame to run them again.
 static SOURCE_CHANGES: Mutex<Vec<String>> = Mutex::new(Vec::new());
@@ -475,6 +479,7 @@ pub fn file_by_constant(mrb: &Mrb, names: &[String]) -> Option<String> {
 /// never waiting for the realm, so whatever frees a node never waits for Ruby.
 pub fn release(key: Key) {
     RELEASES.lock().unwrap().push(key);
+    QUEUED.store(true, Ordering::Release);
 }
 
 /// Holds the object `key` holds loosely at the realm's next entry or frame,
@@ -511,6 +516,7 @@ fn queue_holding(key: Key, is_firm: bool) {
     let mut holdings = HOLDINGS.lock().unwrap();
     holdings.retain(|(waiting, _)| *waiting != key);
     holdings.push((key, is_firm));
+    QUEUED.store(true, Ordering::Release);
 }
 
 /// Holds `object` under `key` loosely in the realm `mrb` belongs to, for an
@@ -523,7 +529,7 @@ pub fn hold_loose(mrb: &Mrb, key: Key, object: Value) {
 /// engine object only Ruby holds, entering the game's realm only when a key
 /// is waiting; the extension calls it every frame.
 pub fn release_queued() {
-    if RELEASES.lock().unwrap().is_empty() && HOLDINGS.lock().unwrap().is_empty() {
+    if !QUEUED.load(Ordering::Acquire) {
         return;
     }
     let game = lock_game();
@@ -627,6 +633,7 @@ pub fn close() {
     *game.borrow_mut() = Game::Closed;
     RELEASES.lock().unwrap().clear();
     HOLDINGS.lock().unwrap().clear();
+    QUEUED.store(false, Ordering::Release);
     SOURCE_CHANGES.lock().unwrap().clear();
     snapshot::publish(Arc::default());
 }
@@ -841,6 +848,9 @@ impl Realm {
     // call, or the collector would keep each one as long as the realm stays
     // entered.
     fn release_queued(&self) {
+        if !QUEUED.swap(false, Ordering::AcqRel) {
+            return;
+        }
         let _scope = self.mrb.arena_scope();
         let keys = std::mem::take(&mut *RELEASES.lock().unwrap());
         let registry = &bookkeeping(&self.mrb).registry;
