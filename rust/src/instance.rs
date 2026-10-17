@@ -8,7 +8,6 @@
 
 use std::collections::BTreeSet;
 use std::ffi::c_void;
-use std::panic::{self, AssertUnwindSafe};
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, LazyLock, Mutex, PoisonError};
 
@@ -23,9 +22,8 @@ use smallvec::SmallVec;
 
 use crate::ancestry::{Ancestry, Lineage};
 use crate::bridge::{self, EngineCrossing, Owner, RubyCrossing};
-use crate::error;
 use crate::header::Header;
-use crate::log::GodotLog;
+use crate::log::{GodotLog, catch_panic};
 use crate::realm::{self, Build, Key, Realm, RubyError};
 use crate::snapshot::{self, Heading, Member, Property, Snapshot};
 
@@ -218,6 +216,14 @@ impl RubyInstance {
 
     fn lineage(&self) -> Lineage<'_> {
         self.caller.lineage()
+    }
+
+    // Whether the class, or a class it inherits from, defines `method` on
+    // `self`.
+    fn has_class_method(&self, method: &str) -> bool {
+        self.lineage()
+            .files()
+            .any(|(_, header)| header.static_methods().iter().any(|name| name == method))
     }
 
     // What the node's class declared for the editor, its ancestors' included
@@ -628,23 +634,6 @@ unsafe fn borrow_instance<R>(
     body(unsafe { &*data.cast::<RubyInstance>() })
 }
 
-// Answers what `body` answers, or `fallback` when it panics, writing the
-// panic to Godot's log: a panic unwinding out of a callback Godot called
-// would abort the process. What the instance shares across callbacks is
-// behind atomics and mutexes that recover from a panic, so `body` is taken
-// as unwind safe.
-fn catch_panic<R>(callback: &str, fallback: R, body: impl FnOnce() -> R) -> R {
-    panic::catch_unwind(AssertUnwindSafe(body)).unwrap_or_else(|payload| {
-        let message = payload
-            .downcast_ref::<&str>()
-            .copied()
-            .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
-            .unwrap_or("an unknown panic");
-        error!("{callback} on a Ruby script instance failed: {message}");
-        fallback
-    })
-}
-
 // What a callback reading or writing a property of the node's class takes
 // from the instance before Ruby runs.
 struct PropertyReach {
@@ -979,17 +968,41 @@ unsafe extern "C" fn call(
                 Some((method, is_awaiting, instance.caller()))
             })
         };
-        let Some((method, is_awaiting, caller)) = found else {
-            // SAFETY: Godot hands an error to fill.
-            unsafe { (*error).error = sys::GDEXTENSION_CALL_ERROR_INVALID_METHOD };
-            return true;
-        };
         let args: &[&Variant] = if args.is_null() {
             &[]
         } else {
             // SAFETY: Godot hands `count` live variants, which `Variant` lays out
             // as, alive for the call.
             unsafe { std::slice::from_raw_parts(args.cast::<&Variant>(), count as usize) }
+        };
+        let Some((method, is_awaiting, caller)) = found else {
+            // A method the class defines on `self` answers a call on its
+            // object, as a GDScript's static function does on an instance:
+            // the script's own instance runs it.
+            let name = method.to_string();
+            // SAFETY: Godot hands a live instance.
+            let script = unsafe {
+                borrow_instance(data, |instance| {
+                    instance
+                        .has_class_method(&name)
+                        .then(|| instance.script.clone())
+                })
+            };
+            let answered = script.map(|mut script| {
+                let args: VarArray = args.iter().map(|arg| (*arg).clone()).collect();
+                script.callv(method, &args)
+            });
+            // SAFETY: Godot hands an initialized variant and an error to fill.
+            unsafe {
+                match answered {
+                    Some(answered) => {
+                        *answer.cast::<Variant>() = answered;
+                        (*error).error = sys::GDEXTENSION_CALL_OK;
+                    }
+                    None => (*error).error = sys::GDEXTENSION_CALL_ERROR_INVALID_METHOD,
+                }
+            }
+            return true;
         };
         // A method that may wait runs in a fiber of its own, which the signal
         // it waits for resumes; while it waits, Godot gets a signal emitted

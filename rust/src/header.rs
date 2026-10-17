@@ -15,8 +15,8 @@ use crate::snapshot::{
 
 /// A file's header: the constants its `module` and `class` statements write,
 /// the name the class its path names is written with, the superclass written
-/// on it, the names of the methods it defines, what each method the file
-/// defines calls, the signals, rpcs, properties and headings its body
+/// on it, the names of the methods it defines on its instances and on
+/// `self`, what each method the file defines calls, the signals, rpcs, properties and headings its body
 /// declares, and the `tool`, `abstract` and `icon` its body calls.
 #[derive(Debug, Default)]
 pub struct Header {
@@ -25,6 +25,7 @@ pub struct Header {
     name_offset: usize,
     superclass: Option<Superclass>,
     methods: BTreeMap<String, usize>,
+    static_methods: Vec<String>,
     method_calls: Vec<MethodCalls>,
     signal_offsets: BTreeMap<String, usize>,
     export_offsets: BTreeMap<String, usize>,
@@ -115,6 +116,12 @@ impl Header {
 
     pub fn has_method(&self, name: &str) -> bool {
         self.methods.contains_key(name)
+    }
+
+    /// The methods the class body defines on `self`, which GDScript calls on
+    /// the script as a GDScript's static functions.
+    pub fn static_methods(&self) -> &[String] {
+        &self.static_methods
     }
 
     /// What each method the file defines calls, in any class or module of
@@ -224,10 +231,18 @@ impl Header {
     fn read_class_body(&mut self, statements: &NodeList) {
         for node in statements.iter() {
             if let Some(def) = node.as_def_node() {
-                if def.receiver().is_none() {
-                    let offset = def.location().start_offset();
-                    let name = decode_text(def.name().as_slice());
-                    self.methods.entry(name).or_insert(offset);
+                let name = decode_text(def.name().as_slice());
+                match def.receiver() {
+                    None => {
+                        let offset = def.location().start_offset();
+                        self.methods.entry(name).or_insert(offset);
+                    }
+                    Some(receiver) if receiver.as_self_node().is_some() => {
+                        if !self.static_methods.contains(&name) {
+                            self.static_methods.push(name);
+                        }
+                    }
+                    Some(_) => {}
                 }
             } else if let Some(call) = node.as_call_node() {
                 self.read_call(&call);

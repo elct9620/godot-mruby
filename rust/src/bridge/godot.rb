@@ -7,6 +7,12 @@ module Godot
   # What a call to the engine raises when the engine cannot run it.
   class CallError < StandardError; end
 
+  # Calls `method` with `args` on the class the constant path `name` spells,
+  # as GDScript calls `new` or a static function on a script.
+  def self.__call_class__(name, method, *args)
+    name.split("::").reduce(::Object) { |scope, part| scope.const_get(part) }.__send__(method, *args)
+  end
+
   # The engine's utility functions Ruby lacks, such as lerp and randf, each a
   # strict block of the number of arguments it takes, naming its function by
   # its row, so a call neither gathers its arguments into an array nor looks

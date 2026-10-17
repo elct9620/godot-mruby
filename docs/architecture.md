@@ -113,6 +113,7 @@ Names follow the naming chapter of [`convention.md`](convention.md#1-naming).
 | `RubyScript` in `script.rs`, answered from `header.rs` and `ancestry.rs` | `ScriptExtension` |
 | An inner `RubyScript`, as `res://kennel.rb::Hound` | A GDScript inner class |
 | `RubyInstance` in `instance.rs` | A script instance |
+| The script's own instance in `script/class_instance.rs` | A GDScript's static functions and `new` |
 | `RubyTestRunner` in `runner.rs` | A `Node` in `runner.tscn` |
 | `RubyEditorPlugin` in `plugin.rs`, `RubyExportPlugin` in `export.rs` | `EditorPlugin`, `EditorExportPlugin` |
 | `RubySyntaxHighlighter` in `highlighter.rs`, from Prism's tokens | `EditorSyntaxHighlighter` |
@@ -267,6 +268,18 @@ collected   Ruby object freed    ──► engine object let go at the next fram
 ```
 
 mruby has no weak references, so a loosely held object is found by key only until the collector frees it. An engine object is never let go of inside the collector, since freeing it may call its script.
+
+#### 2.4.2 Class calls
+
+Each script carries an instance of its own, so GDScript calls `new` and the class's methods on `self` on the script as on a GDScript's.
+
+```
+load("x.rb").new(5)    ──► script's instance ──► realm: X.new(5)
+load("x.rb").temper(3) ──► script's instance ──► realm: X.temper(3)
+load("x.rb").get_path  ──► declined, no realm  ──► the Script's own method
+```
+
+Godot sends every call on a script through its instance first, so the instance answers only `new` and the methods the header lists on `self`. It knows the script by id, so a reload changes what it answers. An object of the class answers those methods too.
 
 ### 2.5 Announcement
 

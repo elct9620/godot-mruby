@@ -6,6 +6,7 @@
 use std::cell::RefCell;
 use std::ffi::CStr;
 use std::fmt;
+use std::panic::{self, AssertUnwindSafe};
 
 use godot::classes::Os;
 use godot::global::{PrintLevel, PrintRecord, PrintSource, godot_print, print_custom, printraw};
@@ -105,6 +106,23 @@ pub fn write<'a>(level: Level, at: impl Into<Option<&'a Location>>, message: fmt
         source: Some(source),
         editor_notify: false,
     });
+}
+
+/// Answers what `body` answers, or `fallback` when it panics, writing the
+/// panic to Godot's log: a panic unwinding out of a callback Godot called
+/// would abort the process. What a script instance shares across callbacks
+/// is behind atomics and mutexes that recover from a panic, so `body` is
+/// taken as unwind safe.
+pub fn catch_panic<R>(callback: &str, fallback: R, body: impl FnOnce() -> R) -> R {
+    panic::catch_unwind(AssertUnwindSafe(body)).unwrap_or_else(|payload| {
+        let message = payload
+            .downcast_ref::<&str>()
+            .copied()
+            .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+            .unwrap_or("an unknown panic");
+        crate::error!("{callback} on a Ruby script instance failed: {message}");
+        fallback
+    })
 }
 
 #[macro_export]

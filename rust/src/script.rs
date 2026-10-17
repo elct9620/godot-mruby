@@ -11,7 +11,7 @@ use godot::global::Error;
 use godot::meta::conv::RawPtr;
 use godot::obj::{EngineBitfield, EngineEnum};
 use godot::prelude::*;
-use godot::register::info::PropertyUsageFlags;
+use godot::register::info::{MethodFlags, PropertyUsageFlags};
 use godot::sys::{self, GodotFfi};
 use rustc_hash::FxHashMap;
 
@@ -25,6 +25,8 @@ use crate::realm::{self, Files};
 use crate::settings;
 use crate::snapshot::{self, Heading, Member, Parameter, Property, Signal};
 use crate::{announcement, documentation, error};
+
+mod class_instance;
 
 /// The script a `.rb` file loads as, the way a `.gd` file loads as a `GDScript`.
 ///
@@ -230,7 +232,7 @@ impl RubyScript {
     /// The script of the file at `path`, holding `source`.
     pub fn from_source(path: &str, source: GString) -> Gd<Self> {
         let header = Header::from_source(path, &source.to_string(), &GameFiles.roots());
-        Gd::from_init_fn(|base| Self {
+        let script = Gd::from_init_fn(|base| Self {
             base,
             header: Arc::new(header),
             ancestry: Cache::default(),
@@ -241,7 +243,43 @@ impl RubyScript {
             refusals: Mutex::default(),
             inner_scripts: Mutex::default(),
             source,
-        })
+        });
+        class_instance::attach(&script);
+        script
+    }
+
+    /// Whether GDScript may call `method` on the script as a GDScript's
+    /// static function: the class, or a class it inherits from, defines it
+    /// on `self`.
+    pub fn has_class_method(&self, method: &str) -> bool {
+        self.lineage()
+            .files()
+            .any(|(_, header)| header.static_methods().iter().any(|name| name == method))
+    }
+
+    /// The constant the script's class is named by from the top level, as
+    /// `Enemies::Boss`.
+    pub fn class_constant(&self) -> String {
+        let path = self.base().get_path().to_string();
+        let (file, inner) = realm::split_inner_path(&path);
+        std::iter::once(GameFiles.roots().name_by_path(file))
+            .chain(inner.into_iter().map(str::to_owned))
+            .collect::<Vec<_>>()
+            .join("::")
+    }
+
+    // The methods GDScript calls on the script, its own and those it
+    // inherits, nearest first and each once.
+    fn class_methods(&self) -> Vec<String> {
+        let mut methods: Vec<String> = Vec::new();
+        for (_, header) in self.lineage().files() {
+            for name in header.static_methods() {
+                if !methods.contains(name) {
+                    methods.push(name.clone());
+                }
+            }
+        }
+        methods
     }
 
     /// The script a template made for a new file, holding `source`.
@@ -643,16 +681,23 @@ impl IScriptExtension for RubyScript {
     }
 
     fn has_method(&self, method: StringName) -> bool {
-        self.lineage()
-            .has_method(&snapshot::latest(), &method.to_string())
+        let method = method.to_string();
+        self.lineage().has_method(&snapshot::latest(), &method) || self.has_class_method(&method)
     }
 
-    fn has_static_method(&self, _method: StringName) -> bool {
-        false
+    fn has_static_method(&self, method: StringName) -> bool {
+        self.has_class_method(&method.to_string())
     }
 
-    fn get_method_info(&self, _method: StringName) -> AnyDictionary {
-        VarDictionary::new().upcast_any_dictionary()
+    // A static method takes any arguments, since Ruby says nothing of them
+    // before it runs; GDScript's analyzer checks a call against this.
+    fn get_method_info(&self, method: StringName) -> AnyDictionary {
+        let method = method.to_string();
+        if self.has_class_method(&method) {
+            describe_class_method(&method).upcast_any_dictionary()
+        } else {
+            VarDictionary::new().upcast_any_dictionary()
+        }
     }
 
     fn is_tool(&self) -> bool {
@@ -720,9 +765,15 @@ impl IScriptExtension for RubyScript {
     }
 
     fn get_script_method_list(&self) -> Array<AnyDictionary> {
-        self.methods()
+        let methods = self.methods();
+        let class_methods = self.class_methods();
+        let described = methods.iter().map(|method| describe_name(method.as_str()));
+        let class_described = class_methods
             .iter()
-            .map(|method| describe_name(method.as_str()).upcast_any_dictionary())
+            .map(|method| describe_class_method(method));
+        described
+            .chain(class_described)
+            .map(VarDictionary::upcast_any_dictionary)
             .collect()
     }
 
@@ -826,6 +877,21 @@ fn describe_parameter(parameter: &Parameter) -> AnyDictionary {
 fn describe_name(name: &str) -> VarDictionary {
     let mut info = VarDictionary::new();
     info.set("name", name);
+    info
+}
+
+// A method the class defines on `self`, as Godot reads a static function's:
+// any arguments, and an answer of any type.
+fn describe_class_method(name: &str) -> VarDictionary {
+    let mut answer = VarDictionary::new();
+    answer.set("type", VariantType::NIL.ord());
+    answer.set("usage", PropertyUsageFlags::NIL_IS_VARIANT.ord() as i64);
+    let mut info = describe_name(name);
+    let flags = MethodFlags::NORMAL | MethodFlags::STATIC | MethodFlags::VARARG;
+    info.set("flags", flags.ord() as i64);
+    info.set("args", &VarArray::new());
+    info.set("default_args", &VarArray::new());
+    info.set("return", &answer);
     info
 }
 

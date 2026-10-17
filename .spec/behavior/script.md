@@ -2,6 +2,10 @@
 
 How a `.rb` file attached to a node comes to run, and where what it prints goes. A node's Ruby object is built the first time Godot calls a method its class defines, so a node is made without running Ruby.
 
+### What differs from GDScript
+
+- A method a class defines on `self` takes and answers values of any type, and one defined while its file runs is called through the script but unknown to GDScript's analyzer.
+
 ## Includes
 
 - `godot/test/e2e/**/*_test.rb`
@@ -897,3 +901,39 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a coroutine waiting for a signal, and the Signal its end is answered through |
 | When | the object emitting the signal it waits for is freed, and the collector runs |
 | Then | the object the Signal names is freed too, as nothing is left to resume the coroutine |
+
+## `RS-106` GDScript makes an object of a Ruby class with `new`
+
+| Step | Statement |
+| --- | --- |
+| Given | the class a Ruby script defines, whose `initialize` takes arguments |
+| When | GDScript calls `new` on the script with arguments, as on a GDScript's |
+| Then | it gets an object of the class, carrying the script, made by `initialize` with those arguments |
+
+## `RS-107` GDScript calls a Ruby class's method on `self`
+
+| Step | Statement |
+| --- | --- |
+| Given | the class a Ruby script defines, with a method it defines on `self` |
+| When | GDScript calls that method on the script, as a GDScript's static function |
+| Then | it gets what the method answered |
+
+## `RS-108` A script lists its class's methods on `self` as static
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RS-107` |
+
+| Step | Statement |
+| --- | --- |
+| Given | the class a Ruby script defines, with a method it defines on `self` |
+| When | Godot lists the script's methods, and GDScript compiles a call of that method on the script |
+| Then | the method is listed as static, so GDScript's analyzer takes the call as it takes a static function's |
+
+## `RS-109` An object answers its class's method on `self`
+
+| Step | Statement |
+| --- | --- |
+| Given | an object of a Ruby class defining a method on `self` |
+| When | GDScript calls that method on the object, as it may call a static function on an instance |
+| Then | it gets what the class's method answered |
