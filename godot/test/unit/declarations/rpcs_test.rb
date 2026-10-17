@@ -14,7 +14,7 @@ class RpcsTest < Minitest::Test
 
     courier.rpc(:announce)
 
-    assert_equal 1, courier.announced
+    assert_equal 1, courier.announcements
   end
 
   # @behavior RD-116

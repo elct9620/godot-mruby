@@ -14,7 +14,7 @@ use godot::meta::conv::RawPtr;
 use godot::prelude::*;
 use godot::register::info::PropertyUsageFlags;
 
-use crate::announcement::{self, Omission, SharedNames};
+use crate::announcement::{self, NameClashes, Omission};
 use crate::compiler::CompileError;
 use crate::completion::{self, Candidate};
 use crate::game::{self, GameFiles};
@@ -40,7 +40,7 @@ pub struct RubyLanguage {
 pub const NAME: &str = "Ruby";
 
 static LANGUAGE: Mutex<Option<InstanceId>> = Mutex::new(None);
-static SHARED_NAMES: Mutex<SharedNames> = Mutex::new(SharedNames::new());
+static NAME_CLASHES: Mutex<NameClashes> = Mutex::new(NameClashes::new());
 
 pub fn register() {
     let language = RubyLanguage::new_alloc();
@@ -455,7 +455,7 @@ impl IScriptLanguageExtension for RubyLanguage {
     fn get_global_class_name(&self, path: GString) -> AnyDictionary {
         let file = path.to_string();
         let announced = announcement::announcement_by_path(&file);
-        let mut shared_names = SHARED_NAMES.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut shared_names = NAME_CLASHES.lock().unwrap_or_else(PoisonError::into_inner);
         if !matches!(announced, Err(Omission::SharedName { .. })) {
             shared_names.forget(&file);
         }

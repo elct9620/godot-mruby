@@ -573,7 +573,7 @@ fn check_argument_count(
 // the extension is built against lists it. A later engine that gives one of
 // those arguments a default still has it required here.
 fn count_required(kind: VariantType, method: &StringName) -> Option<usize> {
-    static REQUIRED_COUNTS: LazyLock<FxHashMap<(i32, StringName), usize>> = LazyLock::new(|| {
+    static MINIMUMS: LazyLock<FxHashMap<(i32, StringName), usize>> = LazyLock::new(|| {
         let kinds: Vec<VariantType> = (0..VariantType::MAX.ord)
             .map(<VariantType as EngineEnum>::from_ord)
             .collect();
@@ -588,7 +588,7 @@ fn count_required(kind: VariantType, method: &StringName) -> Option<usize> {
             .flatten()
             .collect()
     });
-    REQUIRED_COUNTS.get(&(kind.ord, method.clone())).copied()
+    MINIMUMS.get(&(kind.ord, method.clone())).copied()
 }
 
 // What a call of `method` on a value of type `kind` answered, or the error

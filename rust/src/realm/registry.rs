@@ -13,11 +13,11 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 // The keys whose loosely held object the collector has freed, noted as it
 // frees it, so the registry never reaches the memory it was in.
-static COLLECTED: Mutex<Option<FxHashSet<i64>>> = Mutex::new(None);
+static DEAD_KEYS: Mutex<Option<FxHashSet<i64>>> = Mutex::new(None);
 
 /// Notes that the collector freed the object `key` holds loosely.
 pub fn note_collected(key: Key) {
-    COLLECTED
+    DEAD_KEYS
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .get_or_insert_default()
@@ -26,7 +26,7 @@ pub fn note_collected(key: Key) {
 
 /// Whether the collector freed the object `key` held loosely.
 pub fn is_collected(key: Key) -> bool {
-    COLLECTED
+    DEAD_KEYS
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .as_ref()
@@ -34,7 +34,7 @@ pub fn is_collected(key: Key) -> bool {
 }
 
 fn forget_collected(key: Key) {
-    if let Some(keys) = COLLECTED
+    if let Some(keys) = DEAD_KEYS
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .as_mut()
@@ -57,7 +57,7 @@ impl From<i64> for Key {
 pub(super) struct Registry {
     objects: RHash,
     // The objects held loosely, by key: the collector does not mark them, so
-    // one is read only while `COLLECTED` does not name its key.
+    // one is read only while `DEAD_KEYS` does not name its key.
     loose: RefCell<FxHashMap<i64, Value>>,
     // The last key the registry named itself. It counts down from -1, since
     // a node's key is its instance id, which is positive: only a

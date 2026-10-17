@@ -313,13 +313,13 @@ pub mod tests {
     }
 
     const BOSS: &str = "res://enemies/boss.rb";
-    const NESTED_BOSS: &str = "module Enemies\n  class Boss < Enemy\n  end\nend\n";
+    const ENEMIES_BOSS: &str = "module Enemies\n  class Boss < Enemy\n  end\nend\n";
 
     // @behavior RI-001
     #[test]
     fn a_superclass_is_found_in_the_innermost_namespace_first() {
         let sources = [
-            (BOSS, NESTED_BOSS),
+            (BOSS, ENEMIES_BOSS),
             (
                 "res://enemies/enemy.rb",
                 "module Enemies\n  class Enemy < Godot::Node2D\n  end\nend\n",
@@ -336,7 +336,7 @@ pub mod tests {
     #[test]
     fn a_superclass_the_innermost_namespace_lacks_is_found_further_out() {
         let sources = [
-            (BOSS, NESTED_BOSS),
+            (BOSS, ENEMIES_BOSS),
             ("res://enemy.rb", "class Enemy < Godot::Node2D\nend\n"),
         ];
 

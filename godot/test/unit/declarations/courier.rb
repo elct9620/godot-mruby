@@ -6,12 +6,12 @@ module Unit
       rpc :deliver
       rpc :announce, mode: :any_peer, sync: :call_local, transfer_mode: :unreliable_ordered, transfer_channel: 2
 
-      attr_reader :announced
+      attr_reader :announcements
 
       def deliver; end
 
       def announce
-        @announced = (@announced || 0) + 1
+        @announcements = (@announcements || 0) + 1
       end
     end
   end

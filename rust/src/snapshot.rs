@@ -160,7 +160,7 @@ pub struct Property {
     pub hint_string: String,
     // What the property is used for besides being a script variable.
     usage: PropertyUsageFlags,
-    default: DeclaredValue,
+    default: DeclarationValue,
     default_text: String,
 }
 
@@ -171,10 +171,10 @@ pub struct Property {
 // or holds an object no file holds is kept as nothing, as GDScript keeps no
 // default it cannot work out before running.
 #[derive(Clone, Debug, PartialEq, Eq)]
-enum DeclaredValue {
+enum DeclarationValue {
     Resource(String),
-    Array(Vec<DeclaredValue>),
-    Dictionary(Vec<(DeclaredValue, DeclaredValue)>),
+    Array(Vec<DeclarationValue>),
+    Dictionary(Vec<(DeclarationValue, DeclarationValue)>),
     Bytes(Vec<u8>),
 }
 
@@ -194,7 +194,7 @@ impl Property {
             hint: PropertyHint::NONE,
             hint_string: String::new(),
             usage: PropertyUsageFlags::DEFAULT,
-            default: DeclaredValue::from_variant(default),
+            default: DeclarationValue::from_variant(default),
             default_text: default.to_string(),
         }
     }
@@ -244,7 +244,7 @@ impl Property {
     }
 }
 
-impl DeclaredValue {
+impl DeclarationValue {
     fn from_variant(value: &Variant) -> Self {
         Self::read(value).unwrap_or_else(|| Self::Bytes(var_to_bytes(&Variant::nil()).to_vec()))
     }
@@ -770,7 +770,7 @@ mod tests {
             hint: PropertyHint::NONE,
             hint_string: String::new(),
             usage: PropertyUsageFlags::DEFAULT,
-            default: DeclaredValue::Bytes(Vec::new()),
+            default: DeclarationValue::Bytes(Vec::new()),
             default_text: "0.0".to_owned(),
         }
     }

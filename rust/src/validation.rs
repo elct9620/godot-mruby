@@ -424,14 +424,14 @@ mod tests {
     }
 
     const ENEMY: &str = "class Enemy < Godot::Node2D\nend\n";
-    const NESTED_ENEMY: &str = "module Bosses\n  class Enemy < Godot::Node2D\n  end\nend\n";
+    const BOSSES_ENEMY: &str = "module Bosses\n  class Enemy < Godot::Node2D\n  end\nend\n";
 
     // @behavior RK-005
     #[test]
     fn a_node_script_sharing_its_name_is_warned_of() {
         let sources = [
             ("res://enemy.rb", ENEMY),
-            ("res://bosses/enemy.rb", NESTED_ENEMY),
+            ("res://bosses/enemy.rb", BOSSES_ENEMY),
         ];
 
         let validation = validate_source("res://enemy.rb", ENEMY, &sources);
@@ -450,7 +450,7 @@ mod tests {
     fn a_file_is_checked_as_it_is_typed() {
         let sources = [
             ("res://enemy.rb", "class Enemy\nend\n"),
-            ("res://bosses/enemy.rb", NESTED_ENEMY),
+            ("res://bosses/enemy.rb", BOSSES_ENEMY),
         ];
 
         let validation = validate_source("res://enemy.rb", ENEMY, &sources);

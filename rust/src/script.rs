@@ -112,7 +112,7 @@ impl Exports {
 static PLACEHOLDER_SCRIPTS: Mutex<Vec<InstanceId>> = Mutex::new(Vec::new());
 // The paths of scripts Godot made placeholders of since the last frame,
 // whose files the editor's realm runs then.
-static PENDING_PATHS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+static PLACEHOLDER_PATHS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 /// Runs in the game's realm the file of each script Godot made a
 /// placeholder of since the last frame, unless it is one the editor leaves
@@ -122,7 +122,11 @@ static PENDING_PATHS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 /// Placeholders exist only in the editor, and the extension calls this
 /// every frame.
 pub fn run_placed(run_again: bool) {
-    let paths = std::mem::take(&mut *PENDING_PATHS.lock().unwrap_or_else(PoisonError::into_inner));
+    let paths = std::mem::take(
+        &mut *PLACEHOLDER_PATHS
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner),
+    );
     if paths.is_empty() {
         if run_again {
             tell_placed();
@@ -324,7 +328,9 @@ impl RubyScript {
             placed.push(id);
         }
         let path = self.base().get_path().to_string();
-        let mut unrun = PENDING_PATHS.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut unrun = PLACEHOLDER_PATHS
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
         if !path.is_empty() && !unrun.contains(&path) {
             unrun.push(path);
         }

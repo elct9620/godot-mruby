@@ -47,16 +47,16 @@ module Unit
       end
 
       def spawn(source)
-        @spawned = Godot::Coroutine.run do
+        @coroutine = Godot::Coroutine.run do
           @log << await(source, :relayed)
           :block_done
         end
         @log << :went_on
-        @spawned
+        @coroutine
       end
 
       def join
-        @log << await(@spawned)
+        @log << await(@coroutine)
       end
 
       def sort_awaiting(source)

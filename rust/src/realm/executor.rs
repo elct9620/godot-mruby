@@ -495,7 +495,7 @@ fn source_by_path(mrb: &Mrb, path: &str) -> Result<String, Error> {
 // goes before the class.
 fn take_away(mrb: &Mrb, frame: &Frame) {
     for (scope, name) in frame.constants.iter().rev() {
-        if let Some(scope) = defined_scope_by_names(mrb, scope) {
+        if let Some(scope) = live_scope_by_names(mrb, scope) {
             scope.const_remove(mrb, name.as_str()).ok();
         }
     }
@@ -503,7 +503,7 @@ fn take_away(mrb: &Mrb, frame: &Frame) {
 
 // The module the names in `scope` spell exactly, if each is still defined;
 // asking for a missing one would load it by name.
-fn defined_scope_by_names(mrb: &Mrb, scope: &[String]) -> Option<Scope> {
+fn live_scope_by_names(mrb: &Mrb, scope: &[String]) -> Option<Scope> {
     scope
         .iter()
         .try_fold(Scope::Class(mrb.object_class()), |outer, name| {

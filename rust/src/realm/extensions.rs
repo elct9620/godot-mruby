@@ -72,7 +72,7 @@ mod tests {
     }
 
     thread_local! {
-        static NESTED_DATA: ExtensionData = ExtensionData::default();
+        static ASKER_DATA: ExtensionData = ExtensionData::default();
     }
 
     // Data whose default asks for other data of the same list.
@@ -80,7 +80,7 @@ mod tests {
 
     impl Default for Asker {
         fn default() -> Self {
-            NESTED_DATA.with(|data| data.data_by_type::<First>().0.set(3));
+            ASKER_DATA.with(|data| data.data_by_type::<First>().0.set(3));
             Self
         }
     }
@@ -88,7 +88,7 @@ mod tests {
     // @behavior RE-010
     #[test]
     fn a_default_may_ask_for_other_data_as_it_is_made() {
-        NESTED_DATA.with(|data| {
+        ASKER_DATA.with(|data| {
             data.data_by_type::<Asker>();
 
             assert_eq!(data.data_by_type::<First>().0.get(), 3);

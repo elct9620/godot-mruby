@@ -46,7 +46,7 @@ enum Standing {
 
 // The reference-counted engine objects Ruby let go of, waiting for the next
 // frame.
-static RELEASED: Mutex<Vec<EngineObject>> = Mutex::new(Vec::new());
+static RELEASE_QUEUE: Mutex<Vec<EngineObject>> = Mutex::new(Vec::new());
 
 impl EngineObject {
     fn new(object: Gd<Object>) -> Self {
@@ -76,7 +76,7 @@ impl Drop for EngineObject {
         if self.1 == Standing::Scripted {
             realm::note_collected(derive_object_key(id));
         }
-        RELEASED
+        RELEASE_QUEUE
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .push(Self::new(object));
@@ -86,7 +86,8 @@ impl Drop for EngineObject {
 /// Lets go of the reference-counted engine objects Ruby let go of since the
 /// last call; the extension calls it every frame and once the realm closes.
 pub fn release_collected() {
-    let released = std::mem::take(&mut *RELEASED.lock().unwrap_or_else(PoisonError::into_inner));
+    let released =
+        std::mem::take(&mut *RELEASE_QUEUE.lock().unwrap_or_else(PoisonError::into_inner));
     for mut object in released {
         // SAFETY: taken once; the emptied value is forgotten, never dropped.
         drop(unsafe { ManuallyDrop::take(&mut object.0) });

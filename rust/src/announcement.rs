@@ -149,9 +149,9 @@ pub fn announcement_by_path(path: &str) -> Result<Announcement, Omission> {
 /// The names scripts share, each with the files sharing it, already
 /// warned of: the editor scans the project again and again and asks of every
 /// file, and each shared name is warned of once while it lasts.
-pub struct SharedNames(BTreeSet<(String, Vec<String>)>);
+pub struct NameClashes(BTreeSet<(String, Vec<String>)>);
 
-impl SharedNames {
+impl NameClashes {
     pub const fn new() -> Self {
         Self(BTreeSet::new())
     }
@@ -218,7 +218,7 @@ mod tests {
     use std::collections::BTreeMap;
     use std::sync::Mutex;
 
-    use super::{Announcement, Omission, Project, SharedNames, collect_name_sharers};
+    use super::{Announcement, NameClashes, Omission, Project, collect_name_sharers};
     use crate::ancestry::tests::Sources;
     use crate::game::Listing;
     use crate::realm::{Declarations, Files, Roots};
@@ -401,7 +401,7 @@ mod tests {
     #[test]
     fn a_shared_name_that_came_back_is_warned_of_again() {
         let files = ["res://a/twin.rb".to_owned(), "res://b/twin.rb".to_owned()];
-        let mut shared_names = SharedNames::new();
+        let mut shared_names = NameClashes::new();
         shared_names.note("Twin", &files);
         shared_names.forget("res://a/twin.rb");
 

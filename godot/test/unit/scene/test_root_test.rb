@@ -3,7 +3,7 @@ class TestRootTest < Minitest::Test
   # expects to have been freed with it has.
   def after_teardown
     super
-    (@expect_freed || []).each do |node|
+    (@teardown_nodes || []).each do |node|
       assert_raises(Godot::CallError) { node.get_name }
     end
   end
@@ -17,14 +17,14 @@ class TestRootTest < Minitest::Test
 
   # @behavior RW-003
   def test_a_node_given_to_autofree_is_freed_once_the_teardown_has_run
-    @expect_freed = [autofree(Godot::Node.new)]
+    @teardown_nodes = [autofree(Godot::Node.new)]
   end
 
   # @behavior RW-004
   def test_a_node_under_the_test_root_is_freed_with_it_once_the_teardown_has_run
     node = Godot::Node.new
     test_root.add_child(node)
-    @expect_freed = [node]
+    @teardown_nodes = [node]
   end
 
   # @behavior RW-005

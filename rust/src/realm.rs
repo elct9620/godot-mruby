@@ -1066,7 +1066,7 @@ impl RubyError {
 }
 
 // Where the Ruby the extension ships is compiled, apart from any project path.
-const SHIPPED_DIRECTORY: &str = "godot_mruby/";
+const EXTENSION_DIRECTORY: &str = "godot_mruby/";
 
 // The frames of `error`'s backtrace that name a line, most recent first.
 fn collect_frames(mrb: &Mrb, error: &Error) -> Vec<Location> {
@@ -1092,9 +1092,9 @@ fn filter_frames(mrb: &Mrb, backtrace: &[String]) -> Vec<Location> {
     }
     if frames
         .iter()
-        .any(|frame| !frame.file.starts_with(SHIPPED_DIRECTORY))
+        .any(|frame| !frame.file.starts_with(EXTENSION_DIRECTORY))
     {
-        frames.retain(|frame| !frame.file.starts_with(SHIPPED_DIRECTORY));
+        frames.retain(|frame| !frame.file.starts_with(EXTENSION_DIRECTORY));
     }
     frames
 }
