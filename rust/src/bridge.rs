@@ -27,7 +27,7 @@ mod utility;
 mod value;
 mod value_type;
 
-pub use bound_method::find_method_declarer;
+pub use bound_method::{find_method_declarer, is_string_name_member};
 pub use object::{Owner, derive_object_key, release_collected};
 pub use value::{EngineCrossing, RubyCrossing};
 pub use value_type::collect_value_type_names;

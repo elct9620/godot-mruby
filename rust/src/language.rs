@@ -164,6 +164,7 @@ impl IScriptLanguageExtension for RubyLanguage {
             &validation::EngineClasses {
                 is_engine_class: &game::is_engine_class,
                 method_declarer: &bridge::find_method_declarer,
+                is_string_name_member: &bridge::is_string_name_member,
             },
             &path.to_string(),
             &script.to_string(),

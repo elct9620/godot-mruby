@@ -262,6 +262,27 @@ pub fn find_method_declarer(class: &str, method: &str) -> Option<String> {
     find_declarer(&ClassDb::singleton(), class, method).map(|declarer| declarer.to_string())
 }
 
+/// Whether `member`, a property or a method of the engine class `class` or
+/// one of its ancestors, answers a StringName.
+pub fn is_string_name_member(class: &str, member: &str) -> bool {
+    let class_db = ClassDb::singleton();
+    let is_string_name = |info: &VarDictionary| {
+        info.get_or_nil("type").try_to::<i64>().ok()
+            == Some(i64::from(VariantType::STRING_NAME.ord))
+    };
+    let property = class_db
+        .class_get_property_list(class)
+        .iter_shared()
+        .find(|info| info.get_or_nil("name").to_string() == member);
+    if let Some(property) = property {
+        return is_string_name(&property);
+    }
+    find_declarer(&class_db, class, member)
+        .and_then(|declarer| find_info(&class_db, &declarer, member))
+        .and_then(|info| info.get_or_nil("return").try_to::<VarDictionary>().ok())
+        .is_some_and(|returned| is_string_name(&returned))
+}
+
 /// Whether the engine class `class` or one of its ancestors declares a
 /// static method `method`, which the class itself answers.
 pub fn is_static_method(class: &str, method: &str) -> bool {

@@ -5,6 +5,8 @@
 
 use std::ffi::CString;
 
+use ruby_prism::{CallNode, DefNode, Node, Visit};
+
 use crate::ancestry;
 use crate::announcement::{self, Omission, Project};
 use crate::compiler::{self, CompileError};
@@ -37,6 +39,9 @@ pub enum Kind {
     /// The class defines a method its engine class binds, which the engine
     /// never calls.
     NativeMethodOverride,
+    /// A member answering a StringName, which reaches Ruby as a Symbol, is
+    /// compared with a String, so the comparison never holds.
+    StringNameComparison,
 }
 
 impl Kind {
@@ -47,6 +52,7 @@ impl Kind {
             Kind::SharedConstant => "SHARED_CONSTANT",
             Kind::SharedName => "SHARED_NAME",
             Kind::NativeMethodOverride => "NATIVE_METHOD_OVERRIDE",
+            Kind::StringNameComparison => "STRING_NAME_COMPARISON",
         }
     }
 }
@@ -58,6 +64,9 @@ pub struct EngineClasses<'a> {
     /// The engine class binding a method of that name, among the engine
     /// class of the first name and its ancestors.
     pub method_declarer: &'a dyn Fn(&str, &str) -> Option<String>,
+    /// Whether a property or a method of that name answers a StringName,
+    /// among the engine class of the first name and its ancestors.
+    pub is_string_name_member: &'a dyn Fn(&str, &str) -> bool,
 }
 
 /// What checking `source`, typed as the file at `path` among `files`, finds.
@@ -99,12 +108,14 @@ pub fn validate<F: Files + Sync>(
         _ => None,
     };
     let overrides = collect_native_method_overrides(&typed, engine, path, source);
+    let comparisons = collect_string_name_comparisons(&typed, engine, path, source);
     Validation {
         error: diagnostics.error,
         warnings: compiled
             .chain(shared_constant)
             .chain(shared_name)
             .chain(overrides)
+            .chain(comparisons)
             .collect(),
     }
 }
@@ -139,6 +150,96 @@ fn collect_native_method_overrides(
             })
         })
         .collect()
+}
+
+// A warning at each comparison, in a method the script's class defines, of
+// a String with one of its engine class's members answering a StringName,
+// which Ruby is given as a Symbol. Only a member called on the object itself
+// is known, since nothing tells the class of any other receiver.
+fn collect_string_name_comparisons(
+    files: &impl Files,
+    engine: &EngineClasses,
+    path: &str,
+    source: &str,
+) -> Vec<Warning> {
+    let header = Header::from_source(path, source, &files.roots());
+    let Ok(ancestry) = ancestry::trace_ancestry(path, &header, files) else {
+        return Vec::new();
+    };
+    let engine_class = ancestry.engine_class();
+    if !(engine.is_engine_class)(engine_class) {
+        return Vec::new();
+    }
+    let mut finder = ComparisonFinder {
+        is_string_name_member: &|member| (engine.is_string_name_member)(engine_class, member),
+        in_method: false,
+        found: Vec::new(),
+    };
+    finder.visit(&ruby_prism::parse(source.as_bytes()).node());
+    finder
+        .found
+        .into_iter()
+        .map(|(member, offset)| Warning {
+            line: locate_line(source, offset),
+            kind: Kind::StringNameComparison,
+            message: format!(
+                "\"{member}\" answers a StringName, which reaches Ruby as a Symbol, so comparing it with a String never holds; compare it with a Symbol."
+            ),
+        })
+        .collect()
+}
+
+// Finds, inside instance methods, `==` and `!=` between a String literal and
+// a member called on the object itself that answers a StringName.
+struct ComparisonFinder<'a> {
+    is_string_name_member: &'a dyn Fn(&str) -> bool,
+    in_method: bool,
+    found: Vec<(String, usize)>,
+}
+
+impl ComparisonFinder<'_> {
+    // The member `node` calls on the object itself, if it is one answering a
+    // StringName.
+    fn read_string_name_member(&self, node: &Node) -> Option<String> {
+        let call = node.as_call_node()?;
+        let on_self = call
+            .receiver()
+            .is_none_or(|receiver| receiver.as_self_node().is_some());
+        if !on_self || call.arguments().is_some() {
+            return None;
+        }
+        let member = String::from_utf8_lossy(call.name().as_slice()).into_owned();
+        (self.is_string_name_member)(&member).then_some(member)
+    }
+}
+
+impl<'pr> Visit<'pr> for ComparisonFinder<'_> {
+    fn visit_def_node(&mut self, node: &DefNode<'pr>) {
+        let was_in_method = self.in_method;
+        self.in_method = node.receiver().is_none();
+        ruby_prism::visit_def_node(self, node);
+        self.in_method = was_in_method;
+    }
+
+    fn visit_call_node(&mut self, node: &CallNode<'pr>) {
+        let name = node.name().as_slice();
+        if self.in_method && (name == b"==" || name == b"!=") {
+            let argument = node
+                .arguments()
+                .and_then(|arguments| arguments.arguments().iter().next());
+            if let (Some(receiver), Some(argument)) = (node.receiver(), argument) {
+                let member = match (receiver.as_string_node(), argument.as_string_node()) {
+                    (Some(_), None) => self.read_string_name_member(&argument),
+                    (None, Some(_)) => self.read_string_name_member(&receiver),
+                    _ => None,
+                };
+                if let Some(member) = member {
+                    self.found.push((member, node.location().start_offset()));
+                }
+            }
+        }
+        ruby_prism::visit_call_node(self, node);
+    }
 }
 
 // The warning that other files name the constant the file at `path` names,
@@ -217,9 +318,12 @@ mod tests {
         let method_declarer = |class: &str, method: &str| {
             (class == "Node2D" && method == "get_name").then(|| "Node".to_owned())
         };
+        let is_string_name_member =
+            |class: &str, member: &str| class == "Node2D" && member == "name";
         let engine = EngineClasses {
             is_engine_class: &is_engine_class,
             method_declarer: &method_declarer,
+            is_string_name_member: &is_string_name_member,
         };
         validate(
             &files,
@@ -291,6 +395,21 @@ mod tests {
         let checked = validate_source("res://enemy.rb", ENEMY, &sources);
 
         assert_eq!(warnings_by_kind(&checked, Kind::SharedName).len(), 1);
+    }
+
+    // @behavior RK-009
+    #[test]
+    fn a_string_name_member_compared_with_a_string_is_warned_of() {
+        let source = "class Enemy < Godot::Node2D\n  def player?\n    name == \"Player\"\n  end\n\n  def boss?\n    \"Boss\" != self.name || name == :Boss || label == \"Boss\"\n  end\nend\nname == \"Top\"\n";
+        let sources = [("res://enemy.rb", ENEMY)];
+
+        let checked = validate_source("res://enemy.rb", source, &sources);
+
+        let message = "\"name\" answers a StringName, which reaches Ruby as a Symbol, so comparing it with a String never holds; compare it with a Symbol.";
+        assert_eq!(
+            warnings_by_kind(&checked, Kind::StringNameComparison),
+            vec![(3, message), (7, message)]
+        );
     }
 
     // @behavior RK-008

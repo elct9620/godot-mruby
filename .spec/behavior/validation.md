@@ -8,6 +8,7 @@ How the editor learns what is wrong with a Ruby file as it is typed: the source 
 - Only the first syntax error comes back.
 - An unknown method, a mismatched type or a refused declaration shows only when the file runs.
 - A file naming a constant the realm already has is warned of only as the realm opens: only the realm knows what it has.
+- A member answering a StringName is known only when called on the object itself: nothing tells the class of another receiver, such as a signal's argument.
 
 ## Includes
 
@@ -77,3 +78,11 @@ How the editor learns what is wrong with a Ruby file as it is typed: the source 
 | Given | a node script whose class defines a method of a name its engine class binds, such as `get_name` |
 | When | the editor checks the file |
 | Then | a warning comes back at the method's line that the engine will not call it, as GDScript's `NATIVE_METHOD_OVERRIDE` says |
+
+## `RK-009` A StringName member compared with a String is warned of
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose method compares, with `==` or `!=`, a String with a member of its engine class answering a StringName, called on the object itself |
+| When | the file is checked |
+| Then | a warning at that line says the member reaches Ruby as a Symbol, so the comparison never holds |
