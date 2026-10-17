@@ -8,8 +8,8 @@ module Integration
         tool
 
         PATH = "res://integration/highlighting/probe/speed.rb".freeze
-        OPEN_AT = 30
-        LOOK_AT = 40
+        OPENING_FRAME = 30
+        LOOK_FRAME = 40
 
         def _ready
           @frames = 0
@@ -17,9 +17,9 @@ module Integration
 
         def _process(_delta)
           @frames += 1
-          if @frames == OPEN_AT
+          if @frames == OPENING_FRAME
             Godot::EditorInterface.edit_script(Godot::ResourceLoader.load(PATH))
-          elsif @frames == LOOK_AT
+          elsif @frames == LOOK_FRAME
             look
           end
         end

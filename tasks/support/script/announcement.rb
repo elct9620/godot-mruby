@@ -21,7 +21,7 @@ module Godot
                       "define scripts named Twin, so none is listed by that name".freeze
       # The twins are the project's only node scripts meant to share a name, so
       # any other pair sharing one is a file that took a name already spelled.
-      SHARED_NAME = /define scripts named (?<name>\w+), so none is listed/
+      NAME_CLASH = /define scripts named (?<name>\w+), so none is listed/
       # A node script the editor cannot read, and what a scan must never print
       # while the language answers for it.
       UNREADABLE_FILE = "unreadable.rb"
@@ -75,7 +75,7 @@ module Godot
       # Every node script but the twins has a name of its own, so a fixture
       # never takes one another file already spells.
       def verify_names_apart!(output)
-        shared = output.scan(SHARED_NAME).flatten.uniq - ["Twin"]
+        shared = output.scan(NAME_CLASH).flatten.uniq - ["Twin"]
         return if shared.empty?
 
         raise "Node scripts other than the twins share a name #{shared}:\n#{output}"

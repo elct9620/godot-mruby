@@ -15,7 +15,7 @@ class SuperclassTest < Minitest::Test
     end
   RUBY
 
-  UNFINISHED_CHAMELEON = <<~RUBY.freeze
+  HALF_CHAMELEON = <<~RUBY.freeze
     module Unit
       module Reload
         class Chameleon < Godot::Node2D
@@ -75,7 +75,7 @@ class SuperclassTest < Minitest::Test
     node = make_node(:chameleon)
     node.call(:kind)
 
-    stub_source(:chameleon, UNFINISHED_CHAMELEON) do
+    stub_source(:chameleon, HALF_CHAMELEON) do
       assert_equal ["node", Godot::Node], [node.call(:kind), Unit::Reload::Chameleon.superclass]
     end
   end

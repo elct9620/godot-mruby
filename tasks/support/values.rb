@@ -4,7 +4,7 @@ module Godot
   # Plays the scene calling a value type's methods with fewer arguments than
   # they require on a release build. Part of Godot::Release.
   module Values
-    SCENE = "res://integration/values/refused_method.tscn"
+    SCENE = "res://integration/values/method_probe.tscn"
     REFUSALS = ["wrong number of arguments (given 1, expected 2)",
                 "wrong number of arguments (given 1, expected 3)"].freeze
 

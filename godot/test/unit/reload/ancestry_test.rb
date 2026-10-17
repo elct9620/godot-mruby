@@ -1,7 +1,7 @@
 class AncestryTest < Minitest::Test
   DIRECTORY = "res://test/unit/reload".freeze
 
-  SHIFTED_SOURCE = <<~RUBY.freeze
+  SHIFTER_SOURCE = <<~RUBY.freeze
     module Unit
       module Reload
         class Shifter < Godot::Node2D
@@ -14,7 +14,7 @@ class AncestryTest < Minitest::Test
   def test_a_node_script_reports_the_engine_class_the_file_it_extends_now_reaches
     drifter = load_script(:drifter)
     drifter.get_instance_base_type
-    stub_source(load_script(:shifter), SHIFTED_SOURCE) do
+    stub_source(load_script(:shifter), SHIFTER_SOURCE) do
       assert_equal :Node2D, drifter.get_instance_base_type
     end
   end

@@ -11,9 +11,9 @@ module Integration
         DIRECTORY = "res://enemies/ships".freeze
         PATH = "#{DIRECTORY}/hero_ship.rb".freeze
         TEMPLATE = "CharacterBody2D: Basic Movement".freeze
-        OPEN_AT = 30
-        LIST_AT = 40
-        CREATE_AT = 50
+        OPENING_FRAME = 30
+        LISTING_FRAME = 40
+        CREATION_FRAME = 50
 
         def _ready
           @frames = 0
@@ -22,11 +22,11 @@ module Integration
         def _process(_delta)
           @frames += 1
           case @frames
-          when OPEN_AT then open
-          when LIST_AT
+          when OPENING_FRAME then open
+          when LISTING_FRAME
             list
             @dialog.config("CharacterBody2D", PATH)
-          when CREATE_AT
+          when CREATION_FRAME
             choose(TEMPLATE)
             @dialog.get_ok_button.emit_signal(:pressed)
           end

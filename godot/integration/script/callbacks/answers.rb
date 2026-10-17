@@ -1,3 +1,5 @@
+# Answers GDScript with an Array holding itself, which cannot cross to the
+# engine.
 module Integration
   module Script
     module Callbacks

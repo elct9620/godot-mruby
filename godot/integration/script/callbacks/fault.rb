@@ -1,3 +1,4 @@
+# Raises as its object is built, so Godot never calls its _process.
 module Integration
   module Script
     module Callbacks

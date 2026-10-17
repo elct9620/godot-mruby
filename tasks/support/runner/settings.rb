@@ -13,16 +13,16 @@ module Godot
       # The one test file the copy's res://test keeps, so a run of it shows
       # what ran without running every test again, and the summary of a run of
       # its two tests.
-      KEPT_TEST = "test/kept_test.rb"
-      KEPT_TEST_SOURCE = "class KeptTest < Minitest::Test\n  def test_runs\n    pass\n  end\n\n  " \
-                         "def test_runs_too\n    pass\n  end\nend\n"
-      KEPT_SUMMARY = /^2 runs, \d+ assertions, 0 failures, 0 errors, 0 skips$/
+      ANCHOR_TEST = "test/anchor_test.rb"
+      ANCHOR_TEST_SOURCE = "class AnchorTest < Minitest::Test\n  def test_runs\n    pass\n  end\n\n  " \
+                           "def test_runs_too\n    pass\n  end\nend\n"
+      ANCHOR_SUMMARY = /^2 runs, \d+ assertions, 0 failures, 0 errors, 0 skips$/
       # A test file the check writes under the copy's res://test, the pattern
       # that matches it and no other file there, and the summary of a run of
       # its one test.
-      PICKED_TEST = "test/picked_by_pattern.rb"
-      PICKED_TEST_SOURCE = "class PickedByPatternTest < Minitest::Test\n  def test_runs\n    pass\n  end\nend\n"
-      PATTERN = "picked_*.rb"
+      NEEDLE_TEST = "test/needle_in_haystack.rb"
+      NEEDLE_TEST_SOURCE = "class NeedleTest < Minitest::Test\n  def test_runs\n    pass\n  end\nend\n"
+      PATTERN = "needle_*.rb"
       PATTERN_SUMMARY = /^1 runs, \d+ assertions, 0 failures, 0 errors, 0 skips$/
 
       module_function
@@ -45,7 +45,7 @@ module Godot
       # @behavior RT-027
       def verify_defaults!(project)
         output, status = Runner.run(project)
-        return if status.success? && output.match?(KEPT_SUMMARY)
+        return if status.success? && output.match?(ANCHOR_SUMMARY)
 
         raise "A project without test settings did not run #{Runner::TESTS}:\n#{output}"
       end
@@ -53,7 +53,7 @@ module Godot
       # A pattern matching one test file has to run that file's tests alone.
       # @behavior RT-028
       def verify_pattern!(project)
-        File.write(File.join(project, PICKED_TEST), PICKED_TEST_SOURCE)
+        File.write(File.join(project, NEEDLE_TEST), NEEDLE_TEST_SOURCE)
         File.write(File.join(project, "override.cfg"), %([mruby]\n\ntest/pattern="#{PATTERN}"\n))
         output, status = Runner.run(project)
         return if status.success? && output.match?(PATTERN_SUMMARY)
@@ -61,12 +61,12 @@ module Godot
         raise "The test pattern #{PATTERN} did not narrow the run:\n#{output}"
       end
 
-      # Replaces the tests under the project's res://test with the one KEPT_TEST.
+      # Replaces the tests under the project's res://test with the one ANCHOR_TEST.
       def keep_one_test(project)
         tests = File.join(project, "test")
         FileUtils.rm_rf(tests)
         FileUtils.mkdir_p(tests)
-        File.write(File.join(project, KEPT_TEST), KEPT_TEST_SOURCE)
+        File.write(File.join(project, ANCHOR_TEST), ANCHOR_TEST_SOURCE)
       end
 
       # Removes the test settings from the project's settings, keeping the

@@ -9,14 +9,14 @@ module Godot
     module Callbacks
       # The scene, what its scripts print, and what they must never print.
       SCENE = "res://integration/script/callbacks/callbacks.tscn"
-      BUILT_LINE = "brick.rb built an object"
-      FAILED_LINE = "SCRIPT ERROR: fault.rb cannot be built"
-      FAILED_PROCESS_LINE = "fault.rb processed"
+      BRICK_LINE = "brick.rb built an object"
+      FAULT_LINE = "SCRIPT ERROR: fault.rb cannot be built"
+      FAULT_PROCESS_LINE = "fault.rb processed"
       IDLE_LINE = "statue.rb ran"
       # What Godot gets for an answer that cannot cross, and the log's reason.
-      REFUSED_ANSWER_LINES = ["make_self_loop answered Nil <null>",
-                              "ERROR: #make_self_loop answered [[...]]: an Array nested more than 100 deep cannot " \
-                              "reach the engine"].freeze
+      REFUSAL_LINES = ["make_self_loop answered Nil <null>",
+                       "ERROR: #make_self_loop answered [[...]]: an Array nested more than 100 deep cannot " \
+                       "reach the engine"].freeze
 
       module_function
 
@@ -32,7 +32,7 @@ module Godot
 
       # @behavior RS-013 RS-014 RS-015 RS-016
       def verify_objects_built!(lines, output)
-        counts = { BUILT_LINE => 2, FAILED_LINE => 1, FAILED_PROCESS_LINE => 0, IDLE_LINE => 0 }
+        counts = { BRICK_LINE => 2, FAULT_LINE => 1, FAULT_PROCESS_LINE => 0, IDLE_LINE => 0 }
         wrong = counts.reject { |line, count| lines.count(line) == count }
         return if wrong.empty?
 
@@ -41,7 +41,7 @@ module Godot
 
       # @behavior RV-008
       def verify_refused_answer!(lines, output)
-        missing = REFUSED_ANSWER_LINES.reject { |line| lines.include?(line) }
+        missing = REFUSAL_LINES.reject { |line| lines.include?(line) }
         return if missing.empty?
 
         raise "The callbacks scene's answer that cannot cross did not reach Godot as null #{missing}:\n#{output}"

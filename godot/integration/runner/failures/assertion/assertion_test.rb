@@ -1,6 +1,6 @@
 # A test whose assertion fails: the runner has to report it where it failed,
 # still run teardown, and fail the run.
-class FailedAssertionTest < Minitest::Test
+class AssertionTest < Minitest::Test
   def teardown
     puts "teardown ran after a failure"
   end

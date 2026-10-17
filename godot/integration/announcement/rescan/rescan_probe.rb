@@ -8,12 +8,12 @@ module Integration
         tool
 
         NAME = :Boss
-        ADDED = "res://integration/announcement/rescan/added/boss.rb".freeze
+        NEWCOMER = "res://integration/announcement/rescan/newcomer/boss.rb".freeze
         SOURCE = <<~RUBY.freeze
           module Integration
             module Announcement
               module Rescan
-                module Added
+                module Newcomer
                   class Boss < Godot::Node
                   end
                 end
@@ -21,8 +21,8 @@ module Integration
             end
           end
         RUBY
-        ADD_AT = 60
-        REPORT_AT = 150
+        ADDITION_FRAME = 60
+        REPORT_FRAME = 150
 
         def _ready
           @frames = 0
@@ -31,15 +31,15 @@ module Integration
         def _process(_delta)
           @frames += 1
           case @frames
-          when ADD_AT then add
-          when REPORT_AT then report("after the scan")
+          when ADDITION_FRAME then add
+          when REPORT_FRAME then report("after the scan")
           end
         end
 
         def add
           report("before the file came")
-          Godot::DirAccess.make_dir_recursive_absolute(ADDED[0, ADDED.rindex("/")])
-          file = Godot::FileAccess.open(ADDED, Godot::FileAccess::WRITE)
+          Godot::DirAccess.make_dir_recursive_absolute(NEWCOMER[0, NEWCOMER.rindex("/")])
+          file = Godot::FileAccess.open(NEWCOMER, Godot::FileAccess::WRITE)
           file.store_string(SOURCE)
           file.close
           Godot::EditorInterface.get_resource_filesystem.scan

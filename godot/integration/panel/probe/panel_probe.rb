@@ -11,8 +11,8 @@ module Integration
 
         DIRECTORY = "res://integration/runner/failures/assertion".freeze
         RUN_FILE = "user://godot_mruby/run.json".freeze
-        PRESS_AT = 30
-        LOOK_EVERY = 30
+        PRESS_FRAME = 30
+        LOOK_INTERVAL = 30
 
         def _ready
           @frames = 0
@@ -23,11 +23,11 @@ module Integration
           panel = (@panel ||= find_panel(get_tree.root))
           return unless panel
 
-          if @frames == PRESS_AT
+          if @frames == PRESS_FRAME
             press(panel)
           elsif @pressed && !@left && runner_took_run_file?
             leave_run_file
-          elsif @pressed && !@opened && (@frames % LOOK_EVERY).zero?
+          elsif @pressed && !@opened && (@frames % LOOK_INTERVAL).zero?
             look(panel)
           end
         end

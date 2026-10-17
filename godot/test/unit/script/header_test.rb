@@ -49,7 +49,7 @@ class HeaderTest < Minitest::Test
 
   # @behavior RS-039
   def test_a_scenes_connection_to_a_declared_signal_is_made_before_its_file_runs
-    listener = autofree(Godot::ResourceLoader.load("#{DIRECTORY}/siren.tscn").instantiate)
+    listener = autofree(Godot::ResourceLoader.load("#{DIRECTORY}/listener.tscn").instantiate)
 
     assert listener.get_node("Siren").has_connections(:wailed)
     refute ran?(:Siren)

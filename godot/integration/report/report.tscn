@@ -1,7 +1,7 @@
 [gd_scene load_steps=5 format=3]
 
-[ext_resource type="Script" path="res://integration/report/warning.rb" id="1"]
-[ext_resource type="Script" path="res://integration/report/syntax_error.rb" id="2"]
+[ext_resource type="Script" path="res://integration/report/warner.rb" id="1"]
+[ext_resource type="Script" path="res://integration/report/typo.rb" id="2"]
 [ext_resource type="Script" path="res://integration/report/fuse.rb" id="3"]
 [ext_resource type="Script" path="res://integration/report/crier.rb" id="4"]
 

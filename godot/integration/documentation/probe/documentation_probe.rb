@@ -9,9 +9,9 @@ module Integration
 
         PATH = "res://integration/documentation/probe/waymark.rb".freeze
         PAGE = "Waymark".freeze
-        OPEN_AT = 30
-        SHOW_AT = 40
-        READ_AT = 50
+        OPENING_FRAME = 30
+        DISPLAY_FRAME = 40
+        READING_FRAME = 50
 
         def _ready
           @frames = 0
@@ -19,11 +19,11 @@ module Integration
 
         def _process(_delta)
           @frames += 1
-          if @frames == OPEN_AT
+          if @frames == OPENING_FRAME
             open_page
-          elsif @frames == SHOW_AT
+          elsif @frames == DISPLAY_FRAME
             show_page
-          elsif @frames == READ_AT
+          elsif @frames == READING_FRAME
             read_page
           end
         end

@@ -17,17 +17,17 @@ module Godot
     # What the leftover scene loads under a test directory, which is a root
     # directory, as the constant its path names from there.
     LEFTOVER = "class Leftover\nend\n"
-    LEFT_OUT_LINE = "left out: uninitialized constant Leftover"
+    LEFTOVER_LINE = "left out: uninitialized constant Leftover"
     # The run ends within its first frames; this only stops one that never
     # does from hanging the check.
     FRAMES = "60"
-    SHIPPED_SCENE = "res://integration/export/manifest.tscn"
+    MANIFEST_SCENE = "res://integration/export/manifest.tscn"
     # Paths an export has to leave out, and a game file it has to ship, which
     # tells a game missing everything from one missing only its tests.
-    LEFT_OUT_PATHS = ["res://test/unit/engine_classes/engine_classes_test.rb",
-                      "res://addons/godot_mruby/runner.tscn"].freeze
+    EXCLUSIONS = ["res://test/unit/engine_classes/engine_classes_test.rb",
+                  "res://addons/godot_mruby/runner.tscn"].freeze
     GAME_FILE = "res://integration/export/seeker.rb"
-    REFUSED_SCENE = "res://integration/export/intruder.tscn"
+    INTRUDER_SCENE = "res://integration/export/intruder.tscn"
     REFUSAL = "ERROR: The test runner does not run in an exported game"
     HINT_SCENE = "res://integration/export/lookout.tscn"
     HINT = "quarry hint: Seeker"
@@ -50,14 +50,14 @@ module Godot
       source = File.join(dir, "leftover.rb")
       File.write(source, LEFTOVER)
       output, status = run(dir, pack, LEFTOVER_SCENE, source, File.join(dir, "leftover.pck"))
-      return if status.success? && output.lines.map(&:chomp).include?(LEFT_OUT_LINE)
+      return if status.success? && output.lines.map(&:chomp).include?(LEFTOVER_LINE)
 
       raise "The exported game's Ruby reached a file under a test directory:\n#{output}"
     end
 
     # @behavior RX-002 RX-003
     def verify_tests_left_out!(dir, pack)
-      output, status = run(dir, pack, SHIPPED_SCENE, *LEFT_OUT_PATHS, GAME_FILE)
+      output, status = run(dir, pack, MANIFEST_SCENE, *EXCLUSIONS, GAME_FILE)
       shipped = output.lines.filter_map do |line|
         line.chomp.delete_prefix("shipped: ") if line.start_with?("shipped: ")
       end
@@ -69,7 +69,7 @@ module Godot
     # The runner quits the game with 1 as it refuses.
     # @behavior RX-006
     def verify_runner_refused!(dir, pack)
-      output, status = run(dir, pack, REFUSED_SCENE)
+      output, status = run(dir, pack, INTRUDER_SCENE)
       return if status.exitstatus == 1 && output.lines.map(&:chomp).include?(REFUSAL)
 
       raise "The exported game ran a test runner:\n#{output}"

@@ -19,7 +19,7 @@ module Notices
   CHANGES = { "godot-cell" => GodotCell.change }.freeze
   # How the section of a crate that publishes no license file opens; the
   # rest of the line links the text of each license its manifest names.
-  UNPUBLISHED_OPENING = "No license file is published with this crate"
+  NO_LICENSE_OPENING = "No license file is published with this crate"
   # A license's text page on SPDX, which the line links by its identifier.
   LICENSE_PAGE = %r{https://spdx\.org/licenses/[\w.+-]+\.html}
 
@@ -45,7 +45,7 @@ module Notices
   def compose_notice(title, dir, license, change = nil)
     texts = Dir.children(dir).grep(LICENSE_FILE).sort.map { |file| File.read(File.join(dir, file)) }
     if texts.empty?
-      texts = ["#{UNPUBLISHED_OPENING}; its license text is at #{link_license_pages(license).join(", ")}\n"]
+      texts = ["#{NO_LICENSE_OPENING}; its license text is at #{link_license_pages(license).join(", ")}\n"]
     end
     texts << change if change
     title = "#{title}, changed" if change
@@ -103,7 +103,7 @@ module Notices
   # The lines in `text` saying a crate publishes no license file without
   # linking a license's text.
   def find_unlinked_licenses(text)
-    text.lines.grep(/\A#{UNPUBLISHED_OPENING}/).grep_v(LICENSE_PAGE)
+    text.lines.grep(/\A#{NO_LICENSE_OPENING}/).grep_v(LICENSE_PAGE)
   end
 
   # Whether `text` carries mruby's notice of what it compiles in under other

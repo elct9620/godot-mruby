@@ -4,7 +4,7 @@ module Godot
   # Plays the scene calling an engine method's bind with counts it does not
   # take on a release build. Part of Godot::Release.
   module EngineClasses
-    SCENE = "res://integration/engine_classes/refused_bind.tscn"
+    SCENE = "res://integration/engine_classes/bind_probe.tscn"
     REFUSALS = ["wrong number of arguments (given 0, expected 2)",
                 "wrong number of arguments (given 3, expected 2)"].freeze
 

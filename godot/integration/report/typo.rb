@@ -1,8 +1,8 @@
 # The compiler stops at the stray end below, so this file never runs.
 module Integration
   module Report
-    class SyntaxError < Godot::Node
-      puts "syntax_error.rb ran"
+    class Typo < Godot::Node
+      puts "typo.rb ran"
 
       def _ready
       end

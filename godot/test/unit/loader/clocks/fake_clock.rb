@@ -1,6 +1,6 @@
 module Unit
   module Loader
-    module Support
+    module Clocks
       # Test support a test reaches by name, from its test directory.
       class FakeClock
         def now

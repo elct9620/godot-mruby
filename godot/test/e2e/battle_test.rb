@@ -22,7 +22,7 @@ class BattleTest < Minitest::Test
   end
 
   # @behavior RS-028
-  def test_godot_gets_a_enemies_speed_as_a_float_and_its_health_as_an_integer
+  def test_godot_gets_an_enemys_speed_as_a_float_and_its_health_as_an_integer
     add_child_autofree(@battle)
     enemy = @battle.enemies.first
 

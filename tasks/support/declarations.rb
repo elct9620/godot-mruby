@@ -13,9 +13,9 @@ module Godot
     # The scene sets the property before anything builds the node's object,
     # so the answer is the scene's; the object is given it once it is built,
     # and a node the scene set nothing on answers what its class exported.
-    STAGED_LINE = "staged range: 500.0"
-    AIMED_LINE = "preset.rb aims at 500.0"
-    BUILT_LINE = "built range: 500.0"
+    SCENE_RANGE_LINE = "staged range: 500.0"
+    AIM_LINE = "preset.rb aims at 500.0"
+    OBJECT_RANGE_LINE = "built range: 500.0"
     DEFAULT_LINE = "default range: 300.0"
     RELEASE_SCENE = "res://integration/declarations/release/ledger.tscn"
     EXPORT_LINE = "export: balance"
@@ -27,7 +27,7 @@ module Godot
     def verify!(project)
       output, status = Godot.run_scene(project, SCENE, "--quit-after", "3")
       lines = output.lines.map(&:chomp)
-      missing = [STAGED_LINE, AIMED_LINE, BUILT_LINE, DEFAULT_LINE].reject { |line| lines.include?(line) }
+      missing = [SCENE_RANGE_LINE, AIM_LINE, OBJECT_RANGE_LINE, DEFAULT_LINE].reject { |line| lines.include?(line) }
       return if status.success? && missing.empty?
 
       raise "The exports scene did not answer its properties #{missing}:\n#{output}"

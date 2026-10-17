@@ -3,7 +3,7 @@
 # checks hands the engine unchecked, then quits.
 module Integration
   module EngineClasses
-    class RefusedBind < Godot::Node
+    class BindProbe < Godot::Node
       def _ready
         [[], [:refused, 1, 2]].each do |args|
           set_meta(*args)

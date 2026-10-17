@@ -7,7 +7,7 @@ module Integration
       class Refresher < Godot::Node
         tool
 
-        EDITED_SOURCE = <<~RUBY.freeze
+        REVISION = <<~RUBY.freeze
           module Integration
             module Script
               module Exports
@@ -27,7 +27,7 @@ module Integration
 
           plate = get_node("Plate")
           script = plate.get_script
-          script.source_code = EDITED_SOURCE
+          script.source_code = REVISION
           script.reload
           names = plate.get_property_list.map { |property| property["name"] }
           puts "armor listed: #{names.include?('armor')}"

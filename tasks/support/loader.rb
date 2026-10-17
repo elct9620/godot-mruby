@@ -25,8 +25,8 @@ module Godot
     # What every run has to report of the namespace's own file that raises as
     # a constant of its name outside the namespace loads: the error placed at
     # the line of the file that raised.
-    HIDDEN_ERROR_LINES = ["SCRIPT ERROR: bay/latch.rb fails as a latch outside Bay loads",
-                          "(res://test/unit/loader/bay/latch.rb:8)"].freeze
+    LATCH_ERROR_LINES = ["SCRIPT ERROR: bay/latch.rb fails as a latch outside Bay loads",
+                         "(res://test/unit/loader/bay/latch.rb:8)"].freeze
     # A test using a constant whose file raises, and what its run has to print
     # in order: the error placed at the line of the file that raised.
     ERROR_TESTS = "res://integration/loader/failures/tripwire"
@@ -67,7 +67,7 @@ module Godot
     # raised as the constant outside it loaded, at the file's line.
     # @behavior RL-035
     def verify_hidden_raised!(output)
-      missing = Runner.find_missing_in_order(output, HIDDEN_ERROR_LINES)
+      missing = Runner.find_missing_in_order(output, LATCH_ERROR_LINES)
       return if missing.empty?
 
       raise "A run of #{Runner::TESTS} did not report the hidden file that raised #{missing}:\n#{output}"

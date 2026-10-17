@@ -3,7 +3,7 @@ class TypingTest < Minitest::Test
   RANGE = 1
   # @GlobalScope's Variant.Type for int, which Ruby has no name for.
   INT = 2
-  EDITED_SOURCE = <<~RUBY.freeze
+  REVISION = <<~RUBY.freeze
     module Unit
       module Script
         class Tuner < Godot::Node2D
@@ -29,7 +29,7 @@ class TypingTest < Minitest::Test
     Unit::Script::Tuner
     @script = Godot::ResourceLoader.load(PATH)
     @source = @script.source_code
-    @script.source_code = EDITED_SOURCE
+    @script.source_code = REVISION
   end
 
   def teardown

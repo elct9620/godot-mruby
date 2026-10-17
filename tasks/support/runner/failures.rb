@@ -16,29 +16,29 @@ module Godot
       RUNS = {
         %W[--dir #{RUNNER_TESTS}/failures/assertion] => [
           "teardown ran after a failure",
-          "FailedAssertionTest#test_one_equals_two [#{RUNNER_TESTS}/failures/assertion/failed_assertion_test.rb:9]:",
-          "ERROR: FailedAssertionTest#test_one_equals_two: Expected: 1",
-          "(#{RUNNER_TESTS}/failures/assertion/failed_assertion_test.rb:9)"
+          "AssertionTest#test_one_equals_two [#{RUNNER_TESTS}/failures/assertion/assertion_test.rb:9]:",
+          "ERROR: AssertionTest#test_one_equals_two: Expected: 1",
+          "(#{RUNNER_TESTS}/failures/assertion/assertion_test.rb:9)"
         ],
         %W[--dir #{RUNNER_TESTS}/failures/assertion --seed 7] => [
-          "ERROR: FailedAssertionTest#test_one_equals_two: Expected: 1",
-          "Run it again with --seed 7 --include FailedAssertionTest#test_one_equals_two"
+          "ERROR: AssertionTest#test_one_equals_two: Expected: 1",
+          "Run it again with --seed 7 --include AssertionTest#test_one_equals_two"
         ],
         %W[--dir #{RUNNER_TESTS}/failures/error] => [
-          "RaisedErrorTest#test_raises_an_argument_error [#{RUNNER_TESTS}/failures/error/raised_error_test.rb:10]:",
+          "ErrorTest#test_raises_an_argument_error [#{RUNNER_TESTS}/failures/error/error_test.rb:10]:",
           "ArgumentError: not an assertion",
-          "    #{RUNNER_TESTS}/failures/error/raised_error_test.rb:10:in refuse_the_item",
-          "    #{RUNNER_TESTS}/failures/error/raised_error_test.rb:6:in test_raises_an_argument_error\n\n",
-          "ERROR: RaisedErrorTest#test_raises_an_argument_error: ArgumentError: not an assertion",
-          "(#{RUNNER_TESTS}/failures/error/raised_error_test.rb:10)"
+          "    #{RUNNER_TESTS}/failures/error/error_test.rb:10:in refuse_the_item",
+          "    #{RUNNER_TESTS}/failures/error/error_test.rb:6:in test_raises_an_argument_error\n\n",
+          "ERROR: ErrorTest#test_raises_an_argument_error: ArgumentError: not an assertion",
+          "(#{RUNNER_TESTS}/failures/error/error_test.rb:10)"
         ],
         %W[--dir #{RUNNER_TESTS}/failures/syntax] => [
-          "(#{RUNNER_TESTS}/failures/syntax/broken_syntax_test.rb:4)",
+          "(#{RUNNER_TESTS}/failures/syntax/syntax_test.rb:4)",
           "0 runs, 0 assertions"
         ],
         %W[--dir #{RUNNER_TESTS}/failures/delay] => [
-          "ERROR: WaitedFailureTest#test_fails_after_a_frame: Expected: 1",
-          "(#{RUNNER_TESTS}/failures/delay/waited_failure_test.rb:6)"
+          "ERROR: DelayTest#test_fails_after_a_frame: Expected: 1",
+          "(#{RUNNER_TESTS}/failures/delay/delay_test.rb:6)"
         ],
         %W[--dir #{RUNNER_TESTS}/failures/missing] => [
           "The test directory #{RUNNER_TESTS}/failures/missing does not exist"

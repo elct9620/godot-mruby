@@ -13,10 +13,10 @@ module Integration
         BLANK_LINE = 6
         POINT_LINE = 7
         MILESTONE_LINE = 4
-        OPEN_AT = 30
-        LOOK_AT = 40
-        LOOK_UP_AT = 50
-        READ_AT = 60
+        OPENING_FRAME = 30
+        LOOK_FRAME = 40
+        LOOKUP_FRAME = 50
+        READING_FRAME = 60
 
         def _ready
           @frames = 0
@@ -24,13 +24,13 @@ module Integration
 
         def _process(_delta)
           @frames += 1
-          if @frames == OPEN_AT
+          if @frames == OPENING_FRAME
             Godot::EditorInterface.edit_script(Godot::ResourceLoader.load(PATH))
-          elsif @frames == LOOK_AT
+          elsif @frames == LOOK_FRAME
             look
-          elsif @frames == LOOK_UP_AT
+          elsif @frames == LOOKUP_FRAME
             look_up
-          elsif @frames == READ_AT
+          elsif @frames == READING_FRAME
             read_lookups
           end
         end

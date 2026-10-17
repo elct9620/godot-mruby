@@ -4,7 +4,7 @@ module Unit
       # Holds what Bolt names in a class body inside Bin, where Ruby looks
       # through the enclosing namespaces.
       class Tray
-        HOLDS = Bolt
+        CONTENT = Bolt
       end
     end
   end

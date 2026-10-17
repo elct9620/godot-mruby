@@ -21,7 +21,7 @@ class RerunTest < Minitest::Test
     end
   RUBY
 
-  UNFINISHED_SOURCE = <<~RUBY.freeze
+  HALF_COUNTER = <<~RUBY.freeze
     module Unit
       module Reload
         class Counter < Godot::Node
@@ -136,14 +136,14 @@ class RerunTest < Minitest::Test
     node = make_node(:counter)
     node.call(:answer)
 
-    stub_source(:counter, UNFINISHED_SOURCE) { assert_equal "before", node.call(:answer) }
+    stub_source(:counter, HALF_COUNTER) { assert_equal "before", node.call(:answer) }
   end
 
   # @behavior RF-009
   def test_a_changed_source_that_raises_keeps_the_constants_it_assigned_again
     make_node(:counter).call(:answer)
 
-    stub_source(:counter, UNFINISHED_SOURCE) { assert Unit::Reload::Counter.const_defined?(:LIMIT, false) }
+    stub_source(:counter, HALF_COUNTER) { assert Unit::Reload::Counter.const_defined?(:LIMIT, false) }
   end
 
   # @behavior RF-006

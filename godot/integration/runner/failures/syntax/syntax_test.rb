@@ -1,4 +1,4 @@
 # A test file that does not parse: the run cannot pass without it.
-class BrokenSyntaxTest < Minitest::Test
+class SyntaxTest < Minitest::Test
 end
 end

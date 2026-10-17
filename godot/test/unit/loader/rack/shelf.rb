@@ -4,7 +4,7 @@ module Unit
       # Holds what Nut names in a class body inside Rack, where Ruby looks
       # through the enclosing namespaces.
       class Shelf
-        HOLDS = Nut
+        CONTENT = Nut
       end
     end
   end

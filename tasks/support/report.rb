@@ -9,9 +9,9 @@ module Godot
     # What mruby says about the report scene's files, each as the line Godot
     # prints it on and the Ruby location Godot puts on the line after.
     REPORTS = {
-      "WARNING: else without rescue is useless" => "(res://integration/report/warning.rb:9)",
+      "WARNING: else without rescue is useless" => "(res://integration/report/warner.rb:9)",
       %(SCRIPT ERROR: syntax error, unexpected "'end'", expecting end of file) =>
-        "(res://integration/report/syntax_error.rb:12)",
+        "(res://integration/report/typo.rb:12)",
       "SCRIPT ERROR: wrong key" => "unlock (res://integration/report/fuse.rb:10)"
     }.freeze
     # What the report scene's Ruby reports through Godot's own functions.

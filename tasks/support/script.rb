@@ -17,7 +17,7 @@ module Godot
     PRINTER_SCENE = "res://integration/script/printer.tscn"
     # What the prints scene's Ruby prints. Each line must appear exactly once:
     # the scene attaches the same file to two nodes, and a file runs once.
-    PRINTED_LINES = ["puts from mruby", "print from mruby", ":p_from_mruby"].freeze
+    PRINT_LINES = ["puts from mruby", "print from mruby", ":p_from_mruby"].freeze
     # A scene whose nodes take a library file, a node script extending a class
     # they are not, an abstract node script and a file extending a name no
     # file spells, and the errors refusing each.
@@ -49,7 +49,7 @@ module Godot
     def verify_scripts_run!(project)
       output, status = Godot.run_scene(project, PRINTER_SCENE, "--quit-after", "3")
       lines = output.lines.map(&:chomp)
-      counts = PRINTED_LINES.to_h { |line| [line, lines.count(line)] }
+      counts = PRINT_LINES.to_h { |line| [line, lines.count(line)] }
       return if status.success? && output.lines.grep(ERROR_LINE).empty? && counts.values.all?(1)
 
       raise "The prints scene's Ruby did not print each line once #{counts}:\n#{output}"
