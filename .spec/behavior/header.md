@@ -213,3 +213,11 @@ How a file's header is read from its source without running it: the constants it
 | Given | a file whose class body writes `attr_reader :w` and `attr_accessor :a` inside `class << self`, `define_singleton_method(:s)`, `self.define_singleton_method(:t)`, and `abstract :w, :a, :a=, :s, :t` |
 | When | its header is read |
 | Then | the header marks none of them abstract |
+
+## `RH-026` A method `define_singleton_method` makes inside `class << self` is not the class's own
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose class body calls `define_singleton_method(:x)` inside `class << self`, then `abstract :x` |
+| When | its header is read |
+| Then | the header marks `x` abstract |

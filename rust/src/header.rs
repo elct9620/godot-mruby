@@ -289,8 +289,12 @@ impl Header {
                 self.singleton_class_methods
                     .push(decode_text(def.name().as_slice()));
             } else if let Some(call) = node.as_call_node() {
-                self.singleton_class_methods
-                    .extend(read_method_names(&call));
+                // Here `define_singleton_method` defines on the singleton
+                // class's own singleton class, so not on the class.
+                if call.name().as_slice() != b"define_singleton_method" {
+                    self.singleton_class_methods
+                        .extend(read_method_names(&call));
+                }
             }
         }
     }
@@ -367,16 +371,13 @@ impl Header {
                     self.read_method(&def);
                 }
                 for method in methods {
-                    let name = if let Some(def) = method.as_def_node() {
-                        def.name().as_slice().to_vec()
-                    } else if let Some(name) = method.as_symbol_node() {
-                        name.unescaped().to_vec()
-                    } else if let Some(name) = method.as_string_node() {
-                        name.unescaped().to_vec()
-                    } else {
-                        continue;
+                    let name = match method.as_def_node() {
+                        Some(def) => Some(decode_text(def.name().as_slice())),
+                        None => read_name(method),
                     };
-                    self.mark_abstract(decode_text(&name), offset);
+                    if let Some(name) = name {
+                        self.mark_abstract(name, offset);
+                    }
                 }
             }
             (b"icon", [path]) => {
@@ -1049,6 +1050,16 @@ mod tests {
         let header = Header::from_source("res://shape.rb", source, &Roots::default());
 
         assert!(header.abstract_methods().is_empty());
+    }
+
+    // @behavior RH-026
+    #[test]
+    fn a_method_define_singleton_method_makes_in_class_self_is_not_the_classs_own() {
+        let source = "class Shape < Godot::Node2D\n  abstract\n\n  class << self\n    define_singleton_method(:x) { 1 }\n  end\n  abstract :x\nend\n";
+
+        let header = Header::from_source("res://shape.rb", source, &Roots::default());
+
+        assert_eq!(header.abstract_methods(), ["x".to_owned()].as_slice());
     }
 
     // @behavior RH-010
