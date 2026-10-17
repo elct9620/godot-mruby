@@ -78,3 +78,11 @@ How Ruby computes in a realm: Ruby's own `Math`, `rand` and `srand` behave as Ru
 | Given | a negative dividend |
 | When | Ruby takes its remainder through `Godot.fmod` and `Godot.fposmod` |
 | Then | `fmod` answers GDScript's `%`, signed as the dividend, and `fposmod` answers a remainder that is never negative, while Ruby's `%` keeps Ruby's sign |
+
+## `RC-010` Godot's rounding answers as GDScript's does
+
+| Step | Statement |
+| --- | --- |
+| Given | a Float, and a `Godot::Vector2` |
+| When | Ruby rounds the Float through `Godot.floorf`, `Godot.ceilf` or `Godot.roundf`, and the vector through `Godot.floor` |
+| Then | each Float answers a Float and the vector a vector of its components rounded down, as GDScript's do, while Ruby's `Float#floor` still answers an Integer |

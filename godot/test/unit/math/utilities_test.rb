@@ -44,6 +44,14 @@ class UtilitiesTest < Minitest::Test
     assert_equal 2, -7 % 3
   end
 
+  # @behavior RC-010
+  def test_godots_rounding_answers_as_gdscripts_does
+    assert_equal [1.0, 2.0, 2.0], [Godot.floorf(1.5), Godot.ceilf(1.5), Godot.roundf(1.5)]
+    assert_kind_of Float, Godot.floorf(1.5)
+    assert_equal Godot::Vector2.new(1, -2), Godot.floor(Godot::Vector2.new(1.5, -1.5))
+    assert_kind_of Integer, 1.5.floor
+  end
+
   private
 
   # What GDScript draws from the engine's generator after seeding it.

@@ -85,6 +85,18 @@ static UTILITIES: &[(&str, usize, Utility)] = &[
     ("is_zero_approx", 1, |a| {
         Ok(global::is_zero_approx(read_float(a, 0)?).to_variant())
     }),
+    ("floor", 1, |a| Ok(global::floor(&a[0]))),
+    ("ceil", 1, |a| Ok(global::ceil(&a[0]))),
+    ("round", 1, |a| Ok(global::round(&a[0]))),
+    ("floorf", 1, |a| {
+        Ok(global::floorf(read_float(a, 0)?).to_variant())
+    }),
+    ("ceilf", 1, |a| {
+        Ok(global::ceilf(read_float(a, 0)?).to_variant())
+    }),
+    ("roundf", 1, |a| {
+        Ok(global::roundf(read_float(a, 0)?).to_variant())
+    }),
     ("fposmod", 2, |a| {
         Ok(global::fposmod(read_float(a, 0)?, read_float(a, 1)?).to_variant())
     }),
