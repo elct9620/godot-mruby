@@ -48,4 +48,14 @@ class ClassBodyTest < Minitest::Test
 
     assert_equal [3, false], [shape.count, shape.method_defined?(:count)]
   end
+
+  # @behavior RG-055
+  def test_abstract_given_a_name_an_ancestors_class_method_has_marks_the_method
+    item = Class.new(Godot::Node) do
+      abstract
+      abstract :icon
+    end
+
+    assert item.method_defined?(:icon)
+  end
 end

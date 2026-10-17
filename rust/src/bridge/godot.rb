@@ -97,7 +97,7 @@ module Godot
         return @abstract = true if methods.empty?
 
         methods.each do |method|
-          next if !method_defined?(method) && singleton_class.method_defined?(method)
+          next if !method_defined?(method) && singleton_methods(false).include?(method.to_sym)
 
           define_method(method) do |*|
             raise NotImplementedError, %(Cannot call the parent class' abstract function "#{method}()" because it hasn't been defined.)

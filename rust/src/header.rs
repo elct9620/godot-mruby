@@ -15,7 +15,8 @@ use crate::snapshot::{
 
 // The calls in a class body that define methods the source does not name
 // with a `def`.
-const METHOD_MAKERS: [&[u8]; 7] = [
+const METHOD_MAKERS: [&[u8]; 8] = [
+    b"attr",
     b"attr_reader",
     b"attr_writer",
     b"attr_accessor",
@@ -146,13 +147,13 @@ impl Header {
     }
 
     /// The names of the methods the file's class defines, as its `def`
-    /// statements write them.
+    /// statements and `abstract` write them.
     pub fn methods(&self) -> impl Iterator<Item = &str> {
         self.methods.keys().map(String::as_str)
     }
 
-    /// Each method the file's class defines, with the byte offset of its
-    /// `def` in the source.
+    /// Each method the file's class defines, with the byte offset in the
+    /// source of the `def` or `abstract` writing it.
     pub fn method_offsets(&self) -> impl Iterator<Item = (&str, usize)> {
         self.methods
             .iter()
@@ -286,8 +287,12 @@ impl Header {
     }
 
     // Marks `name` abstract and takes it among the class's methods, as the
-    // class has it once `abstract` defines it at `offset`.
+    // class has it once `abstract` defines it at `offset`; a method the class
+    // defines on `self` stays its own, as `abstract` leaves it.
     fn mark_abstract(&mut self, name: String, offset: usize) {
+        if self.class_methods.contains(&name) {
+            return;
+        }
         if !self.abstract_methods.contains(&name) {
             self.abstract_methods.push(name.clone());
         }
@@ -307,6 +312,15 @@ impl Header {
             .map(|arguments| arguments.arguments().iter().collect())
             .unwrap_or_default();
         match (call.name().as_slice(), arguments.as_slice()) {
+            (b"private" | b"protected" | b"public", targets) => {
+                for node in targets {
+                    if let Some(def) = node.as_def_node() {
+                        self.read_method(&def);
+                    } else if let Some(call) = node.as_call_node() {
+                        self.read_call(&call);
+                    }
+                }
+            }
             (b"tool", []) => self.is_tool = true,
             (b"abstract", []) => self.is_abstract = true,
             (b"abstract", methods) => {
@@ -884,18 +898,20 @@ mod tests {
     // @behavior RH-021
     #[test]
     fn abstract_given_methods_marks_them_and_the_header_holds_them() {
-        let source = "class Shape < Godot::Node2D\n  abstract\n\n  abstract def draw\n  end\n\n  abstract :area, \"edges\"\n  abstract def self.count\n  end\nend\n";
+        let source = "class Shape < Godot::Node2D\n  abstract\n\n  abstract def draw\n  end\n\n  abstract :area, \"edges\"\n  abstract def self.count\n  end\n\n  def self.total\n  end\n  abstract :total\nend\n";
 
         let header = Header::from_source("res://shape.rb", source, &Roots::default());
 
         assert_eq!(
             (
                 header.methods().collect::<Vec<_>>(),
-                header.abstract_methods()
+                header.abstract_methods(),
+                header.class_methods()
             ),
             (
                 vec!["area", "draw", "edges"],
-                ["draw".to_owned(), "area".to_owned(), "edges".to_owned()].as_slice()
+                ["draw".to_owned(), "area".to_owned(), "edges".to_owned()].as_slice(),
+                ["count".to_owned(), "total".to_owned()].as_slice()
             )
         );
     }
@@ -916,6 +932,20 @@ mod tests {
         });
 
         assert_eq!(unnamed, [true; 4]);
+    }
+
+    // @behavior RH-023
+    #[test]
+    fn a_method_written_inside_a_visibility_call_is_the_class_bodys_own() {
+        let source =
+            "class Circle < Shape\n  private def area\n  end\n\n  private attr_reader :size\nend\n";
+
+        let header = Header::from_source("res://circle.rb", source, &Roots::default());
+
+        assert_eq!(
+            (header.has_method("area"), header.has_methods_without_def()),
+            (true, true)
+        );
     }
 
     // @behavior RH-010

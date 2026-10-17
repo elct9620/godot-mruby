@@ -451,3 +451,11 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | a class extending an engine class whose body writes `abstract def self.count` |
 | When | Ruby calls `count` on the class |
 | Then | the class's own method runs, and its objects gain no method of that name |
+
+## `RG-055` `abstract` given a name an ancestor's class method has marks the method
+
+| Step | Statement |
+| --- | --- |
+| Given | a class extending an engine class whose body writes `abstract :icon`, a name `Godot::Object` answers on the class |
+| When | Ruby asks whether the class's objects have `icon` |
+| Then | they have it, marked abstract |

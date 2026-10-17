@@ -178,9 +178,9 @@ How a file's header is read from its source without running it: the constants it
 
 | Step | Statement |
 | --- | --- |
-| Given | a file whose class body writes `abstract def draw`, `abstract :area, "edges"` and `abstract def self.count` |
+| Given | a file whose class body writes `abstract def draw`, `abstract :area, "edges"`, `abstract def self.count`, and `def self.total` before `abstract :total` |
 | When | its header is read |
-| Then | the header holds `draw`, `area` and `edges` among the class's methods, marked abstract, and `count` only among the methods on the class itself |
+| Then | the header holds `draw`, `area` and `edges` among the class's methods, marked abstract, and `count` and `total` only among the methods on the class itself |
 
 ## `RH-022` A class body writing methods without `def` has methods the header cannot name
 
@@ -190,3 +190,10 @@ How a file's header is read from its source without running it: the constants it
 | When | its header is read |
 | Then | the header says the class has methods its source does not name |
 
+## `RH-023` A method written inside a visibility call is the class body's own
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose class body writes `private def area` and `private attr_reader :size` |
+| When | its header is read |
+| Then | the header holds `area` among the class's methods and says the class has methods its source does not name |
