@@ -202,7 +202,7 @@ class ExportsTest < Minitest::Test
 
   # @behavior RD-034
   def test_a_property_only_the_nodes_own_class_has_stays_the_engines
-    sprite = autofree(covered_sprite)
+    sprite = autofree(cloak)
 
     sprite.set(:centered, false)
 
@@ -211,7 +211,7 @@ class ExportsTest < Minitest::Test
 
   # @behavior RD-035
   def test_a_variable_named_as_a_property_of_the_nodes_own_class_is_untouched
-    sprite = autofree(covered_sprite)
+    sprite = autofree(cloak)
 
     sprite.set(:centered, false)
 
@@ -258,7 +258,7 @@ class ExportsTest < Minitest::Test
 
   # A Sprite2D whose Ruby object, of a class extending Node2D, is built and
   # has written its own @centered.
-  def covered_sprite
+  def cloak
     sprite = Godot::Sprite2D.new
     sprite.set_script(Godot::ResourceLoader.load("res://test/unit/declarations/cloak.rb"))
     sprite.call(:cover)
