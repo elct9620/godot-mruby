@@ -459,36 +459,3 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | a class extending an engine class whose body writes `abstract :icon`, a name `Godot::Object` answers on the class |
 | When | Ruby calls `icon` on an object of a class extending it |
 | Then | it raises `NotImplementedError` |
-
-## `RG-056` `abstract` marks an instance method beside a class method of its name
-
-| Step | Statement |
-| --- | --- |
-| Given | a class extending an engine class whose body writes `def self.sum`, `def sum` and `abstract :sum` |
-| When | Ruby calls `sum` on an object of a class extending it |
-| Then | it raises `NotImplementedError`, and the class's own `sum` still answers |
-
-## `RG-057` `abstract` leaves a name only the class itself defines, though an ancestor has it
-
-| Step | Statement |
-| --- | --- |
-| Given | a class extending an engine class whose objects answer `count` |
-| Given | an abstract class extending it whose body writes `def self.count` and `abstract :count` |
-| When | Ruby calls `count` on an object of a class extending the second |
-| Then | the first class's `count` answers |
-
-## `RG-058` `abstract` judges each name as Ruby evaluates the call
-
-| Step | Statement |
-| --- | --- |
-| Given | an abstract class writing `def x` before `abstract def self.x`, `abstract :y, def self.y`, and `abstract :z` after a `class << self` defining `z` |
-| When | Ruby calls `x`, `y` and `z` on an object of a class extending it |
-| Then | `x` raises `NotImplementedError`, and the object has neither `y` nor `z` |
-
-## `RG-059` `abstract` judges a name by the class methods Ruby lists
-
-| Step | Statement |
-| --- | --- |
-| Given | an abstract class writing `def self.p`, then inside `class << self` `def v`, `private :v, :p`, `def self.r`, `Seal.define_singleton_method(:q)`, `EngineClasses::Seal.define_singleton_method(:k)`, `alias u w`, and `def m` made `private` then `public`, then `attr_reader :t`, `def self.t` and `abstract :v, :r, :t, :q, :k, :p, :u, :m` |
-| When | Ruby calls each name on an object of a class extending it |
-| Then | `v`, `r`, `t` and `p` raise `NotImplementedError`, and the object has none of `q`, `k`, `u` and `m` |

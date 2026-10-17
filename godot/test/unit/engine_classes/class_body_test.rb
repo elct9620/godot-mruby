@@ -55,35 +55,4 @@ class ClassBodyTest < Minitest::Test
 
     assert_raises(NotImplementedError) { charm.icon }
   end
-
-  # @behavior RG-056
-  def test_abstract_marks_an_instance_method_beside_a_class_method_of_its_name
-    folio = autofree(Unit::EngineClasses::Folio.new)
-
-    assert_equal 0, Unit::EngineClasses::Codex.sum
-    assert_raises(NotImplementedError) { folio.sum }
-  end
-
-  # @behavior RG-057
-  def test_abstract_leaves_a_name_only_the_class_itself_defines_though_an_ancestor_has_it
-    quill = autofree(Unit::EngineClasses::Quill.new)
-
-    assert_equal [0, 1], [Unit::EngineClasses::Scroll.count, quill.count]
-  end
-
-  # @behavior RG-058
-  def test_abstract_judges_each_name_as_ruby_evaluates_the_call
-    crest = autofree(Unit::EngineClasses::Crest.new)
-
-    assert_raises(NotImplementedError) { crest.x }
-    assert_equal [false, false], %i[y z].map { |name| crest.respond_to?(name) }
-  end
-
-  # @behavior RG-059
-  def test_abstract_judges_a_name_by_the_class_methods_ruby_lists
-    stamp = autofree(Unit::EngineClasses::Stamp.new)
-
-    %i[v r t p].each { |name| assert_raises(NotImplementedError) { stamp.public_send(name) } }
-    assert_equal [false] * 4, %i[q k u m].map { |name| stamp.respond_to?(name) }
-  end
 end

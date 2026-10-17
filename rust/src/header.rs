@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use godot::builtin::{GString, StringName, VarArray, VarDictionary, Variant, VariantType};
 use godot::meta::ToGodot;
-use ruby_prism::{CallNode, DefNode, Integer, Node, NodeList, SingletonClassNode, Visit};
+use ruby_prism::{CallNode, DefNode, Integer, Node, NodeList, Visit};
 
 use crate::hint::Hint;
 use crate::realm::{self, Roots};
@@ -13,17 +13,18 @@ use crate::snapshot::{
     self, Export, Heading, Member, MethodCalls, Parameter, Property, Rpc, Signal,
 };
 
-// The calls in a class body that define methods the source does not name
-// with a `def`.
-const METHOD_MAKERS: [&[u8]; 8] = [
-    b"attr",
-    b"attr_reader",
-    b"attr_writer",
-    b"attr_accessor",
-    b"alias_method",
-    b"define_method",
-    b"include",
-    b"prepend",
+// The calls a class body may make whose effect the header knows: the
+// words of `Godot::Object`'s DSL, each reading only what it is given.
+const KNOWN_CALLS: [&[u8]; 9] = [
+    b"tool",
+    b"icon",
+    b"abstract",
+    b"signal",
+    b"rpc",
+    b"export",
+    b"export_group",
+    b"export_subgroup",
+    b"export_category",
 ];
 
 /// A file's header: the constants its `module` and `class` statements write,
@@ -36,9 +37,6 @@ const METHOD_MAKERS: [&[u8]; 8] = [
 pub struct Header {
     constant_paths: Vec<Vec<String>>,
     name: String,
-    // The class's constant path from the top level, as `["Items",
-    // "Potion"]`.
-    own_path: Vec<String>,
     name_offset: usize,
     superclass: Option<Superclass>,
     methods: BTreeMap<String, usize>,
@@ -54,18 +52,10 @@ pub struct Header {
     is_tool: bool,
     is_abstract: bool,
     abstract_methods: Vec<String>,
-    has_methods_without_def: bool,
-    // The public methods `class << self` or `define_singleton_method`
-    // defines on the class, which answer no Godot question but tell
-    // `abstract` a name is the class's own.
-    singleton_class_methods: Vec<String>,
-    // The class methods `private` or `protected` hides inside
-    // `class << self`, which Ruby lists apart from the class's own.
-    nonpublic_class_methods: Vec<String>,
-    // The instance methods a call such as `attr_reader`, or the `alias`
-    // keyword, defines, which tell `abstract` a name is the objects' as
-    // `def` would.
-    instance_methods_without_def: Vec<String>,
+    has_unknown_statements: bool,
+    // Where each name `abstract` marks was marked, taken among the class's
+    // methods once the body is known to hold nothing unknown.
+    abstract_offsets: Vec<(String, usize)>,
     is_parsed: bool,
     icon: Option<String>,
 }
@@ -255,11 +245,12 @@ impl Header {
         &self.abstract_methods
     }
 
-    /// Whether the class body defines methods other than by `def`, as
-    /// `attr_reader`, `alias_method` or `include` do, so the source does not
-    /// name every method the class has.
-    pub fn has_methods_without_def(&self) -> bool {
-        self.has_methods_without_def
+    /// Whether the class body holds a statement outside the forms the
+    /// header reads, which may define methods the source does not name: only
+    /// `def`, `Godot::Object`'s DSL, visibility over names, constants and
+    /// nested classes are read.
+    pub fn has_unknown_statements(&self) -> bool {
+        self.has_unknown_statements
     }
 
     /// The icon's path from the project's root, as the string `icon` is
@@ -270,118 +261,27 @@ impl Header {
 
     // What the class body's own statements say: the methods it defines on its
     // instances and the calls it makes itself; a class inside it or a method's
-    // body says nothing of this class.
+    // body says nothing of this class. A statement outside the forms read
+    // leaves the class's methods unknown.
     fn read_class_body(&mut self, statements: &NodeList) {
         for node in statements.iter() {
             if let Some(def) = node.as_def_node() {
                 self.read_method(&def);
             } else if let Some(call) = node.as_call_node() {
                 self.read_call(&call);
-            } else if let Some(alias) = node.as_alias_method_node() {
-                self.has_methods_without_def = true;
-                self.instance_methods_without_def
-                    .extend(read_name(&alias.new_name()));
-            } else if let Some(singleton) = node.as_singleton_class_node() {
-                self.read_singleton_class(&singleton);
+            } else if node.as_constant_write_node().is_none()
+                && node.as_constant_path_write_node().is_none()
+                && node.as_class_node().is_none()
+                && node.as_module_node().is_none()
+            {
+                self.has_unknown_statements = true;
             }
         }
-    }
-
-    // The public methods a `class << self` written in the class body defines
-    // on the class, by `def` or by a call naming them, as Ruby's
-    // `singleton_methods` lists them.
-    fn read_singleton_class(&mut self, singleton: &SingletonClassNode) {
-        if singleton.expression().as_self_node().is_none() {
-            return;
-        }
-        let Some(body) = singleton.body().and_then(|body| body.as_statements_node()) else {
-            return;
-        };
-        for node in body.body().iter() {
-            if let Some(def) = node.as_def_node() {
-                // A `def self.` here defines on the singleton class's own
-                // singleton class, so not on the class.
-                if def.receiver().is_none() {
-                    self.singleton_class_methods
-                        .push(decode_text(def.name().as_slice()));
-                }
-            } else if let Some(call) = node.as_call_node() {
-                self.read_singleton_class_call(&call);
-            } else if let Some(alias) = node.as_alias_method_node() {
-                self.singleton_class_methods
-                    .extend(read_name(&alias.new_name()));
+        if !self.has_unknown_statements {
+            for (name, offset) in std::mem::take(&mut self.abstract_offsets) {
+                self.methods.entry(name).or_insert(offset);
             }
         }
-    }
-
-    // What a call inside `class << self` defines on the class: the names a
-    // method maker on the singleton class gives, less those `private` or
-    // `protected` hides; one on the class itself, written by its name, makes
-    // its objects' methods or, by `define_singleton_method`, the class's own.
-    fn read_singleton_class_call(&mut self, call: &CallNode) {
-        let name = call.name().as_slice();
-        match call.receiver() {
-            None => match name {
-                b"private" | b"protected" => {
-                    let nonpublic_names: Vec<String> = call
-                        .arguments()
-                        .map(|arguments| {
-                            arguments
-                                .arguments()
-                                .iter()
-                                .filter_map(|node| read_name(&node))
-                                .collect()
-                        })
-                        .unwrap_or_default();
-                    self.singleton_class_methods
-                        .retain(|method| !nonpublic_names.contains(method));
-                    self.nonpublic_class_methods.extend(nonpublic_names);
-                }
-                b"public" => {
-                    for node in call
-                        .arguments()
-                        .iter()
-                        .flat_map(|arguments| arguments.arguments().iter())
-                    {
-                        if let Some(def) = node.as_def_node().filter(|def| def.receiver().is_none())
-                        {
-                            self.singleton_class_methods
-                                .push(decode_text(def.name().as_slice()));
-                        } else if let Some(inner) = node.as_call_node() {
-                            self.read_singleton_class_call(&inner);
-                        } else if let Some(name) = read_name(&node) {
-                            self.nonpublic_class_methods
-                                .retain(|method| *method != name);
-                            self.singleton_class_methods.push(name);
-                        }
-                    }
-                }
-                // Here `define_singleton_method` defines on the singleton
-                // class's own singleton class, so not on the class.
-                b"define_singleton_method" => {}
-                _ => self.singleton_class_methods.extend(read_method_names(call)),
-            },
-            Some(receiver) if receiver.as_self_node().is_some() => {
-                if name != b"define_singleton_method" {
-                    self.singleton_class_methods.extend(read_method_names(call));
-                }
-            }
-            Some(receiver) if self.is_own_name(&receiver) => {
-                if name == b"define_singleton_method" {
-                    self.singleton_class_methods.extend(read_method_names(call));
-                } else {
-                    self.instance_methods_without_def
-                        .extend(read_method_names(call));
-                }
-            }
-            Some(_) => {}
-        }
-    }
-
-    // Whether `node` is the class's own name written as a constant, bare or
-    // as the end of its path from the top level.
-    fn is_own_name(&self, node: &Node) -> bool {
-        read_constant_path(node).is_some_and(|(written, _)| self.own_path.ends_with(&written))
     }
 
     // A method the class body defines, on its instances or on `self`.
@@ -397,44 +297,30 @@ impl Header {
                     self.class_methods.push(name);
                 }
             }
-            Some(_) => {}
+            Some(_) => self.has_unknown_statements = true,
         }
     }
 
-    // Marks `name` abstract and takes it among the class's methods, as the
-    // class has it once `abstract` defines it at `offset`; a name only the
-    // class itself defines, by `def self.`, in `class << self` or by
-    // `define_singleton_method`, stays the class's own, as `abstract` leaves
-    // it.
+    // Marks `name` abstract, as `abstract` defines it at `offset`; a name only
+    // `def self.` defines stays the class's own, as `abstract` leaves it.
     fn mark_abstract(&mut self, name: String, offset: usize) {
-        let is_on_class = (self.class_methods.contains(&name)
-            || self.singleton_class_methods.contains(&name))
-            && !self.nonpublic_class_methods.contains(&name);
-        if is_on_class
-            && !self.methods.contains_key(&name)
-            && !self.instance_methods_without_def.contains(&name)
-        {
+        if self.class_methods.contains(&name) && !self.methods.contains_key(&name) {
             return;
         }
         if !self.abstract_methods.contains(&name) {
             self.abstract_methods.push(name.clone());
+            self.abstract_offsets.push((name, offset));
         }
-        self.methods.entry(name).or_insert(offset);
     }
 
     fn read_call(&mut self, call: &CallNode) {
-        let is_on_class = call.receiver().is_none_or(|receiver| {
-            receiver.as_self_node().is_some() || self.is_own_name(&receiver)
-        });
-        if is_on_class && METHOD_MAKERS.contains(&call.name().as_slice()) {
-            self.has_methods_without_def = true;
-            self.instance_methods_without_def
-                .extend(read_method_names(call));
-        }
-        if is_on_class && call.name().as_slice() == b"define_singleton_method" {
-            self.singleton_class_methods.extend(read_method_names(call));
-        }
-        if call.receiver().is_some() || call.block().is_some() {
+        let name = call.name().as_slice();
+        let is_visibility = matches!(name, b"private" | b"protected" | b"public");
+        if call.receiver().is_some()
+            || call.block().is_some()
+            || !(is_visibility || KNOWN_CALLS.contains(&name))
+        {
+            self.has_unknown_statements = true;
             return;
         }
         let offset = call.location().start_offset();
@@ -447,8 +333,8 @@ impl Header {
                 for node in targets {
                     if let Some(def) = node.as_def_node() {
                         self.read_method(&def);
-                    } else if let Some(call) = node.as_call_node() {
-                        self.read_call(&call);
+                    } else if read_name(node).is_none() {
+                        self.has_unknown_statements = true;
                     }
                 }
             }
@@ -550,7 +436,6 @@ impl Reader {
         if self.header.is_none() && self.is_own_constant(&names) {
             let mut header = Header {
                 name: names.last().cloned().unwrap_or_default(),
-                own_path: names.clone(),
                 name_offset: node.location().start_offset(),
                 superclass: class
                     .and_then(|class| class.superclass())
@@ -573,34 +458,6 @@ impl Reader {
                 .iter()
                 .zip(&self.key)
                 .all(|(name, segment)| realm::normalize(name) == *segment)
-    }
-}
-
-// The names of the methods `call` makes without `def`, as its arguments
-// write them: every name `attr` and its kin are given, the first for
-// `alias_method`, `define_method` and `define_singleton_method`.
-fn read_method_names(call: &CallNode) -> Vec<String> {
-    let names: Vec<String> = call
-        .arguments()
-        .map(|arguments| {
-            arguments
-                .arguments()
-                .iter()
-                .filter_map(|argument| read_name(&argument))
-                .collect()
-        })
-        .unwrap_or_default();
-    match call.name().as_slice() {
-        b"attr" | b"attr_reader" => names,
-        b"attr_writer" => names.into_iter().map(|name| format!("{name}=")).collect(),
-        b"attr_accessor" => names
-            .into_iter()
-            .flat_map(|name| [format!("{name}="), name])
-            .collect(),
-        b"alias_method" | b"define_method" | b"define_singleton_method" => {
-            names.into_iter().take(1).collect()
-        }
-        _ => Vec::new(),
     }
 }
 
@@ -1087,41 +944,44 @@ mod tests {
 
     // @behavior RH-022
     #[test]
-    fn a_body_writing_methods_without_def_has_methods_the_header_cannot_name() {
-        let sources = [
-            "class Circle < Shape\n  attr_reader :area\nend\n",
-            "class Circle < Shape\n  attr :area\nend\n",
-            "class Circle < Shape\n  alias area size\nend\n",
-            "class Circle < Shape\n  define_method(:area) { 1 }\nend\n",
-            "class Circle < Shape\n  include Round\nend\n",
+    fn a_class_body_holding_a_statement_outside_the_read_forms_has_unknown_methods() {
+        let bodies = [
+            "attr_reader :area",
+            "alias area size",
+            "define_method(:area) { 1 }",
+            "include Round",
+            "class << self\n    def area\n    end\n  end",
+            "hit_points :hp",
+            "self.area = 1",
+            "private attr_reader :area",
         ];
 
-        let answers = sources.map(|source| {
-            Header::from_source("res://circle.rb", source, &Roots::default())
-                .has_methods_without_def()
+        let answers = bodies.map(|body| {
+            let source = format!("class Circle < Shape\n  {body}\nend\n");
+            Header::from_source("res://circle.rb", &source, &Roots::default())
+                .has_unknown_statements()
         });
 
-        assert_eq!(answers, [true; 5]);
+        assert_eq!(answers, [true; 8]);
     }
 
     // @behavior RH-023
     #[test]
-    fn a_method_written_inside_a_visibility_call_is_the_class_bodys_own() {
-        let source =
-            "class Circle < Shape\n  private def area\n  end\n\n  private attr_reader :size\nend\n";
+    fn a_class_body_of_only_the_read_forms_has_known_methods() {
+        let source = "class Circle < Shape\n  tool\n  icon \"res://circle.svg\"\n  SIDES = 0\n\n  def area\n  end\n\n  def self.unit\n  end\n\n  private def roll\n  end\n  private :area\n\n  class Arc\n  end\nend\n";
 
         let header = Header::from_source("res://circle.rb", source, &Roots::default());
 
         assert_eq!(
-            (header.has_method("area"), header.has_methods_without_def()),
-            (true, true)
+            (header.has_unknown_statements(), header.has_method("roll")),
+            (false, true)
         );
     }
 
     // @behavior RH-024
     #[test]
     fn abstract_judges_each_name_as_ruby_evaluates_the_call() {
-        let source = "class Shape < Godot::Node2D\n  abstract\n\n  def x\n  end\n  abstract def self.x\n  end\n\n  abstract :y, def self.y\n  end\n\n  class << self\n    def z\n    end\n  end\n  abstract :z\nend\n";
+        let source = "class Shape < Godot::Node2D\n  abstract\n\n  def x\n  end\n  abstract def self.x\n  end\n\n  abstract :y, def self.y\n  end\nend\n";
 
         let header = Header::from_source("res://shape.rb", source, &Roots::default());
 
@@ -1136,45 +996,16 @@ mod tests {
 
     // @behavior RH-025
     #[test]
-    fn abstract_leaves_names_the_class_itself_makes_without_def() {
-        let source = "class Shape < Godot::Node2D\n  abstract\n\n  class << self\n    attr_reader :w\n    attr_accessor :a\n  end\n  define_singleton_method(:s) { 1 }\n  self.define_singleton_method(:t) { 2 }\n  abstract :w, :a, :a=, :s, :t\nend\n";
+    fn an_abstract_name_joins_the_methods_only_of_a_class_body_the_header_knows() {
+        let known = "class Shape < Godot::Node2D\n  abstract\n  abstract :area\nend\n";
+        let unknown =
+            "class Shape < Godot::Node2D\n  abstract\n  abstract :area\n  attr_reader :size\nend\n";
 
-        let header = Header::from_source("res://shape.rb", source, &Roots::default());
+        let methods = [known, unknown].map(|source| {
+            Header::from_source("res://shape.rb", source, &Roots::default()).has_method("area")
+        });
 
-        assert!(header.abstract_methods().is_empty());
-    }
-
-    // @behavior RH-026
-    #[test]
-    fn a_method_define_singleton_method_makes_in_class_self_is_not_the_classs_own() {
-        let source = "class Shape < Godot::Node2D\n  abstract\n\n  class << self\n    define_singleton_method(:x) { 1 }\n  end\n  abstract :x\nend\n";
-
-        let header = Header::from_source("res://shape.rb", source, &Roots::default());
-
-        assert_eq!(header.abstract_methods(), ["x".to_owned()].as_slice());
-    }
-
-    // @behavior RH-027
-    #[test]
-    fn abstract_judges_a_name_by_the_class_methods_ruby_lists() {
-        let source = "module Unit\n  module EngineClasses\n    class Seal < Godot::Node\n      abstract\n\n      def self.p\n      end\n\n      class << self\n        def v\n        end\n        private :v, :p\n\n        def self.r\n        end\n\n        Seal.define_singleton_method(:q) { 1 }\n        EngineClasses::Seal.define_singleton_method(:k) { 2 }\n\n        def w\n        end\n        alias u w\n\n        def m\n        end\n        private :m\n        public :m\n      end\n\n      attr_reader :t\n\n      def self.t\n      end\n\n      abstract :v, :r, :t, :q, :k, :p, :u, :m\n    end\n  end\nend\n";
-
-        let header = Header::from_source(
-            "res://unit/engine_classes/seal.rb",
-            source,
-            &Roots::default(),
-        );
-
-        assert_eq!(
-            header.abstract_methods(),
-            [
-                "v".to_owned(),
-                "r".to_owned(),
-                "t".to_owned(),
-                "p".to_owned()
-            ]
-            .as_slice()
-        );
+        assert_eq!(methods, [true, false]);
     }
 
     // @behavior RH-010

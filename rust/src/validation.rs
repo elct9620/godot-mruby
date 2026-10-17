@@ -151,7 +151,9 @@ fn describe_abstract_refusal<'a>(
     header: &Header,
     ancestors: impl IntoIterator<Item = &'a Header>,
 ) -> Option<String> {
-    if header.is_abstract() {
+    // A class whose body holds a statement the header does not read may
+    // define methods its source does not name, so it is held to no rule.
+    if header.is_abstract() || header.has_unknown_statements() {
         return None;
     }
     let name = header.name();
@@ -160,15 +162,13 @@ fn describe_abstract_refusal<'a>(
             "Class \"{name}\" is not abstract but contains abstract methods. Mark the class as \"@abstract\" or remove \"@abstract\" from all methods in this class."
         ));
     }
-    // A method the source does not name may be the one an abstract class
-    // leaves, so only what every class names is checked.
-    if header.has_methods_without_def() {
-        return None;
-    }
     let mut definitions: Vec<&str> = header.methods().collect();
     for ancestor in ancestors {
         if !ancestor.is_abstract() {
             break;
+        }
+        if ancestor.has_unknown_statements() {
+            return None;
         }
         let abstract_methods = ancestor.abstract_methods();
         if let Some(method) = abstract_methods
@@ -179,9 +179,6 @@ fn describe_abstract_refusal<'a>(
                 "Class \"{name}\" must implement \"{}.{method}()\" and other inherited abstract methods or be marked as \"@abstract\".",
                 ancestor.name()
             ));
-        }
-        if ancestor.has_methods_without_def() {
-            return None;
         }
         definitions.extend(ancestor.methods().filter(|method| {
             !abstract_methods
@@ -550,6 +547,17 @@ mod tests {
         let sources = [("res://shape.rb", SHAPE), ("res://circle.rb", source)];
 
         let validation = validate_source("res://circle.rb", source, &sources);
+
+        assert!(validation.error.is_none());
+    }
+
+    // @behavior RK-014
+    #[test]
+    fn a_class_whose_body_the_header_does_not_read_is_held_to_no_abstract_rule() {
+        let source = "class Shape < Godot::Node2D\n  class << self\n    def area\n    end\n  end\n  abstract :area\nend\n";
+        let sources = [("res://shape.rb", source)];
+
+        let validation = validate_source("res://shape.rb", source, &sources);
 
         assert!(validation.error.is_none());
     }

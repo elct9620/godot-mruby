@@ -182,50 +182,34 @@ How a file's header is read from its source without running it: the constants it
 | When | its header is read |
 | Then | the header holds `draw`, `area`, `edges` and `sum` among the class's methods, marked abstract, and `count` and `total` only among the methods on the class itself |
 
-## `RH-022` A class body writing methods without `def` has methods the header cannot name
+## `RH-022` A class body holding a statement outside the read forms has unknown methods
 
 | Step | Statement |
 | --- | --- |
-| Given | a file whose class body calls `attr_reader`, `attr`, `alias`, `define_method` or `include` |
+| Given | a file whose class body holds `attr_reader`, `alias`, `define_method`, `include`, `class << self`, a project's own call such as `hit_points :hp`, a call on a receiver, or `private` given a call |
 | When | its header is read |
-| Then | the header says the class has methods its source does not name |
+| Then | the header says the class has methods its source may not name |
 
-## `RH-023` A method written inside a visibility call is the class body's own
+## `RH-023` A class body of only the read forms has known methods
 
 | Step | Statement |
 | --- | --- |
-| Given | a file whose class body writes `private def area` and `private attr_reader :size` |
+| Given | a file whose class body holds only `def`, `def self.`, `Godot::Object`'s DSL, `private`, `protected` or `public` over `def`s and names, constants and nested classes |
 | When | its header is read |
-| Then | the header holds `area` among the class's methods and says the class has methods its source does not name |
+| Then | the header knows every method the class defines, `private def` ones included |
 
 ## `RH-024` `abstract` judges each name as Ruby evaluates the call
 
 | Step | Statement |
 | --- | --- |
-| Given | a file whose class body writes `def x` before `abstract def self.x`, `abstract :y, def self.y`, and `abstract :z` after a `class << self` defining `z` |
+| Given | a file whose class body writes `def x` before `abstract def self.x`, and `abstract :y, def self.y` |
 | When | its header is read |
 | Then | the header marks only `x` abstract |
 
-## `RH-025` `abstract` leaves names the class itself makes without `def`
+## `RH-025` An abstract name joins the methods only of a class body the header knows
 
 | Step | Statement |
 | --- | --- |
-| Given | a file whose class body writes `attr_reader :w` and `attr_accessor :a` inside `class << self`, `define_singleton_method(:s)`, `self.define_singleton_method(:t)`, and `abstract :w, :a, :a=, :s, :t` |
+| Given | a file whose class body writes `abstract :area`, once alone and once beside `attr_reader :size` |
 | When | its header is read |
-| Then | the header marks none of them abstract |
-
-## `RH-026` A method `define_singleton_method` makes inside `class << self` is not the class's own
-
-| Step | Statement |
-| --- | --- |
-| Given | a file whose class body calls `define_singleton_method(:x)` inside `class << self`, then `abstract :x` |
-| When | its header is read |
-| Then | the header marks `x` abstract |
-
-## `RH-027` `abstract` judges a name by the class methods Ruby lists
-
-| Step | Statement |
-| --- | --- |
-| Given | a file whose class body writes `def self.p`, then inside `class << self` `def v`, `private :v, :p`, `def self.r`, `Seal.define_singleton_method(:q)`, `EngineClasses::Seal.define_singleton_method(:k)`, `alias u w`, and `def m` made `private` then `public`, then `attr_reader :t`, `def self.t` and `abstract :v, :r, :t, :q, :k, :p, :u, :m` |
-| When | its header is read |
-| Then | the header marks `v`, `r`, `t` and `p` abstract, and leaves `q`, `k`, `u` and `m`, public methods of the class itself |
+| Then | `area` is among the class's methods only where the body holds nothing unknown |
