@@ -86,3 +86,27 @@ How the editor learns what is wrong with a Ruby file as it is typed: the source 
 | Given | a node script whose method compares, with `==` or `!=`, a String with a member of its engine class answering a StringName, called on the object itself |
 | When | the file is checked |
 | Then | a warning at that line says the member reaches Ruby as a Symbol, so the comparison never holds |
+
+## `RK-010` A class with abstract methods that is not abstract is refused
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose class marks a method with `abstract def` but does not call `abstract` itself |
+| When | the editor checks the file |
+| Then | an error comes back at the class's line that it is not abstract but contains abstract methods, in GDScript's words |
+
+## `RK-011` A class leaving an inherited abstract method unwritten is refused
+
+| Step | Statement |
+| --- | --- |
+| Given | an abstract class marking two methods abstract, and a file whose class extends it writing only one |
+| When | the editor checks the file |
+| Then | an error comes back at the class's line that it must implement the other, in GDScript's words |
+
+## `RK-012` A class writing every inherited abstract method is valid
+
+| Step | Statement |
+| --- | --- |
+| Given | an abstract class marking two methods abstract, and a file whose class extends it writing both |
+| When | the editor checks the file |
+| Then | no error comes back |

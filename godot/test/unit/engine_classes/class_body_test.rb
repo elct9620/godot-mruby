@@ -23,4 +23,19 @@ class ClassBodyTest < Minitest::Test
 
     assert_instance_of Unit::EngineClasses::Rabbit, rabbit
   end
+
+  # @behavior RG-052
+  def test_a_method_abstract_marks_raises_when_called
+    hare = autofree(Unit::EngineClasses::Hare.new)
+
+    error = assert_raises(NotImplementedError) { hare.hop(1) }
+    assert_equal %(Cannot call the parent class' abstract function "hop()" because it hasn't been defined.), error.message
+  end
+
+  # @behavior RG-053
+  def test_a_class_writing_an_abstract_method_runs_its_own
+    rabbit = autofree(Unit::EngineClasses::Rabbit.new)
+
+    assert_equal "hops 2", rabbit.hop(2)
+  end
 end

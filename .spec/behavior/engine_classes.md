@@ -425,3 +425,21 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | a node whose node class extends an extension's class and defines a method of a name that class declares, and Ruby holding the node's engine object |
 | When | Ruby calls that name on the engine object |
 | Then | the extension's method runs and the node class's does not, as GDScript's typed call reaches it |
+
+## `RG-052` A method `abstract` marks raises when called
+
+| Step | Statement |
+| --- | --- |
+| Given | a class extending an engine class whose body marks a method with `abstract def` |
+| Given | a class extending that class whose method of that name calls `super` |
+| When | Ruby calls the method on an object of the second class |
+| Then | it raises `NotImplementedError` that the parent class' abstract function has not been defined, in GDScript's words |
+
+## `RG-053` A class writing an abstract method runs its own
+
+| Step | Statement |
+| --- | --- |
+| Given | a class extending an engine class whose body marks a method with `abstract def` |
+| Given | a class extending that class that writes the method |
+| When | Ruby calls the method on an object of the second class |
+| Then | the second class's method runs |

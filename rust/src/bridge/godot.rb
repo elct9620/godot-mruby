@@ -81,15 +81,26 @@ module Godot
     # What a class extending an engine class calls in its body. Godot reads
     # `tool` and `icon` from the file's source, so they do nothing as the
     # body runs; `abstract` marks only the class calling it, as Active
-    # Record's `abstract_class` does; `signal`, `rpc` and `export` are taken
-    # by the realm, which publishes them for Godot once the file has run.
+    # Record's `abstract_class` does, or the methods it is given; `signal`,
+    # `rpc` and `export` are taken by the realm, which publishes them for
+    # Godot once the file has run.
     class << self
       def tool; end
 
       def icon(_path); end
 
-      def abstract
-        @abstract = true
+      # Marks the class as one never made, or each method named as one a
+      # class extending it writes, as GDScript's `@abstract func` is: called,
+      # it raises. Answers what it is given, so `abstract def` reads as one.
+      def abstract(*methods)
+        return @abstract = true if methods.empty?
+
+        methods.each do |method|
+          define_method(method) do |*|
+            raise NotImplementedError, %(Cannot call the parent class' abstract function "#{method}()" because it hasn't been defined.)
+          end
+        end
+        methods.size == 1 ? methods.first : methods
       end
 
       # A signal of the class, named as Godot names it, with a keyword for

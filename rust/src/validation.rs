@@ -111,7 +111,9 @@ pub fn validate<F: Files + Sync>(
     let overrides = collect_native_method_overrides(&typed, engine, path, source);
     let comparisons = collect_string_name_comparisons(&typed, engine, path, source);
     Validation {
-        error: diagnostics.error,
+        error: diagnostics
+            .error
+            .or_else(|| find_abstract_error(&typed, path, source)),
         warnings: compiled
             .chain(shared_constant)
             .chain(shared_name)
@@ -119,6 +121,62 @@ pub fn validate<F: Files + Sync>(
             .chain(comparisons)
             .collect(),
     }
+}
+
+// The error GDScript's analyzer gives a class that is not abstract yet has
+// abstract methods: its own, or ones the abstract classes it extends leave
+// to it. Ruby has no such analysis, so the editor is where it shows.
+fn find_abstract_error(files: &impl Files, path: &str, source: &str) -> Option<CompileError> {
+    let header = Header::from_source(path, source, &files.roots());
+    let ancestry = ancestry::trace_ancestry(path, &header, files).ok()?;
+    let ancestors = ancestry.files().iter().map(|(_, header)| header);
+    let message = describe_abstract_refusal(&header, ancestors)?;
+    Some(CompileError {
+        line: locate_line(source, header.name_offset()),
+        column: 1,
+        message,
+    })
+}
+
+// What refuses the class `header` reads, as GDScript words it, when it is
+// not abstract yet has abstract methods: its own, or ones left by the
+// abstract classes in `ancestors`, nearest first, up to the first that is
+// not abstract.
+fn describe_abstract_refusal<'a>(
+    header: &Header,
+    ancestors: impl IntoIterator<Item = &'a Header>,
+) -> Option<String> {
+    if header.is_abstract() {
+        return None;
+    }
+    let name = header.name();
+    if !header.abstract_methods().is_empty() {
+        return Some(format!(
+            "Class \"{name}\" is not abstract but contains abstract methods. Mark the class as \"@abstract\" or remove \"@abstract\" from all methods in this class."
+        ));
+    }
+    let mut implemented: Vec<&str> = header.methods().collect();
+    for ancestor in ancestors {
+        if !ancestor.is_abstract() {
+            break;
+        }
+        let abstract_methods = ancestor.abstract_methods();
+        if let Some(method) = abstract_methods
+            .iter()
+            .find(|method| !implemented.contains(&method.as_str()))
+        {
+            return Some(format!(
+                "Class \"{name}\" must implement \"{}.{method}()\" and other inherited abstract methods or be marked as \"@abstract\".",
+                ancestor.name()
+            ));
+        }
+        implemented.extend(
+            ancestor
+                .methods()
+                .filter(|method| !abstract_methods.iter().any(|marked| marked == method)),
+        );
+    }
+    None
 }
 
 // A warning at each method a script's class defines that its engine
@@ -430,5 +488,54 @@ mod tests {
                 "The method \"get_name()\" overrides a method from native class \"Node\". This won't be called by the engine and may not work as expected."
             )]
         );
+    }
+
+    const SHAPE: &str = "class Shape < Godot::Node2D\n  abstract\n\n  abstract def draw\n  end\n\n  abstract :area\nend\n";
+
+    // @behavior RK-010
+    #[test]
+    fn a_class_with_abstract_methods_that_is_not_abstract_is_refused() {
+        let source = "class Shape < Godot::Node2D\n  abstract def draw\n  end\nend\n";
+        let sources = [("res://shape.rb", source)];
+
+        let checked = validate_source("res://shape.rb", source, &sources);
+
+        let error = checked.error.expect("an error");
+        assert_eq!(
+            (error.line, error.message.as_str()),
+            (
+                1,
+                "Class \"Shape\" is not abstract but contains abstract methods. Mark the class as \"@abstract\" or remove \"@abstract\" from all methods in this class."
+            )
+        );
+    }
+
+    // @behavior RK-011
+    #[test]
+    fn a_class_leaving_an_inherited_abstract_method_unwritten_is_refused() {
+        let source = "class Circle < Shape\n  def draw\n  end\nend\n";
+        let sources = [("res://shape.rb", SHAPE), ("res://circle.rb", source)];
+
+        let checked = validate_source("res://circle.rb", source, &sources);
+
+        let error = checked.error.expect("an error");
+        assert_eq!(
+            (error.line, error.message.as_str()),
+            (
+                1,
+                "Class \"Circle\" must implement \"Shape.area()\" and other inherited abstract methods or be marked as \"@abstract\"."
+            )
+        );
+    }
+
+    // @behavior RK-012
+    #[test]
+    fn a_class_writing_every_inherited_abstract_method_is_valid() {
+        let source = "class Circle < Shape\n  def draw\n  end\n\n  def area\n  end\nend\n";
+        let sources = [("res://shape.rb", SHAPE), ("res://circle.rb", source)];
+
+        let checked = validate_source("res://circle.rb", source, &sources);
+
+        assert!(checked.error.is_none());
     }
 }

@@ -135,12 +135,12 @@ end
 
 ## `Godot::Object.abstract`
 
-Marks a class as one that is never made, as GDScript's `@abstract` marks a class: the editor offers it as no node to add, and `new` refuses it.
+Marks a class as one that is never made, as GDScript's `@abstract` marks a class: the editor offers it as no node to add, and `new` refuses it. Given methods, it marks each as one a class extending it writes, as `@abstract func` does, and answers what it was given, so `abstract def` marks the method it defines.
 
 ```ruby
 module Godot
   class Object
-    def self.abstract
+    def self.abstract(*methods)
     end
   end
 end

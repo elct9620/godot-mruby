@@ -173,3 +173,11 @@ How a file's header is read from its source without running it: the constants it
 | Given | a file whose class body calls `icon` with a `res://` path |
 | When | its header is read |
 | Then | the header carries that path, simplified, as the class's icon |
+
+## `RH-021` `abstract` given a method marks it, and the header holds the method
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose class body writes `abstract def draw` and `abstract :area` |
+| When | its header is read |
+| Then | the header holds `draw` among the class's methods and marks `draw` and `area` abstract |

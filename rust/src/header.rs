@@ -37,6 +37,7 @@ pub struct Header {
     digest: u64,
     is_tool: bool,
     is_abstract: bool,
+    abstract_methods: Vec<String>,
     is_parsed: bool,
     icon: Option<String>,
 }
@@ -220,6 +221,12 @@ impl Header {
         self.is_abstract
     }
 
+    /// The methods `abstract` marks in the class body, as `abstract def hurt`
+    /// or `abstract :hurt` writes them, in the order it marks them.
+    pub fn abstract_methods(&self) -> &[String] {
+        &self.abstract_methods
+    }
+
     /// The icon's path from the project's root, as the string `icon` is
     /// called with names it.
     pub fn icon(&self) -> Option<&str> {
@@ -232,22 +239,33 @@ impl Header {
     fn read_class_body(&mut self, statements: &NodeList) {
         for node in statements.iter() {
             if let Some(def) = node.as_def_node() {
-                let name = decode_text(def.name().as_slice());
-                match def.receiver() {
-                    None => {
-                        let offset = def.location().start_offset();
-                        self.methods.entry(name).or_insert(offset);
-                    }
-                    Some(receiver) if receiver.as_self_node().is_some() => {
-                        if !self.class_methods.contains(&name) {
-                            self.class_methods.push(name);
-                        }
-                    }
-                    Some(_) => {}
-                }
+                self.read_method(&def);
             } else if let Some(call) = node.as_call_node() {
                 self.read_call(&call);
             }
+        }
+    }
+
+    // A method the class body defines, on its instances or on `self`.
+    fn read_method(&mut self, def: &DefNode) {
+        let name = decode_text(def.name().as_slice());
+        match def.receiver() {
+            None => {
+                let offset = def.location().start_offset();
+                self.methods.entry(name).or_insert(offset);
+            }
+            Some(receiver) if receiver.as_self_node().is_some() => {
+                if !self.class_methods.contains(&name) {
+                    self.class_methods.push(name);
+                }
+            }
+            Some(_) => {}
+        }
+    }
+
+    fn mark_abstract(&mut self, name: String) {
+        if !self.abstract_methods.contains(&name) {
+            self.abstract_methods.push(name);
         }
     }
 
@@ -263,6 +281,16 @@ impl Header {
         match (call.name().as_slice(), arguments.as_slice()) {
             (b"tool", []) => self.is_tool = true,
             (b"abstract", []) => self.is_abstract = true,
+            (b"abstract", marked) => {
+                for node in marked {
+                    if let Some(def) = node.as_def_node() {
+                        self.read_method(&def);
+                        self.mark_abstract(decode_text(def.name().as_slice()));
+                    } else if let Some(name) = node.as_symbol_node() {
+                        self.mark_abstract(decode_text(name.unescaped()));
+                    }
+                }
+            }
             (b"icon", [path]) => {
                 if let Some(path) = path.as_string_node() {
                     self.icon = Some(decode_text(path.unescaped()));
@@ -819,6 +847,19 @@ mod tests {
         let header = Header::from_source("res://enemy.rb", source, &Roots::default());
 
         assert!(header.is_abstract());
+    }
+
+    // @behavior RH-021
+    #[test]
+    fn abstract_given_a_method_marks_it_and_the_header_holds_the_method() {
+        let source = "class Shape < Godot::Node2D\n  abstract\n\n  abstract def draw\n  end\n\n  abstract :area\nend\n";
+
+        let header = Header::from_source("res://shape.rb", source, &Roots::default());
+
+        assert_eq!(
+            (header.has_method("draw"), header.abstract_methods()),
+            (true, ["draw".to_owned(), "area".to_owned()].as_slice())
+        );
     }
 
     // @behavior RH-010
