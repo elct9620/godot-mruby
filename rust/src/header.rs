@@ -432,7 +432,6 @@ impl Reader {
             return;
         };
         let Some(names) = resolve_constant_names(&path, scope) else {
-            self.has_unknown_statements = true;
             return;
         };
         self.constant_paths.push(names.clone());
@@ -442,16 +441,9 @@ impl Reader {
             .map(|statements| statements.body());
         let is_module = class.is_none();
         let is_own = self.is_own_constant(&names);
-        // The file's own class may hold what the header reads apart, but its
-        // name, superclass and body's shape are held to the read forms as
-        // every other statement of the file is.
-        let is_read = if is_own {
-            class
-                .as_ref()
-                .and_then(|class| class.superclass())
-                .is_none_or(|superclass| is_known_operand(&superclass))
-                && body.is_none() == statements.is_none()
-        } else if is_module {
+        // The file's own class and a module may hold what the header reads
+        // apart, but a body with `rescue` or `ensure` is no plain statements.
+        let is_read = if is_own || is_module {
             body.is_none() == statements.is_none()
         } else {
             is_read_namespace(node)
@@ -818,9 +810,10 @@ fn resolve_constant_names(path: &Node, scope: &[String]) -> Option<Vec<String>> 
 }
 
 // Whether `node` is a class-body statement whose effect the header knows:
-// a `def` on the objects or `self`, a call of `Godot::Object`'s DSL or a
-// visibility over `def`s and names, given only known operands, a constant
-// given one, or a nested class or module of such statements.
+// a `def` on the objects or `self`, a call of `Godot::Object`'s DSL, a
+// visibility or `abstract` over `def`s and names, a constant, or a nested
+// class or module of such statements. What a statement's operands run is
+// not read.
 fn is_read_form(node: &Node) -> bool {
     if let Some(def) = node.as_def_node() {
         return def
@@ -838,103 +831,32 @@ fn is_read_form(node: &Node) -> bool {
             && call.block().is_none()
             && (is_visibility || KNOWN_CALLS.contains(&name))
             && arguments.iter().all(|argument| {
-                if is_visibility || name == b"abstract" {
-                    argument
+                !(is_visibility || name == b"abstract")
+                    || argument
                         .as_def_node()
                         .is_some_and(|def| is_read_form(&def.as_node()))
-                        || read_name(argument).is_some()
-                } else {
-                    is_known_operand(argument)
-                }
+                    || read_name(argument).is_some()
             });
     }
-    if let Some(write) = node.as_constant_write_node() {
-        return is_known_operand(&write.value());
-    }
-    if let Some(write) = node.as_constant_path_write_node() {
-        return read_constant_path(&write.target().as_node()).is_some()
-            && is_known_operand(&write.value());
-    }
-    is_read_namespace(node)
+    node.as_constant_write_node().is_some()
+        || node.as_constant_path_write_node().is_some()
+        || is_read_namespace(node)
 }
 
-// Whether `node` is a `class` or `module` statement of read forms alone: its
-// name a constant path, a class's superclass a known operand, and its body
-// plain statements, without `rescue` or `ensure`, each a read form.
+// Whether `node` is a `class` or `module` statement whose body is plain
+// statements, without `rescue` or `ensure`, each a read form.
 fn is_read_namespace(node: &Node) -> bool {
-    let (path, superclass, body) = if let Some(class) = node.as_class_node() {
-        (class.constant_path(), class.superclass(), class.body())
+    let body = if let Some(class) = node.as_class_node() {
+        class.body()
     } else if let Some(module) = node.as_module_node() {
-        (module.constant_path(), None, module.body())
+        module.body()
     } else {
         return false;
     };
-    read_constant_path(&path).is_some()
-        && superclass.is_none_or(|superclass| is_known_operand(&superclass))
-        && body.is_none_or(|body| {
-            body.as_statements_node()
-                .is_some_and(|statements| statements.body().iter().all(|node| is_read_form(&node)))
-        })
-}
-
-// Whether `node` is an operand that defines no method: a literal, a
-// constant or a path of constants, a collection or range of those, or a
-// value made by a class under `Godot` from them.
-fn is_known_operand(node: &Node) -> bool {
-    if node.as_integer_node().is_some()
-        || node.as_float_node().is_some()
-        || node.as_string_node().is_some()
-        || node.as_symbol_node().is_some()
-        || node.as_nil_node().is_some()
-        || node.as_true_node().is_some()
-        || node.as_false_node().is_some()
-        || node.as_constant_read_node().is_some()
-    {
-        return true;
-    }
-    if node.as_constant_path_node().is_some() {
-        return read_constant_path(node).is_some();
-    }
-    if let Some(array) = node.as_array_node() {
-        return array
-            .elements()
-            .iter()
-            .all(|element| is_known_operand(&element));
-    }
-    if let Some(hash) = node.as_hash_node() {
-        return hash
-            .elements()
-            .iter()
-            .all(|element| is_known_operand(&element));
-    }
-    if let Some(hash) = node.as_keyword_hash_node() {
-        return hash
-            .elements()
-            .iter()
-            .all(|element| is_known_operand(&element));
-    }
-    if let Some(assoc) = node.as_assoc_node() {
-        return is_known_operand(&assoc.key()) && is_known_operand(&assoc.value());
-    }
-    if let Some(range) = node.as_range_node() {
-        return range.left().is_none_or(|left| is_known_operand(&left))
-            && range.right().is_none_or(|right| is_known_operand(&right));
-    }
-    let Some(call) = node.as_call_node() else {
-        return false;
-    };
-    let is_under_godot = call
-        .receiver()
-        .and_then(|receiver| read_constant_path(&receiver))
-        .is_some_and(|(names, _)| names.first().is_some_and(|name| name == "Godot"));
-    is_under_godot
-        && call.block().is_none()
-        && call.arguments().is_none_or(|arguments| {
-            arguments
-                .arguments()
-                .iter()
-                .all(|argument| is_known_operand(&argument))
-        })
+    body.is_none_or(|body| {
+        body.as_statements_node()
+            .is_some_and(|statements| statements.body().iter().all(|node| is_read_form(&node)))
+    })
 }
 
 // A constant path as written, and whether it starts from the top level as
@@ -1103,11 +1025,6 @@ mod tests {
             "signal(:rolled) { 1 }",
             "def other.area\n  end",
             "abstract hit_points(:hp)",
-            "AREA = attr_reader(:area)",
-            "signal :rolled, size: hit_points(:hp)",
-            "class Arc < (attr_reader :area; Object)\n  end",
-            "SIDES = (attr_reader :area; Object)::Integer",
-            "(attr_reader :area; self)::X = 1",
             "class Arc\n    def area\n    end\n  rescue\n  end",
             "class Arc\n    Circle.define_method(:area) { 1 }\n  end",
         ];
@@ -1118,7 +1035,7 @@ mod tests {
                 .has_unknown_statements()
         });
 
-        assert_eq!(answers, [true; 18]);
+        assert_eq!(answers, [true; 13]);
     }
 
     // @behavior RH-023
@@ -1159,9 +1076,6 @@ mod tests {
             "module Shapes\n  RADIUS = 1\n  include Round\n  class Circle < Shape\n  end\nend\n",
             "class Helper\n  Circle.define_method(:area) { 1 }\nend\nclass Circle < Shape\nend\n",
             "class Circle < Shape\n  def area\n  end\nrescue\nend\n",
-            "class Circle < (attr_reader :area; Shape)\nend\n",
-            "class Helper < (Circle.class_eval { 1 }; Object)\nend\nclass Circle < Shape\nend\n",
-            "class (attr_reader :area; Object)::Helper\nend\nclass Circle < Shape\nend\n",
         ];
 
         let answers = sources.map(|source| {
@@ -1173,7 +1087,7 @@ mod tests {
             Header::from_source(path, source, &Roots::default()).has_unknown_statements()
         });
 
-        assert_eq!(answers, [true; 8]);
+        assert_eq!(answers, [true; 5]);
     }
 
     // @behavior RH-026

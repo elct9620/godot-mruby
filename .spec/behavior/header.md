@@ -186,7 +186,7 @@ How a file's header is read from its source without running it: the constants it
 
 | Step | Statement |
 | --- | --- |
-| Given | a file whose class body holds `attr_reader`, `alias`, `define_method`, `include`, `class << self`, a project's own call, a call on a receiver or with a block, `def` on another object, a known call or constant given an operand that is itself such a call or a path off one, or a nested class with such a superclass or a body with `rescue` |
+| Given | a file whose class body holds `attr_reader`, `alias`, `define_method`, `include`, `class << self`, a project's own call, a call on a receiver or with a block, `def` on another object, `abstract` or a visibility given anything but names and `def`s, or a nested class whose body holds such a statement or `rescue` |
 | When | its header is read |
 | Then | the header says the class has methods its source may not name |
 
@@ -210,7 +210,7 @@ How a file's header is read from its source without running it: the constants it
 
 | Step | Statement |
 | --- | --- |
-| Given | a file whose top level or a module around its class holds anything but `module` and `class` statements, or that opens its class again, gives its class a body with `rescue` or a superclass outside the read forms, or holds another class whose name, superclass or body is outside them |
+| Given | a file whose top level or a module around its class holds anything but `module` and `class` statements, or that opens its class again, gives its class a body with `rescue`, or holds another class whose body is outside the read forms |
 | When | its header is read |
 | Then | the header says the class has methods its source may not name |
 

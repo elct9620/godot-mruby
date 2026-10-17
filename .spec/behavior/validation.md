@@ -9,7 +9,7 @@ How the editor learns what is wrong with a Ruby file as it is typed: the source 
 - An unknown method, a mismatched type or a refused declaration shows only when the file runs.
 - A file naming a constant the realm already has is warned of only as the realm opens: only the realm knows what it has.
 - A member answering a StringName is known only when called on the object itself: nothing tells the class of another receiver, such as a signal's argument.
-- The abstract rules hold only a class whose file, and whose abstract ancestors' files, hold nothing beyond the forms the header reads (RH-023, RH-025); any other statement may define methods the source does not name.
+- The abstract rules hold only a class whose file, and whose abstract ancestors' files, hold nothing beyond the forms the header reads (RH-023, RH-025); any other statement may define methods the source does not name. The forms are statements; what their operands run is not read.
 
 ## Includes
 
