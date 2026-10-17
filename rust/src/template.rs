@@ -178,9 +178,11 @@ mod tests {
     // @behavior RY-006
     #[test]
     fn a_template_indents_as_the_editor_does() {
-        let made = write_source(BUILT_INS[1].content, "made", "Godot::Node", "    ");
+        let made = write_source(BUILT_INS[2].content, "made", "Godot::Node", "    ");
 
-        assert!(made.contains("\n    def _ready\n"));
+        assert!(made.contains("\n    def _physics_process(delta)\n"));
+        assert!(made.contains("\n        move_and_slide\n"));
+        assert!(made.contains("\n            self.velocity = "));
     }
 
     // @behavior RY-007

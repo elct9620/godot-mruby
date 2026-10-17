@@ -36,7 +36,9 @@ class SignalsTest < Minitest::Test
 
   # @behavior RD-007
   def test_a_signal_declared_again_with_other_parameters_is_refused
-    assert_raises(ArgumentError) { Unit::Declarations::Gong }
+    error = assert_raises(ArgumentError) { Unit::Declarations::Gong }
+
+    assert_equal "res://test/unit/declarations/gong.rb:6", Minitest.filter_backtrace(error.backtrace).first
   end
 
   # @behavior RD-008

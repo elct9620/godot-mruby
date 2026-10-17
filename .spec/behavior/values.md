@@ -316,7 +316,7 @@ How a value crosses between Ruby and the engine, either way. Ruby's own data is 
 | Step | Statement |
 | --- | --- |
 | Given | a `Godot::Array` and an Array of equal elements, and a `Godot::Dictionary` and a Hash keying the same names by Strings and Symbols |
-| When | Ruby compares the engine's container with Ruby's by `==` and `<=>` |
+| When | Ruby compares the engine's container with Ruby's by `==`, and an Array also by `<=>` |
 | Then | each is equal to Ruby's, as the engine takes a String and a Symbol spelling one name for one key |
 
 ## `RV-040` A container answers Ruby's names as Ruby and the engine's others as the engine

@@ -35,6 +35,7 @@ class ExportsTest < Minitest::Test
   def test_an_export_declared_with_no_value_is_refused
     error = assert_raises(ArgumentError) { Unit::Declarations::Blank }
 
+    assert_equal "res://test/unit/declarations/blank.rb:5", Minitest.filter_backtrace(error.backtrace).first
     assert_equal %(Cannot use "export" because the type of the initialized value can't be inferred.),
                  error.message
   end
@@ -43,6 +44,7 @@ class ExportsTest < Minitest::Test
   def test_an_export_a_ruby_superclass_declared_is_refused
     error = assert_raises(ArgumentError) { Unit::Declarations::Decoy }
 
+    assert_equal "res://test/unit/declarations/decoy.rb:5", Minitest.filter_backtrace(error.backtrace).first
     assert_equal 'The member "mode" already exists in parent class Turret.', error.message
   end
 
@@ -50,12 +52,15 @@ class ExportsTest < Minitest::Test
   def test_an_export_the_engine_class_already_has_is_refused
     error = assert_raises(ArgumentError) { Unit::Declarations::Overlay }
 
+    assert_equal "res://test/unit/declarations/overlay.rb:5", Minitest.filter_backtrace(error.backtrace).first
     assert_equal %(Member "position" redefined (original in native class 'Node2D')), error.message
   end
 
   # @behavior RD-017
   def test_an_export_ruby_objects_already_answer_is_refused
-    assert_raises(ArgumentError) { Unit::Declarations::Veil }
+    error = assert_raises(ArgumentError) { Unit::Declarations::Veil }
+
+    assert_equal "res://test/unit/declarations/veil.rb:6", Minitest.filter_backtrace(error.backtrace).first
   end
 
   # @behavior RD-018
@@ -70,12 +75,16 @@ class ExportsTest < Minitest::Test
 
   # @behavior RD-019
   def test_an_export_declared_again_with_another_value_is_refused
-    assert_raises(ArgumentError) { Unit::Declarations::Lever }
+    error = assert_raises(ArgumentError) { Unit::Declarations::Lever }
+
+    assert_equal "res://test/unit/declarations/lever.rb:6", Minitest.filter_backtrace(error.backtrace).first
   end
 
   # @behavior RD-020
   def test_a_signal_a_ruby_superclass_declared_is_refused
-    assert_raises(ArgumentError) { Unit::Declarations::Resonator }
+    error = assert_raises(ArgumentError) { Unit::Declarations::Resonator }
+
+    assert_equal "res://test/unit/declarations/resonator.rb:5", Minitest.filter_backtrace(error.backtrace).first
   end
 
   # @behavior RD-021

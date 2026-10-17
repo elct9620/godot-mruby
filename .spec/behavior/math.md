@@ -70,3 +70,11 @@ How Ruby computes in a realm: Ruby's own `Math`, `rand` and `srand` behave as Ru
 | Given | a realm |
 | When | Ruby asks an Integer or a Float `zero?`, `positive?`, `negative?` or an Integer `even?` |
 | Then | each answers as Ruby's does |
+
+## `RC-009` Godot's remainders keep the engine's signs
+
+| Step | Statement |
+| --- | --- |
+| Given | a negative dividend |
+| When | Ruby takes its remainder through `Godot.fmod` and `Godot.fposmod` |
+| Then | `fmod` answers GDScript's `%`, signed as the dividend, and `fposmod` answers a remainder that is never negative, while Ruby's `%` keeps Ruby's sign |

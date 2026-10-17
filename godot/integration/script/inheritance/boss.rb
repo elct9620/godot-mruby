@@ -1,5 +1,5 @@
-# A node script only through grunt.rb, with no method of its own, and an
-# icon beside the file.
+# A node script only through grunt.rb, with no method of its own, and the
+# path of an icon beside the file.
 module Integration
   module Script
     module Inheritance

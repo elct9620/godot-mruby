@@ -43,8 +43,11 @@ class LoaderFailureTest < Minitest::Test
 
   # @behavior RL-019
   def test_a_file_that_raised_runs_again_at_the_next_use_of_its_constant
+    runs = -> { Unit::Loader.instance_variable_get(:@tripwire_runs).to_i }
     first = assert_raises(RuntimeError) { Unit::Loader::Tripwire }
+    ran = runs.call
     second = assert_raises(RuntimeError) { Unit::Loader::Tripwire }
+    assert_equal ran + 1, runs.call
     assert_equal first.message, second.message
   end
 

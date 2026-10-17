@@ -14,6 +14,7 @@ class DynamicPropertiesTest < Minitest::Test
     chest.set(:slot_2, 7)
 
     assert_equal 7, chest._get(:slot_2)
+    assert_equal 7, chest.get(:slot_2)
   end
 
   # @behavior RD-111

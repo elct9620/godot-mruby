@@ -19,12 +19,14 @@ class AwaitTest < Minitest::Test
 
   # @behavior RS-096
   def test_await_answers_what_the_signal_was_emitted_with
-    sentinel, source = make_pair
-    sentinel.call(:watch, source)
+    answers = [[], [7], [7, 8]].map do |values|
+      sentinel, source = make_pair
+      sentinel.call(:watch, source)
+      source.emit_signal(:relayed, *values)
+      sentinel.log.last
+    end
 
-    source.emit_signal(:relayed, 7, 8)
-
-    assert_equal [:started, [7, 8]], sentinel.log
+    assert_equal [nil, 7, [7, 8]], answers
   end
 
   # @behavior RS-097

@@ -92,7 +92,7 @@ How a test reaches the scene a game runs in: the runner resumes the run once per
 | --- | --- |
 | Given | a block that always answers `false` |
 | When | the test waits until it with a `max_time` of 0.1 seconds and 0.05 seconds between calls |
-| Then | the block has been called at most twice |
+| Then | the block has been called at least once and at most twice |
 
 ## `RW-012` `wait_until` without a block raises ArgumentError
 

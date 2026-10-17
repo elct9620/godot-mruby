@@ -67,6 +67,7 @@ class ValuesTest < Minitest::Test
     assert_raises(ArgumentError) { @node.set_meta(:deep, deep) }
     assert_raises(ArgumentError) { @node.set_meta(:looped, looped) }
     refute @node.has_meta(:deep)
+    refute @node.has_meta(:looped)
   end
 
   # @behavior RV-007

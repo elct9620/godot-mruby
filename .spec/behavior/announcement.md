@@ -6,6 +6,7 @@ How a node script or an object script is announced to the editor, which lists it
 
 - `rust/src/announcement.rs`
 - `rust/src/game.rs`
+- `tasks/support/announcement.rb`
 
 ## `RN-001` A node script is announced by its class's name without its namespaces
 
@@ -144,7 +145,6 @@ How a node script or an object script is announced to the editor, which lists it
 
 | Attribute | Value |
 | --- | --- |
-| unverifiable | no headless run adds a file while the editor scans the project |
 | relates | `RN-016` |
 
 | Step | Statement |

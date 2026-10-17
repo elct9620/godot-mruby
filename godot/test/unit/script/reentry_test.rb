@@ -18,9 +18,11 @@ class ReentryTest < Minitest::Test
   def test_a_call_arriving_before_a_file_defines_its_class_does_nothing
     Unit::Script::Forerunner
     forerunner = autofree(Unit::Script::EARLY_NODE)
+    before = forerunner.call(:last_notification)
 
     forerunner.notification(2)
 
+    assert_nil before
     assert_equal 2, forerunner.call(:last_notification)
   end
 

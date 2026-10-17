@@ -296,7 +296,7 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | --- | --- |
 | Given | a file whose statements, before its class statement, make a node carrying the file's own script and call back into it |
 | When | the file runs, and Godot later calls the node's script again |
-| Then | the first call back does nothing and reports nothing, and the later call reaches the node's Ruby object |
+| Then | the first call back does nothing, and the later call reaches the node's Ruby object |
 
 ## `RS-037` A node's script taken away while its Ruby runs lets the call finish
 

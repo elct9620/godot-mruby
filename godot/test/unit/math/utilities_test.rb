@@ -13,8 +13,9 @@ class UtilitiesTest < Minitest::Test
   # @behavior RC-004
   def test_godots_random_numbers_come_from_the_engines_generator
     Godot.seed(42)
+    drawn = Godot.randf
 
-    assert_in_delta 0.11471347510815, Godot.randf, 1e-12
+    assert_equal drawn, gdscript_draw_after_seed(42)
   end
 
   # @behavior RC-005
@@ -34,5 +35,22 @@ class UtilitiesTest < Minitest::Test
 
     assert Godot.is_same(node, node)
     assert Godot.is_same(Godot::Vector2.new(1, 2), Godot::Vector2.new(1, 2))
+  end
+
+  # @behavior RC-009
+  def test_godots_remainders_keep_the_engines_signs
+    assert_in_delta(-1.0, Godot.fmod(-7, 3))
+    assert_in_delta 2.0, Godot.fposmod(-7, 3)
+    assert_equal 2, -7 % 3
+  end
+
+  private
+
+  # What GDScript draws from the engine's generator after seeding it.
+  def gdscript_draw_after_seed(number)
+    script = Godot::GDScript.new
+    script.source_code = "extends RefCounted\nfunc draw(number):\n\tseed(number)\n\treturn randf()\n"
+    script.reload
+    script.new.call(:draw, number)
   end
 end

@@ -97,23 +97,30 @@ class HintsTest < Minitest::Test
 
   # @behavior RD-048
   def test_a_range_leaving_out_its_end_is_refused
-    assert_raises(ArgumentError) { Unit::Declarations::Ramp }
+    error = assert_raises(ArgumentError) { Unit::Declarations::Ramp }
+
+    assert_equal "res://test/unit/declarations/ramp.rb:6", Minitest.filter_backtrace(error.backtrace).first
   end
 
   # @behavior RD-049
   def test_a_step_without_a_range_is_refused
-    assert_raises(ArgumentError) { Unit::Declarations::Stair }
+    error = assert_raises(ArgumentError) { Unit::Declarations::Stair }
+
+    assert_equal "res://test/unit/declarations/stair.rb:5", Minitest.filter_backtrace(error.backtrace).first
   end
 
   # @behavior RD-050
   def test_a_second_hint_on_one_property_is_refused
-    assert_raises(ArgumentError) { Unit::Declarations::Slider }
+    error = assert_raises(ArgumentError) { Unit::Declarations::Slider }
+
+    assert_equal "res://test/unit/declarations/slider.rb:5", Minitest.filter_backtrace(error.backtrace).first
   end
 
   # @behavior RD-067
   def test_a_keyword_naming_no_hint_is_refused
     error = assert_raises(ArgumentError) { Unit::Declarations::Tag }
 
+    assert_equal "res://test/unit/declarations/tag.rb:5", Minitest.filter_backtrace(error.backtrace).first
     assert_equal %("slider:" is not a hint a property can be exported with.), error.message
   end
 
@@ -121,6 +128,7 @@ class HintsTest < Minitest::Test
   def test_a_list_hint_written_with_anything_but_a_list_is_refused
     error = assert_raises(ArgumentError) { Unit::Declarations::Menu }
 
+    assert_equal "res://test/unit/declarations/menu.rb:5", Minitest.filter_backtrace(error.backtrace).first
     assert_equal %("enum:" needs a list of names, but :one was given instead.), error.message
   end
 

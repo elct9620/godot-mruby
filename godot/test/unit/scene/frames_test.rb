@@ -66,6 +66,7 @@ class FramesTest < Minitest::Test
 
     wait_until(0.1, 0.05) { (calls += 1) && false }
 
+    assert_operator calls, :>=, 1
     assert_operator calls, :<=, 2
   end
 

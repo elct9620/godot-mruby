@@ -32,11 +32,12 @@ class ObjectScriptsTest < Minitest::Test
   # @behavior RS-089
   def test_an_object_the_engine_alone_holds_keeps_its_ruby_state
     holder = Godot::Array.new
-    put_bumped_tally(holder)
+    id = put_bumped_tally(holder)
 
     GC.start
     wait_process_frames(1)
 
+    assert_equal id, holder[0].get_instance_id
     assert_equal 1, holder[0].count
   end
 
@@ -56,8 +57,11 @@ class ObjectScriptsTest < Minitest::Test
   def test_an_object_script_extending_object_makes_an_object_ruby_frees
     token = Unit::Script::Token.new
 
+    id = token.get_instance_id
+
     assert_equal "token", token.call(:label)
     token.free
+    refute instance_id_valid?(id)
   end
 
   private
@@ -83,5 +87,6 @@ class ObjectScriptsTest < Minitest::Test
     tally = Unit::Script::Tally.new
     tally.bump
     holder.append(tally)
+    tally.get_instance_id
   end
 end
