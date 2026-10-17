@@ -790,7 +790,7 @@ impl Realm {
 
     // The files other than `path` whose classes extend `class` directly.
     fn find_heirs(&self, path: &str, class: Value) -> Vec<String> {
-        executor::run_paths(&self.mrb)
+        executor::clean_run_paths(&self.mrb)
             .into_iter()
             .filter(|heir| heir != path)
             .filter(|heir| {

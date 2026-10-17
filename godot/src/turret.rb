@@ -21,11 +21,11 @@ class Turret < Godot::Node2D
   private
 
   def find_target
-    in_range = get_parent.enemies.select { |enemy| distance_to(enemy) <= range }
-    in_range.inject { |near, enemy| distance_to(enemy) < distance_to(near) ? enemy : near }
+    candidates = get_parent.enemies.select { |enemy| measure_distance(enemy) <= range }
+    candidates.inject { |near, enemy| measure_distance(enemy) < measure_distance(near) ? enemy : near }
   end
 
-  def distance_to(enemy)
+  def measure_distance(enemy)
     position.distance_to(enemy.position)
   end
 end

@@ -5,18 +5,18 @@ module Minitest
     def before_setup
       super
       @emissions = {}
-      @watching = []
+      @signal_connections = []
     end
 
     def watch_signals(object)
       counts = @emissions[object] = {}
-      object.get_signal_list.each do |declared|
-        name = declared["name"]
+      object.get_signal_list.each do |signal_info|
+        name = signal_info["name"]
         counts[name] = 0
         signal = Godot::Signal.new(object, name)
         # connect_block and disconnect_block come with Waits, which every
         # test class includes too.
-        @watching << [signal, connect_block(signal) { counts[name] += 1 }]
+        @signal_connections << [signal, connect_block(signal) { counts[name] += 1 }]
       end
       object
     end
@@ -28,7 +28,7 @@ module Minitest
     end
 
     def before_teardown
-      @watching.each { |signal, connection| disconnect_block(signal, connection) }
+      @signal_connections.each { |signal, connection| disconnect_block(signal, connection) }
       super
     end
 

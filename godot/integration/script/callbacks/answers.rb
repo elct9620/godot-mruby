@@ -2,7 +2,7 @@ module Integration
   module Script
     module Callbacks
       class Answers < Godot::Node
-        def self_loop
+        def make_self_loop
           looped = []
           looped << looped
         end

@@ -21,15 +21,16 @@ func _physics_process(delta: float) -> void:
 
 
 func _find_target():
-	var in_range: Array = get_parent().enemies().filter(
-		func(enemy): return _distance_to(enemy) <= range
+	var candidates: Array = get_parent().enemies().filter(
+		func(enemy): return _measure_distance(enemy) <= range
 	)
-	if in_range.is_empty():
+	if candidates.is_empty():
 		return null
-	return in_range.reduce(
-		func(near, enemy): return enemy if _distance_to(enemy) < _distance_to(near) else near
+	return candidates.reduce(
+		func(near, enemy):
+			return enemy if _measure_distance(enemy) < _measure_distance(near) else near
 	)
 
 
-func _distance_to(enemy: Node2D) -> float:
+func _measure_distance(enemy: Node2D) -> float:
 	return position.distance_to(enemy.position)

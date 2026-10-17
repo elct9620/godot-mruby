@@ -44,13 +44,13 @@ Module.prepend(Module.new do
   # The class itself and the modules it takes in, up to its superclass.
   def __own_ancestors__
     stop = is_a?(Class) ? superclass : nil
-    taken = []
-    ancestors.each do |taken_in|
-      break if taken_in.equal?(stop)
+    own = []
+    ancestors.each do |ancestor|
+      break if ancestor.equal?(stop)
 
-      taken << taken_in
+      own << ancestor
     end
-    taken
+    own
   end
   private :__own_ancestors__
 end)

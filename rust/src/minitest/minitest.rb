@@ -11,15 +11,15 @@ module Minitest
   # above the framework's first, without the extension's own; failing that,
   # every frame that is not the extension's; failing that, every frame.
   def self.filter_backtrace(backtrace)
-    called = []
+    calls = []
     backtrace.each do |frame|
       break if in_directory?(frame, FRAMEWORK_DIRECTORY)
 
-      called << frame
+      calls << frame
     end
-    [called, backtrace].each do |frames|
-      filtered = frames.reject { |frame| in_directory?(frame, EXTENSION_DIRECTORY) }
-      return filtered unless filtered.empty?
+    [calls, backtrace].each do |frames|
+      project_frames = frames.reject { |frame| in_directory?(frame, EXTENSION_DIRECTORY) }
+      return project_frames unless project_frames.empty?
     end
     backtrace
   end

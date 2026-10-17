@@ -54,7 +54,7 @@ impl EngineObject {
     }
 
     // The object a script made, which the realm holds under its key.
-    fn scripted(object: Gd<Object>) -> Self {
+    fn new_scripted(object: Gd<Object>) -> Self {
         Self(ManuallyDrop::new(object), Standing::Scripted)
     }
 }
@@ -201,7 +201,7 @@ fn make_scripted(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
         return Err(make_not_implemented_error(mrb, &message));
     }
     let held = mrb
-        .wrap_as(EngineObject::scripted(object), class)
+        .wrap_as(EngineObject::new_scripted(object), class)
         .as_value();
     let key = derive_object_key(id);
     if id.is_ref_counted() {
@@ -235,7 +235,7 @@ fn script_by_class_path(mrb: &Mrb, path: &str) -> Option<Gd<Script>> {
 // methods the receiver calls on it.
 fn allocate(mrb: &Mrb, class: RClass, owner: &EngineObject) -> Result<Value, Error> {
     check_stands_for(mrb, class, owner)?;
-    let object = EngineObject::scripted((*owner.0).clone());
+    let object = EngineObject::new_scripted((*owner.0).clone());
     Ok(mrb.wrap_as(object, class).as_value())
 }
 
@@ -645,7 +645,7 @@ pub(super) fn to_arguments(
 
 impl EngineObject {
     /// The engine object as the engine takes it, unless it was freed.
-    pub fn variant(&self) -> Result<Variant, String> {
+    pub fn to_variant(&self) -> Result<Variant, String> {
         if self.0.is_instance_valid() {
             Ok(self.0.to_variant())
         } else {

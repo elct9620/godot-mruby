@@ -295,26 +295,26 @@ module Godot
       # the engine's container of its elements, so GDScript reaching the
       # property changes what Ruby reads, and anything else as it is.
       def __hold__(value, types = nil)
-        held = case value
-               when ::Array then Godot::Array.new(value)
-               when ::Hash then Godot::Dictionary.new(value)
-               else value
-               end
-        types.nil? ? held : __type__(held, types)
+        property_value = case value
+                         when ::Array then Godot::Array.new(value)
+                         when ::Hash then Godot::Dictionary.new(value)
+                         else value
+                         end
+        types.nil? ? property_value : __type__(property_value, types)
       end
 
       # `container` typed as `types` say, each a type, an engine class and a
       # script: one for an array's elements, or a dictionary's keys and
       # values. One typed so already is the same container.
       def __type__(container, types)
-        return container if container.is_typed && __typed_as__(container) == types.inject(:+)
+        return container if container.is_typed && __read_types__(container) == types.inject(:+)
         return Godot::Array.new(container, *types.first) if types.size == 1
 
         Godot::Dictionary.new(container, *types[0], *types[1])
       end
 
       # The types `container` is typed with, as `__type__` takes them.
-      def __typed_as__(container)
+      def __read_types__(container)
         if container.is_a?(Godot::Array)
           return [container.get_typed_builtin, container.get_typed_class_name, container.get_typed_script]
         end
@@ -396,10 +396,10 @@ module Godot
       def __read_hint__(keywords)
         step = keywords[:step]
         extra = keywords[:extra_hints]
-        named = keywords.keys.reject { |keyword| %i[step extra_hints].include?(keyword) }
-        raise ArgumentError, %("#{named.last}:" cannot be used with another hint.) if named.size > 1
+        hints = keywords.keys.reject { |keyword| %i[step extra_hints].include?(keyword) }
+        raise ArgumentError, %("#{hints.last}:" cannot be used with another hint.) if hints.size > 1
 
-        hint = named.first
+        hint = hints.first
         return ["range", __read_bounds__(keywords[:range], step, extra)] if hint == :range
         raise ArgumentError, %("step:" needs a "range:" to step through.) unless step.nil?
         raise ArgumentError, %("extra_hints:" needs a "range:" to add to.) unless extra.nil?
@@ -411,12 +411,12 @@ module Godot
 
       # The type `type:` names: a class, or the classes a typed container
       # holds, one in an array or a key's and a value's in a hash.
-      def __read_type__(named)
-        return ["type", __read_type_name__(named)] unless named.is_a?(::Array) || named.is_a?(::Hash)
+      def __read_type__(type)
+        return ["type", __read_type_name__(type)] unless type.is_a?(::Array) || type.is_a?(::Hash)
 
-        classes = named.is_a?(::Hash) ? named.keys + named.values : named
-        unless (named.is_a?(::Array) ? 1 : 2) == classes.size && named.size == 1
-          raise ArgumentError, %("type:" needs one class in an array or one pair in a hash, but #{named.inspect} was given instead.)
+        classes = type.is_a?(::Hash) ? type.keys + type.values : type
+        unless (type.is_a?(::Array) ? 1 : 2) == classes.size && type.size == 1
+          raise ArgumentError, %("type:" needs one class in an array or one pair in a hash, but #{type.inspect} was given instead.)
         end
 
         ["typed", classes.map { |element| __check_class__(:type, element) }]
@@ -428,7 +428,7 @@ module Godot
         if %i[enum flags].include?(hint) && !value.is_a?(::Array)
           raise ArgumentError, %("#{hint}:" needs a list of names, but #{value.inspect} was given instead.)
         end
-        return value.map { |named| __check_class__(hint, named).to_s } if hint == :node_path && value.is_a?(::Array)
+        return value.map { |type| __check_class__(hint, type).to_s } if hint == :node_path && value.is_a?(::Array)
         if hint == :custom && !value.is_a?(::Array)
           raise ArgumentError, %("custom:" needs a hint and what it is read with, but #{value.inspect} was given instead.)
         end
@@ -437,16 +437,16 @@ module Godot
       end
 
       # The class a property names its type by, as the realm spells it.
-      def __read_type_name__(named)
-        __check_class__(:type, named).to_s
+      def __read_type_name__(type)
+        __check_class__(:type, type).to_s
       end
 
       # The class the keyword `keyword` names a type by. Only a class names a
       # type, so anything else is refused where it is written.
-      def __check_class__(keyword, named)
-        raise ArgumentError, %("#{keyword}:" needs a class, but #{named.inspect} was given instead.) unless named.is_a?(::Module)
+      def __check_class__(keyword, type)
+        raise ArgumentError, %("#{keyword}:" needs a class, but #{type.inspect} was given instead.) unless type.is_a?(::Module)
 
-        named
+        type
       end
 
       # A range hint's bounds, the step included when one is declared. A
@@ -553,15 +553,15 @@ module Godot
     # The Ruby class, the engine object as Godot prints it, and the instance
     # variables as Ruby inspects them.
     def inspect
-      inspected = Godot::Object.__send__(:__inspection_stack__)
+      stack = Godot::Object.__send__(:__inspection_stack__)
       head = "#<#{self.class} #{__label__}"
-      return "#{head} ...>" if inspected.any? { |object| object.equal?(self) }
+      return "#{head} ...>" if stack.any? { |object| object.equal?(self) }
 
-      inspected.push(self)
+      stack.push(self)
       variables = instance_variables.map { |name| "#{name}=#{instance_variable_get(name).inspect}" }
       variables.empty? ? "#{head}>" : "#{head} #{variables.join(", ")}>"
     ensure
-      inspected.pop if inspected.last.equal?(self)
+      stack.pop if stack.last.equal?(self)
     end
 
     # Waits until `target` is emitted, in a method Godot runs where it may
@@ -595,7 +595,7 @@ module Godot
     # end through once it has waited. Only a fiber running is kept here; one
     # waiting is kept by its signal's connection alone, so it goes once the
     # object emitting the signal does.
-    @running = {}
+    @fibers = {}
 
     # Runs `body` in a fiber of its own, answering what it returns when it
     # ends without waiting, or else a Signal emitted with what it returns
@@ -619,12 +619,12 @@ module Godot
       # Resumes `fiber` with `values`, emitting the state `ending` holds
       # once it has waited with what the fiber returns as it ends.
       def resume(fiber, ending, *values)
-        @running[fiber] = ending
+        @fibers[fiber] = ending
         answer = fiber.resume(*values)
         ending.first&.emit_signal(:completed, answer) unless fiber.alive?
         answer
       ensure
-        @running.delete(fiber)
+        @fibers.delete(fiber)
       end
 
       # Yields the fiber running now until `target` is emitted, answering
@@ -637,7 +637,7 @@ module Godot
         return target if signal.nil?
 
         fiber = Fiber.current
-        ending = @running[fiber]
+        ending = @fibers[fiber]
         if ending.nil?
           raise FiberError, "await waits only in a method Godot calls, or a block or method Godot calls back"
         end

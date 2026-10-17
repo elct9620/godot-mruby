@@ -50,11 +50,11 @@ impl Gem for Minitest {
         }
         mrb.module_get(c"Minitest")?
             .class_get(mrb, c"LogReporter")?
-            .define_private_method(mrb, c"error", method!(log_error, 3))
+            .define_private_method(mrb, c"log_error", method!(log_error, 3))
     }
 }
 
-// Minitest::LogReporter#error(message, file, line): a test that did not
+// Minitest::LogReporter#log_error(message, file, line): a test that did not
 // pass, written to Godot's log at its Ruby line when it has one.
 fn log_error(
     _mrb: &Mrb,

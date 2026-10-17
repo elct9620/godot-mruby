@@ -92,7 +92,7 @@ fn read_parameter(mrb: &Mrb, name: String, class: Value) -> Result<Parameter, St
     let engine_class = RClass::from_value(class)
         .and_then(|class| find_engine_ancestor(mrb, class))
         .ok_or_else(|| describe_unknown_type(&path))?;
-    let class_name = find_editor_name(mrb, &path).unwrap_or(engine_class);
+    let class_name = editor_name_by_class_path(mrb, &path).unwrap_or(engine_class);
     Ok(Parameter::new(name, VariantType::OBJECT).with_class(class_name))
 }
 
@@ -112,7 +112,7 @@ fn declare_export(
     written: Value,
 ) -> Result<Value, Error> {
     let refuse = |reason: String| make_argument_error(mrb, &reason);
-    if let Some(engine_class) = find_engine_member(mrb, class, &name) {
+    if let Some(engine_class) = engine_class_by_member(mrb, class, &name) {
         let message =
             format!("Member \"{name}\" redefined (original in native class '{engine_class}')");
         return Err(make_argument_error(mrb, &message));
@@ -157,7 +157,7 @@ fn name_node_types(mrb: &Mrb, written: &Variant) -> Variant {
             let path = path.to_string();
             match path.strip_prefix("Godot::") {
                 Some(engine_class) => engine_class.to_owned(),
-                None => find_editor_name(mrb, &path).unwrap_or(path),
+                None => editor_name_by_class_path(mrb, &path).unwrap_or(path),
             }
             .to_variant()
         })
@@ -440,7 +440,7 @@ fn hint_by_class(mrb: &Mrb, class: &str) -> Result<(PropertyHint, String), Strin
         }
         return Err("Export type can only be built-in, a resource, a node, or an enum.".to_owned());
     }
-    let name = find_editor_name(mrb, class).ok_or_else(|| describe_unknown_type(class))?;
+    let name = editor_name_by_class_path(mrb, class).ok_or_else(|| describe_unknown_type(class))?;
     let is_resource = file_by_class_path(mrb, class)
         .and_then(|file| ResourceLoader::singleton().load(&file))
         .and_then(|resource| resource.try_cast::<Script>().ok())
@@ -457,7 +457,7 @@ fn hint_by_class(mrb: &Mrb, class: &str) -> Result<(PropertyHint, String), Strin
 
 // The name the editor lists the Ruby class `class` under, if a script of
 // the project defines it and nothing else is announced by that name.
-fn find_editor_name(mrb: &Mrb, class: &str) -> Option<String> {
+fn editor_name_by_class_path(mrb: &Mrb, class: &str) -> Option<String> {
     editor_name_by_path(&file_by_class_path(mrb, class)?)
 }
 
@@ -479,7 +479,7 @@ fn describe_unknown_type(class: &str) -> String {
 // The engine class `class` extends that has a member of that name, if one
 // has: a signal, a property or an integer constant, which is what GDScript
 // refuses a member for redefining.
-fn find_engine_member(mrb: &Mrb, class: RClass, name: &str) -> Option<String> {
+fn engine_class_by_member(mrb: &Mrb, class: RClass, name: &str) -> Option<String> {
     let engine_class = find_engine_ancestor(mrb, class)?;
     let mut class_db = ClassDb::singleton();
     let has_member = class_db.class_has_signal(engine_class.as_str(), name)

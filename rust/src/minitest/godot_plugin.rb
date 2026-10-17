@@ -4,7 +4,7 @@ module Minitest
   # Writes each test that did not pass to Godot's log at the Ruby line it went
   # wrong at, after the summary, with the options that run it again. A filter
   # that leaves no test to run is written there too and fails the run.
-  # `error` is the extension's.
+  # `log_error` is the extension's.
   class LogReporter < AbstractReporter
     def initialize(options)
       @filter = options[:include]
@@ -18,10 +18,10 @@ module Minitest
     end
 
     def report
-      error("Nothing ran for filter: #{@filter}", nil, nil) if nothing_ran?
+      log_error("Nothing ran for filter: #{@filter}", nil, nil) if nothing_ran?
       @problems.each do |result|
         test = "#{result.class}##{result.name}"
-        error("#{test}: #{result.failure.message}", *result.failure.file_and_line)
+        log_error("#{test}: #{result.failure.message}", *result.failure.file_and_line)
         puts "Run it again with --seed #{Minitest.seed} --include #{test}"
       end
     end

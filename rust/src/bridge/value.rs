@@ -175,12 +175,12 @@ pub fn to_engine(
     if value.is_kind_of(mrb, object::object_class(mrb, data))
         && let Ok(held) = <&EngineObject>::try_convert(value, mrb)
     {
-        return held.variant();
+        return held.to_variant();
     }
     if value.is_kind_of(mrb, value_type::value_class(mrb, data))
         && let Ok(held) = <&EngineValue>::try_convert(value, mrb)
     {
-        return Ok(held.variant());
+        return Ok(held.to_variant());
     }
     let too_deep = || {
         let class = value.classname(mrb);

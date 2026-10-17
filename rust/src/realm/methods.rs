@@ -11,7 +11,7 @@ use beni::{
     value::qnil,
 };
 
-use super::executor::{Declared, SourceNames};
+use super::executor::{DeclarationsByKind, SourceNames};
 use super::{bookkeeping, compile, executor, key_by_path, loader};
 use crate::snapshot::{self, Class};
 
@@ -31,7 +31,7 @@ pub(super) fn methods_by_path(mrb: &Mrb, path: &str) -> Vec<String> {
     let Some(class) = loader::constant_by_key(mrb, &key_by_path(mrb, path)) else {
         return Vec::new();
     };
-    let Some(taken) = class
+    let Some(own_ancestors) = class
         .funcall(mrb, c"__own_ancestors__", &[])
         .ok()
         .and_then(RArray::from_value)
@@ -40,7 +40,7 @@ pub(super) fn methods_by_path(mrb: &Mrb, path: &str) -> Vec<String> {
     };
     let own = [false.into_value(mrb)];
     let mut names: Vec<String> = Vec::new();
-    for module in taken.entries(mrb) {
+    for module in own_ancestors.entries(mrb) {
         if let Some(id) = read_id(mrb, module) {
             record_taker(mrb, id, path);
         }
@@ -70,7 +70,7 @@ pub(super) fn methods_by_path(mrb: &Mrb, path: &str) -> Vec<String> {
 pub(super) fn publish_class(
     mrb: &Mrb,
     path: &str,
-    declared: Declared,
+    declarations: DeclarationsByKind,
     source_names: SourceNames,
     digest: u64,
 ) {
@@ -80,9 +80,9 @@ pub(super) fn publish_class(
     Arc::make_mut(&mut draft).record_class(
         path,
         Class {
-            signals: declared.signals,
-            members: declared.members,
-            rpcs: declared.rpcs,
+            signals: declarations.signals,
+            members: declarations.members,
+            rpcs: declarations.rpcs,
             methods,
             digest,
             export_names: source_names.exports,

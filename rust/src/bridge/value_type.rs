@@ -185,7 +185,7 @@ fn keep_class(mrb: &Mrb, data: &BridgeData, kind: VariantType, class: RClass) {
 
 impl EngineValue {
     /// The value as the engine takes it.
-    pub fn variant(&self) -> Variant {
+    pub fn to_variant(&self) -> Variant {
         self.as_variant().into_owned()
     }
 
@@ -205,7 +205,7 @@ impl EngineValue {
             return Ok(self.clone());
         }
         let name = StringName::from("duplicate");
-        let mut receiver = self.variant();
+        let mut receiver = self.to_variant();
         // SAFETY: the name lives for the call, which takes no arguments.
         let outcome = super::run_engine_call(|copy, error| unsafe {
             sys::interface_fn!(variant_call)(
@@ -440,7 +440,7 @@ fn with_member(mrb: &Mrb, held: &EngineValue, name: Symbol, member: Value) -> Re
     let name = name_by_symbol(mrb, name);
     let member = value::to_engine(mrb, super::data(mrb), member, 1)
         .map_err(|reason| make_argument_error(mrb, &reason))?;
-    let mut copy = held.variant();
+    let mut copy = held.to_variant();
     let mut valid = false as sys::GDExtensionBool;
     // SAFETY: the interface is initialized while the extension runs, and the
     // copy, name and member live for the call.
@@ -502,7 +502,7 @@ fn call(mrb: &Mrb, held: &EngineValue, name: Symbol, args: RArray) -> Result<Val
     check_argument_count(mrb, held.kind(), &name, args.len())?;
     let args = to_arguments(mrb, super::data(mrb), args.entries(mrb))?;
     let pointers: SmallVec<[_; 4]> = args.iter().map(Variant::var_sys).collect();
-    let mut receiver = held.variant();
+    let mut receiver = held.to_variant();
     // SAFETY: the name and argument pointers live for the call, which runs on
     // a copy of the value: a value of fixed size never changes, and a
     // container's copy holds the container itself, so its methods change it.

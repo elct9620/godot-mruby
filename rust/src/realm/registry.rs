@@ -122,13 +122,13 @@ impl Registry {
     /// Whether `key` holds an object.
     pub fn has_object(&self, mrb: &Mrb, key: Key) -> Result<bool, Error> {
         Ok(self.objects.contains_key(mrb, key.to_value(mrb))?
-            || self.loose_object(mrb, key).is_some())
+            || self.loose_object_by_key(mrb, key).is_some())
     }
 
     // The object `key` holds loosely while the collector has not freed it,
     // protected in the arena now that Rust has it: callers run inside an
     // arena scope, which takes the protection back as it ends.
-    fn loose_object(&self, mrb: &Mrb, key: Key) -> Option<Value> {
+    fn loose_object_by_key(&self, mrb: &Mrb, key: Key) -> Option<Value> {
         let object = *self.loose.borrow().get(&key.0)?;
         (!is_collected(key)).then(|| mrb.arena_scope().keep(object))
     }
@@ -138,7 +138,7 @@ impl Registry {
     pub fn object_by_key(&self, mrb: &Mrb, key: Key) -> Result<Value, Error> {
         let mut object = self.objects.get(mrb, key.to_value(mrb))?;
         if object.is_nil() {
-            object = self.loose_object(mrb, key).unwrap_or(object);
+            object = self.loose_object_by_key(mrb, key).unwrap_or(object);
         }
         if object.is_nil() {
             let class = mrb.exc_get(c"RuntimeError")?;
@@ -156,7 +156,7 @@ impl Registry {
             .entries(mrb)
             .chain(
                 keys.into_iter()
-                    .filter_map(|key| self.loose_object(mrb, Key(key))),
+                    .filter_map(|key| self.loose_object_by_key(mrb, Key(key))),
             )
             .collect()
     }

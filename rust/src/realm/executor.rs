@@ -144,7 +144,7 @@ pub(super) fn has_run(mrb: &Mrb, path: &str) -> bool {
 }
 
 /// The files that have run cleanly.
-pub(super) fn run_paths(mrb: &Mrb) -> Vec<String> {
+pub(super) fn clean_run_paths(mrb: &Mrb) -> Vec<String> {
     runs(mrb)
         .files
         .borrow()
@@ -242,14 +242,14 @@ pub(super) fn record_created(mrb: &Mrb, scope: Vec<String>, name: String) {
 /// declaring it differently is refused where it is written, and a name an
 /// ancestor declared is the ancestor's, refused in GDScript's own words so
 /// that the same mistake reads the same in both languages.
-pub(super) fn declare(mrb: &Mrb, class: RClass, declared: Declaration) -> Result<(), Error> {
-    if let Some(ancestor) = ancestor_by_member(mrb, class, declared.name()) {
+pub(super) fn declare(mrb: &Mrb, class: RClass, declaration: Declaration) -> Result<(), Error> {
+    if let Some(ancestor) = ancestor_by_member(mrb, class, declaration.name()) {
         return Err(make_ruby_error(
             mrb,
             c"ArgumentError",
             &format!(
                 "The member \"{}\" already exists in parent class {ancestor}.",
-                declared.name()
+                declaration.name()
             ),
         ));
     }
@@ -261,19 +261,19 @@ pub(super) fn declare(mrb: &Mrb, class: RClass, declared: Declaration) -> Result
     let Some((_, standing)) = frame
         .declarations
         .iter()
-        .find(|(path, standing)| *path == script && standing.name() == declared.name())
+        .find(|(path, standing)| *path == script && standing.name() == declaration.name())
     else {
-        frame.declarations.push((script, declared));
+        frame.declarations.push((script, declaration));
         return Ok(());
     };
-    if standing == &declared {
+    if standing == &declaration {
         return Ok(());
     }
     let refusal = format!(
         "{} is already declared as {}, so it cannot be declared as {}",
-        declared.name(),
+        declaration.name(),
         standing.label(),
-        declared.label()
+        declaration.label()
     );
     drop(frames);
     Err(make_ruby_error(mrb, c"ArgumentError", &refusal))
@@ -326,7 +326,7 @@ fn script_path_by_class(mrb: &Mrb, class: RClass, path: &str) -> String {
         .path(mrb)
         .map(|written| written.split("::").map(str::to_owned).collect())
         .unwrap_or_default();
-    match inner_names(mrb, path, &names) {
+    match read_inner_names(mrb, path, &names) {
         Some(inner @ [_, ..]) => join_inner_path(path, inner),
         _ => path.to_owned(),
     }
@@ -334,12 +334,12 @@ fn script_path_by_class(mrb: &Mrb, class: RClass, path: &str) -> String {
 
 // The paths of the scripts standing for the classes `frame` created inside
 // its file's class, in the order it created them.
-fn inner_script_paths(mrb: &Mrb, frame: &Frame) -> Vec<String> {
+fn collect_inner_script_paths(mrb: &Mrb, frame: &Frame) -> Vec<String> {
     frame
         .constants
         .iter()
         .filter_map(|(scope, name)| {
-            let inner = inner_names(mrb, &frame.path, scope)?;
+            let inner = read_inner_names(mrb, &frame.path, scope)?;
             let mut names = inner.to_vec();
             names.push(name.clone());
             Some(join_inner_path(&frame.path, &names))
@@ -354,7 +354,7 @@ fn inner_script_paths(mrb: &Mrb, frame: &Frame) -> Vec<String> {
 
 // What `names` spells after the constant path of the file at `path`'s
 // class, if it begins with that path.
-fn inner_names<'n>(mrb: &Mrb, path: &str, names: &'n [String]) -> Option<&'n [String]> {
+fn read_inner_names<'n>(mrb: &Mrb, path: &str, names: &'n [String]) -> Option<&'n [String]> {
     let file_key = key_by_path(mrb, path);
     let is_inside = names.len() >= file_key.len()
         && names
@@ -424,12 +424,24 @@ fn execute<T>(
 // Publishes what the file `frame` ran declared: its class's, with the names
 // its source spells out, and each class's inside it.
 fn publish_frame(mrb: &Mrb, mut frame: Frame) {
-    let inner_paths = inner_script_paths(mrb, &frame);
-    let declared = split(take_declarations(&mut frame.declarations, &frame.path));
-    methods::publish_class(mrb, &frame.path, declared, frame.source_names, frame.digest);
+    let inner_paths = collect_inner_script_paths(mrb, &frame);
+    let declarations = split(take_declarations(&mut frame.declarations, &frame.path));
+    methods::publish_class(
+        mrb,
+        &frame.path,
+        declarations,
+        frame.source_names,
+        frame.digest,
+    );
     for path in inner_paths {
-        let declared = split(take_declarations(&mut frame.declarations, &path));
-        methods::publish_class(mrb, &path, declared, SourceNames::default(), frame.digest);
+        let declarations = split(take_declarations(&mut frame.declarations, &path));
+        methods::publish_class(
+            mrb,
+            &path,
+            declarations,
+            SourceNames::default(),
+            frame.digest,
+        );
     }
 }
 
@@ -438,18 +450,21 @@ fn take_declarations(
     declarations: &mut Vec<(String, Declaration)>,
     path: &str,
 ) -> Vec<Declaration> {
-    let (taken, kept) = std::mem::take(declarations)
+    let (script_declarations, others) = std::mem::take(declarations)
         .into_iter()
         .partition(|(script, _)| script == path);
-    *declarations = kept;
-    taken.into_iter().map(|(_, declared)| declared).collect()
+    *declarations = others;
+    script_declarations
+        .into_iter()
+        .map(|(_, declaration)| declaration)
+        .collect()
 }
 
 // What a frame declared, as the kinds a class publishes: its signals, what
 // the editor shows, which keeps the order it was declared in, and its rpcs.
-fn split(declared: Vec<Declaration>) -> Declared {
-    let mut split = Declared::default();
-    for one in declared {
+fn split(declarations: Vec<Declaration>) -> DeclarationsByKind {
+    let mut split = DeclarationsByKind::default();
+    for one in declarations {
         match one {
             Declaration::Signal(signal) => split.signals.push(signal),
             Declaration::Property(property) => split.members.push(Member::Property(property)),
@@ -462,7 +477,7 @@ fn split(declared: Vec<Declaration>) -> Declared {
 
 /// What a class's body declared, by kind.
 #[derive(Default)]
-pub(super) struct Declared {
+pub(super) struct DeclarationsByKind {
     pub signals: Vec<Signal>,
     pub members: Vec<Member>,
     pub rpcs: Vec<Rpc>,
