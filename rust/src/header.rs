@@ -414,8 +414,9 @@ impl Reader {
     // methods, as may a class body holding more than the forms read.
     fn read_body(&mut self, body: &NodeList, scope: &[String], is_namespace: bool) {
         for node in body.iter() {
-            let is_nesting = node.as_module_node().is_some() || node.as_class_node().is_some();
-            if is_namespace && !is_nesting {
+            let is_class_or_module =
+                node.as_module_node().is_some() || node.as_class_node().is_some();
+            if is_namespace && !is_class_or_module {
                 self.has_unknown_statements = true;
             }
             self.read_statement(&node, scope);
