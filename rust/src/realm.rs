@@ -1031,9 +1031,15 @@ impl RubyError {
     }
 }
 
+// Where the Ruby the extension ships is compiled, apart from any project path.
+const SHIPPED_DIRECTORY: &str = "godot_mruby/";
+
 // The frames of `error`'s backtrace that name a line, most recent first.
 // Under a call from Rust, the top level mruby's base frame kept from the last
-// file it ran is not one Ruby called through, so it is left out.
+// file it ran is not one Ruby called through, so it is left out. So are the
+// frames of the Ruby the extension ships, as minitest leaves out its own, so
+// an error the extension raises is placed where the project's Ruby called
+// it; one raised with no project frame keeps them all.
 fn collect_frames(mrb: &Mrb, error: &Error) -> Vec<Location> {
     let mut frames: Vec<Location> = error
         .backtrace(mrb)
@@ -1045,6 +1051,12 @@ fn collect_frames(mrb: &Mrb, error: &Error) -> Vec<Location> {
         .is_some_and(|kept| matches!(kept.outermost.get(), Some(Origin::Call)));
     if under_call && frames.last().is_some_and(|frame| frame.function.is_empty()) {
         frames.pop();
+    }
+    if frames
+        .iter()
+        .any(|frame| !frame.file.starts_with(SHIPPED_DIRECTORY))
+    {
+        frames.retain(|frame| !frame.file.starts_with(SHIPPED_DIRECTORY));
     }
     frames
 }
@@ -1116,6 +1128,26 @@ mod tests {
 
         fn source_by_path(&self, _path: &str) -> Result<String, String> {
             Ok("ready = true\nraise \"raised at the top\"\n".to_owned())
+        }
+
+        fn declarations_by_path(&self, _path: &str) -> Declarations {
+            Declarations::default()
+        }
+    }
+
+    const REFUSER: &str = "res://refuser.rb";
+
+    // A file whose top level, on its second line, calls a method the
+    // extension's Ruby defines that raises.
+    struct Refuser;
+
+    impl Files for Refuser {
+        fn paths(&self) -> Vec<String> {
+            vec![REFUSER.to_owned()]
+        }
+
+        fn source_by_path(&self, _path: &str) -> Result<String, String> {
+            Ok("ready = true\nrefuse\n".to_owned())
         }
 
         fn declarations_by_path(&self, _path: &str) -> Declarations {
@@ -1327,6 +1359,24 @@ mod tests {
         });
 
         assert_eq!(format_frames(ran.err()), ["res://tripwire.rb:2:"]);
+    }
+
+    // @behavior RR-007
+    #[test]
+    fn an_error_the_extensions_ruby_raises_is_placed_where_the_project_called_it() {
+        let _turn = TURN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        close();
+        prepare(|| {
+            Realm::open(Refuser, Silence, |realm| {
+                let source = "def refuse = raise(ArgumentError, \"refused\")\n";
+                compiler::run(&realm.mrb, c"godot_mruby/refusal.rb", source, |_| {})
+                    .map_err(|error| RubyError::from_error(&realm.mrb, None, &error))
+            })
+        });
+
+        let ran = enter(|realm| realm.run(REFUSER));
+
+        assert_eq!(format_frames(ran.err()), ["res://refuser.rb:2:"]);
     }
 
     // @behavior RL-039

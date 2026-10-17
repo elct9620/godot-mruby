@@ -61,3 +61,11 @@ How what mruby has to say about a Ruby file reaches Godot: through the log, at t
 | Given | a node script whose callback calls a method that raises |
 | When | the scene runs |
 | Then | the backtrace the log carries ends with the callback, with no frame of what called into Ruby |
+
+## `RR-007` An error the extension's Ruby raises is placed where the project called it
+
+| Step | Statement |
+| --- | --- |
+| Given | a Ruby file calling a method of the extension's own Ruby that raises, such as a refused declaration |
+| When | the file runs |
+| Then | the exception is placed at the file's line, and its backtrace holds no frame of the extension's own Ruby |
