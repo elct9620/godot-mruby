@@ -15,7 +15,7 @@ class UtilitiesTest < Minitest::Test
     Godot.seed(42)
     drawn = Godot.randf
 
-    assert_equal drawn, gdscript_draw_after_seed(42)
+    assert_equal drawn, draw_in_gdscript(42)
   end
 
   # @behavior RC-005
@@ -55,7 +55,7 @@ class UtilitiesTest < Minitest::Test
   private
 
   # What GDScript draws from the engine's generator after seeding it.
-  def gdscript_draw_after_seed(number)
+  def draw_in_gdscript(number)
     script = Godot::GDScript.new
     script.source_code = "extends RefCounted\nfunc draw(number):\n\tseed(number)\n\treturn randf()\n"
     script.reload

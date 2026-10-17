@@ -252,9 +252,7 @@ impl RubyScript {
     /// static function: the class, or a class it inherits from, defines it
     /// on `self`.
     pub fn has_class_method(&self, method: &str) -> bool {
-        self.lineage()
-            .files()
-            .any(|(_, header)| header.static_methods().iter().any(|name| name == method))
+        self.lineage().has_class_method(method)
     }
 
     /// The constant the script's class is named by from the top level, as
@@ -266,20 +264,6 @@ impl RubyScript {
             .chain(inner.into_iter().map(str::to_owned))
             .collect::<Vec<_>>()
             .join("::")
-    }
-
-    // The methods GDScript calls on the script, its own and those it
-    // inherits, nearest first and each once.
-    fn class_methods(&self) -> Vec<String> {
-        let mut methods: Vec<String> = Vec::new();
-        for (_, header) in self.lineage().files() {
-            for name in header.static_methods() {
-                if !methods.contains(name) {
-                    methods.push(name.clone());
-                }
-            }
-        }
-        methods
     }
 
     /// The script a template made for a new file, holding `source`.
@@ -766,7 +750,7 @@ impl IScriptExtension for RubyScript {
 
     fn get_script_method_list(&self) -> Array<AnyDictionary> {
         let methods = self.methods();
-        let class_methods = self.class_methods();
+        let class_methods = self.lineage().collect_class_methods();
         let described = methods.iter().map(|method| describe_name(method.as_str()));
         let class_described = class_methods
             .iter()

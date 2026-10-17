@@ -1,7 +1,7 @@
 module Unit
   module Script
-    # Awaits for the class taking it in, from a module's own method.
-    module Listening
+    # Awaits a signal for the class taking it in, from a module's own method.
+    module Listener
       def listen(source)
         await(source, :relayed)
       end

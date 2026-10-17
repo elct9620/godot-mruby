@@ -15,9 +15,10 @@ use crate::snapshot::{
 
 /// A file's header: the constants its `module` and `class` statements write,
 /// the name the class its path names is written with, the superclass written
-/// on it, the names of the methods it defines on its instances and on
-/// `self`, what each method the file defines calls, the signals, rpcs, properties and headings its body
-/// declares, and the `tool`, `abstract` and `icon` its body calls.
+/// on it, the names of the methods it defines on its instances and on `self`,
+/// what each method the file defines calls, the signals, rpcs, properties and
+/// headings its body declares, and the `tool`, `abstract` and `icon` its body
+/// calls.
 #[derive(Debug, Default)]
 pub struct Header {
     constant_paths: Vec<Vec<String>>,
@@ -25,7 +26,7 @@ pub struct Header {
     name_offset: usize,
     superclass: Option<Superclass>,
     methods: BTreeMap<String, usize>,
-    static_methods: Vec<String>,
+    class_methods: Vec<String>,
     method_calls: Vec<MethodCalls>,
     signal_offsets: BTreeMap<String, usize>,
     export_offsets: BTreeMap<String, usize>,
@@ -120,8 +121,8 @@ impl Header {
 
     /// The methods the class body defines on `self`, which GDScript calls on
     /// the script as a GDScript's static functions.
-    pub fn static_methods(&self) -> &[String] {
-        &self.static_methods
+    pub fn class_methods(&self) -> &[String] {
+        &self.class_methods
     }
 
     /// What each method the file defines calls, in any class or module of
@@ -238,8 +239,8 @@ impl Header {
                         self.methods.entry(name).or_insert(offset);
                     }
                     Some(receiver) if receiver.as_self_node().is_some() => {
-                        if !self.static_methods.contains(&name) {
-                            self.static_methods.push(name);
+                        if !self.class_methods.contains(&name) {
+                            self.class_methods.push(name);
                         }
                     }
                     Some(_) => {}
@@ -445,9 +446,9 @@ impl<'pr> Visit<'pr> for MethodCallCollector {
             fn visit_call_node(&mut self, node: &CallNode<'pr>) {
                 let name = decode_text(node.name().as_slice());
                 if node.receiver().is_none() && name == "await" {
-                    self.0.calls_await = true;
-                } else if !self.0.called.contains(&name) {
-                    self.0.called.push(name);
+                    self.0.has_await = true;
+                } else if !self.0.callees.contains(&name) {
+                    self.0.callees.push(name);
                 }
                 ruby_prism::visit_call_node(self, node);
             }

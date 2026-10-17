@@ -205,8 +205,8 @@ What a method its file's source defines calls, which tells whether it may await 
 ```rust
 pub struct MethodCalls {
     pub method: String,
-    pub calls_await: bool,
-    pub called: Vec<String>,
+    pub has_await: bool,
+    pub callees: Vec<String>,
 }
 ```
 

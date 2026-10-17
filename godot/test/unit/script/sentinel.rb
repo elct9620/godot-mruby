@@ -3,7 +3,7 @@ module Unit
     # Waits for its source's signals in the methods Godot calls on it,
     # noting each step and what each wait answered.
     class Sentinel < Godot::Node
-      include Listening
+      include Listener
 
       attr_reader :log
 
@@ -35,7 +35,7 @@ module Unit
         [:echoed, await(source, :relayed)]
       end
 
-      def maybe(source, waits)
+      def wait_if(source, waits)
         return :early unless waits
 
         await(source, :relayed)

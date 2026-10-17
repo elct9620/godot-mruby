@@ -218,14 +218,6 @@ impl RubyInstance {
         self.caller.lineage()
     }
 
-    // Whether the class, or a class it inherits from, defines `method` on
-    // `self`.
-    fn has_class_method(&self, method: &str) -> bool {
-        self.lineage()
-            .files()
-            .any(|(_, header)| header.static_methods().iter().any(|name| name == method))
-    }
-
     // What the node's class declared for the editor, its ancestors' included
     // and in the order each class wrote it; a file that has not run has the
     // properties its header writes and no heading.
@@ -984,6 +976,7 @@ unsafe extern "C" fn call(
             let script = unsafe {
                 borrow_instance(data, |instance| {
                     instance
+                        .lineage()
                         .has_class_method(&name)
                         .then(|| instance.script.clone())
                 })

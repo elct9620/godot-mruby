@@ -77,7 +77,7 @@ class AwaitTest < Minitest::Test
   def test_a_method_that_could_await_but_does_not_answers_its_value
     sentinel, source = make_pair
 
-    assert_equal :early, sentinel.call(:maybe, source, false)
+    assert_equal :early, sentinel.call(:wait_if, source, false)
   end
 
   # @behavior RS-102

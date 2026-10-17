@@ -173,12 +173,12 @@ fn collect_string_name_comparisons(
     }
     let mut finder = ComparisonFinder {
         is_string_name_member: &|member| (engine.is_string_name_member)(engine_class, member),
-        in_method: false,
-        found: Vec::new(),
+        is_in_method: false,
+        comparisons: Vec::new(),
     };
     finder.visit(&ruby_prism::parse(source.as_bytes()).node());
     finder
-        .found
+        .comparisons
         .into_iter()
         .map(|(member, offset)| Warning {
             line: locate_line(source, offset),
@@ -194,8 +194,8 @@ fn collect_string_name_comparisons(
 // a member called on the object itself that answers a StringName.
 struct ComparisonFinder<'a> {
     is_string_name_member: &'a dyn Fn(&str) -> bool,
-    in_method: bool,
-    found: Vec<(String, usize)>,
+    is_in_method: bool,
+    comparisons: Vec<(String, usize)>,
 }
 
 impl ComparisonFinder<'_> {
@@ -216,15 +216,15 @@ impl ComparisonFinder<'_> {
 
 impl<'pr> Visit<'pr> for ComparisonFinder<'_> {
     fn visit_def_node(&mut self, node: &DefNode<'pr>) {
-        let was_in_method = self.in_method;
-        self.in_method = node.receiver().is_none();
+        let was_in_method = self.is_in_method;
+        self.is_in_method = node.receiver().is_none();
         ruby_prism::visit_def_node(self, node);
-        self.in_method = was_in_method;
+        self.is_in_method = was_in_method;
     }
 
     fn visit_call_node(&mut self, node: &CallNode<'pr>) {
         let name = node.name().as_slice();
-        if self.in_method && (name == b"==" || name == b"!=") {
+        if self.is_in_method && (name == b"==" || name == b"!=") {
             let argument = node
                 .arguments()
                 .and_then(|arguments| arguments.arguments().iter().next());
@@ -235,7 +235,8 @@ impl<'pr> Visit<'pr> for ComparisonFinder<'_> {
                     _ => None,
                 };
                 if let Some(member) = member {
-                    self.found.push((member, node.location().start_offset()));
+                    self.comparisons
+                        .push((member, node.location().start_offset()));
                 }
             }
         }

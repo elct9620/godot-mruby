@@ -359,8 +359,8 @@ impl Member {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct MethodCalls {
     pub method: String,
-    pub calls_await: bool,
-    pub called: Vec<String>,
+    pub has_await: bool,
+    pub callees: Vec<String>,
 }
 
 /// What a class has once its file has run: what its body declared, and the
@@ -454,7 +454,7 @@ pub struct Snapshot {
     classes: HashMap<Arc<str>, Arc<Class>>,
     // The names of the methods that may await, worked out at the first
     // question and again once a class is recorded.
-    awaiting: OnceLock<BTreeSet<String>>,
+    awaiting_names: OnceLock<BTreeSet<String>>,
 }
 
 impl Snapshot {
@@ -464,7 +464,7 @@ impl Snapshot {
     /// which class a call reaches; a method so taken that never waits only
     /// costs its fiber.
     pub fn is_awaiting(&self, method: &str) -> bool {
-        self.awaiting
+        self.awaiting_names
             .get_or_init(|| self.collect_awaiting())
             .contains(method)
     }
@@ -479,14 +479,14 @@ impl Snapshot {
             .collect();
         let mut awaiting: BTreeSet<String> = calls
             .iter()
-            .filter(|calls| calls.calls_await)
+            .filter(|calls| calls.has_await)
             .map(|calls| calls.method.clone())
             .collect();
         loop {
             let reached: Vec<String> = calls
                 .iter()
                 .filter(|calls| !awaiting.contains(&calls.method))
-                .filter(|calls| calls.called.iter().any(|name| awaiting.contains(name)))
+                .filter(|calls| calls.callees.iter().any(|name| awaiting.contains(name)))
                 .map(|calls| calls.method.clone())
                 .collect();
             if reached.is_empty() {
@@ -706,7 +706,7 @@ impl Snapshot {
     /// run, in place of what it had before.
     pub fn record_class(&mut self, path: &str, class: Class) {
         self.classes.insert(Arc::from(path), Arc::new(class));
-        self.awaiting = OnceLock::new();
+        self.awaiting_names = OnceLock::new();
     }
 
     /// Takes `methods` as what the class of the file at `path` has now, which

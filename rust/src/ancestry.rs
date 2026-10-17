@@ -179,6 +179,27 @@ impl<'a> Lineage<'a> {
         self.files()
             .any(|(path, header)| header.has_method(name) || snapshot.has_method(path, name))
     }
+
+    /// Whether a file of the lineage defines the method `name` on `self`, as
+    /// its source writes it.
+    pub fn has_class_method(&self, name: &str) -> bool {
+        self.files()
+            .any(|(_, header)| header.class_methods().iter().any(|method| method == name))
+    }
+
+    /// The methods the lineage's files define on `self`, nearest first and
+    /// each once.
+    pub fn collect_class_methods(&self) -> Vec<String> {
+        let mut methods: Vec<String> = Vec::new();
+        for (_, header) in self.files() {
+            for name in header.class_methods() {
+                if !methods.contains(name) {
+                    methods.push(name.clone());
+                }
+            }
+        }
+        methods
+    }
 }
 
 /// Why a file has no ancestry.

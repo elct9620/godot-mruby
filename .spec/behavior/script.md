@@ -4,7 +4,7 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 
 ### What differs from GDScript
 
-- A method a class defines on `self` takes and answers values of any type, and one defined while its file runs is called through the script but unknown to GDScript's analyzer.
+- A method a class defines on `self` takes and answers values of any type, and only one its source writes as `def self.name` in the class body is answered: one defined another way, or while the file runs, is neither called through the script nor known to GDScript's analyzer.
 
 ## Includes
 
