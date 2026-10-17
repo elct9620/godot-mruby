@@ -51,11 +51,23 @@ class ClassBodyTest < Minitest::Test
 
   # @behavior RG-055
   def test_abstract_given_a_name_an_ancestors_class_method_has_marks_the_method
-    item = Class.new(Godot::Node) do
-      abstract
-      abstract :icon
-    end
+    charm = autofree(Unit::EngineClasses::Charm.new)
 
-    assert item.method_defined?(:icon)
+    assert_raises(NotImplementedError) { charm.icon }
+  end
+
+  # @behavior RG-056
+  def test_abstract_marks_an_instance_method_beside_a_class_method_of_its_name
+    folio = autofree(Unit::EngineClasses::Folio.new)
+
+    assert_equal 0, Unit::EngineClasses::Codex.sum
+    assert_raises(NotImplementedError) { folio.sum }
+  end
+
+  # @behavior RG-057
+  def test_abstract_leaves_a_name_only_the_class_itself_defines_though_an_ancestor_has_it
+    quill = autofree(Unit::EngineClasses::Quill.new)
+
+    assert_equal [0, 1], [Unit::EngineClasses::Scroll.count, quill.count]
   end
 end

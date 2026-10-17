@@ -178,15 +178,15 @@ How a file's header is read from its source without running it: the constants it
 
 | Step | Statement |
 | --- | --- |
-| Given | a file whose class body writes `abstract def draw`, `abstract :area, "edges"`, `abstract def self.count`, and `def self.total` before `abstract :total` |
+| Given | a file whose class body writes `abstract def draw`, `abstract :area, "edges"`, `abstract def self.count`, `def self.total` before `abstract :total`, and `def self.sum` and `def sum` before `abstract :sum` |
 | When | its header is read |
-| Then | the header holds `draw`, `area` and `edges` among the class's methods, marked abstract, and `count` and `total` only among the methods on the class itself |
+| Then | the header holds `draw`, `area`, `edges` and `sum` among the class's methods, marked abstract, and `count` and `total` only among the methods on the class itself |
 
 ## `RH-022` A class body writing methods without `def` has methods the header cannot name
 
 | Step | Statement |
 | --- | --- |
-| Given | a file whose class body calls `attr_reader`, `alias`, `define_method` or `include` |
+| Given | a file whose class body calls `attr_reader`, `attr`, `alias`, `define_method` or `include` |
 | When | its header is read |
 | Then | the header says the class has methods its source does not name |
 

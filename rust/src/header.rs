@@ -287,10 +287,10 @@ impl Header {
     }
 
     // Marks `name` abstract and takes it among the class's methods, as the
-    // class has it once `abstract` defines it at `offset`; a method the class
-    // defines on `self` stays its own, as `abstract` leaves it.
+    // class has it once `abstract` defines it at `offset`; a name only `def
+    // self.` defines stays the class's own, as `abstract` leaves it.
     fn mark_abstract(&mut self, name: String, offset: usize) {
-        if self.class_methods.contains(&name) {
+        if self.class_methods.contains(&name) && !self.methods.contains_key(&name) {
             return;
         }
         if !self.abstract_methods.contains(&name) {
@@ -898,7 +898,7 @@ mod tests {
     // @behavior RH-021
     #[test]
     fn abstract_given_methods_marks_them_and_the_header_holds_them() {
-        let source = "class Shape < Godot::Node2D\n  abstract\n\n  abstract def draw\n  end\n\n  abstract :area, \"edges\"\n  abstract def self.count\n  end\n\n  def self.total\n  end\n  abstract :total\nend\n";
+        let source = "class Shape < Godot::Node2D\n  abstract\n\n  abstract def draw\n  end\n\n  abstract :area, \"edges\"\n  abstract def self.count\n  end\n\n  def self.total\n  end\n  abstract :total\n\n  def self.sum\n  end\n\n  def sum\n  end\n  abstract :sum\nend\n";
 
         let header = Header::from_source("res://shape.rb", source, &Roots::default());
 
@@ -909,9 +909,15 @@ mod tests {
                 header.class_methods()
             ),
             (
-                vec!["area", "draw", "edges"],
-                ["draw".to_owned(), "area".to_owned(), "edges".to_owned()].as_slice(),
-                ["count".to_owned(), "total".to_owned()].as_slice()
+                vec!["area", "draw", "edges", "sum"],
+                [
+                    "draw".to_owned(),
+                    "area".to_owned(),
+                    "edges".to_owned(),
+                    "sum".to_owned()
+                ]
+                .as_slice(),
+                ["count".to_owned(), "total".to_owned(), "sum".to_owned()].as_slice()
             )
         );
     }
@@ -921,17 +927,18 @@ mod tests {
     fn a_body_writing_methods_without_def_has_methods_the_header_cannot_name() {
         let sources = [
             "class Circle < Shape\n  attr_reader :area\nend\n",
+            "class Circle < Shape\n  attr :area\nend\n",
             "class Circle < Shape\n  alias area size\nend\n",
             "class Circle < Shape\n  define_method(:area) { 1 }\nend\n",
             "class Circle < Shape\n  include Round\nend\n",
         ];
 
-        let unnamed = sources.map(|source| {
+        let answers = sources.map(|source| {
             Header::from_source("res://circle.rb", source, &Roots::default())
                 .has_methods_without_def()
         });
 
-        assert_eq!(unnamed, [true; 4]);
+        assert_eq!(answers, [true; 5]);
     }
 
     // @behavior RH-023
