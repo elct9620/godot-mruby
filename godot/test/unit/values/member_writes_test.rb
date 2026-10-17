@@ -56,13 +56,16 @@ class MemberWritesTest < Minitest::Test
   end
 
   # @behavior RV-047
-  def test_an_operator_assignment_to_a_member_writes_it_back_once
+  def test_an_operator_assignment_to_a_member_reads_and_writes_it_back_once
     mover = autofree(Unit::Values::Mover.new)
     mover.position = Godot::Vector2.new(1, 2)
+    ledger = Unit::Values::Ledger.new
 
     mover.call(:nudge_once)
+    ledger.spot.x += 1
 
     assert_equal Godot::Vector2.new(1, 6), mover.position
+    assert_equal [Godot::Vector2.new(2, 1), 2], [ledger.spot, ledger.reads]
   end
 
   # @behavior RV-048

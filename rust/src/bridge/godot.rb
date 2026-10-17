@@ -672,9 +672,11 @@ module Godot
   # methods and operators, and never changed, since each side holds its own
   # copy.
   class Value
-    # What an engine container is: the engine's own, shared wherever it is
-    # held, so a change to an element is made in it rather than in a copy.
-    module Shared
+    # What an engine Array or Dictionary is: the engine's own, shared
+    # wherever it is held, so a change to an element is made in it rather
+    # than in a copy. A packed array a property answers is a copy, so it is
+    # written back as a value is.
+    module SharedContainer
     end
 
     class << self
@@ -685,14 +687,7 @@ module Godot
       # or the arguments of an index. Answers the root as it is now, which
       # changes only when it is itself a value type and every link was one.
       def __write_chain__(root, path, step, value)
-        links = path.each_with_object([root]) { |read, read_links| read_links << __read_step__(read_links.last, read) }
-        updated = __write_step__(links.last, step, value)
-        index = path.size - 1
-        while index >= 0 && __copied__?(links[index + 1])
-          updated = __write_step__(links[index], path[index], updated)
-          index -= 1
-        end
-        index.negative? && __copied__?(root) ? updated : root
+        __write_links__(__read_links__(root, path), path, step, value)
       end
 
       # `__write_through__` for the commonest chain, one member read and one
@@ -700,7 +695,7 @@ module Godot
       # the assignment is written.
       def __write_member__(owner, reader, writer, member, member_writer, value)
         link = owner.__send__(reader)
-        if Value === link && !(Shared === link)
+        if __copied__?(link)
           begin
             owner.__send__(writer, link.__send__(:__with_member__, member, value))
           rescue NoMethodError => e
@@ -729,17 +724,17 @@ module Godot
       # member from the current one, which `||=` keeps when it is truthy and
       # `&&=` when it is not.
       def __update_chain__(root, path, step, short = nil)
-        links = path.each_with_object([root]) { |read, read_links| read_links << __read_step__(read_links.last, read) }
+        links = __read_links__(root, path)
         current = __read_step__(links.last, step)
         return root if (short == :or && current) || (short == :and && !current)
 
-        __write_chain__(root, path, step, yield(current))
+        __write_links__(links, path, step, yield(current))
       end
 
       # Whether `link` is a value type's value, which is copied wherever it
       # is held, rather than anything shared in place.
       def __copied__?(link)
-        Value === link && !(Shared === link)
+        Value === link && !(SharedContainer === link)
       end
 
       # The values a multiple assignment takes from `values`, as Ruby splats
@@ -768,6 +763,24 @@ module Godot
       private :__has_value_type__, :__call_static__, :__constant_by_name__, :__engine_names__
 
       private
+
+      # The root, then what each step of `path` reads from the link before.
+      def __read_links__(root, path)
+        path.each_with_object([root]) { |step, links| links << __read_step__(links.last, step) }
+      end
+
+      # `step` of the last of `links` set to `value`, each value type changed
+      # written back into the link it was read from, up to the first one
+      # shared in place; answers the root as it is now.
+      def __write_links__(links, path, step, value)
+        updated = __write_step__(links.last, step, value)
+        index = path.size - 1
+        while index >= 0 && __copied__?(links[index + 1])
+          updated = __write_step__(links[index], path[index], updated)
+          index -= 1
+        end
+        index.negative? && __copied__?(links.first) ? updated : links.first
+      end
 
       def __read_step__(owner, step)
         ::Array === step ? owner.__send__(:[], *step) : owner.__send__(step)
@@ -964,7 +977,7 @@ module Godot
 
   # The engine's Array; Godot::Value::Sequence says how it answers.
   class Array < Value
-    include Shared
+    include SharedContainer
     include Sequence
 
     __define_engine_names__
@@ -983,7 +996,7 @@ module Godot
   # and those Enumerable gives, behave as Ruby's; the engine's other names
   # behave as the engine's.
   class Dictionary < Value
-    include Shared
+    include SharedContainer
     include Enumerable
 
     def each(&block)

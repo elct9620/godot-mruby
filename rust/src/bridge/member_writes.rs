@@ -1,8 +1,9 @@
 //! Assignments to a member of a member, rewritten before mruby compiles a
 //! project's file, so they write each value type they change back into what
-//! it was read from through the `Godot` gem's helpers, as GDScript's do: `position.y = 5` reads the position, sets `y`
-//! on its copy and writes the copy back, while a value never changes.
-//! Lines stay where they were; columns inside a rewritten one shift.
+//! it was read from through the `Godot` gem's helpers, as GDScript's do:
+//! `position.y = 5` reads the position, sets `y` on its copy and writes the
+//! copy back, while a value never changes. Lines stay where they were;
+//! columns inside a rewritten one shift.
 
 use std::borrow::Cow;
 use std::ops::Range;
@@ -153,9 +154,9 @@ impl WriteFinder {
     ) {
         if let Some(target) = read_target(receiver, step) {
             self.0.push(Write {
-                span: read_span(location),
+                span: to_range(location),
                 target: Some(target),
-                form: Form::Operator(operator, read_span(&value.location())),
+                form: Form::Operator(operator, to_range(&value.location())),
             });
         }
     }
@@ -178,9 +179,9 @@ fn read_call_write(node: &CallNode) -> Option<Write> {
         Step::Member(name.strip_suffix('=')?.to_owned())
     };
     Some(Write {
-        span: read_span(&node.location()),
+        span: to_range(&node.location()),
         target: Some(read_target(receiver, step)?),
-        form: Form::Assign(read_span(&value.location())),
+        form: Form::Assign(to_range(&value.location())),
     })
 }
 
@@ -192,7 +193,7 @@ fn read_multiple_write(node: &ruby_prism::MultiWriteNode) -> Option<Write> {
     }
     let mut targets = Vec::new();
     for target in node.lefts().iter() {
-        let range = read_span(&target.location());
+        let range = to_range(&target.location());
         if let Some(call) = target.as_call_target_node() {
             if call.is_safe_navigation() {
                 return None;
@@ -216,9 +217,9 @@ fn read_multiple_write(node: &ruby_prism::MultiWriteNode) -> Option<Write> {
         .as_array_node()
         .is_some_and(|array| array.opening_loc().is_none());
     Some(Write {
-        span: read_span(&node.location()),
+        span: to_range(&node.location()),
         target: None,
-        form: Form::Multiple(targets, read_span(&value.location()), is_implicit_array),
+        form: Form::Multiple(targets, to_range(&value.location()), is_implicit_array),
     })
 }
 
@@ -228,11 +229,11 @@ fn read_multiple_write(node: &ruby_prism::MultiWriteNode) -> Option<Write> {
 // left as Ruby writes it.
 fn read_target(receiver: Node, step: Step) -> Option<Target> {
     let (root, path) = read_chain(receiver);
-    let qualifies = match &step {
+    let is_rewritten = match &step {
         Step::Member(_) => !path.is_empty() || matches!(root, Root::Variable(_)),
         Step::Index(_) => matches!(path.last(), Some(Step::Member(_))),
     };
-    qualifies.then_some(Target { root, path, step })
+    is_rewritten.then_some(Target { root, path, step })
 }
 
 // What `node` reads, as the root it starts from and its links in order.
@@ -255,7 +256,7 @@ fn read_chain(node: Node) -> (Root, Vec<Step>) {
                 continue;
             }
         }
-        let range = read_span(&current.location());
+        let range = to_range(&current.location());
         let is_variable = current.as_local_variable_read_node().is_some()
             || current.as_instance_variable_read_node().is_some()
             || current.as_global_variable_read_node().is_some()
@@ -387,7 +388,7 @@ fn emit_assign(
             let variable = part(range);
             if let (true, Step::Member(member)) = (target.path.is_empty(), &target.step) {
                 format!(
-                    "(__godot_value__ = {value}; ::Godot::Value === {variable} && !(::Godot::Value::Shared === {variable}) ? ({variable} = {variable}.with({member}: __godot_value__); __godot_value__) : ({variable}.{member} = __godot_value__))"
+                    "(__godot_value__ = {value}; ::Godot::Value === {variable} && !(::Godot::Value::SharedContainer === {variable}) ? ({variable} = {variable}.with({member}: __godot_value__); __godot_value__) : ({variable}.{member} = __godot_value__))"
                 )
             } else {
                 format!(
@@ -454,7 +455,7 @@ fn emit_step(step: &Step, part: &mut impl FnMut(&Range<usize>) -> String) -> Str
     }
 }
 
-fn read_span(location: &ruby_prism::Location) -> Range<usize> {
+fn to_range(location: &ruby_prism::Location) -> Range<usize> {
     location.start_offset()..location.end_offset()
 }
 

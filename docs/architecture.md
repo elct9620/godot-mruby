@@ -279,7 +279,7 @@ load("x.rb").temper(3) ──► script's instance ──► realm: X.temper(3)
 load("x.rb").get_path  ──► declined, no realm  ──► the Script's own method
 ```
 
-Godot sends every call on a script through its instance first, so the instance answers only `new` and the methods the header lists on `self`. It knows the script by id, so a reload changes what it answers. An object of the class answers those methods too.
+Godot sends every call on a script through its instance first. The instance answers only `new` and the class methods `def self.name` writes, as the header lists them. It knows the script by id, so a reload changes what it answers. An object of the class answers those methods too.
 
 ### 2.5 Announcement
 
@@ -341,7 +341,7 @@ position.y = 5        # as written
 ::Godot::Value.__write_member__(self, :position, :position=, :y, :y=, (5))
 ```
 
-Each link is written back up to the first one shared in place, such as an engine object or container. Lines keep their numbers.
+Each link is written back up to the first one shared in place: an engine object, `Godot::Array` or `Godot::Dictionary`. A packed array a property answers is a copy, so it is written back. Lines keep their numbers.
 
 ### 2.7 Snapshot
 

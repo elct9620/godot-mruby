@@ -5,7 +5,7 @@ How a value crosses between Ruby and the engine, either way. Ruby's own data is 
 ### What differs from GDScript
 
 - An index written of an index read, as `grid[y][x] = 1`, is written as Ruby writes it, so a packed array an engine Array holds is not written back.
-- An operator assignment to a member of a variable's value evaluates to the variable, not to the member it wrote.
+- An operator assignment to a member of a member evaluates to what the chain started from, not to the member it wrote.
 - What a member assignment writes is evaluated before the members it reads on the way.
 
 ## Includes
@@ -385,13 +385,13 @@ How a value crosses between Ruby and the engine, either way. Ruby's own data is 
 | When | Ruby assigns an element of the property through its index |
 | Then | the node's property holds the array with that element changed |
 
-## `RV-047` An operator assignment to a member writes it back once
+## `RV-047` An operator assignment to a member reads and writes it back once
 
 | Step | Statement |
 | --- | --- |
 | Given | a node whose property holds a value of a value type |
 | When | Ruby assigns a member of the property with `+=`, `\|\|=` or `&&=` |
-| Then | the property holds the value with the member computed from what it held, written back once |
+| Then | the property holds the value with the member computed from what it held, each link read once and written back once |
 
 ## `RV-048` A multiple assignment to members writes each back
 
