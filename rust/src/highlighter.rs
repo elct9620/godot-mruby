@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 
 use godot::classes::{ClassDb, EditorInterface, EditorSyntaxHighlighter, IEditorSyntaxHighlighter};
 use godot::prelude::*;
+use ruby_prism::{BlockNode, DefNode, LambdaNode, Visit};
 use ruby_prism_sys::pm_token_type_t;
 
 use crate::language;
@@ -43,7 +44,8 @@ pub struct Line {
     pub highlights: Vec<Highlight>,
     // Whether lexing from this line's start reads what lexing from the
     // source's start does: it follows the end of a statement, inside no
-    // string, heredoc or embedded document.
+    // string, heredoc or embedded document, nor any method or block, whose
+    // local variables lexing from inside it would not know.
     is_resumable: bool,
 }
 
@@ -53,7 +55,7 @@ pub fn highlight(source: &str, is_engine_class: impl Fn(&str) -> bool) -> Vec<Li
         .chain(source.match_indices('\n').map(|(at, _)| at + 1))
         .collect();
     let tokens = lex(source);
-    let resumable_starts = find_resumable_starts(&tokens);
+    let resumable_starts = find_resumable_starts(&tokens, &collect_local_scopes(source));
     let mut marks = vec![BTreeMap::new(); line_starts.len()];
     for (start, end, role) in assign_roles(source, &tokens, is_engine_class) {
         let mut line = line_starts.partition_point(|&at| at <= start) - 1;
@@ -93,18 +95,54 @@ pub fn highlight(source: &str, is_engine_class: impl Fn(&str) -> bool) -> Vec<Li
 }
 
 // The offsets lexing can resume at: after a newline ending a statement, once
-// every token before it has ended. Prism hands a heredoc's body over before
-// the rest of the line that opens it, so the line after the opener is not one.
-fn find_resumable_starts(tokens: &[Token]) -> Vec<usize> {
+// every token before it has ended, outside every scope in `scopes`. Prism
+// hands a heredoc's body over before the rest of the line that opens it, so
+// the line after the opener is not one.
+fn find_resumable_starts(tokens: &[Token], scopes: &[(usize, usize)]) -> Vec<usize> {
     let mut lexed_to = 0;
     let mut starts = Vec::new();
     for token in tokens {
         lexed_to = lexed_to.max(token.end);
-        if token.kind == ruby_prism_sys::PM_TOKEN_NEWLINE && token.end == lexed_to {
+        let is_scoped = scopes
+            .iter()
+            .any(|&(start, end)| start < token.end && token.end < end);
+        if token.kind == ruby_prism_sys::PM_TOKEN_NEWLINE && token.end == lexed_to && !is_scoped {
             starts.push(token.end);
         }
     }
     starts
+}
+
+// The byte ranges of the methods, blocks and lambdas in `source`, each a
+// scope of local variables of its own; one a cut leaves open runs to the end.
+fn collect_local_scopes(source: &str) -> Vec<(usize, usize)> {
+    struct Scopes(Vec<(usize, usize)>);
+    impl<'pr> Visit<'pr> for Scopes {
+        fn visit_def_node(&mut self, node: &DefNode<'pr>) {
+            let location = node.location();
+            self.0
+                .push((location.start_offset(), location.end_offset()));
+            ruby_prism::visit_def_node(self, node);
+        }
+
+        fn visit_block_node(&mut self, node: &BlockNode<'pr>) {
+            let location = node.location();
+            self.0
+                .push((location.start_offset(), location.end_offset()));
+            ruby_prism::visit_block_node(self, node);
+        }
+
+        fn visit_lambda_node(&mut self, node: &LambdaNode<'pr>) {
+            let location = node.location();
+            self.0
+                .push((location.start_offset(), location.end_offset()));
+            ruby_prism::visit_lambda_node(self, node);
+        }
+    }
+
+    let mut scopes = Scopes(Vec::new());
+    scopes.visit(&ruby_prism::parse(source.as_bytes()).node());
+    scopes.0
 }
 
 /// A text's highlighted lines from its first down, lexed only as far as they
@@ -580,6 +618,23 @@ mod tests {
             .map(|line| line.highlights)
             .collect();
         assert_eq!(read, whole);
+    }
+
+    // @behavior RU-017
+    #[test]
+    fn a_local_assigned_in_a_method_longer_than_a_lex_is_known_below() {
+        let mut lines = vec!["def run", "  step = 1"];
+        lines.resize(150, "  step");
+        lines.extend(["  step -1", "end"]);
+        let mut cache = HighlightCache::default();
+
+        let read = read_every_line(&mut cache, &lines);
+        lines[140] = "  step = 2";
+        cache.drop_from(140);
+        let reread = read_every_line(&mut cache, &lines);
+
+        assert_eq!(read_role(&read, 150, 7), Role::Operator);
+        assert_eq!(read_role(&reread, 150, 7), Role::Operator);
     }
 
     // @behavior RU-016

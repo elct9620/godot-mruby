@@ -5,7 +5,7 @@ How the script editor colours a Ruby file: a highlighter of the extension's own 
 ### What it does not see
 
 - A line above an edit keeps its colours until it is edited or the file is opened again, as in every Godot highlighter: the editor asks again only from the edited line down.
-- A line lexed again after an edit does not know the local variables assigned above where lexing started, so a local read as `x /2` there is coloured as a method call with a regexp until the file is opened again.
+- A line lexed apart from the lines above it does not know the local variables a class body or the file's top level assigned there, so such a local read as `x /2` is coloured as a method call with a regexp; a method's or a block's are known, since lexing starts outside them.
 
 ## Includes
 
@@ -140,3 +140,11 @@ How the script editor colours a Ruby file: a highlighter of the extension's own 
 | Given | the coloured lines of a long file |
 | When | a line near its end is edited and the line below it is coloured |
 | Then | only the lines from the last statement before the edit are read again |
+
+## `RU-017` A local a method assigns is known however long the method runs
+
+| Step | Statement |
+| --- | --- |
+| Given | a method longer than the lines one lex reads, assigning a local near its start and reading it as `x -1` near its end |
+| When | the editor reads every line, and again after an edit inside the method |
+| Then | the `-` is coloured as an operator both times, as it is for a local |
