@@ -1311,7 +1311,7 @@ mod tests {
     }
 
     // A fresh game's realm holding a Thing, and the key it holds it for.
-    fn holding() -> (MutexGuard<'static, ()>, Key) {
+    fn thing_key() -> (MutexGuard<'static, ()>, Key) {
         let turn = TURN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         close();
         prepare(|| Realm::open(Thing, Silence, |_| Ok(())));
@@ -1328,7 +1328,7 @@ mod tests {
     // @behavior RO-001
     #[test]
     fn a_released_key_no_longer_reaches_its_object() {
-        let (_turn, key) = holding();
+        let (_turn, key) = thing_key();
 
         release(key);
         let sent = enter(|realm| realm.send::<_, i64>(key, "answer", no_args()));
@@ -1339,7 +1339,7 @@ mod tests {
     // @behavior RO-004
     #[test]
     fn an_answer_converts_to_what_its_caller_takes_as_an_argument_does() {
-        let (_turn, key) = holding();
+        let (_turn, key) = thing_key();
 
         let sent = enter(|realm| realm.send::<_, i64>(key, "ratio", no_args()));
 
@@ -1349,7 +1349,7 @@ mod tests {
     // @behavior RO-005
     #[test]
     fn an_answer_the_caller_cannot_take_names_the_call_and_why() {
-        let (_turn, key) = holding();
+        let (_turn, key) = thing_key();
 
         let sent = enter(|realm| realm.send::<_, i64>(key, "name", no_args()));
 
@@ -1363,7 +1363,7 @@ mod tests {
     // @behavior RR-004 RR-006
     #[test]
     fn a_raised_backtrace_holds_only_the_frames_ruby_called_through() {
-        let (_turn, key) = holding();
+        let (_turn, key) = thing_key();
 
         let sent = enter(|realm| realm.send::<_, i64>(key, "fail", no_args()));
 
@@ -1465,7 +1465,7 @@ mod tests {
     // @behavior RO-002
     #[test]
     fn releasing_a_key_never_waits_for_the_realm() {
-        let (_turn, key) = holding();
+        let (_turn, key) = thing_key();
         let (inside, entered) = mpsc::channel();
         let (leave, left) = mpsc::channel::<()>();
         let holder = thread::spawn(move || {
@@ -1493,7 +1493,7 @@ mod tests {
     // @behavior RE-017
     #[test]
     fn a_thread_waiting_long_for_the_realm_is_told_of_once_naming_the_thread_inside() {
-        let (_turn, _key) = holding();
+        let (_turn, _key) = thing_key();
         let warnings = Warnings::default();
         watch_waits(Waits {
             patience: Duration::from_millis(20),
@@ -1540,7 +1540,7 @@ mod tests {
     // @behavior RO-003
     #[test]
     fn a_frame_lets_go_of_released_keys_without_any_other_entry() {
-        let (_turn, key) = holding();
+        let (_turn, key) = thing_key();
         release(key);
 
         release_queued();
@@ -1556,7 +1556,7 @@ mod tests {
     // @behavior RE-001
     #[test]
     fn a_thread_inside_the_realm_enters_it_again() {
-        let (_turn, key) = holding();
+        let (_turn, key) = thing_key();
 
         let answer = enter(|_| enter(|realm| realm.send::<_, i64>(key, "answer", no_args())));
 
@@ -1566,7 +1566,7 @@ mod tests {
     // @behavior RE-006
     #[test]
     fn entries_nested_too_deep_on_one_thread_raise_system_stack_error() {
-        let (_turn, key) = holding();
+        let (_turn, key) = thing_key();
         let deepest = enter_nested(DEEPEST_ENTRY - 1, key);
         let beyond = enter_nested(DEEPEST_ENTRY, key);
 
@@ -1577,7 +1577,7 @@ mod tests {
     // @behavior RE-016
     #[test]
     fn an_entry_nested_too_deep_is_not_told_as_the_openers() {
-        let (_turn, key) = holding();
+        let (_turn, key) = thing_key();
         let beyond = enter_nested(DEEPEST_ENTRY, key);
 
         assert!(beyond.is_err_and(|error| !error.is_from_opener()));
@@ -1586,7 +1586,7 @@ mod tests {
     // @behavior RE-002
     #[test]
     fn another_thread_waits_until_the_outermost_entry_returns() {
-        let (_turn, _key) = holding();
+        let (_turn, _key) = thing_key();
         let (inner_returned, returned) = mpsc::channel();
         let (leave, left) = mpsc::channel::<()>();
         let holder = thread::spawn(move || {
@@ -1621,7 +1621,7 @@ mod tests {
     // @behavior RE-007
     #[test]
     fn a_realm_opened_again_gives_each_extension_its_data_afresh() {
-        let (_turn, _key) = holding();
+        let (_turn, _key) = thing_key();
         #[derive(Default)]
         struct Tally(Cell<u32>);
         enter(|realm| {
@@ -1639,7 +1639,7 @@ mod tests {
     // @behavior RE-008
     #[test]
     fn an_extensions_data_lasts_from_one_entry_to_the_next() {
-        let (_turn, _key) = holding();
+        let (_turn, _key) = thing_key();
         #[derive(Default)]
         struct Tally(Cell<u32>);
         enter(|realm| {
@@ -1782,7 +1782,7 @@ mod tests {
     // @behavior RE-004
     #[test]
     fn closing_the_realm_from_inside_it_leaves_it_open() {
-        let (_turn, key) = holding();
+        let (_turn, key) = thing_key();
 
         let answer = enter(|_| {
             close();
