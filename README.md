@@ -21,6 +21,7 @@ The addon registers Ruby as a script language, so a `.rb` file is served whereve
 | Area | What it gives |
 |---|---|
 | Scripts | `.rb` scripts for nodes, their inner classes, resources and objects, with exports, signals and rpcs |
+| Ruby | mruby 4.0 with Ruby's common core extensions; files, time and processes through Godot |
 | Engine | classes, singletons and values under `Godot` |
 | Loading | files load by constant name, no `require` |
 | Editor | highlighting, completion, lookup, help pages, templates, validation, test panel |

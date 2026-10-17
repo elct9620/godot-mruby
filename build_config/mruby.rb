@@ -2,11 +2,13 @@
 # would only repeat it.
 MRuby::Lockfile.disable
 
-# The fewest gems the extension needs; anything that reaches the host (IO,
+# The fewest gems a game needs; anything that reaches the host (IO,
 # sockets, directories) stays out, since Ruby reaches the host through Godot's
 # API.
 GEMS = %w[
-  mruby-compiler mruby-fiber mruby-math mruby-metaprog mruby-method mruby-numeric-ext mruby-random mruby-sprintf
+  mruby-array-ext mruby-compar-ext mruby-compiler mruby-data mruby-enum-ext mruby-enumerator mruby-fiber
+  mruby-hash-ext mruby-kernel-ext mruby-math mruby-metaprog mruby-method mruby-numeric-ext mruby-random
+  mruby-range-ext mruby-set mruby-sprintf mruby-string-ext mruby-struct
 ].freeze
 
 # What every build shares, as each goes into the same shipped library. That
