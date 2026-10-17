@@ -210,6 +210,6 @@ How a file's header is read from its source without running it: the constants it
 
 | Step | Statement |
 | --- | --- |
-| Given | a file whose class body writes `attr_reader :w` inside `class << self`, `define_singleton_method(:s)`, and `abstract :w, :s` |
+| Given | a file whose class body writes `attr_reader :w` and `attr_accessor :a` inside `class << self`, `define_singleton_method(:s)`, `self.define_singleton_method(:t)`, and `abstract :w, :a, :a=, :s, :t` |
 | When | its header is read |
-| Then | the header marks neither `w` nor `s` abstract |
+| Then | the header marks none of them abstract |

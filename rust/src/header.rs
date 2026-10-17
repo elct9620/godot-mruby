@@ -52,8 +52,9 @@ pub struct Header {
     is_abstract: bool,
     abstract_methods: Vec<String>,
     has_methods_without_def: bool,
-    // The methods `class << self` defines, which answer no Godot question
-    // but tell `abstract` a name is the class's own.
+    // The methods `class << self` or `define_singleton_method` defines,
+    // which answer no Godot question but tell `abstract` a name is the
+    // class's own.
     singleton_class_methods: Vec<String>,
     is_parsed: bool,
     icon: Option<String>,
@@ -313,8 +314,9 @@ impl Header {
 
     // Marks `name` abstract and takes it among the class's methods, as the
     // class has it once `abstract` defines it at `offset`; a name only the
-    // class itself defines, by `def self.` or in `class << self`, stays the
-    // class's own, as `abstract` leaves it.
+    // class itself defines, by `def self.`, in `class << self` or by
+    // `define_singleton_method`, stays the class's own, as `abstract` leaves
+    // it.
     fn mark_abstract(&mut self, name: String, offset: usize) {
         let is_on_class =
             self.class_methods.contains(&name) || self.singleton_class_methods.contains(&name);
@@ -331,7 +333,10 @@ impl Header {
         if call.receiver().is_none() && METHOD_MAKERS.contains(&call.name().as_slice()) {
             self.has_methods_without_def = true;
         }
-        if call.receiver().is_none() && call.name().as_slice() == b"define_singleton_method" {
+        let is_on_self = call
+            .receiver()
+            .is_none_or(|receiver| receiver.as_self_node().is_some());
+        if is_on_self && call.name().as_slice() == b"define_singleton_method" {
             self.singleton_class_methods.extend(read_method_names(call));
         }
         if call.receiver().is_some() || call.block().is_some() {
@@ -482,26 +487,26 @@ impl Reader {
 // write them: every name `attr` and its kin are given, the first for
 // `alias_method`, `define_method` and `define_singleton_method`.
 fn read_method_names(call: &CallNode) -> Vec<String> {
-    let names = call
+    let names: Vec<String> = call
         .arguments()
-        .map(|arguments| arguments.arguments().iter().collect::<Vec<_>>())
-        .unwrap_or_default()
-        .into_iter()
-        .filter_map(|argument| {
-            argument
-                .as_symbol_node()
-                .map(|name| name.unescaped().to_vec())
-                .or_else(|| {
-                    argument
-                        .as_string_node()
-                        .map(|name| name.unescaped().to_vec())
-                })
+        .map(|arguments| {
+            arguments
+                .arguments()
+                .iter()
+                .filter_map(|argument| read_name(&argument))
+                .collect()
         })
-        .map(|name| decode_text(&name));
+        .unwrap_or_default();
     match call.name().as_slice() {
-        b"attr" | b"attr_reader" | b"attr_accessor" => names.collect(),
-        b"attr_writer" => names.map(|name| format!("{name}=")).collect(),
-        b"alias_method" | b"define_method" | b"define_singleton_method" => names.take(1).collect(),
+        b"attr" | b"attr_reader" => names,
+        b"attr_writer" => names.into_iter().map(|name| format!("{name}=")).collect(),
+        b"attr_accessor" => names
+            .into_iter()
+            .flat_map(|name| [format!("{name}="), name])
+            .collect(),
+        b"alias_method" | b"define_method" | b"define_singleton_method" => {
+            names.into_iter().take(1).collect()
+        }
         _ => Vec::new(),
     }
 }
@@ -1039,7 +1044,7 @@ mod tests {
     // @behavior RH-025
     #[test]
     fn abstract_leaves_names_the_class_itself_makes_without_def() {
-        let source = "class Shape < Godot::Node2D\n  abstract\n\n  class << self\n    attr_reader :w\n  end\n  define_singleton_method(:s) { 1 }\n  abstract :w, :s\nend\n";
+        let source = "class Shape < Godot::Node2D\n  abstract\n\n  class << self\n    attr_reader :w\n    attr_accessor :a\n  end\n  define_singleton_method(:s) { 1 }\n  self.define_singleton_method(:t) { 2 }\n  abstract :w, :a, :a=, :s, :t\nend\n";
 
         let header = Header::from_source("res://shape.rb", source, &Roots::default());
 
