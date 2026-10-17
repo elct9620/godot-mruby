@@ -55,4 +55,19 @@ class ClassBodyTest < Minitest::Test
 
     assert_raises(NotImplementedError) { charm.icon }
   end
+
+  # @behavior RG-056
+  def test_abstract_marks_an_instance_method_beside_a_class_method_of_its_name
+    folio = autofree(Unit::EngineClasses::Folio.new)
+
+    assert_equal 0, Unit::EngineClasses::Codex.sum
+    assert_raises(NotImplementedError) { folio.sum }
+  end
+
+  # @behavior RG-057
+  def test_abstract_leaves_a_name_only_the_class_itself_defines_though_an_ancestor_has_it
+    quill = autofree(Unit::EngineClasses::Quill.new)
+
+    assert_equal [0, 1], [Unit::EngineClasses::Scroll.count, quill.count]
+  end
 end

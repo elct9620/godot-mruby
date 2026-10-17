@@ -186,7 +186,7 @@ How a file's header is read from its source without running it: the constants it
 
 | Step | Statement |
 | --- | --- |
-| Given | a file whose class body holds `attr_reader`, `alias`, `define_method`, `include`, `class << self`, a project's own call such as `hit_points :hp`, a call on a receiver, or `private` given a call |
+| Given | a file whose class body holds `attr_reader`, `alias`, `define_method`, `include`, `class << self`, a project's own call, a call on a receiver or with a block, `def` on another object, or a known call or constant given an operand that is itself such a call |
 | When | its header is read |
 | Then | the header says the class has methods its source may not name |
 
@@ -194,7 +194,7 @@ How a file's header is read from its source without running it: the constants it
 
 | Step | Statement |
 | --- | --- |
-| Given | a file whose class body holds only `def`, `def self.`, `Godot::Object`'s DSL, `private`, `protected` or `public` over `def`s and names, constants and nested classes |
+| Given | a file whose class body holds only `def`, `def self.`, `Godot::Object`'s DSL, `private`, `protected` or `public` over `def`s and names, constants given literals, collections, ranges or values made under `Godot`, and nested classes |
 | When | its header is read |
 | Then | the header knows every method the class defines, `private def` ones included |
 
@@ -206,10 +206,26 @@ How a file's header is read from its source without running it: the constants it
 | When | its header is read |
 | Then | the header marks only `x` abstract |
 
-## `RH-025` An abstract name joins the methods only of a class body the header knows
+## `RH-025` A file holding a statement outside its class's nesting has unknown methods
 
 | Step | Statement |
 | --- | --- |
-| Given | a file whose class body writes `abstract :area`, once alone and once beside `attr_reader :size` |
+| Given | a file whose top level or a module around its class holds anything but `module` and `class` statements, or that opens its class again, or holds another class whose body is outside the read forms |
 | When | its header is read |
-| Then | `area` is among the class's methods only where the body holds nothing unknown |
+| Then | the header says the class has methods its source may not name |
+
+## `RH-026` A `def` after `abstract` takes the name back
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose class body writes `abstract :area`, then `def area` |
+| When | its header is read |
+| Then | `area` is among the class's methods and not marked abstract |
+
+## `RH-027` A name a visibility call is given is the objects' beside a `def self.`
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose class body writes `def self.area`, `private :area`, then `abstract :area` |
+| When | its header is read |
+| Then | the header marks `area` abstract |

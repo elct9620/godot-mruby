@@ -459,3 +459,20 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | a class extending an engine class whose body writes `abstract :icon`, a name `Godot::Object` answers on the class |
 | When | Ruby calls `icon` on an object of a class extending it |
 | Then | it raises `NotImplementedError` |
+
+## `RG-056` `abstract` marks an instance method beside a class method of its name
+
+| Step | Statement |
+| --- | --- |
+| Given | a class extending an engine class whose body writes `def self.sum`, `def sum` and `abstract :sum` |
+| When | Ruby calls `sum` on an object of a class extending it |
+| Then | it raises `NotImplementedError`, and the class's own `sum` still answers |
+
+## `RG-057` `abstract` leaves a name only the class itself defines, though an ancestor has it
+
+| Step | Statement |
+| --- | --- |
+| Given | a class extending an engine class whose objects answer `count` |
+| Given | an abstract class extending it whose body writes `def self.count` and `abstract :count` |
+| When | Ruby calls `count` on an object of a class extending the second |
+| Then | the first class's `count` answers |

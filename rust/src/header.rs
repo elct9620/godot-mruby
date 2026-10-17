@@ -53,9 +53,9 @@ pub struct Header {
     is_abstract: bool,
     abstract_methods: Vec<String>,
     has_unknown_statements: bool,
-    // Where each name `abstract` marks was marked, taken among the class's
-    // methods once the body is known to hold nothing unknown.
-    abstract_offsets: Vec<(String, usize)>,
+    // The names `private`, `protected`, `public` or `export` is given, each
+    // a method the class's objects have once the call runs.
+    instance_names: Vec<String>,
     is_parsed: bool,
     icon: Option<String>,
 }
@@ -91,11 +91,13 @@ impl Header {
             key: roots.key_by_path(path),
             header: None,
             constant_paths: Vec::new(),
+            has_unknown_statements: false,
         };
         if let Some(program) = result.node().as_program_node() {
-            reader.read_body(&program.statements().body(), &[]);
+            reader.read_body(&program.statements().body(), &[], true);
         }
-        let header = reader.header.unwrap_or_default();
+        let mut header = reader.header.unwrap_or_default();
+        header.has_unknown_statements |= reader.has_unknown_statements;
         let mut collector = MethodCallCollector(Vec::new());
         collector.visit(&result.node());
         Header {
@@ -245,10 +247,12 @@ impl Header {
         &self.abstract_methods
     }
 
-    /// Whether the class body holds a statement outside the forms the
-    /// header reads, which may define methods the source does not name: only
-    /// `def`, `Godot::Object`'s DSL, visibility over names, constants and
-    /// nested classes are read.
+    /// Whether the file holds a statement outside the forms the header reads,
+    /// which may define methods the source does not name. Read are the
+    /// `module` and `class` statements leading to the class, and in a class
+    /// body `def`, `def self.`, `Godot::Object`'s DSL, visibility over `def`s
+    /// and names, constants and nested classes, each given only literals,
+    /// constants, collections, ranges and values made under `Godot`.
     pub fn has_unknown_statements(&self) -> bool {
         self.has_unknown_statements
     }
@@ -265,21 +269,13 @@ impl Header {
     // leaves the class's methods unknown.
     fn read_class_body(&mut self, statements: &NodeList) {
         for node in statements.iter() {
+            if !is_read_form(&node) {
+                self.has_unknown_statements = true;
+            }
             if let Some(def) = node.as_def_node() {
                 self.read_method(&def);
             } else if let Some(call) = node.as_call_node() {
                 self.read_call(&call);
-            } else if node.as_constant_write_node().is_none()
-                && node.as_constant_path_write_node().is_none()
-                && node.as_class_node().is_none()
-                && node.as_module_node().is_none()
-            {
-                self.has_unknown_statements = true;
-            }
-        }
-        if !self.has_unknown_statements {
-            for (name, offset) in std::mem::take(&mut self.abstract_offsets) {
-                self.methods.entry(name).or_insert(offset);
             }
         }
     }
@@ -289,6 +285,8 @@ impl Header {
         let name = decode_text(def.name().as_slice());
         match def.receiver() {
             None => {
+                // A `def` replaces the method `abstract` defined before it.
+                self.abstract_methods.retain(|method| *method != name);
                 let offset = def.location().start_offset();
                 self.methods.entry(name).or_insert(offset);
             }
@@ -297,30 +295,26 @@ impl Header {
                     self.class_methods.push(name);
                 }
             }
-            Some(_) => self.has_unknown_statements = true,
+            Some(_) => {}
         }
     }
 
-    // Marks `name` abstract, as `abstract` defines it at `offset`; a name only
-    // `def self.` defines stays the class's own, as `abstract` leaves it.
+    // Marks `name` abstract and takes it among the class's methods, as
+    // `abstract` defines it at `offset`; a name only `def self.` defines so
+    // far stays the class's own, as `abstract` leaves it.
     fn mark_abstract(&mut self, name: String, offset: usize) {
-        if self.class_methods.contains(&name) && !self.methods.contains_key(&name) {
+        let is_objects = self.methods.contains_key(&name) || self.instance_names.contains(&name);
+        if self.class_methods.contains(&name) && !is_objects {
             return;
         }
         if !self.abstract_methods.contains(&name) {
             self.abstract_methods.push(name.clone());
-            self.abstract_offsets.push((name, offset));
         }
+        self.methods.entry(name).or_insert(offset);
     }
 
     fn read_call(&mut self, call: &CallNode) {
-        let name = call.name().as_slice();
-        let is_visibility = matches!(name, b"private" | b"protected" | b"public");
-        if call.receiver().is_some()
-            || call.block().is_some()
-            || !(is_visibility || KNOWN_CALLS.contains(&name))
-        {
-            self.has_unknown_statements = true;
+        if call.receiver().is_some() || call.block().is_some() {
             return;
         }
         let offset = call.location().start_offset();
@@ -333,8 +327,8 @@ impl Header {
                 for node in targets {
                     if let Some(def) = node.as_def_node() {
                         self.read_method(&def);
-                    } else if read_name(node).is_none() {
-                        self.has_unknown_statements = true;
+                    } else if let Some(name) = read_name(node) {
+                        self.instance_names.push(name);
                     }
                 }
             }
@@ -378,6 +372,7 @@ impl Header {
             }
             (b"export", [name, default, keywords @ ..]) => {
                 if let Some(name) = read_name(name) {
+                    self.instance_names.push(name.clone());
                     self.export_offsets.entry(name).or_insert(offset);
                 }
                 if let Some(export) = read_export(name, default, keywords) {
@@ -407,13 +402,22 @@ struct Reader {
     key: Vec<String>,
     header: Option<Header>,
     constant_paths: Vec<Vec<String>>,
+    // Whether the file holds, outside its class's body, a statement that may
+    // define the class's methods.
+    has_unknown_statements: bool,
 }
 
 impl Reader {
     // The `module` and `class` statements of a body inside the namespaces
-    // `scope` names, looking for the one the file's path names.
-    fn read_body(&mut self, body: &NodeList, scope: &[String]) {
+    // `scope` names, looking for the one the file's path names. Anything
+    // else in the file's top level or a module body may define the class's
+    // methods, as may a class body holding more than the forms read.
+    fn read_body(&mut self, body: &NodeList, scope: &[String], is_namespace: bool) {
         for node in body.iter() {
+            let is_nesting = node.as_module_node().is_some() || node.as_class_node().is_some();
+            if is_namespace && !is_nesting {
+                self.has_unknown_statements = true;
+            }
             self.read_statement(&node, scope);
         }
     }
@@ -433,7 +437,20 @@ impl Reader {
         let statements = body
             .and_then(|body| body.as_statements_node())
             .map(|statements| statements.body());
-        if self.header.is_none() && self.is_own_constant(&names) {
+        let is_module = class.is_none();
+        let is_own = self.is_own_constant(&names);
+        if is_own && self.header.is_some() {
+            self.has_unknown_statements = true;
+        }
+        if !is_module
+            && !is_own
+            && statements
+                .as_ref()
+                .is_some_and(|statements| !statements.iter().all(|node| is_read_form(&node)))
+        {
+            self.has_unknown_statements = true;
+        }
+        if self.header.is_none() && is_own {
             let mut header = Header {
                 name: names.last().cloned().unwrap_or_default(),
                 name_offset: node.location().start_offset(),
@@ -448,7 +465,7 @@ impl Reader {
             self.header = Some(header);
         }
         if let Some(statements) = &statements {
-            self.read_body(statements, &names);
+            self.read_body(statements, &names, is_module);
         }
     }
 
@@ -791,6 +808,112 @@ fn resolve_constant_names(path: &Node, scope: &[String]) -> Option<Vec<String>> 
     })
 }
 
+// Whether `node` is a class-body statement whose effect the header knows:
+// a `def` on the objects or `self`, a call of `Godot::Object`'s DSL or a
+// visibility over `def`s and names, given only known operands, a constant
+// given one, or a nested class or module of such statements.
+fn is_read_form(node: &Node) -> bool {
+    if let Some(def) = node.as_def_node() {
+        return def
+            .receiver()
+            .is_none_or(|receiver| receiver.as_self_node().is_some());
+    }
+    if let Some(call) = node.as_call_node() {
+        let name = call.name().as_slice();
+        let is_visibility = matches!(name, b"private" | b"protected" | b"public");
+        let arguments: Vec<Node> = call
+            .arguments()
+            .map(|arguments| arguments.arguments().iter().collect())
+            .unwrap_or_default();
+        return call.receiver().is_none()
+            && call.block().is_none()
+            && (is_visibility || KNOWN_CALLS.contains(&name))
+            && arguments.iter().all(|argument| {
+                if is_visibility || name == b"abstract" {
+                    argument
+                        .as_def_node()
+                        .is_some_and(|def| is_read_form(&def.as_node()))
+                        || read_name(argument).is_some()
+                } else {
+                    is_known_operand(argument)
+                }
+            });
+    }
+    if let Some(write) = node.as_constant_write_node() {
+        return is_known_operand(&write.value());
+    }
+    if let Some(write) = node.as_constant_path_write_node() {
+        return is_known_operand(&write.value());
+    }
+    let body = if let Some(class) = node.as_class_node() {
+        class.body()
+    } else if let Some(module) = node.as_module_node() {
+        module.body()
+    } else {
+        return false;
+    };
+    body.and_then(|body| body.as_statements_node())
+        .is_none_or(|statements| statements.body().iter().all(|node| is_read_form(&node)))
+}
+
+// Whether `node` is an operand that defines no method: a literal, a
+// constant, a collection or range of those, or a value made by a class
+// under `Godot` from them.
+fn is_known_operand(node: &Node) -> bool {
+    if node.as_integer_node().is_some()
+        || node.as_float_node().is_some()
+        || node.as_string_node().is_some()
+        || node.as_symbol_node().is_some()
+        || node.as_nil_node().is_some()
+        || node.as_true_node().is_some()
+        || node.as_false_node().is_some()
+        || node.as_constant_read_node().is_some()
+        || node.as_constant_path_node().is_some()
+    {
+        return true;
+    }
+    if let Some(array) = node.as_array_node() {
+        return array
+            .elements()
+            .iter()
+            .all(|element| is_known_operand(&element));
+    }
+    if let Some(hash) = node.as_hash_node() {
+        return hash
+            .elements()
+            .iter()
+            .all(|element| is_known_operand(&element));
+    }
+    if let Some(hash) = node.as_keyword_hash_node() {
+        return hash
+            .elements()
+            .iter()
+            .all(|element| is_known_operand(&element));
+    }
+    if let Some(assoc) = node.as_assoc_node() {
+        return is_known_operand(&assoc.key()) && is_known_operand(&assoc.value());
+    }
+    if let Some(range) = node.as_range_node() {
+        return range.left().is_none_or(|left| is_known_operand(&left))
+            && range.right().is_none_or(|right| is_known_operand(&right));
+    }
+    let Some(call) = node.as_call_node() else {
+        return false;
+    };
+    let is_under_godot = call
+        .receiver()
+        .and_then(|receiver| read_constant_path(&receiver))
+        .is_some_and(|(names, _)| names.first().is_some_and(|name| name == "Godot"));
+    is_under_godot
+        && call.block().is_none()
+        && call.arguments().is_none_or(|arguments| {
+            arguments
+                .arguments()
+                .iter()
+                .all(|argument| is_known_operand(&argument))
+        })
+}
+
 // A constant path as written, and whether it starts from the top level as
 // `::A` does. None for a path whose parent is not a constant.
 fn read_constant_path(node: &Node) -> Option<(Vec<String>, bool)> {
@@ -954,6 +1077,12 @@ mod tests {
             "hit_points :hp",
             "self.area = 1",
             "private attr_reader :area",
+            "signal(:rolled) { 1 }",
+            "def other.area\n  end",
+            "abstract hit_points(:hp)",
+            "AREA = attr_reader(:area)",
+            "signal :rolled, size: hit_points(:hp)",
+            "class Arc\n    Circle.define_method(:area) { 1 }\n  end",
         ];
 
         let answers = bodies.map(|body| {
@@ -962,13 +1091,13 @@ mod tests {
                 .has_unknown_statements()
         });
 
-        assert_eq!(answers, [true; 8]);
+        assert_eq!(answers, [true; 14]);
     }
 
     // @behavior RH-023
     #[test]
     fn a_class_body_of_only_the_read_forms_has_known_methods() {
-        let source = "class Circle < Shape\n  tool\n  icon \"res://circle.svg\"\n  SIDES = 0\n\n  def area\n  end\n\n  def self.unit\n  end\n\n  private def roll\n  end\n  private :area\n\n  class Arc\n  end\nend\n";
+        let source = "class Circle < Shape\n  tool\n  icon \"res://circle.svg\"\n  SIDES = [1, 2..3, { round: true }]\n  ORIGIN = Godot::Vector2.new(0, -1.5)\n\n  def area\n  end\n\n  def self.unit\n  end\n\n  private def roll\n  end\n  private :area\n\n  class Arc\n  end\nend\n";
 
         let header = Header::from_source("res://circle.rb", source, &Roots::default());
 
@@ -996,16 +1125,48 @@ mod tests {
 
     // @behavior RH-025
     #[test]
-    fn an_abstract_name_joins_the_methods_only_of_a_class_body_the_header_knows() {
-        let known = "class Shape < Godot::Node2D\n  abstract\n  abstract :area\nend\n";
-        let unknown =
-            "class Shape < Godot::Node2D\n  abstract\n  abstract :area\n  attr_reader :size\nend\n";
+    fn a_file_holding_a_statement_outside_its_classs_nesting_has_unknown_methods() {
+        let sources = [
+            "class Circle < Shape\nend\nCircle.define_method(:area) { 1 }\n",
+            "class Circle < Shape\nend\nclass Circle\n  attr_reader :area\nend\n",
+            "module Shapes\n  RADIUS = 1\n  include Round\n  class Circle < Shape\n  end\nend\n",
+            "class Helper\n  Circle.define_method(:area) { 1 }\nend\nclass Circle < Shape\nend\n",
+        ];
 
-        let methods = [known, unknown].map(|source| {
-            Header::from_source("res://shape.rb", source, &Roots::default()).has_method("area")
+        let answers = sources.map(|source| {
+            let path = if source.contains("module Shapes") {
+                "res://shapes/circle.rb"
+            } else {
+                "res://circle.rb"
+            };
+            Header::from_source(path, source, &Roots::default()).has_unknown_statements()
         });
 
-        assert_eq!(methods, [true, false]);
+        assert_eq!(answers, [true; 4]);
+    }
+
+    // @behavior RH-026
+    #[test]
+    fn a_def_after_abstract_takes_the_name_back() {
+        let source =
+            "class Shape < Godot::Node2D\n  abstract\n  abstract :area\n\n  def area\n  end\nend\n";
+
+        let header = Header::from_source("res://shape.rb", source, &Roots::default());
+
+        assert_eq!(
+            (header.abstract_methods(), header.has_method("area")),
+            ([].as_slice(), true)
+        );
+    }
+
+    // @behavior RH-027
+    #[test]
+    fn a_name_visibility_is_given_is_the_objects_beside_a_def_self() {
+        let source = "class Shape < Godot::Node2D\n  abstract\n\n  def self.area\n  end\n  private :area\n  abstract :area\nend\n";
+
+        let header = Header::from_source("res://shape.rb", source, &Roots::default());
+
+        assert_eq!(header.abstract_methods(), ["area".to_owned()].as_slice());
     }
 
     // @behavior RH-010

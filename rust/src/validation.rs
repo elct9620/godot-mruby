@@ -561,4 +561,16 @@ mod tests {
 
         assert!(validation.error.is_none());
     }
+
+    // @behavior RK-015
+    #[test]
+    fn a_class_extending_an_abstract_class_the_header_does_not_read_is_held_to_no_rule() {
+        let shape = "class Shape < Godot::Node2D\n  abstract\n  abstract :area, :size\n  attr_reader :size\nend\n";
+        let source = "class Circle < Shape\n  def area\n  end\nend\n";
+        let sources = [("res://shape.rb", shape), ("res://circle.rb", source)];
+
+        let validation = validate_source("res://circle.rb", source, &sources);
+
+        assert!(validation.error.is_none());
+    }
 }
