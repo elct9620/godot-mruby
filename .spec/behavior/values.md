@@ -11,6 +11,7 @@ How a value crosses between Ruby and the engine, either way. Ruby's own data is 
 ## Includes
 
 - `godot/test/unit/values/**/*_test.rb`
+- `tasks/support/loader/scaling.rb`
 - `tasks/support/script/callbacks.rb`
 
 ## `RV-001` A scalar crosses as itself
@@ -416,3 +417,11 @@ How a value crosses between Ruby and the engine, either way. Ruby's own data is 
 | Given | a value of a value type |
 | When | Ruby calls `with` naming members and their new values, or a member the type lacks |
 | Then | it answers a copy with those members changed and the value as it was, or raises `ArgumentError` in GDScript's words |
+
+## `RV-051` A name the engine hands Ruby takes as long however many names the project has
+
+| Step | Statement |
+| --- | --- |
+| Given | a project of library files defining methods, and one twenty times its size |
+| When | Ruby reads a node's name, which arrives as a Symbol, in each project |
+| Then | the larger project takes at most twice as long |

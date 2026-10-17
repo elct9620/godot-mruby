@@ -52,7 +52,7 @@ fn to_ruby(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> Value {
         VariantType::STRING => mrb
             .str_new(variant.to::<GString>().to_string().as_bytes())
             .as_value(),
-        VariantType::STRING_NAME => intern_symbol(mrb, &variant.to::<StringName>().to_string()),
+        VariantType::STRING_NAME => intern_symbol(mrb, data, variant.to::<StringName>()),
         VariantType::OBJECT => match variant
             .try_to::<Gd<Object>>()
             .ok()
@@ -75,9 +75,17 @@ fn to_ruby(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> Value {
     }
 }
 
-fn intern_symbol(mrb: &Mrb, name: &str) -> Value {
-    mrb.intern(name.as_bytes())
-        .map_or_else(|_| qnil().as_value(), |id| Symbol::from(id).as_value())
+// The symbol for `name`, interned the first time the engine hands it over.
+fn intern_symbol(mrb: &Mrb, data: &BridgeData, name: StringName) -> Value {
+    if let Some(symbol) = data.symbols.borrow().get(&name) {
+        return symbol.as_value();
+    }
+    let Ok(id) = mrb.intern(name.to_string().as_bytes()) else {
+        return qnil().as_value();
+    };
+    let symbol = Symbol::from(id);
+    data.symbols.borrow_mut().insert(name, symbol);
+    symbol.as_value()
 }
 
 /// A Ruby Array of the elements of `variant`, an Array or a packed array,

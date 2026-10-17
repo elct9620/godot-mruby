@@ -87,6 +87,9 @@ struct BridgeData {
     // The nameless classes of bound methods and of bound members.
     bound_method_class: Cell<Option<RClass>>,
     bound_member_class: Cell<Option<RClass>>,
+    // Ruby's symbol for each StringName the engine has handed Ruby: mruby
+    // looks a name up in time that grows with the symbols the game has.
+    symbols: RefCell<HashMap<StringName, Symbol>>,
 }
 
 // What the bridge keeps for the realm `mrb` belongs to.

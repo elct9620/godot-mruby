@@ -14,6 +14,8 @@ module Bench
     # is written for every this many library files.
     DIRECTORIES = 10
     FILES_PER_SCRIPT = 10
+    # The methods each library file's class defines, each named after it.
+    ITEM_METHODS = %w[size cost weight rank label].freeze
 
     module_function
 
@@ -37,11 +39,14 @@ module Bench
     end
 
     # Writes the library file at `index`, answering the names it is reached by.
+    # Its class defines methods of names of its own, so the names the realm
+    # holds grow with the files, as a game's do.
     def write_item(project, index)
       directory = "D#{index % DIRECTORIES}"
       name = "Item#{index}"
+      methods = ITEM_METHODS.map { |method| "      def #{method}_#{index}\n      end\n" }.join("\n")
       write(project, "lib/#{directory.downcase}/item#{index}.rb",
-            "module Lib\n  module #{directory}\n    class #{name}\n    end\n  end\nend\n")
+            "module Lib\n  module #{directory}\n    class #{name}\n#{methods}    end\n  end\nend\n")
       ["Lib", directory, name]
     end
 

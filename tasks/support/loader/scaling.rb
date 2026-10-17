@@ -9,15 +9,19 @@ module Godot
     # Plays the bench scene in a generated project and in one twenty times its
     # size, and holds what Ruby timed to growing with the files: a cost paid
     # per file that itself grows with the project, such as walking every
-    # directory for each file, multiplies past the allowance. Part of
+    # directory for each file, multiplies past the allowance. Reading a name
+    # the engine hands Ruby holds to the same time whatever the size, since
+    # the names the project gives the realm grow with it. Part of
     # Loader.verify!.
     module Scaling
       SIZES = [20, 400].freeze
       # How far past the projects' size ratio the larger may go, for the
       # fixed costs and noise of a small run.
       ALLOWANCE = 2
-      # What Ruby timed that has to stay proportional to the files.
+      # What Ruby timed that has to stay proportional to the files, and what
+      # has to stay within the allowance of the smaller project's.
       MEASURE_NAMES = %w[run_by_name attach].freeze
+      FLAT_MEASURE_NAMES = %w[name_get].freeze
       # How many times the projects are measured while one stays past the
       # allowance, so a run slowed once by a loaded machine is not read as
       # growth; each size keeps its fastest.
@@ -29,6 +33,7 @@ module Godot
         measures = measure_fastest(project)
         verify_reached!(measures)
         verify_attached!(measures)
+        verify_name_read!(measures)
       end
 
       # @behavior RL-037
@@ -39,6 +44,15 @@ module Godot
       # @behavior RL-038
       def verify_attached!(measures)
         verify_proportional!("Giving nodes their scripts", measures.map { |measure| measure.fetch("attach") })
+      end
+
+      # @behavior RV-051
+      def verify_name_read!(measures)
+        small, large = measures.map { |measure| measure.fetch("name_get") }
+        return if flat?(small, large)
+
+        raise "Reading a node's name took #{large} µs in #{SIZES.last} files against #{small} µs in " \
+              "#{SIZES.first}, more than #{ALLOWANCE} times as long"
       end
 
       def verify_proportional!(what, (small, large))
@@ -65,7 +79,8 @@ module Godot
       end
 
       def all_proportional?(measures)
-        MEASURE_NAMES.all? { |name| proportional?(*measures.map { |measure| measure.fetch(name) }) }
+        MEASURE_NAMES.all? { |name| proportional?(*measures.map { |measure| measure.fetch(name) }) } &&
+          FLAT_MEASURE_NAMES.all? { |name| flat?(*measures.map { |measure| measure.fetch(name) }) }
       end
 
       # Each size's measures, each the faster of `kept` and `again`.
@@ -75,6 +90,10 @@ module Godot
 
       def proportional?(small, large)
         large <= small * limit
+      end
+
+      def flat?(small, large)
+        large <= small * ALLOWANCE
       end
 
       # How many times as long the larger project may take.
