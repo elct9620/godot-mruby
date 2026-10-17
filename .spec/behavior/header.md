@@ -186,7 +186,7 @@ How a file's header is read from its source without running it: the constants it
 
 | Step | Statement |
 | --- | --- |
-| Given | a file whose class body holds `attr_reader`, `alias`, `define_method`, `include`, `class << self`, a project's own call, a call on a receiver or with a block, `def` on another object, or a known call or constant given an operand that is itself such a call |
+| Given | a file whose class body holds `attr_reader`, `alias`, `define_method`, `include`, `class << self`, a project's own call, a call on a receiver or with a block, `def` on another object, a known call or constant given an operand that is itself such a call or a path off one, or a nested class with such a superclass or a body with `rescue` |
 | When | its header is read |
 | Then | the header says the class has methods its source may not name |
 
@@ -210,7 +210,7 @@ How a file's header is read from its source without running it: the constants it
 
 | Step | Statement |
 | --- | --- |
-| Given | a file whose top level or a module around its class holds anything but `module` and `class` statements, or that opens its class again, or holds another class whose body is outside the read forms |
+| Given | a file whose top level or a module around its class holds anything but `module` and `class` statements, or that opens its class again, gives its class a body with `rescue` or a superclass outside the read forms, or holds another class whose name, superclass or body is outside them |
 | When | its header is read |
 | Then | the header says the class has methods its source may not name |
 
@@ -226,6 +226,14 @@ How a file's header is read from its source without running it: the constants it
 
 | Step | Statement |
 | --- | --- |
-| Given | a file whose class body writes `def self.area`, `private :area`, then `abstract :area` |
+| Given | a file whose class extends one defining `area` and whose body writes `def self.area`, `private :area`, then `abstract :area` |
 | When | its header is read |
 | Then | the header marks `area` abstract |
+
+## `RH-028` A name `export` is given is not the objects' beside a `def self.`
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose class body writes `export :area`, `def self.area`, then `abstract :area` |
+| When | its header is read |
+| Then | the header marks nothing abstract, since whether `export` defines `area` on the class turns on ancestors the header does not read |

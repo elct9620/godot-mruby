@@ -53,8 +53,8 @@ pub struct Header {
     is_abstract: bool,
     abstract_methods: Vec<String>,
     has_unknown_statements: bool,
-    // The names `private`, `protected`, `public` or `export` is given, each
-    // a method the class's objects have once the call runs.
+    // The names `private`, `protected` or `public` is given, each a method
+    // Ruby copies into the class itself as the call runs.
     instance_names: Vec<String>,
     is_parsed: bool,
     icon: Option<String>,
@@ -182,15 +182,15 @@ impl Header {
             .map(|(name, offset)| (name.as_str(), *offset))
     }
 
-    /// The signals the class declares, in the order it declares them, as the
-    /// `signal` calls of its body write them; a call writing a name it does
-    /// not spell out declares none the header can read.
     /// The rpcs the class body declares with literals, as the file would
     /// declare them as it runs.
     pub fn rpcs(&self) -> &[Rpc] {
         &self.rpcs
     }
 
+    /// The signals the class declares, in the order it declares them, as the
+    /// `signal` calls of its body write them; a call writing a name it does
+    /// not spell out declares none the header can read.
     pub fn signals(&self) -> &[Signal] {
         &self.signals
     }
@@ -303,8 +303,9 @@ impl Header {
     // `abstract` defines it at `offset`; a name only `def self.` defines so
     // far stays the class's own, as `abstract` leaves it.
     fn mark_abstract(&mut self, name: String, offset: usize) {
-        let is_objects = self.methods.contains_key(&name) || self.instance_names.contains(&name);
-        if self.class_methods.contains(&name) && !is_objects {
+        let is_objects_method =
+            self.methods.contains_key(&name) || self.instance_names.contains(&name);
+        if self.class_methods.contains(&name) && !is_objects_method {
             return;
         }
         if !self.abstract_methods.contains(&name) {
@@ -372,7 +373,6 @@ impl Header {
             }
             (b"export", [name, default, keywords @ ..]) => {
                 if let Some(name) = read_name(name) {
-                    self.instance_names.push(name.clone());
                     self.export_offsets.entry(name).or_insert(offset);
                 }
                 if let Some(export) = read_export(name, default, keywords) {
@@ -431,23 +431,31 @@ impl Reader {
             return;
         };
         let Some(names) = resolve_constant_names(&path, scope) else {
+            self.has_unknown_statements = true;
             return;
         };
         self.constant_paths.push(names.clone());
         let statements = body
+            .as_ref()
             .and_then(|body| body.as_statements_node())
             .map(|statements| statements.body());
         let is_module = class.is_none();
         let is_own = self.is_own_constant(&names);
-        if is_own && self.header.is_some() {
-            self.has_unknown_statements = true;
-        }
-        if !is_module
-            && !is_own
-            && statements
+        // The file's own class may hold what the header reads apart, but its
+        // name, superclass and body's shape are held to the read forms as
+        // every other statement of the file is.
+        let is_read = if is_own {
+            class
                 .as_ref()
-                .is_some_and(|statements| !statements.iter().all(|node| is_read_form(&node)))
-        {
+                .and_then(|class| class.superclass())
+                .is_none_or(|superclass| is_known_operand(&superclass))
+                && body.is_none() == statements.is_none()
+        } else if is_module {
+            body.is_none() == statements.is_none()
+        } else {
+            is_read_namespace(node)
+        };
+        if !is_read || (is_own && self.header.is_some()) {
             self.has_unknown_statements = true;
         }
         if self.header.is_none() && is_own {
@@ -843,22 +851,34 @@ fn is_read_form(node: &Node) -> bool {
         return is_known_operand(&write.value());
     }
     if let Some(write) = node.as_constant_path_write_node() {
-        return is_known_operand(&write.value());
+        return read_constant_path(&write.target().as_node()).is_some()
+            && is_known_operand(&write.value());
     }
-    let body = if let Some(class) = node.as_class_node() {
-        class.body()
+    is_read_namespace(node)
+}
+
+// Whether `node` is a `class` or `module` statement of read forms alone: its
+// name a constant path, a class's superclass a known operand, and its body
+// plain statements, without `rescue` or `ensure`, each a read form.
+fn is_read_namespace(node: &Node) -> bool {
+    let (path, superclass, body) = if let Some(class) = node.as_class_node() {
+        (class.constant_path(), class.superclass(), class.body())
     } else if let Some(module) = node.as_module_node() {
-        module.body()
+        (module.constant_path(), None, module.body())
     } else {
         return false;
     };
-    body.and_then(|body| body.as_statements_node())
-        .is_none_or(|statements| statements.body().iter().all(|node| is_read_form(&node)))
+    read_constant_path(&path).is_some()
+        && superclass.is_none_or(|superclass| is_known_operand(&superclass))
+        && body.is_none_or(|body| {
+            body.as_statements_node()
+                .is_some_and(|statements| statements.body().iter().all(|node| is_read_form(&node)))
+        })
 }
 
 // Whether `node` is an operand that defines no method: a literal, a
-// constant, a collection or range of those, or a value made by a class
-// under `Godot` from them.
+// constant or a path of constants, a collection or range of those, or a
+// value made by a class under `Godot` from them.
 fn is_known_operand(node: &Node) -> bool {
     if node.as_integer_node().is_some()
         || node.as_float_node().is_some()
@@ -868,9 +888,11 @@ fn is_known_operand(node: &Node) -> bool {
         || node.as_true_node().is_some()
         || node.as_false_node().is_some()
         || node.as_constant_read_node().is_some()
-        || node.as_constant_path_node().is_some()
     {
         return true;
+    }
+    if node.as_constant_path_node().is_some() {
+        return read_constant_path(node).is_some();
     }
     if let Some(array) = node.as_array_node() {
         return array
@@ -1082,6 +1104,10 @@ mod tests {
             "abstract hit_points(:hp)",
             "AREA = attr_reader(:area)",
             "signal :rolled, size: hit_points(:hp)",
+            "class Arc < (attr_reader :area; Object)\n  end",
+            "SIDES = (attr_reader :area; Object)::Integer",
+            "(attr_reader :area; self)::X = 1",
+            "class Arc\n    def area\n    end\n  rescue\n  end",
             "class Arc\n    Circle.define_method(:area) { 1 }\n  end",
         ];
 
@@ -1091,7 +1117,7 @@ mod tests {
                 .has_unknown_statements()
         });
 
-        assert_eq!(answers, [true; 14]);
+        assert_eq!(answers, [true; 18]);
     }
 
     // @behavior RH-023
@@ -1131,6 +1157,10 @@ mod tests {
             "class Circle < Shape\nend\nclass Circle\n  attr_reader :area\nend\n",
             "module Shapes\n  RADIUS = 1\n  include Round\n  class Circle < Shape\n  end\nend\n",
             "class Helper\n  Circle.define_method(:area) { 1 }\nend\nclass Circle < Shape\nend\n",
+            "class Circle < Shape\n  def area\n  end\nrescue\nend\n",
+            "class Circle < (attr_reader :area; Shape)\nend\n",
+            "class Helper < (Circle.class_eval { 1 }; Object)\nend\nclass Circle < Shape\nend\n",
+            "class (attr_reader :area; Object)::Helper\nend\nclass Circle < Shape\nend\n",
         ];
 
         let answers = sources.map(|source| {
@@ -1142,7 +1172,7 @@ mod tests {
             Header::from_source(path, source, &Roots::default()).has_unknown_statements()
         });
 
-        assert_eq!(answers, [true; 4]);
+        assert_eq!(answers, [true; 8]);
     }
 
     // @behavior RH-026
@@ -1162,11 +1192,21 @@ mod tests {
     // @behavior RH-027
     #[test]
     fn a_name_visibility_is_given_is_the_objects_beside_a_def_self() {
-        let source = "class Shape < Godot::Node2D\n  abstract\n\n  def self.area\n  end\n  private :area\n  abstract :area\nend\n";
+        let source = "class Shape < Base\n  abstract\n\n  def self.area\n  end\n  private :area\n  abstract :area\nend\n";
 
         let header = Header::from_source("res://shape.rb", source, &Roots::default());
 
         assert_eq!(header.abstract_methods(), ["area".to_owned()].as_slice());
+    }
+
+    // @behavior RH-028
+    #[test]
+    fn a_name_export_is_given_is_not_the_objects_beside_a_def_self() {
+        let source = "class Shape < Godot::Node2D\n  abstract\n\n  export :area, nil\n  def self.area\n  end\n  abstract :area\nend\n";
+
+        let header = Header::from_source("res://shape.rb", source, &Roots::default());
+
+        assert!(header.abstract_methods().is_empty());
     }
 
     // @behavior RH-010
