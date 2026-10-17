@@ -153,9 +153,9 @@ impl WriteFinder {
     ) {
         if let Some(target) = read_target(receiver, step) {
             self.0.push(Write {
-                span: span(location),
+                span: read_span(location),
                 target: Some(target),
-                form: Form::Operator(operator, span(&value.location())),
+                form: Form::Operator(operator, read_span(&value.location())),
             });
         }
     }
@@ -178,9 +178,9 @@ fn read_call_write(node: &CallNode) -> Option<Write> {
         Step::Member(name.strip_suffix('=')?.to_owned())
     };
     Some(Write {
-        span: span(&node.location()),
+        span: read_span(&node.location()),
         target: Some(read_target(receiver, step)?),
-        form: Form::Assign(span(&value.location())),
+        form: Form::Assign(read_span(&value.location())),
     })
 }
 
@@ -192,7 +192,7 @@ fn read_multiple_write(node: &ruby_prism::MultiWriteNode) -> Option<Write> {
     }
     let mut targets = Vec::new();
     for target in node.lefts().iter() {
-        let range = span(&target.location());
+        let range = read_span(&target.location());
         if let Some(call) = target.as_call_target_node() {
             if call.is_safe_navigation() {
                 return None;
@@ -216,9 +216,9 @@ fn read_multiple_write(node: &ruby_prism::MultiWriteNode) -> Option<Write> {
         .as_array_node()
         .is_some_and(|array| array.opening_loc().is_none());
     Some(Write {
-        span: span(&node.location()),
+        span: read_span(&node.location()),
         target: None,
-        form: Form::Multiple(targets, span(&value.location()), is_implicit_array),
+        form: Form::Multiple(targets, read_span(&value.location()), is_implicit_array),
     })
 }
 
@@ -241,7 +241,7 @@ fn read_chain(node: Node) -> (Root, Vec<Step>) {
     let mut current = node;
     let root = loop {
         if let Some(call) = current.as_call_node() {
-            if let Some(member) = read_member_read(&call) {
+            if let Some(member) = read_member(&call) {
                 path.push(Step::Member(member));
                 match call.receiver() {
                     Some(receiver) => current = receiver,
@@ -249,13 +249,13 @@ fn read_chain(node: Node) -> (Root, Vec<Step>) {
                 }
                 continue;
             }
-            if let (Some(receiver), Some(index)) = (call.receiver(), read_index_read(&call)) {
+            if let (Some(receiver), Some(index)) = (call.receiver(), read_index(&call)) {
                 path.push(Step::Index(index));
                 current = receiver;
                 continue;
             }
         }
-        let range = span(&current.location());
+        let range = read_span(&current.location());
         let is_variable = current.as_local_variable_read_node().is_some()
             || current.as_instance_variable_read_node().is_some()
             || current.as_global_variable_read_node().is_some()
@@ -272,7 +272,7 @@ fn read_chain(node: Node) -> (Root, Vec<Step>) {
 
 // The member a call reads, when it is a plain read of one: a name taking no
 // arguments and no block.
-fn read_member_read(call: &CallNode) -> Option<String> {
+fn read_member(call: &CallNode) -> Option<String> {
     if call.arguments().is_some() || call.block().is_some() || call.is_safe_navigation() {
         return None;
     }
@@ -286,7 +286,7 @@ fn read_member_read(call: &CallNode) -> Option<String> {
 }
 
 // The source of the arguments an index read takes.
-fn read_index_read(call: &CallNode) -> Option<Range<usize>> {
+fn read_index(call: &CallNode) -> Option<Range<usize>> {
     if decode(call.name().as_slice()) != "[]" || call.block().is_some() || call.is_safe_navigation()
     {
         return None;
@@ -454,7 +454,7 @@ fn emit_step(step: &Step, part: &mut impl FnMut(&Range<usize>) -> String) -> Str
     }
 }
 
-fn span(location: &ruby_prism::Location) -> Range<usize> {
+fn read_span(location: &ruby_prism::Location) -> Range<usize> {
     location.start_offset()..location.end_offset()
 }
 
