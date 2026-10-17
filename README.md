@@ -22,7 +22,8 @@ The addon registers Ruby as a script language, so a `.rb` file is served whereve
 |---|---|
 | Scripts | `.rb` scripts for nodes, their inner classes, resources and objects, with exports, signals and rpcs |
 | Ruby | mruby 4.0 with Ruby's common core extensions; files, time and processes through Godot |
-| Engine | classes, singletons and values under `Godot` |
+| Engine | classes, singletons and values under `Godot`; `position.y = 5` writes back |
+| GDScript | calls a Ruby class's `new` and methods on `self`, awaits its methods |
 | Loading | files load by constant name, no `require` |
 | Editor | highlighting, completion, lookup, help pages, templates, validation, test panel |
 | Tests | Minitest runner, left out of exports |
