@@ -78,4 +78,12 @@ class ClassBodyTest < Minitest::Test
     assert_raises(NotImplementedError) { crest.x }
     assert_equal [false, false], %i[y z].map { |name| crest.respond_to?(name) }
   end
+
+  # @behavior RG-059
+  def test_abstract_judges_a_name_by_the_class_methods_ruby_lists
+    stamp = autofree(Unit::EngineClasses::Stamp.new)
+
+    %i[v r t].each { |name| assert_raises(NotImplementedError) { stamp.public_send(name) } }
+    refute stamp.respond_to?(:q)
+  end
 end

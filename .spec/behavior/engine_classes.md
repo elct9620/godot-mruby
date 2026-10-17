@@ -484,3 +484,11 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | an abstract class writing `def x` before `abstract def self.x`, `abstract :y, def self.y`, and `abstract :z` after a `class << self` defining `z` |
 | When | Ruby calls `x`, `y` and `z` on an object of a class extending it |
 | Then | `x` raises `NotImplementedError`, and the object has neither `y` nor `z` |
+
+## `RG-059` `abstract` judges a name by the class methods Ruby lists
+
+| Step | Statement |
+| --- | --- |
+| Given | an abstract class writing, inside `class << self`, `def v` made `private`, `def self.r` and `Seal.define_singleton_method(:q)`, then `attr_reader :t`, `def self.t` and `abstract :v, :r, :t, :q` |
+| When | Ruby calls each name on an object of a class extending it |
+| Then | `v`, `r` and `t` raise `NotImplementedError`, and the object has no `q` |

@@ -221,3 +221,11 @@ How a file's header is read from its source without running it: the constants it
 | Given | a file whose class body calls `define_singleton_method(:x)` inside `class << self`, then `abstract :x` |
 | When | its header is read |
 | Then | the header marks `x` abstract |
+
+## `RH-027` `abstract` judges a name by the class methods Ruby lists
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose class body writes, inside `class << self`, `def v` made `private`, `def self.r` and `Seal.define_singleton_method(:q)`, then `attr_reader :t`, `def self.t` and `abstract :v, :r, :t, :q` |
+| When | its header is read |
+| Then | the header marks `v`, `r` and `t` abstract, and leaves `q`, a public method of the class itself |
