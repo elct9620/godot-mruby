@@ -4,13 +4,13 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
-use godot::classes::{ClassDb, EditorInterface, EditorSyntaxHighlighter, IEditorSyntaxHighlighter};
+use godot::classes::{EditorInterface, EditorSyntaxHighlighter, IEditorSyntaxHighlighter};
 use godot::prelude::*;
 use ruby_prism::{BlockNode, DefNode, LambdaNode, Visit};
 use ruby_prism_sys::pm_token_type_t;
 
-use crate::language;
 use crate::lexer::{Token, lex};
+use crate::{game, language};
 
 /// What a stretch of a line is to its reader, which decides its colour.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -401,13 +401,12 @@ impl IEditorSyntaxHighlighter for RubySyntaxHighlighter {
         let Ok(line) = usize::try_from(line) else {
             return colors.upcast_any_dictionary();
         };
-        let class_db = ClassDb::singleton();
         let mut cache = self.cache.borrow_mut();
         let highlights = cache.read_highlights(
             line,
             usize::try_from(text_edit.get_line_count()).unwrap_or(0),
             |at| text_edit.get_line(at as i32).to_string(),
-            |name| class_db.class_exists(name),
+            game::is_engine_class,
         );
         for highlight in highlights {
             let color = self.palette.color_by_role(highlight.role);

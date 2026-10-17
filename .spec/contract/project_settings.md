@@ -16,7 +16,7 @@ The project's test directories, each searched recursively; `res://test` when a p
 
 ## `mruby/test/pattern`
 
-The file names under a test directory that are test files, matched as a glob; `*_test.rb` when a project sets none.
+The Ruby files under a test directory that are test files, matched by name as a glob; `*_test.rb` when a project sets none.
 
 ## `mruby/loader/root_directories`
 

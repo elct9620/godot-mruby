@@ -648,7 +648,7 @@ const TEMPLATE_BUILT_IN: i64 = 0;
 // A base the dialog names by a script's global class, as the quoted path of
 // that script, which is how the dialog names one it only knows by path.
 fn resolve_base(base: &str) -> String {
-    if ClassDb::singleton().class_exists(base) {
+    if game::is_engine_class(base) {
         return base.to_owned();
     }
     ProjectSettings::singleton()

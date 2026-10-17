@@ -1,3 +1,6 @@
+//! The class index: each constant path a project file's path spells, to that
+//! file, so Ruby loads a file by the name of what it defines.
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::{Level, Location, Log};

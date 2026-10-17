@@ -1,13 +1,13 @@
 use std::cell::RefCell;
 
-use godot::classes::{DirAccess, FileAccess, INode, Json, Node, Os, ResourceLoader};
+use godot::classes::{DirAccess, FileAccess, INode, Json, Node, Os};
 use godot::prelude::*;
 
 use crate::error;
 use crate::game;
 use crate::log::GodotLog;
 use crate::minitest::{self, Frame, LoadFailure, Minitest};
-use crate::realm::{self, Level, Location, Log, RubyError};
+use crate::realm::{self, Files, Level, Location, Log, RubyError};
 use crate::settings;
 
 /// The node the addon's runner scene holds. Once in the tree it installs the
@@ -98,16 +98,22 @@ impl RubyTestRunner {
     }
 }
 
-// The test files under `directories`, in name order.
+// The test files under `directories`, in name order: the project's files
+// there whose name matches the project's test pattern.
 fn collect_test_files(directories: &[String]) -> Result<Vec<String>, String> {
-    let pattern = settings::test_pattern();
-    let mut tests = Vec::new();
-    for directory in directories {
-        if !DirAccess::dir_exists_absolute(directory) {
-            return Err(format!("The test directory {directory} does not exist"));
-        }
-        collect_tests(directory, &pattern, &mut tests);
+    if let Some(directory) = directories
+        .iter()
+        .find(|directory| !DirAccess::dir_exists_absolute(directory.as_str()))
+    {
+        return Err(format!("The test directory {directory} does not exist"));
     }
+    let pattern = settings::test_pattern();
+    let mut tests: Vec<String> = game::listing()
+        .paths()
+        .into_iter()
+        .filter(|path| settings::is_in_directory(path, directories))
+        .filter(|path| GString::from(path.rsplit('/').next().unwrap_or(path)).match_glob(&pattern))
+        .collect();
     tests.sort();
     Ok(tests)
 }
@@ -254,27 +260,4 @@ fn read_option(args: &[String], names: &[&str]) -> Option<String> {
     args.windows(2)
         .find(|pair| names.contains(&pair[0].as_str()))
         .map(|pair| pair[1].clone())
-}
-
-// The test files under `directory`, as Godot lists its resources: each one
-// whose name matches the project's test pattern.
-fn collect_tests(directory: &str, pattern: &GString, tests: &mut Vec<String>) {
-    for entry in ResourceLoader::singleton()
-        .list_directory(directory)
-        .as_slice()
-    {
-        if let Some(child) = entry.to_string().strip_suffix('/') {
-            collect_tests(&join(directory, child), pattern, tests);
-        } else if entry.match_glob(pattern) {
-            tests.push(join(directory, &entry.to_string()));
-        }
-    }
-}
-
-fn join(directory: &str, name: &str) -> String {
-    if directory.ends_with('/') {
-        format!("{directory}{name}")
-    } else {
-        format!("{directory}/{name}")
-    }
 }
