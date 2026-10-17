@@ -142,6 +142,7 @@ Scene stage begins
   │  language::register     RubyLanguage for .rb
   │  loader::register       .rb loads as RubyScript
   │  saver::register        RubyScript saves as .rb
+  │  realm::watch_waits     a wait past its patience is logged
   │  realm::prepare         RealmFiles, GodotLog, the Godot gem
   ▼
 Editor stage begins, in the editor
@@ -151,6 +152,7 @@ the first entry
   │  the game's realm opens as prepared
   ▼
 every frame
+  │  bridge::release_collected objects Ruby's collector let go of
   │  realm::release_queued     objects of nodes freed since
   │  realm::rerun_queued       files of scripts reloaded since
   │  script::remake_instances  nodes of classes made afresh
@@ -161,6 +163,7 @@ Scene stage ends
   │  loader::unregister
   │  language::unregister
   │  realm::close
+  │  bridge::release_collected
   ▼
 the library unloads
 ```
@@ -191,11 +194,13 @@ lib.rs    registers Scripting and settings, prepares the realm
 │    ──► announcement                     │      │
 │  highlighter ──► language, lexer        │      │
 │  lookup ──► completion                  │      │
+│  saver ──► template                     │      │
 │  completion ──► lexer ──► Prism         │      │
 └──┬──────────────────────────────────────┘      │
    ▼                                             ▼
 ┌─ Given to the realm ────────────────────────────────────────┐
 │  game: files, listing, engine classes  bridge    log        │
+│  game ──► bridge, the member write rewrite                  │
 │  settings                                                   │
 └──┬──────────────────────────────────────────────────────────┘
    ▼
@@ -217,7 +222,7 @@ Several layers ask the same questions, and each has one owner below them all.
 | Question | Owner |
 | --- | --- |
 | The project's files, kept listed | `game` |
-| Which engine classes are nodes | `game` |
+| Which names are engine classes | `game` |
 | The backtrace being reported | `log` |
 | The name an export's class goes by | Godot's list of global classes |
 
@@ -234,7 +239,7 @@ Several layers ask the same questions, and each has one owner below them all.
 | `Files::file_by_name` | the `ClassIndex` behind a lookup |
 | `Files::declarations_by_path` | what a file opens, its superclass, the names it declares |
 
-`game` hands the realm each file's declarations, so the realm holds a node script's class to its superclass. `minitest` uses the realm only for a failure's `Location`, and writes through `log`.
+`game` hands the realm each file's declarations, so the realm holds a node script's class to its superclass. `minitest` compiles its own Ruby, uses the realm only for a failure's `Location`, and writes through `log`.
 
 ### 2.4 Node scripts
 
@@ -288,9 +293,9 @@ the editor scans res://
   │  language.get_global_class_name(path), read from disk
   ▼
 announcement::Project
-  │  under a test directory        ──► not listed
-  │  header + ancestry: no node    ──► not listed
-  │  another node script's name    ──► not listed, warned of
+  │  under a test directory             ──► not listed
+  │  header + ancestry: no engine class ──► not listed
+  │  another node script's name         ──► not listed, warned of
   ▼
 name     Boss                      the class's own name
 base     Enemy                     nearest listed ancestor, or engine class
@@ -402,7 +407,7 @@ There is one realm, the game's, entered by one thread at a time. That thread ent
 ### 3.2 Internals
 
 ```
-realm.rs              Realm, prepare, enter, Files, Log, RubyError
+realm.rs              Realm, prepare, enter, Files, Log, RubyError, the queues
 │
 ├─ the mrb_state
 │  └─ user data       the bookkeeping, private to realm/
@@ -453,8 +458,9 @@ A gem's methods run with the state, and reach the realm's bookkeeping only throu
 | --- | --- |
 | `hold`, `hold_new`, `object_by_key` | an object held under a key, found again |
 | `file_by_constant` | the file the class index names |
+| `hold_loose`, `note_collected` | an object only Ruby holds, let go once collected |
 | `extension_data` | its own data, such as a class it found, closed with the realm |
 | `collect_backtrace` | the frames the running Ruby was called through |
-| `declare_signal`, `declare_export`, `declare_heading` | what a running class declares, published once its file has run |
+| `declare_signal`, `declare_export`, `declare_heading`, `declare_rpc` | what a running class declares, published once its file has run |
 
 The line: what every realm is, output and hooks included, belongs to the realm; what only some need is a gem. The framework is specified in `.spec/contract/minitest.md` and `.spec/behavior/minitest.md`.

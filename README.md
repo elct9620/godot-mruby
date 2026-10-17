@@ -104,6 +104,12 @@ These are what a project meets today, each with what to do about it.
 | An engine error inside a Ruby call carries no Ruby backtrace | find the call by the engine method the error names |
 | Ruby and the engine call into each other at most 24 deep | defer a call with `call_deferred` |
 | Completion infers no variable's type | write the name bare, or after `self.` or `Godot::` |
+| A file's top level runs in the editor | keep game work in methods |
+| A StringName arrives as a Symbol | compare `body.name == :Player` |
+| Node scripts sharing a class name are not listed | give each class its own name |
+| Waiting on a thread that runs Ruby can hang | hand work back with `call_deferred` |
+| Ruby recursion stops near 500 calls | turn deep recursion into a loop |
+| `rand`, `floor` and `%` follow Ruby | use `Godot.randf`, `Godot.floorf`, `Godot.fmod` |
 | The editor's indent type is one setting for every language | set Editor Settings > Text Editor > Behavior > Indent to spaces |
 | Godot 4.7 may keep Plain Text for a `.rb` opened before the addon | choose Ruby once in the script editor's Edit > Syntax Highlighter |
 
