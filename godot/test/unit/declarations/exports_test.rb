@@ -33,17 +33,24 @@ class ExportsTest < Minitest::Test
 
   # @behavior RD-014
   def test_an_export_declared_with_no_value_is_refused
-    assert_raises(ArgumentError) { Unit::Declarations::Blank }
+    error = assert_raises(ArgumentError) { Unit::Declarations::Blank }
+
+    assert_equal %(Cannot use "export" because the type of the initialized value can't be inferred.),
+                 error.message
   end
 
   # @behavior RD-015
   def test_an_export_a_ruby_superclass_declared_is_refused
-    assert_raises(ArgumentError) { Unit::Declarations::Decoy }
+    error = assert_raises(ArgumentError) { Unit::Declarations::Decoy }
+
+    assert_equal 'The member "mode" already exists in parent class Turret.', error.message
   end
 
   # @behavior RD-016
   def test_an_export_the_engine_class_already_has_is_refused
-    assert_raises(ArgumentError) { Unit::Declarations::Overlay }
+    error = assert_raises(ArgumentError) { Unit::Declarations::Overlay }
+
+    assert_equal %(Member "position" redefined (original in native class 'Node2D')), error.message
   end
 
   # @behavior RD-017
@@ -200,28 +207,6 @@ class ExportsTest < Minitest::Test
     sprite.set(:centered, false)
 
     assert_equal "mine", sprite.call(:cover)
-  end
-
-  # @behavior RD-036
-  def test_a_name_a_ruby_superclass_declared_is_refused_in_gdscripts_words
-    error = assert_raises(ArgumentError) { Unit::Declarations::Decoy }
-
-    assert_equal 'The member "mode" already exists in parent class Turret.', error.message
-  end
-
-  # @behavior RD-037
-  def test_a_name_the_engine_class_has_is_refused_in_gdscripts_words
-    error = assert_raises(ArgumentError) { Unit::Declarations::Overlay }
-
-    assert_equal %(Member "position" redefined (original in native class 'Node2D')), error.message
-  end
-
-  # @behavior RD-038
-  def test_an_export_naming_no_type_is_refused_in_gdscripts_words
-    error = assert_raises(ArgumentError) { Unit::Declarations::Blank }
-
-    assert_equal %(Cannot use "export" because the type of the initialized value can't be inferred.),
-                 error.message
   end
 
   # @behavior RD-077

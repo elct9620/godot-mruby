@@ -31,7 +31,7 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 | --- | --- |
 | Given | a test method whose assertion fails |
 | When | the runner scene runs headless on its directory |
-| Then | the log carries a message naming the test with the `res://` path and line of the failing assertion |
+| Then | the summary minitest prints names the test with the `res://` path and line of the failing assertion |
 
 ## `RT-004` Teardown runs after a test that failed
 
@@ -55,7 +55,7 @@ How a Ruby test suite runs headless: the runner scene the addon carries runs eve
 | --- | --- |
 | Given | a test method that raises an exception other than `Minitest::Assertion` |
 | When | the runner scene runs headless on its directory |
-| Then | the log carries a message naming the test, the exception, and the `res://` path and line that raised it |
+| Then | the summary minitest prints names the test, the exception, and the `res://` path and line that raised it |
 
 ## `RT-007` A test file that does not parse fails the run
 

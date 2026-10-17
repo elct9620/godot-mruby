@@ -308,8 +308,7 @@ fn opener() -> MutexGuard<'static, Option<Opener>> {
     OPENER.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// Gives the game's realm the way it opens, which its first entry uses. A
-/// mod's realm will be given its own the same way, keyed by the mod.
+/// Gives the game's realm the way it opens, which its first entry uses.
 pub fn prepare(open: impl Fn() -> Result<Realm, RubyError> + Send + 'static) {
     *opener() = Some(Box::new(open));
 }

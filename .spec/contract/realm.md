@@ -10,7 +10,7 @@ The one way the extension runs Ruby. A component enters the game's realm and ask
 
 ## `prepare`
 
-Gives the game's realm the way it opens, which its first entry uses; a mod's realm is given its own the same way.
+Gives the game's realm the way it opens, which its first entry uses.
 
 | Attribute | Value |
 | --- | --- |
@@ -602,7 +602,7 @@ impl Realm {
 
 ## `Key`
 
-What something outside a realm keeps for the Ruby object the realm holds for it, rather than the object; the outside names it, so a node's key is the node's instance id and the node's Ruby object is found from the node alone.
+What something outside a realm keeps for the Ruby object the realm holds for it, rather than the object; the outside names it, as `derive_object_key` does for a scripted object.
 
 | Attribute | Value |
 | --- | --- |
@@ -796,7 +796,7 @@ pub trait Files {
 
 ## `Declarations`
 
-What a file declares before it runs: the constants its statements write, each as the names written from the top level, which the realm loads before the statements open them, and the superclass its class extends when something relies on it, which the realm holds the class to once the file has run.
+What a file declares before it runs: the constants its statements write, each as the names written from the top level, which the realm loads before the statements open them, the superclass its class extends when something relies on it, which the realm holds the class to once the file has run, and the names its class body's `export` and `signal` calls spell out.
 
 | Attribute | Value |
 | --- | --- |

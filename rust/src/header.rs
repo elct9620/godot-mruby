@@ -13,9 +13,9 @@ use crate::snapshot::{self, Export, Heading, Member, Parameter, Property, Rpc, S
 
 /// A file's header: the constants its `module` and `class` statements write,
 /// the name the class its path names is written with, the superclass written
-/// on it, the names of the methods it defines, the signals, properties and
-/// headings its body declares, and the `tool`, `abstract` and `icon` its
-/// body calls.
+/// on it, the names of the methods it defines and which of them call
+/// `await`, the signals, rpcs, properties and headings its body declares,
+/// and the `tool`, `abstract` and `icon` its body calls.
 #[derive(Debug, Default)]
 pub struct Header {
     constant_paths: Vec<Vec<String>>,

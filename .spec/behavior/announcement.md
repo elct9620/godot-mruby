@@ -47,11 +47,11 @@ How a node script or an object script is announced to the editor, which lists it
 | When | it is announced |
 | Then | there is no announcement |
 
-## `RN-006` Node scripts sharing a name are not announced
+## `RN-006` Scripts sharing a name are not announced
 
 | Step | Statement |
 | --- | --- |
-| Given | two node scripts in different namespaces whose classes share a name |
+| Given | two scripts in different namespaces whose classes share a name |
 | When | one of them is announced |
 | Then | there is no announcement, naming the other file |
 

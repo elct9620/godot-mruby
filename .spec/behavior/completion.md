@@ -4,7 +4,7 @@ How the script editor completes and looks up a name in a Ruby file: the language
 
 ### What it does not see
 
-- A receiver other than `Godot` names no class Prism can tell, so a call on a local variable or a method's result completes to nothing.
+- A receiver other than `Godot` and `self` names no class Prism can tell, so a call on a local variable or a method's result completes to nothing.
 
 ## Includes
 

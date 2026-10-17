@@ -94,6 +94,84 @@ module Godot
 end
 ```
 
+## `Godot::Object.tool`
+
+Marks a class as one the editor runs, as GDScript's `@tool` does. Godot reads it from the file's source, so the call does nothing as the body runs.
+
+```ruby
+module Godot
+  class Object
+    def self.tool
+    end
+  end
+end
+```
+
+## `Godot::Object.icon`
+
+The icon the editor lists a class with, as GDScript's `@icon` gives one, a path beside the file. Godot reads it from the file's source.
+
+```ruby
+module Godot
+  class Object
+    def self.icon(_path)
+    end
+  end
+end
+```
+
+## `Godot::Object.abstract`
+
+Marks a class as one that is never made, as GDScript's `@abstract` marks a class: the editor offers it as no node to add, and `new` refuses it.
+
+```ruby
+module Godot
+  class Object
+    def self.abstract
+    end
+  end
+end
+```
+
+## `Godot::Object.export_group`
+
+A heading the editor shows a class's exported properties under, as GDScript's `@export_group` writes one, taking the properties after it whose names begin with the prefix.
+
+```ruby
+module Godot
+  class Object
+    def self.export_group(name, prefix = "")
+    end
+  end
+end
+```
+
+## `Godot::Object.export_subgroup`
+
+A heading inside a group, as GDScript's `@export_subgroup` writes one.
+
+```ruby
+module Godot
+  class Object
+    def self.export_subgroup(name, prefix = "")
+    end
+  end
+end
+```
+
+## `Godot::Object.export_category`
+
+A heading over everything the class exports after it, as GDScript's `@export_category` writes one.
+
+```ruby
+module Godot
+  class Object
+    def self.export_category(name)
+    end
+  end
+end
+```
+
 ## `derive_object_key`
 
 The key a realm holds a scripted object's Ruby object under: the object's instance id, so the Ruby object is found from the engine object alone.

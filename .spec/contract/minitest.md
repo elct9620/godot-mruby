@@ -13,7 +13,7 @@ The Ruby a test is written against, spelled the way minitest spells it so a Ruby
 - A difference between two long values is shown as the expected and actual values, not as a diff.
 - `Minitest::Mock` matches positional arguments only, delegates to nothing, cannot expect the Object methods it keeps, such as `to_s`, and has no `must_verify` expectation.
 - `Object#stub` replaces only a method the object defines, and passes no keyword arguments.
-- Plugins are not found among installed gems, and none takes options: the one plugin is the extension's own, which writes each test that did not pass to the log.
+- Plugins are not found among installed gems, and none takes options: the one plugin is the extension's own, which reports the run to the log and to `--results`.
 
 ## Includes
 

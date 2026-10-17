@@ -6,6 +6,22 @@ The classes the extension registers with Godot. The editor and GDScript know the
 
 - `rust/src/**/*.rs`
 
+## `ResourceFormatLoaderRubyScript`
+
+Loads a `.rb` file as a `RubyScript`, keeping its source without running it, the way GDScript's loader does for `.gd`.
+
+```rust
+struct ResourceFormatLoaderRubyScript;
+```
+
+## `ResourceFormatSaverRubyScript`
+
+Saves a `RubyScript` as the `.rb` file holding its source.
+
+```rust
+struct ResourceFormatSaverRubyScript;
+```
+
 ## `RubyEditorPlugin`
 
 The editor plugin the extension adds to every editor: it hands the editor the export plugin, the test panel and the Ruby highlighter as it opens.

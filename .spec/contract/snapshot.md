@@ -37,6 +37,55 @@ pub struct Parameter {
 }
 ```
 
+## `Rpc`
+
+A method a class lets peers call over the network, as a GDScript's `@rpc` marks one: who may call it, whether it runs on the caller too, how it travels and on which channel.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub struct Rpc {
+    pub method: String,
+}
+```
+
+## `Rpc::read`
+
+The rpc of a method from the words and channel `@rpc` takes, or GDScript's refusal of a word it does not take.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Rpc {
+    pub fn read(
+        method: String,
+        mode: &str,
+        sync: &str,
+        transfer_mode: &str,
+        channel: i64,
+    ) -> Result<Self, String> {
+    }
+}
+```
+
+## `Rpc::describe`
+
+The rpc as Godot reads it from a script's rpc config, as GDScript's config has it.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Rpc {
+    pub fn describe(&self) -> VarDictionary {}
+}
+```
+
 ## `Heading`
 
 A heading the editor shows the properties under: a category, as `export_category` writes one or as a class is headed by the file at `path`, or a group or subgroup, as `export_group` and `export_subgroup` write one, taking the properties whose names begin with `prefix`.
@@ -136,6 +185,7 @@ What a class has once its file has run: what its body declared, and the methods 
 pub struct Class {
     pub signals: Vec<Signal>,
     pub members: Vec<Member>,
+    pub rpcs: Vec<Rpc>,
     pub methods: Vec<String>,
     pub digest: u64,
     pub export_names: Vec<String>,
@@ -154,9 +204,28 @@ What a file's source writes, for its class to be answered from: what its header 
 ```rust
 pub struct Source<'a> {
     pub signals: &'a [Signal],
+    pub rpcs: &'a [Rpc],
     pub signal_names: &'a [String],
     pub exports: &'a [Export],
     pub digest: u64,
+}
+```
+
+## `Export`
+
+What a class body declares for the editor, as its source writes it: a property or heading written out in full, or the name of an export whose value or hint only running the file tells.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub enum Export {
+    Member(Member),
+    Name {
+        name: String,
+        bare: Option<Property>,
+    },
 }
 ```
 
@@ -327,6 +396,24 @@ impl Snapshot {
         &self,
         files: impl IntoIterator<Item = (&'a str, Source<'a>)>,
     ) -> Vec<Signal> {
+    }
+}
+```
+
+## `Snapshot::collect_rpcs`
+
+The rpcs the classes of the files declared, the first file's first and one to a method, as a class has what it declared and what it inherits. Each file comes with what its source writes, as `collect_members` takes it.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Snapshot {
+    pub fn collect_rpcs<'a>(
+        &self,
+        files: impl IntoIterator<Item = (&'a str, Source<'a>)>,
+    ) -> Vec<Rpc> {
     }
 }
 ```

@@ -53,7 +53,7 @@ The node a test reaches the scene through: the test runner gives each test one o
 
 ### Class index
 
-A realm's map from constant paths to the files named after them, built from the files the realm is given by Zeitwerk's rules: every directory below a root directory is a namespace, and a file names the constant its path spells from the nearest root directory it sits under, matched without underscores or case. One namespace may span directories under different root directories. The game's realm is given every file under `res://`, and an exported game and the editor leave the test directories out, since tests run only in a game the editor plays.
+A realm's map from constant paths to the files named after them, built from the files the realm is given by Zeitwerk's rules: every directory below a root directory is a namespace, and a file names the constant its path spells from the nearest root directory it sits under, matched without underscores or case. One namespace may span directories under different root directories. The game's realm is given every file under `res://` but the script templates, which the editor fills in as text; an exported game and the editor also leave the test directories out, since tests run only in a game the editor plays.
 
 ### Root directory
 
@@ -73,7 +73,7 @@ Where a run's words go, as one stream: messages - what Ruby prints and the run's
 
 ### Header
 
-What a Ruby file says before it runs, read from its source without running it: the constants its `module` and `class` statements write, and of the class its path names, the name it is written with, the superclass written on its class statement and the namespaces that is looked up from, the names of the methods it defines, the signals its body declares, the properties it exports with a value its source writes out and the hints their keywords write out, the headings it writes, and the `tool`, `abstract` and `icon` its body calls. Godot asks a script these on any thread, before its file has run, and a realm loads what the file writes before running it.
+What a Ruby file says before it runs, read from its source without running it: the constants its `module` and `class` statements write, and of the class its path names, the name it is written with, the superclass written on its class statement and the namespaces that is looked up from, the names of the methods it defines and which of them call `await`, the signals and rpcs its body declares, the properties it exports with a value its source writes out and the hints their keywords write out, the headings it writes, and the `tool`, `abstract` and `icon` its body calls. Godot asks a script these on any thread, before its file has run, and a realm loads what the file writes before running it.
 
 ### Snapshot
 
@@ -105,7 +105,7 @@ A file whose class, the one its path names, extends an engine class that is not 
 
 ### Announcement
 
-What a node script or an object script tells the editor to list it by, as `class_name` does for a GDScript: the name its class is written with, without its namespaces, the nearest announced class it inherits from or else its engine class, and its icon, `tool` and `abstract`. A file under a test directory is never announced, and neither is any of the node scripts sharing a name.
+What a node script or an object script tells the editor to list it by, as `class_name` does for a GDScript: the name its class is written with, without its namespaces, the nearest announced class it inherits from or else its engine class, and its icon, `tool` and `abstract`. A file under a test directory or the script templates is never announced, and neither is any of the scripts sharing a name.
 
 ### Library file
 
