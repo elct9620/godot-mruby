@@ -978,3 +978,11 @@ What a node script's class says about itself as its body runs, and how Godot is 
 | Given | a node script whose class declares an rpc with a mode `@rpc` does not take |
 | When | the class's file runs |
 | Then | the declaration raises `ArgumentError` in GDScript's words for an invalid rpc argument |
+
+## `RD-117` Godot writes an instance variable before asking `_set`
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose class defines `_set`, and whose object wrote an instance variable `_set` would also take |
+| When | Godot writes a property of that name |
+| Then | the variable holds the value and `_set` is not asked, as GDScript writes a member before calling `_set` |

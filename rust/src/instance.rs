@@ -714,9 +714,7 @@ unsafe extern "C" fn set(
         let is_written = match key {
             Some(key) if exported => write(key, &name, true, value),
             // SAFETY: Godot hands a live instance.
-            Some(key) => {
-                (unsafe { ask_set(data, &name, value) }) || write(key, &name, false, value)
-            }
+            Some(key) => write(key, &name, false, value) || unsafe { ask_set(data, &name, value) },
             None if is_deferred || caller.is_failed() => {
                 caller.keep(&name, value);
                 true
