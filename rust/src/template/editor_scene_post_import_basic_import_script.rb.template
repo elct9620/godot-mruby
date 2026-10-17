@@ -1,0 +1,9 @@
+class _CLASS_ < _BASE_
+_TS_tool
+
+_TS_# Called by the editor when a scene has this script set as the import script in the import tab.
+_TS_def _post_import(scene)
+_TS__TS_# Modify the contents of the scene upon import.
+_TS__TS_scene # Return the modified root node when you're done.
+_TS_end
+end

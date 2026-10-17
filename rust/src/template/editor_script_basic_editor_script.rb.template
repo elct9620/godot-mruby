@@ -1,0 +1,7 @@
+class _CLASS_ < _BASE_
+_TS_tool
+
+_TS_# Called when the script is executed (using File -> Run in Script Editor).
+_TS_def _run
+_TS_end
+end

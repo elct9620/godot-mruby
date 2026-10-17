@@ -1,6 +1,6 @@
 //! The script templates the editor offers for a Ruby script: GDScript's
-//! built-in ones for the base classes a node script can extend, in Ruby, and
-//! how one is made into the source of a new file.
+//! built-in ones, in Ruby, and how one is made into the source of a new
+//! file.
 
 use crate::realm::{self, Roots};
 
@@ -14,8 +14,8 @@ pub struct Template {
     pub content: &'static str,
 }
 
-/// GDScript's built-in templates whose base class a node script can extend.
-pub const BUILT_INS: [Template; 5] = [
+/// GDScript's built-in templates, each under the base class it extends.
+pub const BUILT_INS: [Template; 10] = [
     Template {
         inherit: "Object",
         name: "Empty",
@@ -45,6 +45,36 @@ pub const BUILT_INS: [Template; 5] = [
         name: "Plugin",
         description: "Basic plugin template.",
         content: include_str!("template/editor_plugin_plugin.rb.template"),
+    },
+    Template {
+        inherit: "RichTextEffect",
+        name: "Default",
+        description: "Base template for rich text effects",
+        content: include_str!("template/rich_text_effect_default.rb.template"),
+    },
+    Template {
+        inherit: "VisualShaderNodeCustom",
+        name: "Basic",
+        description: "Visual shader's node plugin template",
+        content: include_str!("template/visual_shader_node_custom_basic.rb.template"),
+    },
+    Template {
+        inherit: "EditorScript",
+        name: "Basic Editor Script",
+        description: "Basic editor script template",
+        content: include_str!("template/editor_script_basic_editor_script.rb.template"),
+    },
+    Template {
+        inherit: "EditorScenePostImport",
+        name: "Basic Import Script",
+        description: "Basic import script template",
+        content: include_str!("template/editor_scene_post_import_basic_import_script.rb.template"),
+    },
+    Template {
+        inherit: "EditorScenePostImport",
+        name: "No Comments",
+        description: "Basic import script template (no comments)",
+        content: include_str!("template/editor_scene_post_import_no_comments.rb.template"),
     },
 ];
 
@@ -126,7 +156,14 @@ mod tests {
         assert_eq!(named("CharacterBody2D"), ["Basic Movement"]);
         assert_eq!(named("CharacterBody3D"), ["Basic Movement"]);
         assert_eq!(named("EditorPlugin"), ["Plugin"]);
-        assert!(named("EditorScript").is_empty());
+        assert_eq!(named("RichTextEffect"), ["Default"]);
+        assert_eq!(named("VisualShaderNodeCustom"), ["Basic"]);
+        assert_eq!(named("EditorScript"), ["Basic Editor Script"]);
+        assert_eq!(
+            named("EditorScenePostImport"),
+            ["Basic Import Script", "No Comments"]
+        );
+        assert!(named("Node2D").is_empty());
     }
 
     // @behavior RY-002

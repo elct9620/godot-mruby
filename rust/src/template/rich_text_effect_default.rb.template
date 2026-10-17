@@ -1,0 +1,16 @@
+class _CLASS_ < _BASE_
+_TS_tool
+
+_TS_# To use this effect:
+_TS_# - Enable BBCode on a RichTextLabel.
+_TS_# - Register this effect on the label.
+_TS_# - Use [_CLASS_SNAKE_CASE_ param=2.0]hello[/_CLASS_SNAKE_CASE_] in text.
+_TS_def initialize
+_TS__TS_@bbcode = "_CLASS_SNAKE_CASE_"
+_TS_end
+
+_TS_def _process_custom_fx(char_fx)
+_TS__TS_param = char_fx.env.get("param", 1.0)
+_TS__TS_true
+_TS_end
+end

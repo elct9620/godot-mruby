@@ -1,0 +1,47 @@
+class _CLASS_ < _BASE_
+_TS_tool
+
+_TS_def _get_name
+_TS__TS_"_CLASS_"
+_TS_end
+
+_TS_def _get_category
+_TS__TS_""
+_TS_end
+
+_TS_def _get_description
+_TS__TS_""
+_TS_end
+
+_TS_def _get_return_icon_type
+_TS__TS_PORT_TYPE_SCALAR
+_TS_end
+
+_TS_def _get_input_port_count
+_TS__TS_0
+_TS_end
+
+_TS_def _get_input_port_name(port)
+_TS__TS_""
+_TS_end
+
+_TS_def _get_input_port_type(port)
+_TS__TS_PORT_TYPE_SCALAR
+_TS_end
+
+_TS_def _get_output_port_count
+_TS__TS_1
+_TS_end
+
+_TS_def _get_output_port_name(port)
+_TS__TS_"result"
+_TS_end
+
+_TS_def _get_output_port_type(port)
+_TS__TS_PORT_TYPE_SCALAR
+_TS_end
+
+_TS_def _get_code(input_vars, output_vars, mode, type)
+_TS__TS_"#{output_vars[0]} = 0.0;"
+_TS_end
+end

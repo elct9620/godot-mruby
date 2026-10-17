@@ -1,10 +1,10 @@
 # Script templates
 
-What the editor offers when a Ruby script is created: the templates GDScript has built in, for the base classes a node script can extend, written in Ruby, and made into a script whose class is named after its file and extends the base the dialog was given.
+What the editor offers when a Ruby script is created: the templates GDScript has built in, written in Ruby, and made into a script whose class is named after its file and extends the base the dialog was given.
 
-### Left out
+### What differs from GDScript's
 
-- GDScript's templates for `EditorScenePostImport`, `EditorScript`, `RichTextEffect` and `VisualShaderNodeCustom`: none of them is a node class, and only a node class can be a script.
+- A template's class is named after its file, as every script's is, so `RichTextEffect`'s and `VisualShaderNodeCustom`'s do not prefix the name as GDScript's `class_name` does.
 
 ## Includes
 
@@ -15,9 +15,9 @@ What the editor offers when a Ruby script is created: the templates GDScript has
 
 | Step | Statement |
 | --- | --- |
-| Given | a base class GDScript has built-in templates for that a node script can extend |
+| Given | a base class GDScript has built-in templates for |
 | When | the editor asks the language for that class's built-in templates |
-| Then | it gets GDScript's templates of that class by name: `Object`'s Empty, `Node`'s Default, the Basic Movement of `CharacterBody2D` and of `CharacterBody3D`, and `EditorPlugin`'s Plugin |
+| Then | it gets GDScript's templates of that class by name: `Object`'s Empty, `Node`'s Default, the Basic Movement of `CharacterBody2D` and of `CharacterBody3D`, `EditorPlugin`'s Plugin, `RichTextEffect`'s Default, `VisualShaderNodeCustom`'s Basic, `EditorScript`'s Basic Editor Script, and `EditorScenePostImport`'s Basic Import Script and No Comments |
 
 ## `RY-002` A template made for a file names its class after the file
 
