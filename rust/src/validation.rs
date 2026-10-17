@@ -7,7 +7,7 @@ use std::ffi::CString;
 
 use ruby_prism::{CallNode, DefNode, Node, Visit};
 
-use crate::ancestry;
+use crate::ancestry::{self, Ancestry};
 use crate::announcement::{self, Omission, Project};
 use crate::bridge;
 use crate::compiler::{self, CompileError};
@@ -108,12 +108,19 @@ pub fn validate<F: Files + Sync>(
         }),
         _ => None,
     };
-    let overrides = collect_native_method_overrides(&typed, engine, path, source);
-    let comparisons = collect_string_name_comparisons(&typed, engine, path, source);
+    let header = Header::from_source(path, source, &typed.roots());
+    let (error, overrides, comparisons) = match ancestry::trace_ancestry(path, &header, &typed) {
+        Ok(ancestry) => (
+            diagnostics
+                .error
+                .or_else(|| find_abstract_error(&header, &ancestry, source)),
+            collect_native_method_overrides(&header, &ancestry, engine, source),
+            collect_string_name_comparisons(&ancestry, engine, source),
+        ),
+        Err(_) => (diagnostics.error, Vec::new(), Vec::new()),
+    };
     Validation {
-        error: diagnostics
-            .error
-            .or_else(|| find_abstract_error(&typed, path, source)),
+        error,
         warnings: compiled
             .chain(shared_constant)
             .chain(shared_name)
@@ -126,11 +133,9 @@ pub fn validate<F: Files + Sync>(
 // The error GDScript's analyzer gives a class that is not abstract yet has
 // abstract methods: its own, or ones the abstract classes it extends leave
 // to it. Ruby has no such analysis, so the editor is where it shows.
-fn find_abstract_error(files: &impl Files, path: &str, source: &str) -> Option<CompileError> {
-    let header = Header::from_source(path, source, &files.roots());
-    let ancestry = ancestry::trace_ancestry(path, &header, files).ok()?;
+fn find_abstract_error(header: &Header, ancestry: &Ancestry, source: &str) -> Option<CompileError> {
     let ancestors = ancestry.files().iter().map(|(_, header)| header);
-    let message = describe_abstract_refusal(&header, ancestors)?;
+    let message = describe_abstract_refusal(header, ancestors)?;
     Some(CompileError {
         line: locate_line(source, header.name_offset()),
         column: 1,
@@ -183,15 +188,11 @@ fn describe_abstract_refusal<'a>(
 // class binds, which the engine calls directly rather than through the script,
 // worded as GDScript's NATIVE_METHOD_OVERRIDE.
 fn collect_native_method_overrides(
-    files: &impl Files,
+    header: &Header,
+    ancestry: &Ancestry,
     engine: &EngineClasses,
-    path: &str,
     source: &str,
 ) -> Vec<Warning> {
-    let header = Header::from_source(path, source, &files.roots());
-    let Ok(ancestry) = ancestry::trace_ancestry(path, &header, files) else {
-        return Vec::new();
-    };
     let engine_class = ancestry.engine_class();
     if !(engine.is_engine_class)(engine_class) {
         return Vec::new();
@@ -216,15 +217,10 @@ fn collect_native_method_overrides(
 // which Ruby is given as a Symbol. Only a member called on the object itself
 // is known, since nothing tells the class of any other receiver.
 fn collect_string_name_comparisons(
-    files: &impl Files,
+    ancestry: &Ancestry,
     engine: &EngineClasses,
-    path: &str,
     source: &str,
 ) -> Vec<Warning> {
-    let header = Header::from_source(path, source, &files.roots());
-    let Ok(ancestry) = ancestry::trace_ancestry(path, &header, files) else {
-        return Vec::new();
-    };
     let engine_class = ancestry.engine_class();
     if !(engine.is_engine_class)(engine_class) {
         return Vec::new();
