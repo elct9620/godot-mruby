@@ -288,7 +288,8 @@ impl Header {
                 self.singleton_class_methods
                     .push(decode_text(def.name().as_slice()));
             } else if let Some(call) = node.as_call_node() {
-                self.singleton_class_methods.extend(read_made_names(&call));
+                self.singleton_class_methods
+                    .extend(read_method_names(&call));
             }
         }
     }
@@ -331,7 +332,7 @@ impl Header {
             self.has_methods_without_def = true;
         }
         if call.receiver().is_none() && call.name().as_slice() == b"define_singleton_method" {
-            self.singleton_class_methods.extend(read_made_names(call));
+            self.singleton_class_methods.extend(read_method_names(call));
         }
         if call.receiver().is_some() || call.block().is_some() {
             return;
@@ -480,7 +481,7 @@ impl Reader {
 // The names of the methods `call` makes without `def`, as its arguments
 // write them: every name `attr` and its kin are given, the first for
 // `alias_method`, `define_method` and `define_singleton_method`.
-fn read_made_names(call: &CallNode) -> Vec<String> {
+fn read_method_names(call: &CallNode) -> Vec<String> {
     let names = call
         .arguments()
         .map(|arguments| arguments.arguments().iter().collect::<Vec<_>>())
