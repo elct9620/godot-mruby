@@ -16,7 +16,9 @@ use beni::{
     Class as _, DataType, Error, FromValue, IntoValue, Module, Mrb, Object as _, RArray, RClass,
     RModule, ReprValue, Symbol, TryConvert, TypedData, Value, method, value::qnil,
 };
-use godot::builtin::{GString, StringName, Variant, VariantOperator, VariantType, Vector2, real};
+use godot::builtin::{
+    GString, StringName, Variant, VariantOperator, VariantType, Vector2, Vector2Axis, real,
+};
 use godot::meta::ToGodot;
 use godot::obj::EngineEnum;
 use godot::sys;
@@ -110,6 +112,7 @@ pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
     class.define_singleton_method(mrb, c"__engine_names__", method!(engine_names, 0))?;
     class.define_private_method(mrb, c"__resolve__", method!(resolve, 1))?;
     class.define_private_method(mrb, c"__member_by_name__", method!(member_by_name, 1))?;
+    class.define_private_method(mrb, c"__with_member__", method!(with_member, 2))?;
     class.define_private_method(mrb, c"__get__", method!(get, 1))?;
     class.define_private_method(mrb, c"__call__", method!(call, 2))?;
     class.define_private_method(mrb, c"__hash__", method!(hash, 0))?;
@@ -315,16 +318,18 @@ fn construct(mrb: &Mrb, class: RClass, args: &[Value]) -> Result<Value, Error> {
 // `args`, when they are two numbers: each read as the engine reads a float
 // argument, then narrowed to the engine's real.
 fn read_vector2(args: &[Value]) -> Option<Vector2> {
-    let component = |arg: Value| {
-        i64::from_value(arg)
-            .map(|integer| integer as f64)
-            .or_else(|| f64::from_value(arg))
-            .map(|float| float as real)
-    };
     match args {
-        [x, y] => Some(Vector2::new(component(*x)?, component(*y)?)),
+        [x, y] => Some(Vector2::new(read_real(*x)?, read_real(*y)?)),
         _ => None,
     }
+}
+
+// A number as the engine reads a float argument, narrowed to its real.
+fn read_real(arg: Value) -> Option<real> {
+    i64::from_value(arg)
+        .map(|integer| integer as f64)
+        .or_else(|| f64::from_value(arg))
+        .map(|float| float as real)
 }
 
 // A value type's name, its members, and its methods.
@@ -414,6 +419,48 @@ fn member_by_name(mrb: &Mrb, held: &EngineValue, name: Symbol) -> Value {
     let name = name_by_symbol(mrb, name);
     read_member(&held.as_variant(), &name)
         .map_or_else(|| qnil().as_value(), |found| to_ruby(mrb, &found))
+}
+
+// Godot::Value#__with_member__(name, member): a copy of the value with the
+// member of that name set to `member`, as GDScript sets one on its copy; the
+// value itself never changes.
+fn with_member(mrb: &Mrb, held: &EngineValue, name: Symbol, member: Value) -> Result<Value, Error> {
+    if let EngineValue::Vector2(vector) = held
+        && let Some(axis) = name.name(mrb).and_then(|name| match name.as_str() {
+            "x" => Some(Vector2Axis::X),
+            "y" => Some(Vector2Axis::Y),
+            _ => None,
+        })
+        && let Some(component) = read_real(member)
+    {
+        let mut changed = *vector;
+        changed[axis] = component;
+        return Ok(wrap(mrb, super::data(mrb), EngineValue::Vector2(changed)));
+    }
+    let name = name_by_symbol(mrb, name);
+    let member = value::to_engine(mrb, super::data(mrb), member, 1)
+        .map_err(|reason| make_argument_error(mrb, &reason))?;
+    let mut copy = held.variant();
+    let mut valid = false as sys::GDExtensionBool;
+    // SAFETY: the interface is initialized while the extension runs, and the
+    // copy, name and member live for the call.
+    unsafe {
+        sys::interface_fn!(variant_set_named)(
+            copy.var_sys_mut(),
+            name.string_sys(),
+            member.var_sys(),
+            ptr::addr_of_mut!(valid),
+        );
+    }
+    if valid == 0 {
+        let message = format!(
+            "Invalid assignment of property or key '{name}' with value of type '{}' on a base object of type '{}'.",
+            name_type(member.get_type()),
+            name_type(held.kind())
+        );
+        return Err(make_argument_error(mrb, &message));
+    }
+    Ok(to_ruby(mrb, &copy))
 }
 
 // Godot::Value#__get__(bound): the member `bound` reads, through the

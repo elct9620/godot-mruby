@@ -219,7 +219,7 @@ mod tests {
 
         assert!(made.contains("\n    def _physics_process(delta)\n"));
         assert!(made.contains("\n        move_and_slide\n"));
-        assert!(made.contains("\n            self.velocity = "));
+        assert!(made.contains("\n            velocity.y = JUMP_VELOCITY\n"));
     }
 
     // @behavior RY-007

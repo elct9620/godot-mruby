@@ -113,17 +113,6 @@ class ValueTypesTest < Minitest::Test
     assert_equal "Modulo by zero error in operator '%'.", remainder.message
   end
 
-  # @behavior RV-015
-  def test_a_value_cannot_be_changed
-    vector = Godot::Vector2.new(1, 2)
-
-    assert_raises(FrozenError) { vector.y = 0 }
-    assert_equal 2.0, vector.y
-    other = Godot::Vector3.new(1, 2, 3)
-    assert_raises(FrozenError) { other.z = 0 }
-    assert_equal 3.0, other.z
-  end
-
   # @behavior RV-016
   def test_a_value_prints_as_the_engine_prints_it
     assert_equal "(1.0, 2.0)", Godot::Vector2.new(1, 2).to_s

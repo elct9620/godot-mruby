@@ -11,6 +11,7 @@ How what mruby has to say about a Ruby file reaches Godot: through the log, at t
 
 ## Includes
 
+- `rust/src/bridge/member_writes.rs`
 - `rust/src/realm.rs`
 - `tasks/support/report.rb`
 
@@ -69,3 +70,15 @@ How what mruby has to say about a Ruby file reaches Godot: through the log, at t
 | Given | a Ruby file calling a method of the extension's own Ruby that raises, such as a refused declaration |
 | When | the file runs |
 | Then | the exception is placed at the file's line, and its backtrace holds no frame of the extension's own Ruby |
+
+## `RR-008` A line after a member write keeps its number
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RV-043` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a file assigning members of members, written across lines |
+| When | the file is compiled, its member writes rewritten |
+| Then | every line keeps its number, so a report names the line the file writes |

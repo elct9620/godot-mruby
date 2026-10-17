@@ -2,6 +2,7 @@
 //! the source Godot holds for each as the game's realm is given them, or as
 //! each is on disk for what the editor asks while it scans.
 
+use std::borrow::Cow;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use godot::classes::{ClassDb, Engine, FileAccess, Os, ResourceLoader, Script};
@@ -9,6 +10,7 @@ use godot::global::Error;
 use godot::obj::Singleton;
 
 use crate::ancestry;
+use crate::bridge;
 use crate::header::Header;
 use crate::realm::{self, ClassIndex, Declarations, Definition, Files, Parent, Roots};
 use crate::settings;
@@ -96,6 +98,12 @@ impl Files for RealmFiles {
 
     fn roots(&self) -> Roots {
         GameFiles.roots()
+    }
+
+    // A project file's assignments to a member of a member write the value
+    // types they change back, as GDScript's do.
+    fn rewrite_source<'a>(&self, source: &'a str) -> Cow<'a, str> {
+        bridge::rewrite_member_writes(source)
     }
 
     fn source_by_path(&self, path: &str) -> Result<String, String> {

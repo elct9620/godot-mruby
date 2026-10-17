@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::cell::{Cell, OnceCell, RefCell};
 use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::ffi::CStr;
@@ -81,6 +82,12 @@ pub trait Files: Send {
     }
     /// The source of the file at `path`, or why there is none.
     fn source_by_path(&self, path: &str) -> Result<String, String>;
+    /// What the realm compiles of a file's `source`: the source itself,
+    /// unless what is given the files rewrites it as the language it serves
+    /// runs a file.
+    fn rewrite_source<'a>(&self, source: &'a str) -> Cow<'a, str> {
+        Cow::Borrowed(source)
+    }
     /// What the file at `path` declares before it runs.
     fn declarations_by_path(&self, path: &str) -> Declarations;
     /// The file the constant path `names`, written inside the namespaces

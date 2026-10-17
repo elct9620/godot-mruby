@@ -9,6 +9,7 @@ use ruby_prism::{CallNode, DefNode, Node, Visit};
 
 use crate::ancestry;
 use crate::announcement::{self, Omission, Project};
+use crate::bridge;
 use crate::compiler::{self, CompileError};
 use crate::header::{Header, locate_line};
 use crate::realm::{Declarations, Files, Roots};
@@ -80,7 +81,7 @@ pub fn validate<F: Files + Sync>(
     source: &str,
 ) -> Validation {
     let name = CString::new(path).unwrap_or_default();
-    let diagnostics = compiler::diagnose(&name, source);
+    let diagnostics = compiler::diagnose(&name, &bridge::rewrite_member_writes(source));
     let typed = DraftFiles {
         files,
         path,

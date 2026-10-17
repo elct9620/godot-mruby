@@ -319,6 +319,17 @@ Vector2 is what games build and compute with most. Its division, modulo, power a
 
 A value type's class defines its members and methods when it is made, so they answer before any ancestor's. `rust/build.rs` reads their names from the API gdext builds against, with each method's required count, and each binds at its first call. Ruby refuses a call given fewer before the engine runs it, since a release engine stops instead.
 
+#### 2.6.2 Member Writes
+
+A value never changes, so assigning one of its members makes a changed copy. Before a project file compiles, `bridge/member_writes.rs` rewrites such an assignment to write the copy back, as GDScript does. The game's files hand the realm the rewrite, so the realm knows no bridge name.
+
+```ruby
+position.y = 5        # as written
+::Godot::Value.__write_member__(self, :position, :position=, :y, :y=, (5))
+```
+
+Each link is written back up to the first one shared in place, such as an engine object or container. Lines keep their numbers.
+
 ### 2.7 Snapshot
 
 ```

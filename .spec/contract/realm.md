@@ -752,6 +752,20 @@ pub trait Files {
 }
 ```
 
+## `Files::rewrite_source`
+
+What the realm compiles of a file's source, so what the language a realm serves does to a file before it runs is the files' to give, and the realm knows none of it.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub trait Files {
+    fn rewrite_source<'a>(&self, source: &'a str) -> Cow<'a, str> {}
+}
+```
+
 ## `Files::declarations_by_path`
 
 What the file at a path declares before it runs, which the realm keeps as it runs the file.

@@ -2,6 +2,12 @@
 
 How a value crosses between Ruby and the engine, either way. Ruby's own data is copied into the engine, whole or not at all, since the engine's containers cannot hold what Ruby's collector must see; the engine's containers and objects reach Ruby as the very ones the engine holds, as GDScript shares them. The engine's own value types, such as `Vector2`, `Color` and `NodePath`, are classes under `Godot` whose values Ruby builds and computes with as GDScript does; one of fixed size never changes, and a container, `Godot::Array`, `Godot::Dictionary` or a packed array, is the engine's own.
 
+### What differs from GDScript
+
+- An index written of an index read, as `grid[y][x] = 1`, is written as Ruby writes it, so a packed array an engine Array holds is not written back.
+- An operator assignment to a member of a variable's value evaluates to the variable, not to the member it wrote.
+- What a member assignment writes is evaluated before the members it reads on the way.
+
 ## Includes
 
 - `godot/test/unit/values/**/*_test.rb`
@@ -119,13 +125,13 @@ How a value crosses between Ruby and the engine, either way. Ruby's own data is 
 | When | Ruby adds, multiplies, negates and compares them |
 | Then | each answers what the engine's operator answers, and an operator the engine lacks for the operands raises `TypeError` with GDScript's message |
 
-## `RV-015` A value cannot be changed
+## `RV-015` Assigning a value's member gives its variable a copy
 
 | Step | Statement |
 | --- | --- |
-| Given | a value of a value type with a member |
-| When | Ruby assigns the member |
-| Then | it raises `FrozenError`, and the value is as it was |
+| Given | a value of a value type held by two variables |
+| When | Ruby assigns a member through one of them |
+| Then | that variable holds a copy with the member changed, and the other the value as it was, as GDScript copies a value |
 
 ## `RV-016` A value prints as the engine prints it
 
@@ -346,3 +352,67 @@ How a value crosses between Ruby and the engine, either way. Ruby's own data is 
 | Given | an Array and a `Godot::Array` of equal elements, and a Hash and a `Godot::Dictionary` of equal entries |
 | When | Ruby compares its own container with the engine's by `==` |
 | Then | each is equal, as CRuby's asks an object answering `to_ary` or `to_hash` |
+
+## `RV-043` A member of a property's value is written back
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose property holds a value of a value type |
+| When | Ruby assigns a member of the property, through the node, `self` or no receiver |
+| Then | the node's property holds the value with that member changed, as GDScript writes it back |
+
+## `RV-044` A member of a member is written back through each value
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose property holds a value whose member is itself a value, such as `transform.origin` |
+| When | Ruby assigns a member of that inner value |
+| Then | the inner value is written back into the outer, and the outer into the property |
+
+## `RV-045` A member of a container's element is written into the container
+
+| Step | Statement |
+| --- | --- |
+| Given | a value of a value type held in a `Godot::Array`, a `Godot::Dictionary`, or Ruby's Array or Hash |
+| When | Ruby assigns a member of the element through its index |
+| Then | the container holds the element with that member changed |
+
+## `RV-046` An element of a property's packed array is written back
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose property holds a packed array |
+| When | Ruby assigns an element of the property through its index |
+| Then | the node's property holds the array with that element changed |
+
+## `RV-047` An operator assignment to a member writes it back once
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose property holds a value of a value type |
+| When | Ruby assigns a member of the property with `+=`, `\|\|=` or `&&=` |
+| Then | the property holds the value with the member computed from what it held, written back once |
+
+## `RV-048` A multiple assignment to members writes each back
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose property holds a value of a value type, and a variable holding another |
+| When | Ruby assigns members of both in one multiple assignment |
+| Then | the property and the variable each hold their value with its member changed |
+
+## `RV-049` A member of a value a call answers cannot be assigned
+
+| Step | Statement |
+| --- | --- |
+| Given | a method answering a value of a value type, which nothing holds |
+| When | Ruby assigns a member of what the method answers |
+| Then | it raises `FrozenError`, since nothing would see the change GDScript drops |
+
+## `RV-050` `with` answers a copy with members changed
+
+| Step | Statement |
+| --- | --- |
+| Given | a value of a value type |
+| When | Ruby calls `with` naming members and their new values, or a member the type lacks |
+| Then | it answers a copy with those members changed and the value as it was, or raises `ArgumentError` in GDScript's words |

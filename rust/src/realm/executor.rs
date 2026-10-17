@@ -396,7 +396,7 @@ fn execute<T>(
         }
         let name =
             CString::new(path).map_err(|error| make_runtime_error(mrb, &error.to_string()))?;
-        compile(mrb, &name, &source)?;
+        compile(mrb, &name, &bookkeeping(mrb).files.rewrite_source(&source))?;
         settle(prepared)
     });
     let frame = runs.frames.borrow_mut().pop();

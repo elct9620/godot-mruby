@@ -666,7 +666,85 @@ module Godot
   # methods and operators, and never changed, since each side holds its own
   # copy.
   class Value
+    # What an engine container is: the engine's own, shared wherever it is
+    # held, so a change to an element is made in it rather than in a copy.
+    module Shared
+    end
+
     class << self
+      # What `root.p1.p2 ... step = value` does, as GDScript assigns to a
+      # member of a member: each value type the path reads is a copy, so the
+      # copy with its member changed is written back into what it was read
+      # from, up to the first link shared in place. A step is a member's name,
+      # or the arguments of an index. Answers the root as it is now, which
+      # changes only when it is itself a value type and every link was one.
+      def __write_chain__(root, path, step, value)
+        links = path.each_with_object([root]) { |read, read_links| read_links << __read_step__(read_links.last, read) }
+        updated = __write_step__(links.last, step, value)
+        index = path.size - 1
+        while index >= 0 && __copied__?(links[index + 1])
+          updated = __write_step__(links[index], path[index], updated)
+          index -= 1
+        end
+        index.negative? && __copied__?(root) ? updated : root
+      end
+
+      # `__write_through__` for the commonest chain, one member read and one
+      # written, as `position.y = 5`, with the writers' names made once where
+      # the assignment is written.
+      def __write_member__(owner, reader, writer, member, member_writer, value)
+        link = owner.__send__(reader)
+        if Value === link && !(Shared === link)
+          begin
+            owner.__send__(writer, link.__send__(:__with_member__, member, value))
+          rescue NoMethodError => e
+            raise e if owner.respond_to?(writer, true)
+
+            raise FrozenError, "can't modify the #{link.class} #{reader} answered: assign it to a variable first"
+          end
+        else
+          link.__send__(member_writer, value)
+        end
+        value
+      end
+
+      # `__write_chain__` for a root no variable holds, answering `value`: a
+      # root that would change is a copy a call answered, which nothing
+      # would see changed.
+      def __write_through__(root, path, step, value)
+        unless __write_chain__(root, path, step, value).equal?(root)
+          raise FrozenError, "can't modify #{root.class} a call answered: assign it to a variable first"
+        end
+
+        value
+      end
+
+      # `__write_chain__` for an operator assignment: the block makes the new
+      # member from the current one, which `||=` keeps when it is truthy and
+      # `&&=` when it is not.
+      def __update_chain__(root, path, step, short = nil)
+        links = path.each_with_object([root]) { |read, read_links| read_links << __read_step__(read_links.last, read) }
+        current = __read_step__(links.last, step)
+        return root if (short == :or && current) || (short == :and && !current)
+
+        __write_chain__(root, path, step, yield(current))
+      end
+
+      # Whether `link` is a value type's value, which is copied wherever it
+      # is held, rather than anything shared in place.
+      def __copied__?(link)
+        Value === link && !(Shared === link)
+      end
+
+      # The values a multiple assignment takes from `values`, as Ruby splats
+      # them.
+      def __splat__(values)
+        return values if ::Array === values
+        return values.to_ary if values.respond_to?(:to_ary)
+
+        [values]
+      end
+
       def method_missing(name, *args, &block)
         answered = __call_static__(name, args)
         return super if answered.nil?
@@ -684,6 +762,29 @@ module Godot
       private :__has_value_type__, :__call_static__, :__constant_by_name__, :__engine_names__
 
       private
+
+      def __read_step__(owner, step)
+        ::Array === step ? owner.__send__(:[], *step) : owner.__send__(step)
+      end
+
+      # `owner` with `step` set to `value`: a copy for a value type, or
+      # `owner` itself changed in place.
+      def __write_step__(owner, step, value)
+        if ::Array === step
+          owner.__send__(:[]=, *step, value)
+          owner
+        elsif __copied__?(owner)
+          owner.with(step => value)
+        else
+          writer = :"#{step}="
+          unless owner.respond_to?(writer, true)
+            raise FrozenError, "can't modify the #{value.class} #{step} answered: assign it to a variable first"
+          end
+
+          owner.__send__(writer, value)
+          owner
+        end
+      end
 
       # What is defined on a value type's class is the engine's, never a file's.
       def const_added(name); end
@@ -730,6 +831,12 @@ module Godot
 
     def inspect
       "#<#{self.class} #{self}>"
+    end
+
+    # A copy of the value with each member named set to the value given, as
+    # Ruby's Data#with gives one; the value itself never changes.
+    def with(**members)
+      members.reduce(self) { |value, (name, member)| value.__send__(:__with_member__, name, member) }
     end
 
     # A member or engine method the running engine has beyond those the class
@@ -851,6 +958,7 @@ module Godot
 
   # The engine's Array; Godot::Value::Sequence says how it answers.
   class Array < Value
+    include Shared
     include Sequence
 
     __define_engine_names__
@@ -869,6 +977,7 @@ module Godot
   # and those Enumerable gives, behave as Ruby's; the engine's other names
   # behave as the engine's.
   class Dictionary < Value
+    include Shared
     include Enumerable
 
     def each(&block)
