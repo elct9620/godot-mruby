@@ -70,12 +70,25 @@ end
 
 ## `Godot::Object#await`
 
-Waits until a signal is emitted, in a method Godot calls whose body calls `await` or in a block or method Godot calls back, and answers what the signal was emitted with: nil, its one value, or its values in an array, as GDScript's `await` does. Godot gets nil from the call at once, and the method runs on once the signal is emitted. The signal is a `Godot::Signal`, or an object followed by the name of its signal; anywhere else, `await` raises `FiberError`.
+The way a Ruby method waits for a signal or a coroutine as GDScript's `await` does, so a game written in Ruby waits where a GDScript one would.
 
 ```ruby
 module Godot
   class Object
-    def await(signal, name = nil)
+    def await(awaited, name = nil)
+    end
+  end
+end
+```
+
+## `Godot::Coroutine.run`
+
+The way Ruby starts a coroutine without waiting for it, as GDScript calls a coroutine without `await`, keeping the Signal it ends with for whoever waits for it later.
+
+```ruby
+module Godot
+  module Coroutine
+    def self.run(&body)
     end
   end
 end

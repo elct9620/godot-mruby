@@ -12,7 +12,7 @@ use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 
 use crate::compiler;
-use crate::snapshot::{self, Heading, Property, Rpc, Signal, Snapshot};
+use crate::snapshot::{self, Heading, MethodCalls, Property, Rpc, Signal, Snapshot};
 
 mod constants;
 mod executor;
@@ -108,6 +108,8 @@ pub struct Declarations {
     pub exports: Vec<String>,
     /// The names its class body's `signal` calls spell out.
     pub signals: Vec<String>,
+    /// What each method its source defines calls.
+    pub method_calls: Vec<MethodCalls>,
 }
 
 /// The superclass a file's class is held to.

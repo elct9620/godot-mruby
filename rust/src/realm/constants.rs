@@ -151,6 +151,7 @@ pub(super) fn ensure_opened(mrb: &Mrb, path: &str) -> Result<Option<Parent>, Err
         executor::SourceNames {
             exports: declarations.exports,
             signals: declarations.signals,
+            method_calls: declarations.method_calls,
         },
     );
     Ok(declarations.parent)

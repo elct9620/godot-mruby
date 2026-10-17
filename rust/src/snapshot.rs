@@ -3,7 +3,7 @@
 //! realm: asking never waits for the thread inside it, and what is read is
 //! whole, since a realm publishes a class only once its file has run.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::{Arc, LazyLock, OnceLock, PoisonError, RwLock};
 
@@ -354,11 +354,21 @@ impl Member {
     }
 }
 
+/// What a method its file's source defines calls: `await` itself, and the
+/// names of the methods it calls, as the source writes them.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct MethodCalls {
+    pub method: String,
+    pub calls_await: bool,
+    pub called: Vec<String>,
+}
+
 /// What a class has once its file has run: what its body declared, and the
 /// methods it defines, those metaprogramming defined included, with the
 /// digest of the source it ran and the names that source's `export` and
 /// `signal` calls write, which tell what the source Godot holds now has
-/// changed and what it cannot answer for.
+/// changed and what it cannot answer for, and what the methods its source
+/// defines call.
 #[derive(Clone, Debug, Default)]
 pub struct Class {
     pub signals: Vec<Signal>,
@@ -368,6 +378,7 @@ pub struct Class {
     pub digest: u64,
     pub export_names: Vec<String>,
     pub signal_names: Vec<String>,
+    pub method_calls: Vec<MethodCalls>,
 }
 
 impl Class {
@@ -441,9 +452,50 @@ impl Export {
 #[derive(Clone, Debug, Default)]
 pub struct Snapshot {
     classes: HashMap<Arc<str>, Arc<Class>>,
+    // The names of the methods that may await, worked out at the first
+    // question and again once a class is recorded.
+    awaiting: OnceLock<BTreeSet<String>>,
 }
 
 impl Snapshot {
+    /// Whether a method named `method` may await, as some class's source
+    /// writes one: its body calls `await`, or calls a method of a name that
+    /// may. A name is taken for every method so named, since nothing tells
+    /// which class a call reaches; a method so taken that never waits only
+    /// costs its fiber.
+    pub fn is_awaiting(&self, method: &str) -> bool {
+        self.awaiting
+            .get_or_init(|| self.collect_awaiting())
+            .contains(method)
+    }
+
+    // The names `is_awaiting` answers for, each method reaching `await`
+    // through any number of calls.
+    fn collect_awaiting(&self) -> BTreeSet<String> {
+        let calls: Vec<&MethodCalls> = self
+            .classes
+            .values()
+            .flat_map(|class| class.method_calls.iter())
+            .collect();
+        let mut awaiting: BTreeSet<String> = calls
+            .iter()
+            .filter(|calls| calls.calls_await)
+            .map(|calls| calls.method.clone())
+            .collect();
+        loop {
+            let reached: Vec<String> = calls
+                .iter()
+                .filter(|calls| !awaiting.contains(&calls.method))
+                .filter(|calls| calls.called.iter().any(|name| awaiting.contains(name)))
+                .map(|calls| calls.method.clone())
+                .collect();
+            if reached.is_empty() {
+                return awaiting;
+            }
+            awaiting.extend(reached);
+        }
+    }
+
     /// The signals the class of the file at `path` declared, in the order it
     /// declared them; none for a file that has not run.
     pub fn signals_by_path(&self, path: &str) -> &[Signal] {
@@ -654,6 +706,7 @@ impl Snapshot {
     /// run, in place of what it had before.
     pub fn record_class(&mut self, path: &str, class: Class) {
         self.classes.insert(Arc::from(path), Arc::new(class));
+        self.awaiting = OnceLock::new();
     }
 
     /// Takes `methods` as what the class of the file at `path` has now, which

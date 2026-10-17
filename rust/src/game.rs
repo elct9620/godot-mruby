@@ -74,6 +74,7 @@ impl Files for GameFiles {
             parent,
             exports: header.export_names().map(str::to_owned).collect(),
             signals: header.signal_names().to_vec(),
+            method_calls: header.method_calls().to_vec(),
         }
     }
 }

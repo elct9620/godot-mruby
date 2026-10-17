@@ -190,6 +190,37 @@ pub struct Class {
     pub digest: u64,
     pub export_names: Vec<String>,
     pub signal_names: Vec<String>,
+    pub method_calls: Vec<MethodCalls>,
+}
+```
+
+## `MethodCalls`
+
+What a method its file's source defines calls, which tells whether it may await through the methods it calls.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub struct MethodCalls {
+    pub method: String,
+    pub calls_await: bool,
+    pub called: Vec<String>,
+}
+```
+
+## `Snapshot::is_awaiting`
+
+Whether Godot runs a method of that name where it may wait, so a call waiting through another method is answered as a coroutine.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Snapshot {
+    pub fn is_awaiting(&self, method: &str) -> bool {}
 }
 ```
 

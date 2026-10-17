@@ -173,14 +173,6 @@ impl<'a> Lineage<'a> {
             .collect()
     }
 
-    /// Whether the nearest file whose source defines the method `name` calls
-    /// `await` in its body, so Godot runs it where it may wait.
-    pub fn is_awaiting(&self, name: &str) -> bool {
-        self.files()
-            .find(|(_, header)| header.has_method(name))
-            .is_some_and(|(_, header)| header.is_awaiting(name))
-    }
-
     /// Whether a file of the lineage defines the method `name`, as its source
     /// writes it or as its class defined it while it ran.
     pub fn has_method(&self, snapshot: &Snapshot, name: &str) -> bool {

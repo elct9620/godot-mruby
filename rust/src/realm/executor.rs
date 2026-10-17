@@ -12,7 +12,7 @@ use super::constants::{self, Scope};
 use super::{
     bookkeeping, compile, file_by_constant, join_inner_path, key_by_path, methods, normalize,
 };
-use crate::snapshot::{self, Heading, Member, Property, Rpc, Signal};
+use crate::snapshot::{self, Heading, Member, MethodCalls, Property, Rpc, Signal};
 use beni::{Class as _, Error, FromValue, Module, Mrb, RClass};
 
 /// How far a file has run in a realm.
@@ -91,11 +91,12 @@ struct Frame {
 }
 
 /// The names a file's source spells out in its class body's `export` and
-/// `signal` calls.
+/// `signal` calls, and what each method it defines calls.
 #[derive(Default)]
 pub(super) struct SourceNames {
     pub exports: Vec<String>,
     pub signals: Vec<String>,
+    pub method_calls: Vec<MethodCalls>,
 }
 
 /// How far each file has run in a realm, and the files running now.

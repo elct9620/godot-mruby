@@ -87,6 +87,7 @@ pub(super) fn publish_class(
             digest,
             export_names: source_names.exports,
             signal_names: source_names.signals,
+            method_calls: source_names.method_calls,
         },
     );
     snapshot::publish(Arc::clone(&draft));

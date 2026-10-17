@@ -558,13 +558,15 @@ module Godot
       inspected.pop if inspected.last.equal?(self)
     end
 
-    # Waits until `signal` is emitted, in a method Godot runs that calls
-    # `await`, and answers what it was emitted with: nil, its one value, or
-    # its values in an array, as GDScript's `await` does. `signal` is a
-    # Godot::Signal, or an object followed by the name of its signal.
-    def await(signal, name = nil)
-      signal = Godot::Signal.new(signal, name) unless name.nil?
-      Coroutine.wait_for(signal)
+    # Waits until `awaited` is emitted, in a method Godot runs where it may
+    # wait, and answers what it was emitted with: nil, its one value, or its
+    # values in an array, as GDScript's `await` does. `awaited` is a
+    # Godot::Signal, an object followed by the name of its signal, or a
+    # coroutine's state, whose end is awaited; any other value is answered
+    # at once.
+    def await(awaited, name = nil)
+      awaited = Godot::Signal.new(awaited, name) unless name.nil?
+      Coroutine.__send__(:wait_for, awaited)
     end
 
     private
@@ -583,36 +585,79 @@ module Godot
   # which yields as it awaits a signal and is resumed when the signal is
   # emitted, so Godot goes on while it waits, as with a GDScript coroutine.
   module Coroutine
-    # The fibers running now that may wait.
+    # The fibers running now that may wait, each with what it answers its
+    # end through once it has waited. Only a fiber running is kept here; one
+    # waiting is kept by its signal's connection alone, so it goes once the
+    # object emitting the signal does.
     @running = {}
 
-    # Runs `body` in a fiber of its own, answering what it returns, or nil
-    # once it waits.
+    # Runs `body` in a fiber of its own, answering what it returns when it
+    # ends without waiting, or else a Signal emitted with what it returns
+    # once it ends, which Godot and Ruby await as a GDScript coroutine's
+    # state.
     def self.run(&body)
-      resume(Fiber.new(&body))
+      fiber = Fiber.new(&body)
+      ending = []
+      answer = resume(fiber, ending)
+      return answer unless fiber.alive?
+
+      state = Godot::RefCounted.new
+      state.add_user_signal("completed")
+      ending << state
+      Godot::Signal.new(state, :completed)
     end
 
-    # Resumes `fiber` with `values`, answering what it returns once it has,
-    # or nil when it waits again.
-    def self.resume(fiber, *values)
-      @running[fiber] = true
-      answer = fiber.resume(*values)
-      fiber.alive? ? nil : answer
-    ensure
-      @running.delete(fiber)
-    end
+    class << self
+      private
 
-    # Yields the fiber running now until `signal` is emitted, answering what
-    # it was emitted with. Only a fiber `run` made yields: any other Ruby is
-    # Godot's to wait for.
-    def self.wait_for(signal)
-      fiber = Fiber.current
-      unless @running.key?(fiber)
-        raise FiberError, "await waits only in a method Godot calls, or a block or method Godot calls back"
+      # Resumes `fiber` with `values`, emitting the state `ending` holds
+      # once it has waited with what the fiber returns as it ends.
+      def resume(fiber, ending, *values)
+        @running[fiber] = ending
+        answer = fiber.resume(*values)
+        ending.first&.emit_signal(:completed, answer) unless fiber.alive?
+        answer
+      ensure
+        @running.delete(fiber)
       end
 
-      signal.connect(proc { |*args| resume(fiber, args.size > 1 ? args : args.first) }, Godot::Object::CONNECT_ONE_SHOT)
-      Fiber.yield
+      # Yields the fiber running now until `awaited` is emitted, answering
+      # what it was emitted with; a value that is no signal is answered at
+      # once. Only a fiber `run` made yields: any other Ruby is Godot's to
+      # wait for. A yield mruby refuses, from under a method of its C, leaves
+      # no connection behind.
+      def wait_for(awaited)
+        signal = read_signal(awaited)
+        return awaited if signal.nil?
+
+        fiber = Fiber.current
+        ending = @running[fiber]
+        if ending.nil?
+          raise FiberError, "await waits only in a method Godot calls, or a block or method Godot calls back"
+        end
+
+        # The waiting fiber holds no Callable of its own connection, which
+        # would hold the fiber back through its proc. A refused yield removes
+        # the connection just made, the last the signal lists, since the
+        # engine lists them in the order they were made.
+        signal.connect(proc { |*args| resume(fiber, ending, args.size > 1 ? args : args.first) },
+                       Godot::Object::CONNECT_ONE_SHOT)
+        begin
+          Fiber.yield
+        rescue FiberError => e
+          signal.disconnect(signal.get_connections.last["callable"])
+          raise e
+        end
+      end
+
+      # The signal awaiting `awaited` waits for: itself, or the end of a
+      # coroutine's state; none for any other value.
+      def read_signal(awaited)
+        return awaited if awaited.is_a?(Godot::Signal)
+        return unless awaited.is_a?(Godot::Object) && awaited.is_class("GDScriptFunctionState")
+
+        Godot::Signal.new(awaited, :completed)
+      end
     end
   end
 

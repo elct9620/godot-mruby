@@ -798,13 +798,13 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | When | Godot reads the script's rpc config |
 | Then | the config lists that rpc as the file would declare it |
 
-## `RS-094` A method Godot calls returns as it awaits
+## `RS-094` A method Godot calls answers a signal as it awaits
 
 | Step | Statement |
 | --- | --- |
 | Given | a node whose class's method calls `await` on a signal |
 | When | Godot calls that method |
-| Then | Godot gets nil at once, as it gets a GDScript coroutine's state, and the method has run up to its `await` |
+| Then | Godot gets a Signal at once, which awaiting waits on as on a GDScript coroutine's state, and the method has run up to its `await` |
 
 ## `RS-095` An awaiting method resumes once its signal is emitted
 
@@ -837,3 +837,63 @@ How a `.rb` file attached to a node comes to run, and where what it prints goes.
 | Given | a node whose class's method calls `await` |
 | When | Ruby calls that method itself, outside anything Godot called |
 | Then | `await` raises `FiberError` |
+
+## `RS-099` A method Godot calls awaits through the methods it calls
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose method Godot calls writes no `await` but calls a method of its class, and one of a module, that awaits a signal |
+| When | Godot calls the method, and then the signal is emitted |
+| Then | the method waits where the method it called awaits, and runs on once the signal is emitted, as a GDScript coroutine awaiting another does |
+
+## `RS-100` GDScript awaiting a Ruby method waits until it ends
+
+| Step | Statement |
+| --- | --- |
+| Given | a GDScript function awaiting a node's Ruby method that awaits a signal |
+| When | the signal is emitted |
+| Then | the GDScript function runs on with what the Ruby method returned, as it would with a GDScript coroutine |
+
+## `RS-101` A method that could await but does not answers its value
+
+| Step | Statement |
+| --- | --- |
+| Given | a node whose method Godot calls awaits only on some calls |
+| When | Godot calls it on one where it returns without awaiting |
+| Then | Godot gets what it returned, as a GDScript coroutine that never awaits returns its value |
+
+## `RS-102` `await` answers a value that is no signal at once
+
+| Step | Statement |
+| --- | --- |
+| Given | a value that is neither a Signal nor a coroutine's state, such as what a method that did not wait returned |
+| When | Ruby awaits it, inside or outside what Godot calls |
+| Then | `await` answers the value without waiting, as GDScript's does |
+
+## `RS-103` `Godot::Coroutine.run` goes on without waiting
+
+| Step | Statement |
+| --- | --- |
+| Given | a method Godot called, running a block that awaits a signal through `Godot::Coroutine.run` |
+| When | the block reaches its `await`, and later the signal is emitted |
+| Then | `run` answers a Signal at once and the method goes on, the block runs on once the signal is emitted, and awaiting the Signal answers what the block returned |
+
+## `RS-104` `await` under a method mruby runs in C raises and leaves no connection
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RS-098` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a method Godot called, awaiting a signal inside a block a method of mruby's C calls, such as `sort`'s |
+| When | the method reaches the `await`, and it then awaits the signal again outside the block |
+| Then | the first `await` raises `FiberError`, and the second answers what the signal is emitted with, since the first left no connection |
+
+## `RS-105` A coroutine whose signal goes with its object is let go of
+
+| Step | Statement |
+| --- | --- |
+| Given | a coroutine waiting for a signal, and the Signal its end is answered through |
+| When | the object emitting the signal it waits for is freed, and the collector runs |
+| Then | the object the Signal names is freed too, as nothing is left to resume the coroutine |

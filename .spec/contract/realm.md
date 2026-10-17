@@ -796,7 +796,7 @@ pub trait Files {
 
 ## `Declarations`
 
-What a file declares before it runs: the constants its statements write, each as the names written from the top level, which the realm loads before the statements open them, the superclass its class extends when something relies on it, which the realm holds the class to once the file has run, and the names its class body's `export` and `signal` calls spell out.
+What a file declares before it runs: the constants its statements write, each as the names written from the top level, which the realm loads before the statements open them, the superclass its class extends when something relies on it, which the realm holds the class to once the file has run, the names its class body's `export` and `signal` calls spell out, and what each method its source defines calls.
 
 | Attribute | Value |
 | --- | --- |

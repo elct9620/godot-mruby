@@ -1,21 +1,23 @@
 //! Reads a Ruby file's source with Prism and never runs it, so what the file
 //! says is known on any thread before its file has run.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use godot::builtin::{GString, StringName, VarArray, VarDictionary, Variant, VariantType};
 use godot::meta::ToGodot;
-use ruby_prism::{CallNode, Integer, Node, NodeList, Visit};
+use ruby_prism::{CallNode, DefNode, Integer, Node, NodeList, Visit};
 
 use crate::hint::Hint;
 use crate::realm::{self, Roots};
-use crate::snapshot::{self, Export, Heading, Member, Parameter, Property, Rpc, Signal};
+use crate::snapshot::{
+    self, Export, Heading, Member, MethodCalls, Parameter, Property, Rpc, Signal,
+};
 
 /// A file's header: the constants its `module` and `class` statements write,
 /// the name the class its path names is written with, the superclass written
-/// on it, the names of the methods it defines and which of them call
-/// `await`, the signals, rpcs, properties and headings its body declares,
-/// and the `tool`, `abstract` and `icon` its body calls.
+/// on it, the names of the methods it defines, what each method the file
+/// defines calls, the signals, rpcs, properties and headings its body
+/// declares, and the `tool`, `abstract` and `icon` its body calls.
 #[derive(Debug, Default)]
 pub struct Header {
     constant_paths: Vec<Vec<String>>,
@@ -23,9 +25,7 @@ pub struct Header {
     name_offset: usize,
     superclass: Option<Superclass>,
     methods: BTreeMap<String, usize>,
-    // The methods whose bodies call `await`, which Godot runs where they may
-    // wait.
-    awaiting: BTreeSet<String>,
+    method_calls: Vec<MethodCalls>,
     signal_offsets: BTreeMap<String, usize>,
     export_offsets: BTreeMap<String, usize>,
     signals: Vec<Signal>,
@@ -75,8 +75,11 @@ impl Header {
             reader.read_body(&program.statements().body(), &[]);
         }
         let header = reader.header.unwrap_or_default();
+        let mut collector = MethodCallCollector(Vec::new());
+        collector.visit(&result.node());
         Header {
             constant_paths: reader.constant_paths,
+            method_calls: collector.0,
             digest: snapshot::digest(source),
             is_parsed: result.errors().next().is_none(),
             icon: header
@@ -114,10 +117,10 @@ impl Header {
         self.methods.contains_key(name)
     }
 
-    /// Whether the body of the method `name` calls `await`, so it may wait
-    /// for a signal as a GDScript coroutine does.
-    pub fn is_awaiting(&self, name: &str) -> bool {
-        self.awaiting.contains(name)
+    /// What each method the file defines calls, in any class or module of
+    /// it, so a method that may wait is known through the methods it calls.
+    pub fn method_calls(&self) -> &[MethodCalls] {
+        &self.method_calls
     }
 
     /// The names of the methods the file's class defines, as its `def`
@@ -224,9 +227,6 @@ impl Header {
                 if def.receiver().is_none() {
                     let offset = def.location().start_offset();
                     let name = decode_text(def.name().as_slice());
-                    if def.body().is_some_and(|body| calls_await(&body)) {
-                        self.awaiting.insert(name.clone());
-                    }
                     self.methods.entry(name).or_insert(offset);
                 }
             } else if let Some(call) = node.as_call_node() {
@@ -419,21 +419,37 @@ fn with_keyword_hint(property: &Property, keywords: &Node) -> Option<Property> {
         .ok()
 }
 
-// Whether `body` calls `await` without a receiver anywhere in it, a block's
-// included, as a method that may wait does.
-fn calls_await(body: &Node) -> bool {
-    struct Finder(bool);
-    impl<'pr> Visit<'pr> for Finder {
-        fn visit_call_node(&mut self, node: &CallNode<'pr>) {
-            if node.receiver().is_none() && node.name().as_slice() == b"await" {
-                self.0 = true;
+// What each `def` of a file calls, its blocks' calls included and a `def`
+// written inside it apart.
+struct MethodCallCollector(Vec<MethodCalls>);
+
+impl<'pr> Visit<'pr> for MethodCallCollector {
+    fn visit_def_node(&mut self, node: &DefNode<'pr>) {
+        struct Calls<'a>(&'a mut MethodCalls);
+        impl<'pr> Visit<'pr> for Calls<'_> {
+            fn visit_call_node(&mut self, node: &CallNode<'pr>) {
+                let name = decode_text(node.name().as_slice());
+                if node.receiver().is_none() && name == "await" {
+                    self.0.calls_await = true;
+                } else if !self.0.called.contains(&name) {
+                    self.0.called.push(name);
+                }
+                ruby_prism::visit_call_node(self, node);
             }
-            ruby_prism::visit_call_node(self, node);
+
+            fn visit_def_node(&mut self, _node: &DefNode<'pr>) {}
         }
+
+        let mut calls = MethodCalls {
+            method: decode_text(node.name().as_slice()),
+            ..MethodCalls::default()
+        };
+        if let Some(body) = node.body() {
+            Calls(&mut calls).visit(&body);
+        }
+        self.0.push(calls);
+        ruby_prism::visit_def_node(self, node);
     }
-    let mut finder = Finder(false);
-    finder.visit(body);
-    finder.0
 }
 
 // The rpc an `rpc` call declares with a method's name and literal keywords

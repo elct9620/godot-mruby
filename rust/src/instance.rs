@@ -72,43 +72,47 @@ pub fn owners_by_path(path: &str) -> Vec<InstanceId> {
 
 /// The methods a node's class has, by the StringName Godot calls each with,
 /// for every instance of one header and ancestry: worked out again whenever
-/// another snapshot is published, so a call finds its method's name without
-/// formatting it or walking the lineage.
+/// another snapshot is published, so a call finds its method's name, and
+/// whether it may await, without formatting it or walking the lineage.
 #[derive(Default)]
 pub struct Methods(Mutex<Option<MethodTable>>);
 
-// The methods a lineage had in a snapshot, and each one's name.
+// The methods a lineage had in a snapshot: each one's name, and whether it
+// may await.
 struct MethodTable {
     snapshot: Arc<Snapshot>,
-    names: FxHashMap<StringName, Arc<str>>,
+    methods: FxHashMap<StringName, (Arc<str>, bool)>,
 }
 
 impl Methods {
-    // The name of `method` when the class has it, read from the latest
-    // snapshot and the lineage `lineage` gives.
-    fn name_by_string_name<'l>(
+    // The name of `method` when the class has it, and whether it may await,
+    // read from the latest snapshot and the lineage `lineage` gives.
+    fn method_by_string_name<'l>(
         &self,
         method: &StringName,
         lineage: impl FnOnce() -> Lineage<'l>,
-    ) -> Option<Arc<str>> {
+    ) -> Option<(Arc<str>, bool)> {
         let latest = snapshot::latest();
         let mut table = self.0.lock().unwrap_or_else(PoisonError::into_inner);
         let table = match &mut *table {
             Some(table) if Arc::ptr_eq(&table.snapshot, &latest) => table,
             stale => stale.insert(MethodTable::new(&lineage(), latest)),
         };
-        table.names.get(method).cloned()
+        table.methods.get(method).cloned()
     }
 }
 
 impl MethodTable {
     fn new(lineage: &Lineage, snapshot: Arc<Snapshot>) -> Self {
-        let names = lineage
+        let methods = lineage
             .collect_methods(&snapshot)
             .into_iter()
-            .map(|name| (StringName::from(name), Arc::from(name)))
+            .map(|name| {
+                let method = (Arc::from(name), snapshot.is_awaiting(name));
+                (StringName::from(name), method)
+            })
             .collect();
-        Self { snapshot, names }
+        Self { snapshot, methods }
     }
 }
 
@@ -205,10 +209,11 @@ impl RubyInstance {
         self.lineage().has_method(&snapshot::latest(), method)
     }
 
-    // The name of `method`, which Godot calls by its StringName, when the
-    // node's class has it.
-    fn method_name_by_string_name(&self, method: &StringName) -> Option<Arc<str>> {
-        self.methods.name_by_string_name(method, || self.lineage())
+    // The name of `method`, which Godot calls by its StringName, and whether
+    // it may await, when the node's class has it.
+    fn method_by_string_name(&self, method: &StringName) -> Option<(Arc<str>, bool)> {
+        self.methods
+            .method_by_string_name(method, || self.lineage())
     }
 
     fn lineage(&self) -> Lineage<'_> {
@@ -884,10 +889,9 @@ unsafe extern "C" fn has_method(
         // SAFETY: Godot hands a method name living for the call.
         let method = unsafe { &*method.cast::<StringName>() };
         // SAFETY: Godot hands a live instance.
-        let has_method = unsafe {
-            borrow_instance(data, |instance| instance.method_name_by_string_name(method))
-        }
-        .is_some();
+        let has_method =
+            unsafe { borrow_instance(data, |instance| instance.method_by_string_name(method)) }
+                .is_some();
         sys::GDExtensionBool::from(has_method)
     })
 }
@@ -971,8 +975,7 @@ unsafe extern "C" fn call(
         // SAFETY: Godot hands a live instance.
         let found = unsafe {
             borrow_instance(data, |instance| {
-                let method = instance.method_name_by_string_name(method)?;
-                let is_awaiting = instance.lineage().is_awaiting(&method);
+                let (method, is_awaiting) = instance.method_by_string_name(method)?;
                 Some((method, is_awaiting, instance.caller()))
             })
         };
@@ -989,8 +992,8 @@ unsafe extern "C" fn call(
             unsafe { std::slice::from_raw_parts(args.cast::<&Variant>(), count as usize) }
         };
         // A method that may wait runs in a fiber of its own, which the signal
-        // it waits for resumes; Godot gets nil while it waits, as it gets a
-        // GDScript coroutine's state.
+        // it waits for resumes; while it waits, Godot gets a signal emitted
+        // once it ends, as it gets a GDScript coroutine's state.
         let answered = if is_awaiting {
             let name = StringName::from(&*method).to_variant();
             let awaited: SmallVec<[&Variant; 4]> =
@@ -1037,8 +1040,7 @@ unsafe fn find_caller(
     unsafe {
         borrow_instance(data, |instance| {
             let may_run = !instance.is_recorded() || realm::is_inside();
-            (may_run && instance.method_name_by_string_name(method).is_some())
-                .then(|| instance.caller())
+            (may_run && instance.method_by_string_name(method).is_some()).then(|| instance.caller())
         })
     }
 }
@@ -1149,7 +1151,7 @@ unsafe extern "C" fn notification(
         let caller = unsafe {
             borrow_instance(data, |instance| {
                 instance
-                    .method_name_by_string_name(&NOTIFICATION)
+                    .method_by_string_name(&NOTIFICATION)
                     .map(|_| instance.caller())
             })
         };
