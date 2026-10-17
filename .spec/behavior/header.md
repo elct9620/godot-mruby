@@ -197,3 +197,11 @@ How a file's header is read from its source without running it: the constants it
 | Given | a file whose class body writes `private def area` and `private attr_reader :size` |
 | When | its header is read |
 | Then | the header holds `area` among the class's methods and says the class has methods its source does not name |
+
+## `RH-024` `abstract` judges each name as Ruby evaluates the call
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose class body writes `def x` before `abstract def self.x`, `abstract :y, def self.y`, and `abstract :z` after a `class << self` defining `z` |
+| When | its header is read |
+| Then | the header marks only `x` abstract |

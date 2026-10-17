@@ -92,14 +92,14 @@ module Godot
       # Marks the class as one never made, or each method named as one a
       # class extending it writes, as GDScript's `@abstract func` is: called,
       # it raises. Answers what it is given, so `abstract def` reads as one;
-      # a name only `def self.` defines in the class is left as it is, as the
-      # header, which reads this class's source alone, leaves it.
+      # a name only the class itself defines on `self` is left as it is, as
+      # the header, which reads this class's source alone, leaves it.
       def abstract(*methods)
         return @abstract = true if methods.empty?
 
-        own = instance_methods(false) + private_instance_methods(false)
+        own_methods = instance_methods(false) + private_instance_methods(false)
         methods.each do |method|
-          next if !own.include?(method.to_sym) && singleton_methods(false).include?(method.to_sym)
+          next if !own_methods.include?(method.to_sym) && singleton_methods(false).include?(method.to_sym)
 
           define_method(method) do |*|
             raise NotImplementedError, %(Cannot call the parent class' abstract function "#{method}()" because it hasn't been defined.)

@@ -70,4 +70,12 @@ class ClassBodyTest < Minitest::Test
 
     assert_equal [0, 1], [Unit::EngineClasses::Scroll.count, quill.count]
   end
+
+  # @behavior RG-058
+  def test_abstract_judges_each_name_as_ruby_evaluates_the_call
+    crest = autofree(Unit::EngineClasses::Crest.new)
+
+    assert_raises(NotImplementedError) { crest.x }
+    assert_equal [false, false], %i[y z].map { |name| crest.respond_to?(name) }
+  end
 end

@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use godot::builtin::{GString, StringName, VarArray, VarDictionary, Variant, VariantType};
 use godot::meta::ToGodot;
-use ruby_prism::{CallNode, DefNode, Integer, Node, NodeList, Visit};
+use ruby_prism::{CallNode, DefNode, Integer, Node, NodeList, SingletonClassNode, Visit};
 
 use crate::hint::Hint;
 use crate::realm::{self, Roots};
@@ -52,6 +52,9 @@ pub struct Header {
     is_abstract: bool,
     abstract_methods: Vec<String>,
     has_methods_without_def: bool,
+    // The methods `class << self` defines, which answer no Godot question
+    // but tell `abstract` a name is the class's own.
+    singleton_class_methods: Vec<String>,
     is_parsed: bool,
     icon: Option<String>,
 }
@@ -265,7 +268,23 @@ impl Header {
                 self.read_call(&call);
             } else if node.as_alias_method_node().is_some() {
                 self.has_methods_without_def = true;
+            } else if let Some(singleton) = node.as_singleton_class_node() {
+                self.read_singleton_class(&singleton);
             }
+        }
+    }
+
+    // The methods a `class << self` written in the class body defines.
+    fn read_singleton_class(&mut self, singleton: &SingletonClassNode) {
+        if singleton.expression().as_self_node().is_none() {
+            return;
+        }
+        let Some(body) = singleton.body().and_then(|body| body.as_statements_node()) else {
+            return;
+        };
+        for def in body.body().iter().filter_map(|node| node.as_def_node()) {
+            self.singleton_class_methods
+                .push(decode_text(def.name().as_slice()));
         }
     }
 
@@ -287,10 +306,13 @@ impl Header {
     }
 
     // Marks `name` abstract and takes it among the class's methods, as the
-    // class has it once `abstract` defines it at `offset`; a name only `def
-    // self.` defines stays the class's own, as `abstract` leaves it.
+    // class has it once `abstract` defines it at `offset`; a name only the
+    // class itself defines, by `def self.` or in `class << self`, stays the
+    // class's own, as `abstract` leaves it.
     fn mark_abstract(&mut self, name: String, offset: usize) {
-        if self.class_methods.contains(&name) && !self.methods.contains_key(&name) {
+        let is_on_class =
+            self.class_methods.contains(&name) || self.singleton_class_methods.contains(&name);
+        if is_on_class && !self.methods.contains_key(&name) {
             return;
         }
         if !self.abstract_methods.contains(&name) {
@@ -323,18 +345,24 @@ impl Header {
             }
             (b"tool", []) => self.is_tool = true,
             (b"abstract", []) => self.is_abstract = true,
+            // Ruby runs every argument before `abstract` is called, and a
+            // `def` answers its name as a symbol would, so each `def` is
+            // read before any name is marked.
             (b"abstract", methods) => {
+                for def in methods.iter().filter_map(Node::as_def_node) {
+                    self.read_method(&def);
+                }
                 for method in methods {
-                    if let Some(def) = method.as_def_node() {
-                        self.read_method(&def);
-                        if def.receiver().is_none() {
-                            self.mark_abstract(decode_text(def.name().as_slice()), offset);
-                        }
+                    let name = if let Some(def) = method.as_def_node() {
+                        def.name().as_slice().to_vec()
                     } else if let Some(name) = method.as_symbol_node() {
-                        self.mark_abstract(decode_text(name.unescaped()), offset);
+                        name.unescaped().to_vec()
                     } else if let Some(name) = method.as_string_node() {
-                        self.mark_abstract(decode_text(name.unescaped()), offset);
-                    }
+                        name.unescaped().to_vec()
+                    } else {
+                        continue;
+                    };
+                    self.mark_abstract(decode_text(&name), offset);
                 }
             }
             (b"icon", [path]) => {
@@ -952,6 +980,22 @@ mod tests {
         assert_eq!(
             (header.has_method("area"), header.has_methods_without_def()),
             (true, true)
+        );
+    }
+
+    // @behavior RH-024
+    #[test]
+    fn abstract_judges_each_name_as_ruby_evaluates_the_call() {
+        let source = "class Shape < Godot::Node2D\n  abstract\n\n  def x\n  end\n  abstract def self.x\n  end\n\n  abstract :y, def self.y\n  end\n\n  class << self\n    def z\n    end\n  end\n  abstract :z\nend\n";
+
+        let header = Header::from_source("res://shape.rb", source, &Roots::default());
+
+        assert_eq!(
+            (header.abstract_methods(), header.class_methods()),
+            (
+                ["x".to_owned()].as_slice(),
+                ["x".to_owned(), "y".to_owned()].as_slice()
+            )
         );
     }
 

@@ -476,3 +476,11 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | an abstract class extending it whose body writes `def self.count` and `abstract :count` |
 | When | Ruby calls `count` on an object of a class extending the second |
 | Then | the first class's `count` answers |
+
+## `RG-058` `abstract` judges each name as Ruby evaluates the call
+
+| Step | Statement |
+| --- | --- |
+| Given | an abstract class writing `def x` before `abstract def self.x`, `abstract :y, def self.y`, and `abstract :z` after a `class << self` defining `z` |
+| When | Ruby calls `x`, `y` and `z` on an object of a class extending it |
+| Then | `x` raises `NotImplementedError`, and the object has neither `y` nor `z` |
