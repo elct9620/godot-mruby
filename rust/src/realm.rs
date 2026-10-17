@@ -1073,6 +1073,7 @@ mod tests {
     use std::thread;
     use std::time::Duration;
 
+    use super::index::Silence;
     use super::*;
 
     // The game's realm is one for the whole process, so its tests take turns.
@@ -1238,14 +1239,6 @@ mod tests {
             .iter()
             .map(|frame| format!("{}:{}:{}", frame.file, frame.line, frame.function))
             .collect()
-    }
-
-    struct Silence;
-
-    impl Log for Silence {
-        fn print_line(&self, _text: &str) {}
-        fn print(&self, _text: &str) {}
-        fn record(&self, _level: Level, _at: Option<&Location>, _text: &str) {}
     }
 
     // A fresh game's realm holding a Thing, and the key it holds it for.

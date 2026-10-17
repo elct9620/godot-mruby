@@ -1,8 +1,8 @@
 //! The values that cross between the engine and Ruby, either way. Ruby's
-//! own data is copied into the engine, whole or not at all, and one nested
-//! deeper than the engine's own recursive operations go crosses as nothing;
-//! the engine's containers and objects reach Ruby as the very ones the
-//! engine holds.
+//! own data is copied into the engine, whole or not at all: one nested
+//! deeper than the engine's own recursive operations go raises, and the
+//! engine is given nothing. The engine's containers and objects reach Ruby
+//! as the very ones the engine holds.
 
 use beni::{
     Error, FromValue, IntoValue, Mrb, Proc, Qfalse, Qtrue, RArray, RHash, RString, ReprValue,

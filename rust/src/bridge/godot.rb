@@ -75,8 +75,8 @@ module Godot
     # What a class extending an engine class calls in its body. Godot reads
     # `tool` and `icon` from the file's source, so they do nothing as the
     # body runs; `abstract` marks only the class calling it, as Active
-    # Record's `abstract_class` does; `signal` and `export` are taken by the
-    # realm, which publishes them for Godot once the file has run.
+    # Record's `abstract_class` does; `signal`, `rpc` and `export` are taken
+    # by the realm, which publishes them for Godot once the file has run.
     class << self
       def tool; end
 

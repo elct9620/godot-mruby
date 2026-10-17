@@ -335,8 +335,9 @@ fn add_last_name(
     }
 }
 
-// A log for an index read outside a realm, whose warnings the realm gives.
-struct Silence;
+// A log that drops every word, for an index read outside a realm, whose
+// warnings the realm gives.
+pub(super) struct Silence;
 
 impl Log for Silence {
     fn print_line(&self, _text: &str) {}

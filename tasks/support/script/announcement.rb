@@ -10,8 +10,8 @@ module Godot
     # of. Part of Script.verify!.
     module Announcement
       # The class list the editor writes as it scans the project, and the entry
-      # it lists boss.rb by: its base announced from grunt.rb, and its icon from
-      # beside the file.
+      # it lists boss.rb by: its base announced from grunt.rb, and the icon path
+      # its header names, resolved beside the file.
       CLASS_LIST = File.join(".godot", "global_script_class_cache.cfg")
       BOSS_ENTRY = [
         '"base": &"Grunt"', '"class": &"Boss"', '"icon": "res://integration/script/inheritance/boss.svg"'
