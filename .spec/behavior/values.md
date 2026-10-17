@@ -338,3 +338,11 @@ How a value crosses between Ruby and the engine, either way. Ruby's own data is 
 | Given | a GDScript object holding a packed array, which its method answers |
 | When | Ruby takes the packed array through the method, `get` and `call`, and pushes onto each |
 | Then | the object's packed array holds every element pushed, as GDScript shares a packed array it passes |
+
+## `RV-042` Ruby's container equals an engine container of equal elements
+
+| Step | Statement |
+| --- | --- |
+| Given | an Array and a `Godot::Array` of equal elements, and a Hash and a `Godot::Dictionary` of equal entries |
+| When | Ruby compares its own container with the engine's by `==` |
+| Then | each is equal, as CRuby's asks an object answering `to_ary` or `to_hash` |

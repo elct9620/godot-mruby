@@ -860,6 +860,26 @@ module Godot
     __define_engine_names__
   end
 
+  # Ruby's Array and Hash, compared with an engine container, ask the engine's
+  # container, as CRuby's ask any object answering to_ary or to_hash.
+  module ArrayEquality
+    def ==(other)
+      return super if other.is_a?(::Array) || !other.respond_to?(:to_ary)
+
+      other == self
+    end
+  end
+  ::Array.prepend(ArrayEquality)
+
+  module HashEquality
+    def ==(other)
+      return super if other.is_a?(::Hash) || !other.respond_to?(:to_hash)
+
+      other == self
+    end
+  end
+  ::Hash.prepend(HashEquality)
+
   # What true and false are, as a class names a type, since Ruby has no class
   # of both; a signal's parameter of it is a bool.
   module Bool

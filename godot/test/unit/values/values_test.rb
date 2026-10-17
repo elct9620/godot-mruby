@@ -151,6 +151,16 @@ class ValuesTest < Minitest::Test
     assert_operator table, :==, { name: :hero, "level" => [1] }
   end
 
+  # @behavior RV-042
+  def test_rubys_container_equals_an_engine_container_of_equal_elements
+    list = Godot::Array.new([1, [2]])
+    table = Godot::Dictionary.new({ "name" => :hero })
+
+    assert_operator [1, [2]], :==, list
+    assert_operator({ "name" => :hero }, :==, table)
+    refute_operator [1], :==, list
+  end
+
   # @behavior RV-040
   def test_a_container_answers_rubys_names_as_ruby_and_the_engines_others_as_the_engine
     list = Godot::Array.new([1, 2])
