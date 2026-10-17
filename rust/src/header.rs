@@ -13,6 +13,18 @@ use crate::snapshot::{
     self, Export, Heading, Member, MethodCalls, Parameter, Property, Rpc, Signal,
 };
 
+// The calls in a class body that define methods the source does not name
+// with a `def`.
+const METHOD_MAKERS: [&[u8]; 7] = [
+    b"attr_reader",
+    b"attr_writer",
+    b"attr_accessor",
+    b"alias_method",
+    b"define_method",
+    b"include",
+    b"prepend",
+];
+
 /// A file's header: the constants its `module` and `class` statements write,
 /// the name the class its path names is written with, the superclass written
 /// on it, the names of the methods it defines on its instances and on `self`,
@@ -38,6 +50,7 @@ pub struct Header {
     is_tool: bool,
     is_abstract: bool,
     abstract_methods: Vec<String>,
+    has_methods_without_def: bool,
     is_parsed: bool,
     icon: Option<String>,
 }
@@ -227,6 +240,13 @@ impl Header {
         &self.abstract_methods
     }
 
+    /// Whether the class body defines methods other than by `def`, as
+    /// `attr_reader`, `alias_method` or `include` do, so the source does not
+    /// name every method the class has.
+    pub fn has_methods_without_def(&self) -> bool {
+        self.has_methods_without_def
+    }
+
     /// The icon's path from the project's root, as the string `icon` is
     /// called with names it.
     pub fn icon(&self) -> Option<&str> {
@@ -242,6 +262,8 @@ impl Header {
                 self.read_method(&def);
             } else if let Some(call) = node.as_call_node() {
                 self.read_call(&call);
+            } else if node.as_alias_method_node().is_some() {
+                self.has_methods_without_def = true;
             }
         }
     }
@@ -263,13 +285,19 @@ impl Header {
         }
     }
 
-    fn mark_abstract(&mut self, name: String) {
+    // Marks `name` abstract and takes it among the class's methods, as the
+    // class has it once `abstract` defines it at `offset`.
+    fn mark_abstract(&mut self, name: String, offset: usize) {
         if !self.abstract_methods.contains(&name) {
-            self.abstract_methods.push(name);
+            self.abstract_methods.push(name.clone());
         }
+        self.methods.entry(name).or_insert(offset);
     }
 
     fn read_call(&mut self, call: &CallNode) {
+        if call.receiver().is_none() && METHOD_MAKERS.contains(&call.name().as_slice()) {
+            self.has_methods_without_def = true;
+        }
         if call.receiver().is_some() || call.block().is_some() {
             return;
         }
@@ -281,13 +309,17 @@ impl Header {
         match (call.name().as_slice(), arguments.as_slice()) {
             (b"tool", []) => self.is_tool = true,
             (b"abstract", []) => self.is_abstract = true,
-            (b"abstract", marked) => {
-                for node in marked {
-                    if let Some(def) = node.as_def_node() {
+            (b"abstract", methods) => {
+                for method in methods {
+                    if let Some(def) = method.as_def_node() {
                         self.read_method(&def);
-                        self.mark_abstract(decode_text(def.name().as_slice()));
-                    } else if let Some(name) = node.as_symbol_node() {
-                        self.mark_abstract(decode_text(name.unescaped()));
+                        if def.receiver().is_none() {
+                            self.mark_abstract(decode_text(def.name().as_slice()), offset);
+                        }
+                    } else if let Some(name) = method.as_symbol_node() {
+                        self.mark_abstract(decode_text(name.unescaped()), offset);
+                    } else if let Some(name) = method.as_string_node() {
+                        self.mark_abstract(decode_text(name.unescaped()), offset);
                     }
                 }
             }
@@ -851,15 +883,39 @@ mod tests {
 
     // @behavior RH-021
     #[test]
-    fn abstract_given_a_method_marks_it_and_the_header_holds_the_method() {
-        let source = "class Shape < Godot::Node2D\n  abstract\n\n  abstract def draw\n  end\n\n  abstract :area\nend\n";
+    fn abstract_given_methods_marks_them_and_the_header_holds_them() {
+        let source = "class Shape < Godot::Node2D\n  abstract\n\n  abstract def draw\n  end\n\n  abstract :area, \"edges\"\n  abstract def self.count\n  end\nend\n";
 
         let header = Header::from_source("res://shape.rb", source, &Roots::default());
 
         assert_eq!(
-            (header.has_method("draw"), header.abstract_methods()),
-            (true, ["draw".to_owned(), "area".to_owned()].as_slice())
+            (
+                header.methods().collect::<Vec<_>>(),
+                header.abstract_methods()
+            ),
+            (
+                vec!["area", "draw", "edges"],
+                ["draw".to_owned(), "area".to_owned(), "edges".to_owned()].as_slice()
+            )
         );
+    }
+
+    // @behavior RH-022
+    #[test]
+    fn a_body_writing_methods_without_def_has_methods_the_header_cannot_name() {
+        let sources = [
+            "class Circle < Shape\n  attr_reader :area\nend\n",
+            "class Circle < Shape\n  alias area size\nend\n",
+            "class Circle < Shape\n  define_method(:area) { 1 }\nend\n",
+            "class Circle < Shape\n  include Round\nend\n",
+        ];
+
+        let unnamed = sources.map(|source| {
+            Header::from_source("res://circle.rb", source, &Roots::default())
+                .has_methods_without_def()
+        });
+
+        assert_eq!(unnamed, [true; 4]);
     }
 
     // @behavior RH-010

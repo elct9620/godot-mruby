@@ -174,10 +174,19 @@ How a file's header is read from its source without running it: the constants it
 | When | its header is read |
 | Then | the header carries that path, simplified, as the class's icon |
 
-## `RH-021` `abstract` given a method marks it, and the header holds the method
+## `RH-021` `abstract` given methods marks them, and the header holds them
 
 | Step | Statement |
 | --- | --- |
-| Given | a file whose class body writes `abstract def draw` and `abstract :area` |
+| Given | a file whose class body writes `abstract def draw`, `abstract :area, "edges"` and `abstract def self.count` |
 | When | its header is read |
-| Then | the header holds `draw` among the class's methods and marks `draw` and `area` abstract |
+| Then | the header holds `draw`, `area` and `edges` among the class's methods, marked abstract, and `count` only among the methods on the class itself |
+
+## `RH-022` A class body writing methods without `def` has methods the header cannot name
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose class body calls `attr_reader`, `alias`, `define_method` or `include` |
+| When | its header is read |
+| Then | the header says the class has methods its source does not name |
+

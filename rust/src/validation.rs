@@ -160,7 +160,12 @@ fn describe_abstract_refusal<'a>(
             "Class \"{name}\" is not abstract but contains abstract methods. Mark the class as \"@abstract\" or remove \"@abstract\" from all methods in this class."
         ));
     }
-    let mut implemented: Vec<&str> = header.methods().collect();
+    // A method the source does not name may be the one an abstract class
+    // leaves, so only what every class names is checked.
+    if header.has_methods_without_def() {
+        return None;
+    }
+    let mut definitions: Vec<&str> = header.methods().collect();
     for ancestor in ancestors {
         if !ancestor.is_abstract() {
             break;
@@ -168,18 +173,21 @@ fn describe_abstract_refusal<'a>(
         let abstract_methods = ancestor.abstract_methods();
         if let Some(method) = abstract_methods
             .iter()
-            .find(|method| !implemented.contains(&method.as_str()))
+            .find(|method| !definitions.contains(&method.as_str()))
         {
             return Some(format!(
                 "Class \"{name}\" must implement \"{}.{method}()\" and other inherited abstract methods or be marked as \"@abstract\".",
                 ancestor.name()
             ));
         }
-        implemented.extend(
-            ancestor
-                .methods()
-                .filter(|method| !abstract_methods.iter().any(|marked| marked == method)),
-        );
+        if ancestor.has_methods_without_def() {
+            return None;
+        }
+        definitions.extend(ancestor.methods().filter(|method| {
+            !abstract_methods
+                .iter()
+                .any(|abstract_method| abstract_method == method)
+        }));
     }
     None
 }
@@ -407,10 +415,10 @@ mod tests {
     fn a_file_naming_what_another_file_names_is_warned_of() {
         let sources = [("res://potion.rb", POTION), ("res://po_tion.rb", POTION)];
 
-        let checked = validate_source("res://potion.rb", POTION, &sources);
+        let validation = validate_source("res://potion.rb", POTION, &sources);
 
         assert_eq!(
-            warnings_by_kind(&checked, Kind::SharedConstant),
+            warnings_by_kind(&validation, Kind::SharedConstant),
             vec![(
                 1,
                 "res://potion.rb and res://po_tion.rb both name Potion, so neither loads by name"
@@ -429,10 +437,10 @@ mod tests {
             ("res://bosses/enemy.rb", NESTED_ENEMY),
         ];
 
-        let checked = validate_source("res://enemy.rb", ENEMY, &sources);
+        let validation = validate_source("res://enemy.rb", ENEMY, &sources);
 
         assert_eq!(
-            warnings_by_kind(&checked, Kind::SharedName),
+            warnings_by_kind(&validation, Kind::SharedName),
             vec![(
                 1,
                 "res://enemy.rb and res://bosses/enemy.rb define scripts named Enemy, so none is listed by that name"
@@ -448,9 +456,9 @@ mod tests {
             ("res://bosses/enemy.rb", NESTED_ENEMY),
         ];
 
-        let checked = validate_source("res://enemy.rb", ENEMY, &sources);
+        let validation = validate_source("res://enemy.rb", ENEMY, &sources);
 
-        assert_eq!(warnings_by_kind(&checked, Kind::SharedName).len(), 1);
+        assert_eq!(warnings_by_kind(&validation, Kind::SharedName).len(), 1);
     }
 
     // @behavior RK-009
@@ -459,11 +467,11 @@ mod tests {
         let source = "class Enemy < Godot::Node2D\n  def player?\n    name == \"Player\"\n  end\n\n  def boss?\n    \"Boss\" != self.name || name == :Boss || label == \"Boss\"\n  end\nend\nname == \"Top\"\n";
         let sources = [("res://enemy.rb", ENEMY)];
 
-        let checked = validate_source("res://enemy.rb", source, &sources);
+        let validation = validate_source("res://enemy.rb", source, &sources);
 
         let message = "\"name\" answers a StringName, which reaches Ruby as a Symbol, so comparing it with a String never holds; compare it with a Symbol.";
         assert_eq!(
-            warnings_by_kind(&checked, Kind::StringNameComparison),
+            warnings_by_kind(&validation, Kind::StringNameComparison),
             vec![(3, message), (7, message)]
         );
     }
@@ -475,10 +483,10 @@ mod tests {
             "class Enemy < Godot::Node2D\n  def _ready\n  end\n\n  def get_name\n  end\nend\n";
         let sources = [("res://enemy.rb", ENEMY)];
 
-        let checked = validate_source("res://enemy.rb", source, &sources);
+        let validation = validate_source("res://enemy.rb", source, &sources);
 
         assert_eq!(
-            warnings_by_kind(&checked, Kind::NativeMethodOverride),
+            warnings_by_kind(&validation, Kind::NativeMethodOverride),
             vec![(
                 5,
                 "The method \"get_name()\" overrides a method from native class \"Node\". This won't be called by the engine and may not work as expected."
@@ -494,9 +502,9 @@ mod tests {
         let source = "class Shape < Godot::Node2D\n  abstract def draw\n  end\nend\n";
         let sources = [("res://shape.rb", source)];
 
-        let checked = validate_source("res://shape.rb", source, &sources);
+        let validation = validate_source("res://shape.rb", source, &sources);
 
-        let error = checked.error.expect("an error");
+        let error = validation.error.expect("an error");
         assert_eq!(
             (error.line, error.message.as_str()),
             (
@@ -512,9 +520,9 @@ mod tests {
         let source = "class Circle < Shape\n  def draw\n  end\nend\n";
         let sources = [("res://shape.rb", SHAPE), ("res://circle.rb", source)];
 
-        let checked = validate_source("res://circle.rb", source, &sources);
+        let validation = validate_source("res://circle.rb", source, &sources);
 
-        let error = checked.error.expect("an error");
+        let error = validation.error.expect("an error");
         assert_eq!(
             (error.line, error.message.as_str()),
             (
@@ -530,8 +538,19 @@ mod tests {
         let source = "class Circle < Shape\n  def draw\n  end\n\n  def area\n  end\nend\n";
         let sources = [("res://shape.rb", SHAPE), ("res://circle.rb", source)];
 
-        let checked = validate_source("res://circle.rb", source, &sources);
+        let validation = validate_source("res://circle.rb", source, &sources);
 
-        assert!(checked.error.is_none());
+        assert!(validation.error.is_none());
+    }
+
+    // @behavior RK-013
+    #[test]
+    fn a_class_writing_an_abstract_method_without_def_is_not_refused() {
+        let source = "class Circle < Shape\n  attr_reader :area\n\n  def draw\n  end\nend\n";
+        let sources = [("res://shape.rb", SHAPE), ("res://circle.rb", source)];
+
+        let validation = validate_source("res://circle.rb", source, &sources);
+
+        assert!(validation.error.is_none());
     }
 }

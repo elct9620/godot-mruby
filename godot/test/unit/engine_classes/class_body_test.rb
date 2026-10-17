@@ -38,4 +38,14 @@ class ClassBodyTest < Minitest::Test
 
     assert_equal "hops 2", rabbit.hop(2)
   end
+
+  # @behavior RG-054
+  def test_abstract_leaves_a_method_on_the_class_itself_as_it_is
+    shape = Class.new(Godot::Node) do
+      abstract
+      abstract def self.count = 3
+    end
+
+    assert_equal [3, false], [shape.count, shape.method_defined?(:count)]
+  end
 end

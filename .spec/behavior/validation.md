@@ -110,3 +110,11 @@ How the editor learns what is wrong with a Ruby file as it is typed: the source 
 | Given | an abstract class marking two methods abstract, and a file whose class extends it writing both |
 | When | the editor checks the file |
 | Then | no error comes back |
+
+## `RK-013` A class writing an abstract method without `def` is not refused
+
+| Step | Statement |
+| --- | --- |
+| Given | an abstract class marking two methods abstract, and a file whose class extends it writing one with `def` and the other with `attr_reader` |
+| When | the editor checks the file |
+| Then | no error comes back, since the source does not name every method the class has |

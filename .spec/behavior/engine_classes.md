@@ -443,3 +443,11 @@ How Ruby names and uses the engine's classes: every class the engine registers i
 | Given | a class extending that class that writes the method |
 | When | Ruby calls the method on an object of the second class |
 | Then | the second class's method runs |
+
+## `RG-054` `abstract` leaves a method on the class itself as it is
+
+| Step | Statement |
+| --- | --- |
+| Given | a class extending an engine class whose body writes `abstract def self.count` |
+| When | Ruby calls `count` on the class |
+| Then | the class's own method runs, and its objects gain no method of that name |
