@@ -15,10 +15,10 @@ module Minitest
     # The Object methods a mock keeps, so it can still be printed and told
     # apart; a mock cannot expect them. Every other public method is removed,
     # so a call to it reaches the mock's expectations.
-    KEPT_METHODS = %i[=== class inspect instance_eval instance_variables object_id public_send send to_s].freeze
+    OWN_METHODS = %i[=== class inspect instance_eval instance_variables object_id public_send send to_s].freeze
 
     instance_methods.each do |name|
-      undef_method name unless KEPT_METHODS.include?(name) || name.to_s[0, 2] == "__"
+      undef_method name unless OWN_METHODS.include?(name) || name.to_s[0, 2] == "__"
     end
 
     def initialize

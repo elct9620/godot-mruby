@@ -11,14 +11,14 @@ pub struct Documentation {
     pub brief: String,
     /// The paragraphs after it.
     pub description: String,
-    pub methods: Vec<Entry>,
-    pub properties: Vec<Entry>,
-    pub signals: Vec<Entry>,
+    pub methods: Vec<MemberDoc>,
+    pub properties: Vec<MemberDoc>,
+    pub signals: Vec<MemberDoc>,
 }
 
 /// A member and what its comment says of it.
 #[derive(Debug, PartialEq, Eq)]
-pub struct Entry {
+pub struct MemberDoc {
     pub name: String,
     pub description: String,
 }
@@ -40,10 +40,10 @@ pub fn read_documentation(source: &str, header: &Header) -> Documentation {
     let (brief, description) = class
         .split_once("\n\n")
         .map_or((class.as_str(), ""), |(brief, rest)| (brief, rest));
-    let entries = |offsets: Vec<(&str, usize)>| {
+    let read_member_docs = |offsets: Vec<(&str, usize)>| {
         offsets
             .into_iter()
-            .map(|(name, offset)| Entry {
+            .map(|(name, offset)| MemberDoc {
                 name: name.to_owned(),
                 description: read_comment(source, offset),
             })
@@ -56,9 +56,9 @@ pub fn read_documentation(source: &str, header: &Header) -> Documentation {
     Documentation {
         brief: brief.to_owned(),
         description: description.to_owned(),
-        methods: entries(methods),
-        properties: entries(header.export_offsets().collect()),
-        signals: entries(header.signal_offsets().collect()),
+        methods: read_member_docs(methods),
+        properties: read_member_docs(header.export_offsets().collect()),
+        signals: read_member_docs(header.signal_offsets().collect()),
     }
 }
 
@@ -141,7 +141,7 @@ end
         documentation
             .methods
             .iter()
-            .map(|entry| (entry.name.as_str(), entry.description.as_str()))
+            .map(|doc| (doc.name.as_str(), doc.description.as_str()))
             .collect()
     }
 
@@ -177,7 +177,7 @@ end
         let documentation = read_boss();
         assert_eq!(
             documentation.signals,
-            [Entry {
+            [MemberDoc {
                 name: "fell".to_owned(),
                 description: "Emitted as it falls.".to_owned()
             }]

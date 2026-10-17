@@ -16,10 +16,10 @@ use smallvec::SmallVec;
 use crate::compiler;
 use crate::snapshot::{self, Heading, MethodCalls, Property, Rpc, Signal, Snapshot};
 
-mod constants;
 mod executor;
 mod extensions;
 mod index;
+mod loader;
 mod methods;
 mod print;
 mod reentrant_lock;
@@ -672,7 +672,7 @@ impl Realm {
             ));
         }
         print::define(&mrb)
-            .and_then(|()| constants::define(&mrb))
+            .and_then(|()| loader::define(&mrb))
             .and_then(|()| methods::define(&mrb))
             .map_err(|error| RubyError::from_error(&mrb, None, &error))?;
         let realm = Self { mrb };
@@ -688,7 +688,7 @@ impl Realm {
         let bookkeeping = bookkeeping(&self.mrb);
         bookkeeping.index.borrow_mut().add(
             paths,
-            |key| constants::constant_by_key(&self.mrb, key).is_some(),
+            |key| loader::constant_by_key(&self.mrb, key).is_some(),
             bookkeeping.log.as_ref(),
         );
     }
@@ -704,14 +704,14 @@ impl Realm {
             .borrow()
             .file_keys()
             .into_iter()
-            .filter(|key| constants::constant_by_key(&self.mrb, key).is_none())
+            .filter(|key| loader::constant_by_key(&self.mrb, key).is_none())
             .collect();
         self.mrb
             .init_gem::<G>()
             .map_err(|error| RubyError::from_error(&self.mrb, None, &error))?;
         let added = missing
             .into_iter()
-            .filter(|key| constants::constant_by_key(&self.mrb, key).is_some());
+            .filter(|key| loader::constant_by_key(&self.mrb, key).is_some());
         bookkeeping
             .index
             .borrow_mut()
@@ -727,8 +727,8 @@ impl Realm {
             executor::run(
                 &self.mrb,
                 path,
-                || constants::ensure_opened(&self.mrb, path),
-                |parent| constants::keep_parent(&self.mrb, path, parent),
+                || loader::ensure_opened(&self.mrb, path),
+                |parent| loader::keep_parent(&self.mrb, path, parent),
             )
             .map_err(|error| RubyError::from_error(&self.mrb, Some(path), &error))
         })
@@ -751,19 +751,19 @@ impl Realm {
                     .map_err(read)?;
             }
             let former = if ran {
-                constants::take_class_for_remake(&self.mrb, path).map_err(read)?
+                loader::take_class_for_remake(&self.mrb, path).map_err(read)?
             } else {
                 None
             };
             let run = executor::run_again(
                 &self.mrb,
                 path,
-                || constants::ensure_opened(&self.mrb, path),
-                |parent| constants::keep_parent(&self.mrb, path, parent),
+                || loader::ensure_opened(&self.mrb, path),
+                |parent| loader::keep_parent(&self.mrb, path, parent),
             );
             if let Err(error) = run {
                 if let Some(former) = former {
-                    constants::put_back(&self.mrb, former).map_err(read)?;
+                    loader::put_back(&self.mrb, former).map_err(read)?;
                 }
                 return Err(read(error));
             }
@@ -794,7 +794,7 @@ impl Realm {
             .into_iter()
             .filter(|heir| heir != path)
             .filter(|heir| {
-                constants::constant_by_key(&self.mrb, &key_by_path(&self.mrb, heir))
+                loader::constant_by_key(&self.mrb, &key_by_path(&self.mrb, heir))
                     .and_then(RClass::from_value)
                     .and_then(|heir| heir.superclass(&self.mrb))
                     .is_some_and(|superclass| superclass.as_value().is_equal(&self.mrb, class))
@@ -805,8 +805,7 @@ impl Realm {
     // The class the file at `path` defined, if it answers `message`, even
     // privately.
     fn find_respondent(&self, path: &str, message: &CStr) -> Result<Option<Value>, Error> {
-        let Some(class) = constants::constant_by_key(&self.mrb, &key_by_path(&self.mrb, path))
-        else {
+        let Some(class) = loader::constant_by_key(&self.mrb, &key_by_path(&self.mrb, path)) else {
             return Ok(None);
         };
         let name = Symbol::new(&self.mrb, message)?.into_value(&self.mrb);
@@ -887,8 +886,7 @@ impl Realm {
         if registry.has_object(&self.mrb, key).map_err(read)? {
             return Ok(Build::Existing);
         }
-        let Some(class) = constants::constant_by_key(&self.mrb, &key_by_path(&self.mrb, path))
-        else {
+        let Some(class) = loader::constant_by_key(&self.mrb, &key_by_path(&self.mrb, path)) else {
             if executor::is_running(&self.mrb, file) {
                 return Ok(Build::Pending);
             }

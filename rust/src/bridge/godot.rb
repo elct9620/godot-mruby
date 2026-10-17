@@ -69,7 +69,7 @@ module Godot
 
     # What a typed container's property holds for each object: a copy of
     # the declared container, typed as the engine types it.
-    class TypedContainer
+    class ContainerDefault
       attr_reader :value, :types
 
       def initialize(value, types)
@@ -284,7 +284,7 @@ module Godot
       def __copy__(value, object)
         case value
         when ButtonMethod then object.method(value.name)
-        when TypedContainer then __type__(__copy__(value.value, object), value.types)
+        when ContainerDefault then __type__(__copy__(value.value, object), value.types)
         when ::Array, ::Hash then __hold__(value)
         when ::String, Godot::Dictionary, Godot::Value::Sequence then value.dup
         else value
@@ -327,7 +327,7 @@ module Godot
       # container's types beside it, or a tool button's method.
       def __read_default__(default, hint, types)
         return ButtonMethod.new(default) if hint == "tool_button"
-        return TypedContainer.new(default, types) unless types.nil?
+        return ContainerDefault.new(default, types) unless types.nil?
 
         default
       end
@@ -564,15 +564,15 @@ module Godot
       inspected.pop if inspected.last.equal?(self)
     end
 
-    # Waits until `awaited` is emitted, in a method Godot runs where it may
+    # Waits until `target` is emitted, in a method Godot runs where it may
     # wait, and answers what it was emitted with: nil, its one value, or its
-    # values in an array, as GDScript's `await` does. `awaited` is a
+    # values in an array, as GDScript's `await` does. `target` is a
     # Godot::Signal, an object followed by the name of its signal, or a
     # coroutine's state, whose end is awaited; any other value is answered
     # at once.
-    def await(awaited, name = nil)
-      awaited = Godot::Signal.new(awaited, name) unless name.nil?
-      Coroutine.__send__(:wait_for, awaited)
+    def await(target, name = nil)
+      target = Godot::Signal.new(target, name) unless name.nil?
+      Coroutine.__send__(:wait_for, target)
     end
 
     private
@@ -627,14 +627,14 @@ module Godot
         @running.delete(fiber)
       end
 
-      # Yields the fiber running now until `awaited` is emitted, answering
+      # Yields the fiber running now until `target` is emitted, answering
       # what it was emitted with; a value that is no signal is answered at
       # once. Only a fiber `run` made yields: any other Ruby is Godot's to
       # wait for. A yield mruby refuses, from under a method of its C, leaves
       # no connection behind.
-      def wait_for(awaited)
-        signal = read_signal(awaited)
-        return awaited if signal.nil?
+      def wait_for(target)
+        signal = read_signal(target)
+        return target if signal.nil?
 
         fiber = Fiber.current
         ending = @running[fiber]
@@ -656,13 +656,13 @@ module Godot
         end
       end
 
-      # The signal awaiting `awaited` waits for: itself, or the end of a
+      # The signal awaiting `target` waits for: itself, or the end of a
       # coroutine's state; none for any other value.
-      def read_signal(awaited)
-        return awaited if awaited.is_a?(Godot::Signal)
-        return unless awaited.is_a?(Godot::Object) && awaited.is_class("GDScriptFunctionState")
+      def read_signal(target)
+        return target if target.is_a?(Godot::Signal)
+        return unless target.is_a?(Godot::Object) && target.is_class("GDScriptFunctionState")
 
-        Godot::Signal.new(awaited, :completed)
+        Godot::Signal.new(target, :completed)
       end
     end
   end
@@ -676,7 +676,7 @@ module Godot
     # wherever it is held, so a change to an element is made in it rather
     # than in a copy. A packed array a property answers is a copy, so it is
     # written back as a value is.
-    module SharedContainer
+    module Reference
     end
 
     class << self
@@ -734,7 +734,7 @@ module Godot
       # Whether `link` is a value type's value, which is copied wherever it
       # is held, rather than anything shared in place.
       def __copied__?(link)
-        Value === link && !(SharedContainer === link)
+        Value === link && !(Reference === link)
       end
 
       # The values a multiple assignment takes from `values`, as Ruby splats
@@ -977,7 +977,7 @@ module Godot
 
   # The engine's Array; Godot::Value::Sequence says how it answers.
   class Array < Value
-    include SharedContainer
+    include Reference
     include Sequence
 
     __define_engine_names__
@@ -996,7 +996,7 @@ module Godot
   # and those Enumerable gives, behave as Ruby's; the engine's other names
   # behave as the engine's.
   class Dictionary < Value
-    include SharedContainer
+    include Reference
     include Enumerable
 
     def each(&block)

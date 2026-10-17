@@ -1002,9 +1002,9 @@ unsafe extern "C" fn call(
         // once it ends, as it gets a GDScript coroutine's state.
         let answered = if is_awaiting {
             let name = StringName::from(&*method).to_variant();
-            let awaited: SmallVec<[&Variant; 4]> =
+            let arguments: SmallVec<[&Variant; 4]> =
                 std::iter::once(&name).chain(args.iter().copied()).collect();
-            caller.send("__call_awaiting__", &awaited)
+            caller.send("__call_awaiting__", &arguments)
         } else {
             caller.send(&method, args)
         };

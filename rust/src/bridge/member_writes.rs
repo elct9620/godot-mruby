@@ -388,7 +388,7 @@ fn emit_assign(
             let variable = part(range);
             if let (true, Step::Member(member)) = (target.path.is_empty(), &target.step) {
                 format!(
-                    "(__godot_value__ = {value}; ::Godot::Value === {variable} && !(::Godot::Value::SharedContainer === {variable}) ? ({variable} = {variable}.with({member}: __godot_value__); __godot_value__) : ({variable}.{member} = __godot_value__))"
+                    "(__godot_value__ = {value}; ::Godot::Value === {variable} && !(::Godot::Value::Reference === {variable}) ? ({variable} = {variable}.with({member}: __godot_value__); __godot_value__) : ({variable}.{member} = __godot_value__))"
                 )
             } else {
                 format!(

@@ -641,8 +641,8 @@ impl IScriptExtension for RubyScript {
         let documentation =
             documentation::read_documentation(&self.source.to_string(), &self.header);
         let (name, inherits) = self.read_doc_names();
-        let describe = |entries: &[documentation::Entry]| -> Array<AnyDictionary> {
-            entries.iter().map(describe_entry).collect()
+        let describe = |docs: &[documentation::MemberDoc]| -> Array<AnyDictionary> {
+            docs.iter().map(describe_member_doc).collect()
         };
         let class = vdict! {
             "name" => name,
@@ -796,10 +796,10 @@ impl IScriptExtension for RubyScript {
 }
 
 // A member of a class's page in the editor's help.
-fn describe_entry(entry: &documentation::Entry) -> AnyDictionary {
+fn describe_member_doc(doc: &documentation::MemberDoc) -> AnyDictionary {
     vdict! {
-        "name" => entry.name.as_str(),
-        "description" => entry.description.as_str(),
+        "name" => doc.name.as_str(),
+        "description" => doc.description.as_str(),
     }
     .upcast_any_dictionary()
 }

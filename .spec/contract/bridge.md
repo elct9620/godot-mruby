@@ -75,7 +75,7 @@ The way a Ruby method waits for a signal or a coroutine as GDScript's `await` do
 ```ruby
 module Godot
   class Object
-    def await(awaited, name = nil)
+    def await(target, name = nil)
     end
   end
 end

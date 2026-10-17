@@ -1,4 +1,4 @@
-//! Ruby's side of loading by name. A module prepended to `Module` asks the
+//! The loader, Ruby's side of loading by name. A module prepended to `Module` asks the
 //! class index from `const_missing`, and from `const_added` tells the realm
 //! what a running file creates and loads the constants the new one would
 //! hide, or, for the file's own class, those written inside it; every other
@@ -16,11 +16,7 @@ pub(super) fn define(mrb: &Mrb) -> Result<(), Error> {
     let module = mrb.class_get(c"Module")?;
     module.define_private_method(mrb, c"__load_by_name__", method!(load_by_name, 1))?;
     module.define_private_method(mrb, c"__record_constant__", method!(record_constant, 1))?;
-    compile(
-        mrb,
-        c"godot_mruby/constants.rb",
-        include_str!("constants.rb"),
-    )
+    compile(mrb, c"godot_mruby/loader.rb", include_str!("loader.rb"))
 }
 
 // Module#__load_by_name__(name): the constant in a one-element array, or nil

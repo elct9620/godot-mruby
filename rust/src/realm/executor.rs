@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
 
-use super::constants::{self, Scope};
+use super::loader::{self, Scope};
 use super::{
     bookkeeping, compile, file_by_constant, join_inner_path, key_by_path, methods, normalize,
 };
@@ -345,7 +345,7 @@ fn inner_script_paths(mrb: &Mrb, frame: &Frame) -> Vec<String> {
             Some(join_inner_path(&frame.path, &names))
         })
         .filter(|path| {
-            constants::constant_by_key(mrb, &key_by_path(mrb, path))
+            loader::constant_by_key(mrb, &key_by_path(mrb, path))
                 .and_then(RClass::from_value)
                 .is_some()
         })

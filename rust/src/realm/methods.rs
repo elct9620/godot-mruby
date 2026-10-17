@@ -12,7 +12,7 @@ use beni::{
 };
 
 use super::executor::{Declared, SourceNames};
-use super::{bookkeeping, compile, constants, executor, key_by_path};
+use super::{bookkeeping, compile, executor, key_by_path, loader};
 use crate::snapshot::{self, Class};
 
 pub(super) fn define(mrb: &Mrb) -> Result<(), Error> {
@@ -28,7 +28,7 @@ pub(super) fn define(mrb: &Mrb) -> Result<(), Error> {
 /// is noted as a taker of each of those, so a method added to one later is
 /// read again. None when the file named no class.
 pub(super) fn methods_by_path(mrb: &Mrb, path: &str) -> Vec<String> {
-    let Some(class) = constants::constant_by_key(mrb, &key_by_path(mrb, path)) else {
+    let Some(class) = loader::constant_by_key(mrb, &key_by_path(mrb, path)) else {
         return Vec::new();
     };
     let Some(taken) = class
