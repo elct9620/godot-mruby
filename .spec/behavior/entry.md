@@ -166,3 +166,11 @@ How a thread goes into the game's realm: one thread at a time is inside, and a t
 | Given | a thread inside the game's realm past the patience its waits are watched with |
 | When | another thread enters the realm |
 | Then | the log warns once that it has waited, naming the thread inside, and it enters once that thread leaves |
+
+## `RE-018` A node in a sub-thread process group runs its Ruby off the main thread
+
+| Step | Statement |
+| --- | --- |
+| Given | two node scripts' nodes, each in a sub-thread process group of its own |
+| When | Godot processes them for some frames |
+| Then | each node's `_process` runs every frame, on a thread other than the main one |
