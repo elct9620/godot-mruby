@@ -11,11 +11,16 @@ use godot::meta::ToGodot;
 use super::object::to_arguments;
 use super::refusal::{describe_count, make_argument_error, make_type_error};
 use super::value::RubyCrossing;
+use crate::{log, realm};
 
 type Utility = fn(&[Variant]) -> Result<Variant, String>;
 
 // Any number of arguments.
 const ANY_COUNT: usize = usize::MAX;
+
+// The functions that report to Godot's log, which carry the backtrace Ruby
+// called them through, as GDScript's do.
+const REPORTS: [&str; 2] = ["push_error", "push_warning"];
 
 /// The utility functions under `Godot`: each name, how many arguments it
 /// takes, and the engine function it calls.
@@ -221,7 +226,12 @@ fn call_row(
         return Err(make_argument_error(mrb, &describe_count(args.len(), arity)));
     }
     let args = to_arguments(mrb, super::data(mrb), args)?;
-    let answer = utility(&args).map_err(|reason| {
+    let answer = if REPORTS.contains(name) {
+        log::write_with_backtrace(&realm::collect_backtrace(mrb), || utility(&args))
+    } else {
+        utility(&args)
+    };
+    let answer = answer.map_err(|reason| {
         make_type_error(
             mrb,
             &format!("Invalid type in utility function '{name}'. {reason}"),

@@ -56,20 +56,22 @@ pub fn name_thread() -> String {
 }
 
 thread_local! {
-    // The backtrace of the exception this thread is writing. It holds no
-    // Godot value, since a thread's locals outlive the engine.
+    // The backtrace of what this thread is reporting. It holds no Godot
+    // value, since a thread's locals outlive the engine.
     static BACKTRACE: RefCell<Vec<Location>> = const { RefCell::new(Vec::new()) };
 }
 
-// Runs `write` while `backtrace` is the one this thread is writing.
-fn write_with_backtrace(backtrace: &[Location], write: impl FnOnce()) {
-    let written = BACKTRACE.replace(backtrace.to_vec());
-    write();
-    BACKTRACE.set(written);
+/// Runs `write` while `backtrace` is the one this thread is reporting, so
+/// what Godot prints in it carries that backtrace.
+pub fn write_with_backtrace<R>(backtrace: &[Location], write: impl FnOnce() -> R) -> R {
+    let outer = BACKTRACE.replace(backtrace.to_vec());
+    let answer = write();
+    BACKTRACE.set(outer);
+    answer
 }
 
-/// The backtrace of the exception this thread is writing, which the
-/// language answers as its stack, since Godot asks for it as it prints.
+/// The backtrace of what this thread is reporting, which the language
+/// answers as its stack, since Godot asks for it as it prints.
 pub fn current_backtrace() -> Vec<Location> {
     BACKTRACE.with_borrow(Clone::clone)
 }

@@ -82,3 +82,19 @@ How what mruby has to say about a Ruby file reaches Godot: through the log, at t
 | Given | a file assigning members of members, written across lines |
 | When | the file is compiled, its member writes rewritten |
 | Then | every line keeps its number, so a report names the line the file writes |
+
+## `RR-009` An error Ruby pushes carries the backtrace Ruby called through
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose callback calls a method that calls `Godot.push_error` |
+| When | the scene runs |
+| Then | the log follows the error with its Ruby backtrace, most recent call first, each frame at its method, file and line |
+
+## `RR-010` A warning Ruby pushes carries the backtrace Ruby called through
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose callback calls a method that calls `Godot.push_warning` |
+| When | the scene runs |
+| Then | the log follows the warning with its Ruby backtrace, most recent call first, each frame at its method, file and line |

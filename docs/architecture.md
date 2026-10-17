@@ -218,10 +218,10 @@ Several layers ask the same questions, and each has one owner below them all.
 | --- | --- |
 | The project's files, kept listed | `game` |
 | Which engine classes are nodes | `game` |
-| The backtrace being written | `log` |
+| The backtrace being reported | `log` |
 | The name an export's class goes by | Godot's list of global classes |
 
-`language` answers the backtrace `log` is writing as its stack. `bridge` names the class an export takes as Godot lists it, as GDScript does. `language` checks typed source through `validation`, in a state no realm holds. It reads files as `announcement` does, so the editor never waits for the realm.
+`language` answers the backtrace `log` is reporting as its stack. `bridge` names the class an export takes as Godot lists it, as GDScript does. `language` checks typed source through `validation`, in a state no realm holds. It reads files as `announcement` does, so the editor never waits for the realm.
 
 #### 2.3.2 Declarations
 
@@ -454,6 +454,7 @@ A gem's methods run with the state, and reach the realm's bookkeeping only throu
 | `hold`, `hold_new`, `object_by_key` | an object held under a key, found again |
 | `file_by_constant` | the file the class index names |
 | `extension_data` | its own data, such as a class it found, closed with the realm |
+| `collect_backtrace` | the frames the running Ruby was called through |
 | `declare_signal`, `declare_export`, `declare_heading` | what a running class declares, published once its file has run |
 
 The line: what every realm is, output and hooks included, belongs to the realm; what only some need is a gem. The framework is specified in `.spec/contract/minitest.md` and `.spec/behavior/minitest.md`.

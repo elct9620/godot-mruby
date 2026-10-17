@@ -7,8 +7,8 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::time::Duration;
 
 use beni::{
-    Class as _, Error, FromValue, Gem, IntoValue, Module as _, Mrb, Qtrue, RClass, ReprValue,
-    Symbol, TryConvert, Value,
+    Class as _, Error, FromValue, Gem, IntoValue, Module as _, Mrb, Qtrue, RArray, RClass,
+    ReprValue, Symbol, TryConvert, Value,
 };
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
@@ -473,6 +473,23 @@ pub fn file_by_constant(mrb: &Mrb, names: &[String]) -> Option<String> {
         index::Definition::File(path) => Some(path),
         index::Definition::Namespace(_) => None,
     }
+}
+
+/// The frames the Ruby running in the realm `mrb` was called through, most
+/// recent first, as an exception raised here would carry them.
+pub fn collect_backtrace(mrb: &Mrb) -> Vec<Location> {
+    let lines: Vec<String> = mrb
+        .object_class()
+        .funcall(mrb, c"caller", &[])
+        .and_then(|lines| RArray::try_convert(lines, mrb))
+        .map(|lines| {
+            lines
+                .entries(mrb)
+                .filter_map(|line| String::try_convert(line, mrb).ok())
+                .collect()
+        })
+        .unwrap_or_default();
+    filter_frames(mrb, &lines)
 }
 
 /// Lets go of the object `key` holds at the realm's next entry or frame,
@@ -1052,14 +1069,18 @@ impl RubyError {
 const SHIPPED_DIRECTORY: &str = "godot_mruby/";
 
 // The frames of `error`'s backtrace that name a line, most recent first.
-// Under a call from Rust, the top level mruby's base frame kept from the last
-// file it ran is not one Ruby called through, so it is left out. So are the
-// frames of the Ruby the extension ships, as minitest leaves out its own, so
-// an error the extension raises is placed where the project's Ruby called
-// it; one raised with no project frame keeps them all.
 fn collect_frames(mrb: &Mrb, error: &Error) -> Vec<Location> {
-    let mut frames: Vec<Location> = error
-        .backtrace(mrb)
+    filter_frames(mrb, &error.backtrace(mrb))
+}
+
+// The frames of `backtrace` that name a line, most recent first. Under a call
+// from Rust, the top level mruby's base frame kept from the last file it ran
+// is not one Ruby called through, so it is left out. So are the frames of the
+// Ruby the extension ships, as minitest leaves out its own, so what the
+// extension reports is placed where the project's Ruby called it; a
+// backtrace with no project frame keeps them all.
+fn filter_frames(mrb: &Mrb, backtrace: &[String]) -> Vec<Location> {
+    let mut frames: Vec<Location> = backtrace
         .iter()
         .filter_map(|frame| parse_location(frame))
         .collect();

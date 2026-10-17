@@ -362,8 +362,8 @@ impl IScriptLanguageExtension for RubyLanguage {
         GString::new()
     }
 
-    // mruby 4.0 has no public API answering the stack Ruby is running, so
-    // only an exception being written has frames to answer.
+    // A virtual never runs Ruby, so the stack is what this thread is
+    // reporting: an exception being written, or an error Ruby pushes.
     fn debug_get_current_stack_info(&mut self) -> Array<AnyDictionary> {
         log::current_backtrace()
             .iter()

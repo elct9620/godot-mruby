@@ -100,7 +100,8 @@ These are what a project meets today, each with what to do about it.
 | Limit | What to do |
 |---|---|
 | An exported game ships its `.rb` files as source | keep secrets out of scripts |
-| Breakpoints and stepping are not available | trace with `print` or `push_error` |
+| Breakpoints and stepping are not available | trace with `print`, or `push_error`, which carries Ruby's backtrace |
+| An engine error inside a Ruby call carries no Ruby backtrace | find the call by the engine method the error names |
 | Ruby and the engine call into each other at most 24 deep | defer a call with `call_deferred` |
 | Completion infers no variable's type | write the name bare, or after `self.` or `Godot::` |
 | The editor's indent type is one setting for every language | set Editor Settings > Text Editor > Behavior > Indent to spaces |

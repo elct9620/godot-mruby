@@ -327,6 +327,18 @@ The file the class index of the realm an extension's method runs in names for a 
 pub fn file_by_constant(mrb: &Mrb, names: &[String]) -> Option<String> {}
 ```
 
+## `collect_backtrace`
+
+The frames the Ruby an extension's method runs in was called through, most recent first, as an exception raised there would carry them.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub fn collect_backtrace(mrb: &Mrb) -> Vec<Location> {}
+```
+
 ## `extension_data`
 
 What an extension keeps for the realm its method runs in, one value of each type, made the first time it is asked for, so what an extension remembers of a realm, such as a class it found, lives no longer than the realm.
