@@ -83,7 +83,7 @@ class ClassBodyTest < Minitest::Test
   def test_abstract_judges_a_name_by_the_class_methods_ruby_lists
     stamp = autofree(Unit::EngineClasses::Stamp.new)
 
-    %i[v r t].each { |name| assert_raises(NotImplementedError) { stamp.public_send(name) } }
-    refute stamp.respond_to?(:q)
+    %i[v r t p].each { |name| assert_raises(NotImplementedError) { stamp.public_send(name) } }
+    assert_equal [false] * 4, %i[q k u m].map { |name| stamp.respond_to?(name) }
   end
 end

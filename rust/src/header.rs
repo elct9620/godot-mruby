@@ -36,6 +36,9 @@ const METHOD_MAKERS: [&[u8]; 8] = [
 pub struct Header {
     constant_paths: Vec<Vec<String>>,
     name: String,
+    // The class's constant path from the top level, as `["Items",
+    // "Potion"]`.
+    own_path: Vec<String>,
     name_offset: usize,
     superclass: Option<Superclass>,
     methods: BTreeMap<String, usize>,
@@ -52,13 +55,17 @@ pub struct Header {
     is_abstract: bool,
     abstract_methods: Vec<String>,
     has_methods_without_def: bool,
-    // The methods `class << self` or `define_singleton_method` defines,
-    // which answer no Godot question but tell `abstract` a name is the
-    // class's own.
+    // The public methods `class << self` or `define_singleton_method`
+    // defines on the class, which answer no Godot question but tell
+    // `abstract` a name is the class's own.
     singleton_class_methods: Vec<String>,
-    // The instance methods a call such as `attr_reader` or `alias` defines,
-    // which tell `abstract` a name is the objects' as `def` would.
-    methods_by_call: Vec<String>,
+    // The class methods `private` or `protected` hides inside
+    // `class << self`, which Ruby lists apart from the class's own.
+    nonpublic_class_methods: Vec<String>,
+    // The instance methods a call such as `attr_reader`, or the `alias`
+    // keyword, defines, which tell `abstract` a name is the objects' as
+    // `def` would.
+    instance_methods_without_def: Vec<String>,
     is_parsed: bool,
     icon: Option<String>,
 }
@@ -272,7 +279,8 @@ impl Header {
                 self.read_call(&call);
             } else if let Some(alias) = node.as_alias_method_node() {
                 self.has_methods_without_def = true;
-                self.methods_by_call.extend(read_name(&alias.new_name()));
+                self.instance_methods_without_def
+                    .extend(read_name(&alias.new_name()));
             } else if let Some(singleton) = node.as_singleton_class_node() {
                 self.read_singleton_class(&singleton);
             }
@@ -299,6 +307,9 @@ impl Header {
                 }
             } else if let Some(call) = node.as_call_node() {
                 self.read_singleton_class_call(&call);
+            } else if let Some(alias) = node.as_alias_method_node() {
+                self.singleton_class_methods
+                    .extend(read_name(&alias.new_name()));
             }
         }
     }
@@ -312,7 +323,7 @@ impl Header {
         match call.receiver() {
             None => match name {
                 b"private" | b"protected" => {
-                    let private_names: Vec<String> = call
+                    let nonpublic_names: Vec<String> = call
                         .arguments()
                         .map(|arguments| {
                             arguments
@@ -323,7 +334,8 @@ impl Header {
                         })
                         .unwrap_or_default();
                     self.singleton_class_methods
-                        .retain(|method| !private_names.contains(method));
+                        .retain(|method| !nonpublic_names.contains(method));
+                    self.nonpublic_class_methods.extend(nonpublic_names);
                 }
                 b"public" => {
                     for node in call
@@ -337,6 +349,10 @@ impl Header {
                                 .push(decode_text(def.name().as_slice()));
                         } else if let Some(inner) = node.as_call_node() {
                             self.read_singleton_class_call(&inner);
+                        } else if let Some(name) = read_name(&node) {
+                            self.nonpublic_class_methods
+                                .retain(|method| *method != name);
+                            self.singleton_class_methods.push(name);
                         }
                     }
                 }
@@ -354,17 +370,18 @@ impl Header {
                 if name == b"define_singleton_method" {
                     self.singleton_class_methods.extend(read_method_names(call));
                 } else {
-                    self.methods_by_call.extend(read_method_names(call));
+                    self.instance_methods_without_def
+                        .extend(read_method_names(call));
                 }
             }
             Some(_) => {}
         }
     }
 
-    // Whether `node` is the class's own name written as a constant.
+    // Whether `node` is the class's own name written as a constant, bare or
+    // as the end of its path from the top level.
     fn is_own_name(&self, node: &Node) -> bool {
-        node.as_constant_read_node()
-            .is_some_and(|constant| decode_text(constant.name().as_slice()) == self.name)
+        read_constant_path(node).is_some_and(|(written, _)| self.own_path.ends_with(&written))
     }
 
     // A method the class body defines, on its instances or on `self`.
@@ -390,9 +407,12 @@ impl Header {
     // `define_singleton_method`, stays the class's own, as `abstract` leaves
     // it.
     fn mark_abstract(&mut self, name: String, offset: usize) {
-        let is_on_class =
-            self.class_methods.contains(&name) || self.singleton_class_methods.contains(&name);
-        if is_on_class && !self.methods.contains_key(&name) && !self.methods_by_call.contains(&name)
+        let is_on_class = (self.class_methods.contains(&name)
+            || self.singleton_class_methods.contains(&name))
+            && !self.nonpublic_class_methods.contains(&name);
+        if is_on_class
+            && !self.methods.contains_key(&name)
+            && !self.instance_methods_without_def.contains(&name)
         {
             return;
         }
@@ -408,7 +428,8 @@ impl Header {
         });
         if is_on_class && METHOD_MAKERS.contains(&call.name().as_slice()) {
             self.has_methods_without_def = true;
-            self.methods_by_call.extend(read_method_names(call));
+            self.instance_methods_without_def
+                .extend(read_method_names(call));
         }
         if is_on_class && call.name().as_slice() == b"define_singleton_method" {
             self.singleton_class_methods.extend(read_method_names(call));
@@ -529,6 +550,7 @@ impl Reader {
         if self.header.is_none() && self.is_own_constant(&names) {
             let mut header = Header {
                 name: names.last().cloned().unwrap_or_default(),
+                own_path: names.clone(),
                 name_offset: node.location().start_offset(),
                 superclass: class
                     .and_then(|class| class.superclass())
@@ -1135,13 +1157,23 @@ mod tests {
     // @behavior RH-027
     #[test]
     fn abstract_judges_a_name_by_the_class_methods_ruby_lists() {
-        let source = "class Seal < Godot::Node\n  abstract\n\n  class << self\n    def v\n    end\n    private :v\n\n    def self.r\n    end\n\n    Seal.define_singleton_method(:q) { 1 }\n  end\n\n  attr_reader :t\n\n  def self.t\n  end\n\n  abstract :v, :r, :t, :q\nend\n";
+        let source = "module Unit\n  module EngineClasses\n    class Seal < Godot::Node\n      abstract\n\n      def self.p\n      end\n\n      class << self\n        def v\n        end\n        private :v, :p\n\n        def self.r\n        end\n\n        Seal.define_singleton_method(:q) { 1 }\n        EngineClasses::Seal.define_singleton_method(:k) { 2 }\n\n        def w\n        end\n        alias u w\n\n        def m\n        end\n        private :m\n        public :m\n      end\n\n      attr_reader :t\n\n      def self.t\n      end\n\n      abstract :v, :r, :t, :q, :k, :p, :u, :m\n    end\n  end\nend\n";
 
-        let header = Header::from_source("res://seal.rb", source, &Roots::default());
+        let header = Header::from_source(
+            "res://unit/engine_classes/seal.rb",
+            source,
+            &Roots::default(),
+        );
 
         assert_eq!(
             header.abstract_methods(),
-            ["v".to_owned(), "r".to_owned(), "t".to_owned()].as_slice()
+            [
+                "v".to_owned(),
+                "r".to_owned(),
+                "t".to_owned(),
+                "p".to_owned()
+            ]
+            .as_slice()
         );
     }
 

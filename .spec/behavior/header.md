@@ -226,6 +226,6 @@ How a file's header is read from its source without running it: the constants it
 
 | Step | Statement |
 | --- | --- |
-| Given | a file whose class body writes, inside `class << self`, `def v` made `private`, `def self.r` and `Seal.define_singleton_method(:q)`, then `attr_reader :t`, `def self.t` and `abstract :v, :r, :t, :q` |
+| Given | a file whose class body writes `def self.p`, then inside `class << self` `def v`, `private :v, :p`, `def self.r`, `Seal.define_singleton_method(:q)`, `EngineClasses::Seal.define_singleton_method(:k)`, `alias u w`, and `def m` made `private` then `public`, then `attr_reader :t`, `def self.t` and `abstract :v, :r, :t, :q, :k, :p, :u, :m` |
 | When | its header is read |
-| Then | the header marks `v`, `r` and `t` abstract, and leaves `q`, a public method of the class itself |
+| Then | the header marks `v`, `r`, `t` and `p` abstract, and leaves `q`, `k`, `u` and `m`, public methods of the class itself |
