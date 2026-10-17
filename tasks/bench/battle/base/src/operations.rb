@@ -16,6 +16,7 @@ class Operations < Godot::Node2D
     measure("engine_call") { REPEATS.times { get_child_count } }
     measure("position_get") { REPEATS.times { position } }
     measure("position_set") { REPEATS.times { self.position = v } }
+    measure("member_set") { REPEATS.times { position.y = 5.0 } }
     measure("singleton_call") { REPEATS.times { Godot::Engine.get_process_frames } }
     measure("utility_call") { REPEATS.times { Godot.lerp(from, to, 0.5) } }
     measure("vector_new") { REPEATS.times { Godot::Vector2.new(1, 2) } }

@@ -31,6 +31,10 @@ func _ready() -> void:
 	report("position_set", start)
 	start = Time.get_ticks_usec()
 	for i in REPEATS:
+		position.y = 5.0
+	report("member_set", start)
+	start = Time.get_ticks_usec()
+	for i in REPEATS:
 		var frames := Engine.get_process_frames()
 	report("singleton_call", start)
 	start = Time.get_ticks_usec()
