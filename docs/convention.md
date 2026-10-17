@@ -121,4 +121,6 @@ These names come from another side, and step 1 keeps each as that side spells it
 | Minitest | `passed?`, `test_` |
 | beni | `const_defined_at` |
 | GDScript's words in Ruby's DSL | `signal`, `icon` |
+| Godot's global utility functions | `randf`, `is_same` |
+| GUT's test helpers in Minitest | `autoqfree`, `wait_process_frames` |
 | A Rust function behind Ruby's `__name__` | `name` |
