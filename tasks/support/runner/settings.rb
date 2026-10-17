@@ -20,8 +20,8 @@ module Godot
       # A test file the check writes under the copy's res://test, the pattern
       # that matches it and no other file there, and the summary of a run of
       # its one test.
-      NEEDLE_TEST = "test/needle_in_haystack.rb"
-      NEEDLE_TEST_SOURCE = "class NeedleTest < Minitest::Test\n  def test_runs\n    pass\n  end\nend\n"
+      NEEDLE_TEST = "test/needle_case.rb"
+      NEEDLE_TEST_SOURCE = "class NeedleCase < Minitest::Test\n  def test_runs\n    pass\n  end\nend\n"
       PATTERN = "needle_*.rb"
       PATTERN_SUMMARY = /^1 runs, \d+ assertions, 0 failures, 0 errors, 0 skips$/
 

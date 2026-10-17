@@ -217,7 +217,7 @@ Each layer uses only its own and the layers below it, as `saver` uses `language`
 
 #### 2.3.1 Shared Answers
 
-Several layers ask the same questions, and each has one owner below them all.
+Several layers ask the same questions, and each has one owner below them all. `bridge`, the engine's own binding, asks `ClassDB` directly.
 
 | Question | Owner |
 | --- | --- |

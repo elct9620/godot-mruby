@@ -37,7 +37,7 @@ A directory the test runner runs tests from: one of a project's `mruby/test/dire
 
 ### Test file
 
-A file under a test directory whose name matches the project's `mruby/test/pattern`. Only the test runner runs one.
+A Ruby file under a test directory whose name matches the project's `mruby/test/pattern`. Only the test runner runs one.
 
 ### Test panel
 
