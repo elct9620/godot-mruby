@@ -86,9 +86,8 @@ impl Drop for EngineObject {
 /// Lets go of the reference-counted engine objects Ruby let go of since the
 /// last call; the extension calls it every frame and once the realm closes.
 pub fn release_collected() {
-    let released =
-        std::mem::take(&mut *RELEASE_QUEUE.lock().unwrap_or_else(PoisonError::into_inner));
-    for mut object in released {
+    let queue = std::mem::take(&mut *RELEASE_QUEUE.lock().unwrap_or_else(PoisonError::into_inner));
+    for mut object in queue {
         // SAFETY: taken once; the emptied value is forgotten, never dropped.
         drop(unsafe { ManuallyDrop::take(&mut object.0) });
         std::mem::forget(object);

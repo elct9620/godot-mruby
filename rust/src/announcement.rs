@@ -401,11 +401,11 @@ mod tests {
     #[test]
     fn a_shared_name_that_came_back_is_warned_of_again() {
         let files = ["res://a/twin.rb".to_owned(), "res://b/twin.rb".to_owned()];
-        let mut shared_names = NameClashes::new();
-        shared_names.note("Twin", &files);
-        shared_names.forget("res://a/twin.rb");
+        let mut clashes = NameClashes::new();
+        clashes.note("Twin", &files);
+        clashes.forget("res://a/twin.rb");
 
-        let is_news = shared_names.note("Twin", &files);
+        let is_news = clashes.note("Twin", &files);
 
         assert!(is_news);
     }

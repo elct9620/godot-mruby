@@ -455,9 +455,9 @@ impl IScriptLanguageExtension for RubyLanguage {
     fn get_global_class_name(&self, path: GString) -> AnyDictionary {
         let file = path.to_string();
         let announced = announcement::announcement_by_path(&file);
-        let mut shared_names = NAME_CLASHES.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut clashes = NAME_CLASHES.lock().unwrap_or_else(PoisonError::into_inner);
         if !matches!(announced, Err(Omission::SharedName { .. })) {
-            shared_names.forget(&file);
+            clashes.forget(&file);
         }
         match announced {
             Ok(announcement) => vdict! {
@@ -471,7 +471,7 @@ impl IScriptLanguageExtension for RubyLanguage {
             Err(Omission::SharedName { name, mut others }) => {
                 others.push(file);
                 others.sort();
-                if shared_names.note(&name, &others) {
+                if clashes.note(&name, &others) {
                     warn_of_shared_name(name, others);
                 }
                 empty_dictionary()
