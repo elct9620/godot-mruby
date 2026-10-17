@@ -274,7 +274,8 @@ impl Header {
         }
     }
 
-    // The methods a `class << self` written in the class body defines.
+    // The methods a `class << self` written in the class body defines, by
+    // `def` or by a call naming them.
     fn read_singleton_class(&mut self, singleton: &SingletonClassNode) {
         if singleton.expression().as_self_node().is_none() {
             return;
@@ -282,9 +283,13 @@ impl Header {
         let Some(body) = singleton.body().and_then(|body| body.as_statements_node()) else {
             return;
         };
-        for def in body.body().iter().filter_map(|node| node.as_def_node()) {
-            self.singleton_class_methods
-                .push(decode_text(def.name().as_slice()));
+        for node in body.body().iter() {
+            if let Some(def) = node.as_def_node() {
+                self.singleton_class_methods
+                    .push(decode_text(def.name().as_slice()));
+            } else if let Some(call) = node.as_call_node() {
+                self.singleton_class_methods.extend(read_made_names(&call));
+            }
         }
     }
 
@@ -324,6 +329,9 @@ impl Header {
     fn read_call(&mut self, call: &CallNode) {
         if call.receiver().is_none() && METHOD_MAKERS.contains(&call.name().as_slice()) {
             self.has_methods_without_def = true;
+        }
+        if call.receiver().is_none() && call.name().as_slice() == b"define_singleton_method" {
+            self.singleton_class_methods.extend(read_made_names(call));
         }
         if call.receiver().is_some() || call.block().is_some() {
             return;
@@ -466,6 +474,34 @@ impl Reader {
                 .iter()
                 .zip(&self.key)
                 .all(|(name, segment)| realm::normalize(name) == *segment)
+    }
+}
+
+// The names of the methods `call` makes without `def`, as its arguments
+// write them: every name `attr` and its kin are given, the first for
+// `alias_method`, `define_method` and `define_singleton_method`.
+fn read_made_names(call: &CallNode) -> Vec<String> {
+    let names = call
+        .arguments()
+        .map(|arguments| arguments.arguments().iter().collect::<Vec<_>>())
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|argument| {
+            argument
+                .as_symbol_node()
+                .map(|name| name.unescaped().to_vec())
+                .or_else(|| {
+                    argument
+                        .as_string_node()
+                        .map(|name| name.unescaped().to_vec())
+                })
+        })
+        .map(|name| decode_text(&name));
+    match call.name().as_slice() {
+        b"attr" | b"attr_reader" | b"attr_accessor" => names.collect(),
+        b"attr_writer" => names.map(|name| format!("{name}=")).collect(),
+        b"alias_method" | b"define_method" | b"define_singleton_method" => names.take(1).collect(),
+        _ => Vec::new(),
     }
 }
 
@@ -997,6 +1033,16 @@ mod tests {
                 ["x".to_owned(), "y".to_owned()].as_slice()
             )
         );
+    }
+
+    // @behavior RH-025
+    #[test]
+    fn abstract_leaves_names_the_class_itself_makes_without_def() {
+        let source = "class Shape < Godot::Node2D\n  abstract\n\n  class << self\n    attr_reader :w\n  end\n  define_singleton_method(:s) { 1 }\n  abstract :w, :s\nend\n";
+
+        let header = Header::from_source("res://shape.rb", source, &Roots::default());
+
+        assert!(header.abstract_methods().is_empty());
     }
 
     // @behavior RH-010

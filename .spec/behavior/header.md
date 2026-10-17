@@ -205,3 +205,11 @@ How a file's header is read from its source without running it: the constants it
 | Given | a file whose class body writes `def x` before `abstract def self.x`, `abstract :y, def self.y`, and `abstract :z` after a `class << self` defining `z` |
 | When | its header is read |
 | Then | the header marks only `x` abstract |
+
+## `RH-025` `abstract` leaves names the class itself makes without `def`
+
+| Step | Statement |
+| --- | --- |
+| Given | a file whose class body writes `attr_reader :w` inside `class << self`, `define_singleton_method(:s)`, and `abstract :w, :s` |
+| When | its header is read |
+| Then | the header marks neither `w` nor `s` abstract |
