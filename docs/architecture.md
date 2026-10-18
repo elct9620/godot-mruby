@@ -36,7 +36,7 @@ The realm is one `mrb_state`, reached only through `realm::enter`, and it reache
 res://addons/godot_mruby/
 ├─ godot_mruby.gdextension      names each platform's library
 ├─ godot_mruby.gdextension.uid  the uid Godot gives it
-├─ bin/                         one library per platform
+├─ bin/                         two libraries per platform (1.2.1)
 ├─ runner.tscn                  the test runner scene
 ├─ LICENSE
 └─ THIRD_PARTY_LICENSES.txt     mruby, the shipped crates, what was changed in them
@@ -44,9 +44,20 @@ res://addons/godot_mruby/
 
 What ships is the addon folder, placed where Godot expects a non-project asset: `addons/<name>/`, so its files clash with neither the project nor other assets.
 
-The editor loads the library the `.gdextension` names for the platform, from Godot 4.6 on. Each library is a single binary: the crate links the mruby archive beni builds and the Prism parser `ruby-prism` builds. Nothing else is needed at run time, and macOS ships one universal library. Building needs libclang, which Prism's bindings are generated with.
+Godot loads the library the `.gdextension` names for the platform, from Godot 4.6 on. Each library is a single binary: the crate links the mruby archive beni builds and the Prism parser `ruby-prism` builds. Nothing else is needed at run time, and macOS ships universal libraries. Building needs libclang, which Prism's bindings are generated with.
 
 mruby carries only the gems `build_config/mruby.rb` lists, and none that reaches the host: Ruby reaches files, sockets and processes through Godot.
+
+#### 1.2.1 Builds
+
+Each platform ships two builds of the crate, told apart by its `editor` feature. Godot picks the key whose tags all hold and are the most, and an export never holds `editor`.
+
+| Build | `.gdextension` key | Loaded by |
+| --- | --- | --- |
+| With `editor` | `<platform>.editor` | The editor and the runs it plays |
+| Without | `<platform>` | Export templates, debug and release |
+
+Only the editor's build carries its tools and the test runner, so a game ships neither.
 
 ### 1.3 Source layout
 
@@ -129,7 +140,7 @@ Each class Godot knows answers what Godot already asks of a script language; non
 
 `ResourceFormatLoaderRubyScript` reads a file's source and runs nothing, and `ResourceFormatSaverRubyScript` writes it back. The script answers Godot from its header, which Prism reads from that source, and its ancestry. Only a script of an engine class makes an instance (2.4), and the language announces it (2.5).
 
-The runner is an ordinary node the addon ships, refused in an exported game, whose export leaves out the tests and the runner scene. The test panel plays it with the run file's options. `RealmFiles`, `GodotLog` and the `Godot` gem are what the game's realm is given. They are the files under `res://`, less the test directories in the editor and an exported game, Godot's log, and the engine (2.6). The names Godot knows are in `.spec/contract/godot.md`, and the settings in `.spec/contract/project_settings.md`.
+The runner is an ordinary node only the editor's build has (1.2.1), and an export leaves out the tests and the runner scene. The test panel plays it with the run file's options. `RealmFiles`, `GodotLog` and the `Godot` gem are what the game's realm is given. They are the files under `res://`, less the test directories in the editor and an exported game, Godot's log, and the engine (2.6). The names Godot knows are in `.spec/contract/godot.md`, and the settings in `.spec/contract/project_settings.md`.
 
 ### 2.2 Lifecycle
 
@@ -213,7 +224,7 @@ lib.rs    registers Scripting and settings, prepares the realm
 └────────────────────────────────────┘
 ```
 
-Each layer uses only its own and the layers below it, as `saver` uses `language` and `bridge` uses `log`. Only `language` and `script` refer to each other, since Godot asks each for the other. The realm uses only `compiler` and `snapshot`, the shape it publishes. A property's default keeps its printed text, so the realm handles no engine value. What it needs from Godot, `game` and `log` implement, so it neither parses a file nor knows the engine.
+Each layer uses only its own and the layers below it, as `saver` uses `language` and `bridge` uses `log`. Editor and Testing build only with the `editor` feature. `language`, `script` and `saver` keep their editor parts in a child `editor` module, which a build without it replaces with empty answers. Only `language` and `script` refer to each other, since Godot asks each for the other. The realm uses only `compiler` and `snapshot`, the shape it publishes. A property's default keeps its printed text, so the realm handles no engine value. What it needs from Godot, `game` and `log` implement, so it neither parses a file nor knows the engine.
 
 #### 2.3.1 Shared Answers
 
