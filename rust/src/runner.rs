@@ -42,8 +42,7 @@ enum Run {
 impl INode for RubyTestRunner {
     fn ready(&mut self) {
         let args = take_user_args();
-        let run_as_asked = refuse_exported_game()
-            .and_then(|()| choose_test_directories(&args))
+        let run_as_asked = choose_test_directories(&args)
             .and_then(|directories| collect_test_files(&directories))
             .and_then(|tests| Ok((tests, parse_test_options(&args)?)));
         match run_as_asked {
@@ -161,16 +160,6 @@ fn log_outcome<T: From<bool>>(outcome: Result<T, RubyError>) -> T {
         failed.write(&GodotLog);
         T::from(false)
     })
-}
-
-// An exported game ships no tests, and a runner it still has is refused
-// rather than run against whatever reached the game.
-fn refuse_exported_game() -> Result<(), String> {
-    if game::is_exported() {
-        Err("The test runner does not run in an exported game".to_owned())
-    } else {
-        Ok(())
-    }
 }
 
 // What follows `--` on Godot's command line, or what the run file holds

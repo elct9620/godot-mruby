@@ -48,13 +48,13 @@ How a game ships without its tests: each layer keeps test code out of an exporte
 | When | a file under `res://testing` is asked about |
 | Then | the file is not under a test directory |
 
-## `RX-006` The test runner refuses to run in an exported game
+## `RX-006` An exported game has no test runner
 
 | Step | Statement |
 | --- | --- |
-| Given | an exported game |
-| When | a test runner node enters its scene tree |
-| Then | the log carries an error saying the runner does not run in an exported game |
+| Given | a game exported for an export template, with a scene holding a test runner node |
+| When | the scene loads |
+| Then | the game does not know the runner's class, so no test runs |
 
 ## `RX-007` An exported game reads an export naming a node script's class
 

@@ -10,7 +10,8 @@ module Godot
   # an export template's build carries, so the game answers as a shipped one.
   # That build also carries `editor`, which an export template's does not, so
   # a game property still comes with its category here; no check reads one.
-  # Part of Godot.verify!.
+  # Part of Godot.verify!, and of Godot::Release.verify! for what only an
+  # export template's library shows.
   module Export
     PRESET = "Integration"
     LEFTOVER_SCENE = "res://integration/export/leftover.tscn"
@@ -27,8 +28,8 @@ module Godot
     EXCLUSIONS = ["res://test/unit/engine_classes/engine_classes_test.rb",
                   "res://addons/godot_mruby/runner.tscn"].freeze
     GAME_FILE = "res://integration/export/seeker.rb"
-    INTRUDER_SCENE = "res://integration/export/intruder.tscn"
-    REFUSAL = "ERROR: The test runner does not run in an exported game"
+    STOWAWAY_SCENE = "res://integration/export/stowaway.tscn"
+    STOWAWAY_LINE = "runner class: false"
     HINT_SCENE = "res://integration/export/lookout.tscn"
     HINT = "quarry hint: Seeker"
 
@@ -40,7 +41,6 @@ module Godot
         install_library(project, dir)
         verify_index_left_out!(dir, pack)
         verify_tests_left_out!(dir, pack)
-        verify_runner_refused!(dir, pack)
         verify_ruby_class_hint!(dir, pack)
       end
     end
@@ -66,13 +66,14 @@ module Godot
       raise "The exported game shipped #{shipped} where only #{GAME_FILE} belongs:\n#{output}"
     end
 
-    # The runner quits the game with 1 as it refuses.
+    # A runner node in a scene is one the template's library does not know,
+    # so Godot loads a placeholder of it and no test runs.
     # @behavior RX-006
-    def verify_runner_refused!(dir, pack)
-      output, status = run(dir, pack, INTRUDER_SCENE)
-      return if status.exitstatus == 1 && output.lines.map(&:chomp).include?(REFUSAL)
+    def verify_release!(dir)
+      output, status = Release.play(dir, STOWAWAY_SCENE)
+      return if status.success? && output.lines.map(&:chomp).include?(STOWAWAY_LINE)
 
-      raise "The exported game ran a test runner:\n#{output}"
+      raise "The release build knew the test runner:\n#{output}"
     end
 
     # @behavior RX-007

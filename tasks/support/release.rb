@@ -21,7 +21,7 @@ module Godot
     GAME = "game"
     # The scenes quit as they finish; this only stops one that never does.
     FRAMES = "60"
-    CHECKS = [Declarations, EngineClasses, Values].freeze
+    CHECKS = [Declarations, EngineClasses, Export, Values].freeze
 
     module_function
 
