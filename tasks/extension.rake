@@ -1,14 +1,14 @@
 # frozen_string_literal: true
 
 namespace :extension do
-  desc "Build the extension for this host (debug) and install it into the addon"
+  desc "Build the editor and template libraries for this host (debug) into the addon"
   task build: "beni:build" do
-    Extension.build_debug_library
+    Extension.build_debug_libraries
   end
 
-  desc "Build the library this platform ships (PROFILE=release|debug) and install it into the addon"
+  desc "Build the libraries this platform ships (PROFILE=release|debug) into the addon"
   task dist: "beni:build" do
-    Extension.build_shipped_library
+    Extension.build_shipped_libraries
   end
 end
 

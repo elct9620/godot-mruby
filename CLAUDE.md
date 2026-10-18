@@ -25,12 +25,12 @@ The full source layout, and how the parts fit together, is in `docs/architecture
 ```bash
 bundle install
 bundle exec rake beni:build              # download mruby and godot-cell into vendor/, build mruby's archives
-bundle exec rake extension:build         # host debug build, installed into the addon's bin/
+bundle exec rake extension:build         # host debug editor and template libraries, into the addon's bin/
 bundle exec rake godot:verify            # headless editor pass, then its scenes and the Ruby tests
 GODOT_RELEASE_TEMPLATE=<binary> bundle exec rake godot:release   # the release checks on an export template
 bundle exec rake editor                  # build, then open the editor on godot/
 godot --headless --path godot res://addons/godot_mruby/runner.tscn -- --dir res://test   # the Ruby tests alone
-bundle exec rake extension:dist          # the library this platform ships (PROFILE=release|debug; macOS: lipo universal)
+bundle exec rake extension:dist          # the libraries this platform ships (PROFILE=release|debug; macOS: lipo universal)
 bundle exec rake addon:package           # zip the addon with every platform's library and third-party licenses
 bundle exec rake bench                   # time a game's Ruby beside GDScript; read it on a release build
 bundle exec rake addon:verify            # install the zip into a copy of godot/ and run godot:verify's checks on it

@@ -3,11 +3,19 @@ entry_symbol = "gdext_rust_init"
 compatibility_minimum = 4.6
 reloadable = true
 
-; One binary per platform: the build that fills bin/ decides the Cargo profile
-; (debug for local development, release for distribution). macOS ships a universal dylib.
+; Two libraries per platform: the editor loads the one with its tools and the
+; test runner, export templates the one without. A key wins with more tags, so
+; the editor's needs the extra one. The build that fills bin/ decides the Cargo
+; profile (debug for local development, release for distribution). macOS ships
+; universal dylibs.
 [libraries]
-macos =          "bin/libgodot_mruby.macos.dylib"
-linux.x86_64 =   "bin/libgodot_mruby.linux.x86_64.so"
-linux.arm64 =    "bin/libgodot_mruby.linux.arm64.so"
-windows.x86_64 = "bin/godot_mruby.windows.x86_64.dll"
-windows.arm64 =  "bin/godot_mruby.windows.arm64.dll"
+macos.editor =          "bin/libgodot_mruby.macos.editor.dylib"
+macos =                 "bin/libgodot_mruby.macos.template.dylib"
+linux.x86_64.editor =   "bin/libgodot_mruby.linux.x86_64.editor.so"
+linux.x86_64 =          "bin/libgodot_mruby.linux.x86_64.template.so"
+linux.arm64.editor =    "bin/libgodot_mruby.linux.arm64.editor.so"
+linux.arm64 =           "bin/libgodot_mruby.linux.arm64.template.so"
+windows.x86_64.editor = "bin/godot_mruby.windows.x86_64.editor.dll"
+windows.x86_64 =        "bin/godot_mruby.windows.x86_64.template.dll"
+windows.arm64.editor =  "bin/godot_mruby.windows.arm64.editor.dll"
+windows.arm64 =         "bin/godot_mruby.windows.arm64.template.dll"

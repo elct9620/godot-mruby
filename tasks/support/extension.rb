@@ -21,11 +21,13 @@ module Extension
   CROSS_TRIPLE = "x86_64-apple-darwin"
   ARCHES = { NATIVE_TRIPLE => "arm64", CROSS_TRIPLE => "x86_64" }.freeze
 
-  MACOS_LIBRARY = "lib#{CRATE}.macos.dylib".freeze
-
   # The cargo flags for each profile; the profile name is also the directory
   # cargo writes it to.
   PROFILES = { "release" => ["--release"], "debug" => [] }.freeze
+
+  # The cargo flags for each library a platform ships: the editor's, with its
+  # tools and the test runner, and the one export templates load, without.
+  KINDS = { "editor" => [], "template" => ["--no-default-features"] }.freeze
 
   module_function
 
@@ -33,35 +35,41 @@ module Extension
     RbConfig::CONFIG["host_os"].include?("darwin")
   end
 
-  # A debug build for this host, installed where the editor loads it.
-  def build_debug_library
-    build_host_library("debug")
+  # Debug builds of both libraries for this host, installed where Godot
+  # loads them.
+  def build_debug_libraries
+    KINDS.each_key { |kind| build_host_library("debug", kind) }
   end
 
-  # The library this platform ships, in the profile PROFILE names; macOS
-  # ships one universal library of both architectures.
-  def build_shipped_library
-    macos? ? build_universal_library(profile) : build_host_library(profile)
+  # The libraries this platform ships, in the profile PROFILE names; macOS
+  # ships universal libraries of both architectures.
+  def build_shipped_libraries
+    KINDS.each_key do |kind|
+      macos? ? build_universal_library(profile, kind) : build_host_library(profile, kind)
+    end
   end
 
-  def build_host_library(profile)
-    system("cargo", "build", *PROFILES.fetch(profile), "--manifest-path", MANIFEST, exception: true)
+  # Both kinds build to the same file, so each is installed before the next
+  # builds.
+  def build_host_library(profile, kind)
+    system("cargo", "build", *PROFILES.fetch(profile), *KINDS.fetch(kind), "--manifest-path", MANIFEST,
+           exception: true)
 
-    source, name = host_library
+    source, name = host_library(kind)
     install(File.join(TARGET_DIR, profile, source), name)
   end
 
-  def build_universal_library(profile)
+  def build_universal_library(profile, kind)
     ARCHES.each_key do |triple|
       system(build_cargo_env(triple),
-             "cargo", "build", *PROFILES.fetch(profile), "--target", triple, "--manifest-path", MANIFEST,
-             exception: true)
+             "cargo", "build", *PROFILES.fetch(profile), *KINDS.fetch(kind), "--target", triple,
+             "--manifest-path", MANIFEST, exception: true)
     end
 
-    output = locate_universal_library(profile)
+    output = locate_universal_library(profile, kind)
     system("lipo", "-create", "-output", output, *ARCHES.keys.map { |t| locate_slice(t, profile) }, exception: true)
     require_arches!(output)
-    install(output, MACOS_LIBRARY)
+    install(output, macos_library(kind))
   end
 
   # A distributed build is release unless PROFILE=debug asks for one to
@@ -92,14 +100,19 @@ module Extension
     end
   end
 
-  # Cargo's output name for this host, and the name the addon expects.
-  def host_library
+  # Cargo's output name for this host, and the name the addon expects for
+  # the library of `kind`.
+  def host_library(kind)
     case host_triple
-    when /apple-darwin/ then ["lib#{CRATE}.dylib", MACOS_LIBRARY]
-    when /linux/ then ["lib#{CRATE}.so", "lib#{CRATE}.linux.#{host_arch}.so"]
-    when /windows/ then ["#{CRATE}.dll", "#{CRATE}.windows.#{host_arch}.dll"]
+    when /apple-darwin/ then ["lib#{CRATE}.dylib", macos_library(kind)]
+    when /linux/ then ["lib#{CRATE}.so", "lib#{CRATE}.linux.#{host_arch}.#{kind}.so"]
+    when /windows/ then ["#{CRATE}.dll", "#{CRATE}.windows.#{host_arch}.#{kind}.dll"]
     else raise "Unsupported host: #{host_triple}"
     end
+  end
+
+  def macos_library(kind)
+    "lib#{CRATE}.macos.#{kind}.dylib"
   end
 
   # The native build finds its archive through BENI_VENDOR_DIR, which
@@ -115,8 +128,8 @@ module Extension
     File.join(TARGET_DIR, triple, profile, "lib#{CRATE}.dylib")
   end
 
-  def locate_universal_library(profile)
-    File.join(TARGET_DIR, profile, MACOS_LIBRARY)
+  def locate_universal_library(profile, kind)
+    File.join(TARGET_DIR, profile, macos_library(kind))
   end
 
   # Replace rather than overwrite: a running editor still maps the old
