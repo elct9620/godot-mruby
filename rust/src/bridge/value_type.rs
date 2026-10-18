@@ -83,6 +83,7 @@ fn value_types() -> impl Iterator<Item = VariantType> {
         .map(<VariantType as EngineEnum>::from_ord)
 }
 
+#[cfg(feature = "editor")]
 /// The names of the engine's value types, as their classes under `Godot`
 /// are named.
 pub fn collect_value_type_names() -> Vec<String> {

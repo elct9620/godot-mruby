@@ -256,12 +256,14 @@ fn find_info(class_db: &Gd<ClassDb>, declarer: &StringName, method: &str) -> Opt
         .find(|info| info.get_or_nil("name").to_string() == method)
 }
 
+#[cfg(feature = "editor")]
 /// The engine class that binds `method` among `class` and its ancestors,
 /// nearest first, as GDScript names the native class a method overrides.
 pub fn find_method_declarer(class: &str, method: &str) -> Option<String> {
     find_declarer(&ClassDb::singleton(), class, method).map(|declarer| declarer.to_string())
 }
 
+#[cfg(feature = "editor")]
 /// Whether `member`, a property or a method of the engine class `class` or
 /// one of its ancestors, answers a StringName.
 pub fn is_string_name_member(class: &str, member: &str) -> bool {

@@ -12,7 +12,9 @@ use godot::obj::Singleton;
 use crate::ancestry;
 use crate::bridge;
 use crate::header::Header;
-use crate::realm::{self, ClassIndex, Declarations, Definition, Files, Parent, Roots};
+#[cfg(feature = "editor")]
+use crate::realm::{self, Definition};
+use crate::realm::{ClassIndex, Declarations, Files, Parent, Roots};
 use crate::settings;
 
 const ROOT: &str = "res://";
@@ -134,6 +136,7 @@ pub struct Listing<F: Files> {
     paths: Mutex<Option<Vec<String>>>,
     index: Mutex<Option<Arc<ClassIndex>>>,
     arrivals: Mutex<Vec<String>>,
+    #[cfg(any(test, feature = "editor"))]
     departures: Mutex<Vec<String>>,
 }
 
@@ -147,6 +150,7 @@ impl<F: Files> Listing<F> {
             paths: Mutex::new(None),
             index: Mutex::new(None),
             arrivals: Mutex::new(Vec::new()),
+            #[cfg(any(test, feature = "editor"))]
             departures: Mutex::new(Vec::new()),
         }
     }
@@ -166,6 +170,7 @@ impl<F: Files> Listing<F> {
         }
     }
 
+    #[cfg(any(test, feature = "editor"))]
     /// Lists the project again, walking its directories outside the lock so
     /// no question waits on the walk.
     pub fn relist(&self) {
@@ -181,12 +186,14 @@ impl<F: Files> Listing<F> {
         self.lock_index().take();
     }
 
+    #[cfg(any(test, feature = "editor"))]
     /// The files that joined the listing since this was last asked, each
     /// once, as the editor asked about it or a listing found it.
     pub fn take_arrivals(&self) -> Vec<String> {
         std::mem::take(&mut *self.lock_arrivals())
     }
 
+    #[cfg(any(test, feature = "editor"))]
     /// The files that left the listing since this was last asked, each once,
     /// as a listing found them gone.
     pub fn take_departures(&self) -> Vec<String> {
@@ -215,6 +222,7 @@ impl<F: Files> Listing<F> {
         self.arrivals.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
+    #[cfg(any(test, feature = "editor"))]
     fn lock_departures(&self) -> MutexGuard<'_, Vec<String>> {
         self.departures
             .lock()
@@ -222,6 +230,7 @@ impl<F: Files> Listing<F> {
     }
 }
 
+#[cfg(any(test, feature = "editor"))]
 // The paths in `paths` that `others` lacks, walking both sorted lists once.
 fn collect_missing(paths: &[String], others: &[String]) -> Vec<String> {
     let mut others = others.iter().peekable();
@@ -260,6 +269,7 @@ impl<F: Files> Files for Listing<F> {
         self.index().file_by_name(scope, names)
     }
 
+    #[cfg(feature = "editor")]
     fn collect_definitions_around(&self, path: &str) -> Vec<Definition> {
         self.index().collect_definitions_around(path)
     }
@@ -273,6 +283,7 @@ pub fn listing() -> &'static Listing<FilesOnDisk> {
     &LISTING
 }
 
+#[cfg(feature = "editor")]
 /// Lists the game's files again, as the editor found the project's files
 /// changed, and gives the game's realm those added since it opened.
 /// Answers the files that were added or removed.

@@ -6,6 +6,7 @@ use std::ffi::CStr;
 
 use beni::{Ccontext, Error, Mrb};
 
+#[cfg(feature = "editor")]
 /// What checking source found: the error that stopped it compiling, if any,
 /// and every warning.
 pub struct Diagnostics {
@@ -13,6 +14,7 @@ pub struct Diagnostics {
     pub warnings: Vec<Warning>,
 }
 
+#[cfg(feature = "editor")]
 /// Why source does not compile, at the 1-based line and column it names.
 pub struct CompileError {
     pub line: u32,
@@ -50,6 +52,7 @@ pub fn run(
     outcome.map(|_| ())
 }
 
+#[cfg(feature = "editor")]
 /// What the compiler says of `source` under `name`, compiled and never run.
 /// A new state compiles it, so this belongs to no realm, never waits for one
 /// and prints nothing.
@@ -92,6 +95,7 @@ pub fn diagnose(name: &CStr, source: &str) -> Diagnostics {
     }
 }
 
+#[cfg(feature = "editor")]
 // The column Godot counts, from 1 in characters, of what mruby records as
 // the bytes its lexer read on `line` up to and including the offending
 // token; an error at the end of the file, or one it recorded no position
@@ -117,7 +121,7 @@ fn collect_warnings(context: &Ccontext) -> Vec<Warning> {
         .collect()
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "editor"))]
 mod tests {
     use super::*;
 

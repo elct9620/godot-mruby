@@ -28,10 +28,12 @@ mod utility;
 mod value;
 mod value_type;
 
+#[cfg(feature = "editor")]
 pub use bound_method::{find_method_declarer, is_string_name_member};
 pub use member_writes::rewrite as rewrite_member_writes;
 pub use object::{Owner, derive_object_key, release_collected};
 pub use value::{EngineCrossing, RubyCrossing};
+#[cfg(feature = "editor")]
 pub use value_type::collect_value_type_names;
 
 const FILE: &std::ffi::CStr = c"godot_mruby/bridge/godot.rb";

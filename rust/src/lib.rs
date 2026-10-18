@@ -5,29 +5,41 @@ mod ancestry;
 mod announcement;
 mod bridge;
 mod compiler;
+#[cfg(feature = "editor")]
 mod completion;
+#[cfg(feature = "editor")]
 mod documentation;
+#[cfg(feature = "editor")]
 mod export;
 mod game;
 mod header;
+#[cfg(feature = "editor")]
 mod highlighter;
 mod hint;
 mod instance;
 mod language;
+#[cfg(feature = "editor")]
 mod lexer;
 mod loader;
 mod log;
+#[cfg(feature = "editor")]
 mod lookup;
+#[cfg(feature = "editor")]
 mod minitest;
+#[cfg(feature = "editor")]
 mod panel;
+#[cfg(feature = "editor")]
 mod plugin;
 mod realm;
+#[cfg(feature = "editor")]
 mod runner;
 mod saver;
 mod script;
 mod settings;
 mod snapshot;
+#[cfg(feature = "editor")]
 mod template;
+#[cfg(feature = "editor")]
 mod validation;
 
 struct GodotMruby;

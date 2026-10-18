@@ -27,9 +27,9 @@ mod registry;
 
 use executor::Declaration;
 use extensions::ExtensionData;
-pub use index::{
-    ClassIndex, Definition, Roots, camelize, join_inner_path, normalize, split_inner_path,
-};
+pub use index::{ClassIndex, Roots, join_inner_path, normalize, split_inner_path};
+#[cfg(feature = "editor")]
+pub use index::{Definition, camelize};
 use reentrant_lock::{ReentrantLock, ReentrantLockGuard, Watch};
 use registry::Registry;
 pub use registry::{Key, is_collected, note_collected};
@@ -96,6 +96,7 @@ pub trait Files: Send {
     fn file_by_name(&self, scope: &[String], names: &[String]) -> Option<String> {
         ClassIndex::with_files(self.paths(), self.roots()).file_by_name(scope, names)
     }
+    #[cfg(feature = "editor")]
     /// What these files' class index names directly inside each namespace
     /// the file at `path` is named in, from the top level inward.
     fn collect_definitions_around(&self, path: &str) -> Vec<Definition> {
@@ -624,6 +625,7 @@ pub fn rerun_queued(rerun: &Rerun) -> Reruns {
     }
 }
 
+#[cfg(any(test, feature = "editor"))]
 /// Takes the files at `paths` the game's realm does not name yet into its
 /// class index, if it is open, so a file added since it opened loads by name.
 pub fn take_in_files(paths: Vec<String>) {

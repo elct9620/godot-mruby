@@ -6,6 +6,12 @@ edition = "2024"
 [lib]
 crate-type = ["cdylib"]
 
+[features]
+default = ["editor"]
+# What only the editor binary reaches: the editor's tools and the test runner.
+# Export templates load a library built without it.
+editor = ["dep:ruby-prism-sys"]
+
 [dependencies]
 # experimental-threads: Godot calls a script language, its scripts and their
 # loader from threads other than the main one (the editor's file scan, loading
@@ -23,7 +29,7 @@ beni = "0.23.1"
 ruby-prism = "1.9.0"
 # The tokens Prism lexes, which only its C API hands out; it moves with
 # ruby-prism, whose own parser it is.
-ruby-prism-sys = "1.9.0"
+ruby-prism-sys = { version = "1.9.0", optional = true }
 # Hashes the names a call is looked up by faster than the default SipHash;
 # they come from the project's own scripts, so flooding is no concern.
 rustc-hash = "2.1.3"

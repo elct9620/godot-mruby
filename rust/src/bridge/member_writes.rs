@@ -466,10 +466,10 @@ fn decode(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::rewrite;
-    use crate::compiler;
 
     // @behavior RR-008
     #[test]
+    #[cfg(feature = "editor")]
     fn a_line_after_a_member_write_keeps_its_number() {
         let source = "position\n  .y = 5\nnode.position.x += [\n  1,\n].sum\nv.x, w.y =\n  1, 2\nraise \"here\"\n";
 
@@ -484,7 +484,7 @@ mod tests {
                 .is_some_and(|line| line.contains("raise"))
         );
         assert!(
-            compiler::diagnose(c"res://moved.rb", &rewritten)
+            crate::compiler::diagnose(c"res://moved.rb", &rewritten)
                 .error
                 .is_none()
         );

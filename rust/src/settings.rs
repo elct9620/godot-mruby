@@ -89,6 +89,7 @@ pub fn template_directory() -> String {
     }
 }
 
+#[cfg(feature = "editor")]
 /// The glob a file name under a test directory matches to be a test file.
 pub fn test_pattern() -> GString {
     ProjectSettings::singleton().get_setting(TEST_PATTERN).to()

@@ -179,6 +179,7 @@ pub fn describe_shared_name(path: &str, name: &str, others: &[String]) -> String
     )
 }
 
+#[cfg(any(test, feature = "editor"))]
 /// The files at `paths` whose announcement a file in `changes` may have
 /// changed by arriving or leaving: those sharing its file name, which the
 /// editor does not ask about again by itself. Files under

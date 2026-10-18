@@ -37,6 +37,7 @@ const KNOWN_CALLS: [&[u8]; 9] = [
 pub struct Header {
     constant_paths: Vec<Vec<String>>,
     name: String,
+    #[cfg(feature = "editor")]
     name_offset: usize,
     superclass: Option<Superclass>,
     methods: BTreeMap<String, usize>,
@@ -126,6 +127,7 @@ impl Header {
         &self.name
     }
 
+    #[cfg(feature = "editor")]
     /// The byte offset in the source of the `module` or `class` statement
     /// writing the class's own name.
     pub fn name_offset(&self) -> usize {
@@ -158,6 +160,7 @@ impl Header {
         self.methods.keys().map(String::as_str)
     }
 
+    #[cfg(feature = "editor")]
     /// Each method the file's class defines, with the byte offset in the
     /// source of the `def` or `abstract` writing it.
     pub fn method_offsets(&self) -> impl Iterator<Item = (&str, usize)> {
@@ -166,6 +169,7 @@ impl Header {
             .map(|(name, offset)| (name.as_str(), *offset))
     }
 
+    #[cfg(feature = "editor")]
     /// Each signal the class declares, with the byte offset of its `signal`
     /// call in the source.
     pub fn signal_offsets(&self) -> impl Iterator<Item = (&str, usize)> {
@@ -174,6 +178,7 @@ impl Header {
             .map(|(name, offset)| (name.as_str(), *offset))
     }
 
+    #[cfg(feature = "editor")]
     /// Each property the class exports, with the byte offset of its `export`
     /// call in the source.
     pub fn export_offsets(&self) -> impl Iterator<Item = (&str, usize)> {
@@ -241,12 +246,14 @@ impl Header {
         self.is_abstract
     }
 
+    #[cfg(any(test, feature = "editor"))]
     /// The methods `abstract` marks in the class body, as `abstract def hurt`
     /// or `abstract :hurt` writes them, in the order it marks them.
     pub fn abstract_methods(&self) -> &[String] {
         &self.abstract_methods
     }
 
+    #[cfg(any(test, feature = "editor"))]
     /// Whether the file holds a statement outside the forms the header reads,
     /// which may define methods the source does not name. Read are the
     /// `module` and `class` statements leading to the class, and in a class
@@ -454,6 +461,7 @@ impl Reader {
         if self.header.is_none() && is_own {
             let mut header = Header {
                 name: names.last().cloned().unwrap_or_default(),
+                #[cfg(feature = "editor")]
                 name_offset: node.location().start_offset(),
                 superclass: class
                     .and_then(|class| class.superclass())
@@ -479,6 +487,7 @@ impl Reader {
     }
 }
 
+#[cfg(feature = "editor")]
 /// The line, counted from 1, that the byte at `offset` of `source` is on.
 pub fn locate_line(source: &str, offset: usize) -> u32 {
     let before = source.get(..offset).unwrap_or(source);

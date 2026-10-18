@@ -2,21 +2,29 @@ use std::sync::Mutex;
 
 use godot::classes::file_access::ModeFlags;
 use godot::classes::{
-    EditorInterface, Engine, FileAccess, IResourceFormatSaver, Resource, ResourceFormatSaver,
-    ResourceSaver,
+    FileAccess, IResourceFormatSaver, Resource, ResourceFormatSaver, ResourceSaver,
 };
 use godot::global::Error;
 use godot::obj::Singleton;
 use godot::prelude::*;
 
-use crate::game::GameFiles;
-use crate::realm::Files;
 use crate::script::RubyScript;
-use crate::{language, template};
 
-// The editor setting that has a script saved in the editor reload, which
-// GDScript's saver follows too.
-const RELOAD_ON_SAVE: &str = "text_editor/behavior/files/auto_reload_and_parse_scripts_on_save";
+#[cfg(feature = "editor")]
+mod editor;
+
+// Only the editor makes templates or reloads what it saves, so a library
+// built without it writes the source as it is.
+#[cfg(not(feature = "editor"))]
+mod editor {
+    use godot::prelude::*;
+
+    use crate::script::RubyScript;
+
+    pub fn nest_template(_: &mut Gd<RubyScript>, _: &str) {}
+
+    pub fn reload_saved(_: &mut Gd<RubyScript>) {}
+}
 
 /// Saves a `RubyScript` as a `.rb` file holding its source.
 #[derive(GodotClass)]
@@ -49,9 +57,7 @@ impl IResourceFormatSaver for ResourceFormatSaverRubyScript {
         else {
             return Error::ERR_INVALID_PARAMETER;
         };
-        if script.bind().take_template_mark() {
-            nest_template(&mut script, &path.to_string());
-        }
+        editor::nest_template(&mut script, &path.to_string());
         let Some(mut file) = FileAccess::open(&path, ModeFlags::WRITE) else {
             return FileAccess::get_open_error();
         };
@@ -61,9 +67,7 @@ impl IResourceFormatSaver for ResourceFormatSaverRubyScript {
             return Error::ERR_CANT_CREATE;
         }
         drop(file);
-        if is_reloaded_on_save() {
-            script.reload();
-        }
+        editor::reload_saved(&mut script);
         Error::OK
     }
 
@@ -78,24 +82,4 @@ impl IResourceFormatSaver for ResourceFormatSaverRubyScript {
             PackedStringArray::new()
         }
     }
-}
-
-// Puts a template made for a new file inside the namespaces its path
-// spells, the first place the path is known.
-fn nest_template(script: &mut Gd<RubyScript>, path: &str) {
-    let constant = GameFiles.roots().name_by_path(path);
-    let nested = template::nest_in_namespaces(
-        &script.get_source_code().to_string(),
-        &constant,
-        &language::indentation(),
-    );
-    script.set_source_code(&nested);
-}
-
-// Whether a script saved now reloads: only in the editor, as it sets.
-fn is_reloaded_on_save() -> bool {
-    Engine::singleton().is_editor_hint()
-        && EditorInterface::singleton()
-            .get_editor_settings()
-            .is_some_and(|settings| settings.get_setting(RELOAD_ON_SAVE).booleanize())
 }

@@ -264,6 +264,7 @@ impl ClassIndex {
             .collect()
     }
 
+    #[cfg(feature = "editor")]
     /// What the index names directly inside each namespace the file at
     /// `path` is named in, from the top level inward: the constants a name
     /// written in that file may reach without a namespace.
