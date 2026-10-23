@@ -17,14 +17,15 @@ module Godot
 
     # What `command` printed, and how it ended or nil when it was killed as
     # hung. `stdin_data` is typed first; without `respond` the input closes
-    # then, as Open3.capture2e closes it.
+    # then, as Open3.capture2e closes it. Line ends read as `\n` everywhere,
+    # as a text-mode read gives them; a partial read leaves Windows' `\r\n`.
     def hold(command, stdin_data, respond, **)
       Open3.popen2e(*command, **) do |input, output, wait|
         type(input, stdin_data)
         input.close unless respond
         printed, ended = read_output(output) { |text| type(input, respond.call(text)) if respond }
         kill(wait.pid) unless ended
-        [printed.force_encoding(Encoding.default_external), (wait.value if ended)]
+        [printed.force_encoding(Encoding.default_external).gsub("\r\n", "\n"), (wait.value if ended)]
       end
     end
 
