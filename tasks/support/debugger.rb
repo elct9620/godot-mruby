@@ -4,6 +4,9 @@ module Godot
   # Runs the debugger scene under Godot's command-line debugger, which takes
   # the commands typed at each break from standard input, and reads where it
   # breaks. Part of Godot.verify!.
+  #
+  # Each command is typed once the debugger asks for it: on Windows a read
+  # takes all the input waiting, so commands typed at once read as one.
   module Debugger
     SCENE = "res://integration/debugger/debugger.tscn"
     SCRIPT = "res://integration/debugger/stepper.rb"
@@ -11,6 +14,7 @@ module Godot
     # A break that nothing expected quits the game rather than waiting on
     # input that never comes.
     QUIT = "q"
+    PROMPT = "debug> "
     # The breakpoint stepping starts from, the commands typed at its breaks,
     # and the places the stepper breaks at in turn: its next line, the method
     # its next line calls in another file, then back out at the line after
@@ -89,7 +93,7 @@ module Godot
     # stops one it plays.
     # @behavior SA-009
     def verify_debug!(dir)
-      output, = Release.play(dir, SCENE, *under_debugger(STEPS), stdin_data: typed(STEPS))
+      output, = Release.play(dir, SCENE, *under_debugger(STEPS), respond: answer(STEPS))
       return if breaks(read_breaks(output)) == STEPS[:places]
 
       raise "The debug template's game did not break at #{STEPS[:places]}:\n#{output}"
@@ -97,7 +101,7 @@ module Godot
 
     # What the scene printed under the debugger, from its first break.
     def debug(project, run)
-      output, = Godot.run_scene(project, SCENE, "--quit-after", "3", *under_debugger(run), stdin_data: typed(run))
+      output, = Godot.run_scene(project, SCENE, "--quit-after", "3", *under_debugger(run), respond: answer(run))
       read_breaks(output)
     end
 
@@ -107,14 +111,23 @@ module Godot
       ["-d", "-b", run[:breakpoint]]
     end
 
-    def typed(run)
-      [*run[:commands], QUIT].join("\n")
+    # Answers each prompt the debugger has printed with the next command of
+    # `run`, then with QUIT.
+    def answer(run)
+      commands = run[:commands].dup
+      answered = 0
+      lambda do |output|
+        next if output.scan(PROMPT).size == answered
+
+        answered += 1
+        "#{commands.shift || QUIT}\n"
+      end
     end
 
     # The lines `output` holds from its first break, each without the prompt
     # the debugger writes before reading a command.
     def read_breaks(output)
-      lines = output.lines.map { |line| line.chomp.delete_prefix("debug> ") }.reject(&:empty?)
+      lines = output.lines.map { |line| line.chomp.delete_prefix(PROMPT) }.reject(&:empty?)
       lines.drop_while { |line| !line.start_with?("Debugger Break") }
     end
 
