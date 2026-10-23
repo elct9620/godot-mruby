@@ -1,13 +1,18 @@
 //! Stopping the realm's Ruby where a debugger asks: mruby's code fetch hook
 //! runs before each instruction, and the first instruction of a line is
-//! where a breakpoint or a step stops, as GDScript stops at each line.
+//! where a breakpoint or a step stops, as GDScript stops at each line. The
+//! Ruby the extension ships is stepped over, as its frames are left out of a
+//! backtrace.
 
 use std::sync::Arc;
 
 use beni::Mrb;
 use beni::debug::{DebugInspector, TraceArg};
 
-use super::{Location, Origin, Outermost, Realm, bookkeeping, leave_out_extension_frames};
+use super::{
+    EXTENSION_DIRECTORY, Location, Origin, Outermost, Realm, bookkeeping,
+    leave_out_extension_frames,
+};
 
 /// The debugger a realm stops for. Its breakpoints and steps follow Godot's
 /// script debugger: a step counts the lines left to pass, and its depth the
@@ -44,9 +49,13 @@ impl Realm {
             if !lines.start(running, line.get()) {
                 return;
             }
-            let entered = running as i32 - depth;
-            depth = running as i32;
             let file = arg.path().unwrap_or_default();
+            if file.starts_with(EXTENSION_DIRECTORY) {
+                return;
+            }
+            lines.claim(running);
+            let entered = lines.count_project_frames() - depth;
+            depth += entered;
             if is_stopping(&debugger, entered, line.get() as u32, &file) {
                 debugger.stop(&collect_stack(inspector, &outermost));
             }
@@ -118,19 +127,38 @@ fn locate_frame(inspector: DebugInspector<'_>, index: usize) -> Option<Location>
 
 // The line each frame of the running fiber last started, outermost first, so
 // a frame a call returned to goes on with its line rather than starting it
-// again.
+// again; and whether that line is the project's, so a step's depth counts
+// the project's frames alone, as GDScript's counts its functions.
 #[derive(Default)]
-struct Lines(Vec<usize>);
+struct Lines(Vec<FrameLine>);
+
+#[derive(Clone, Copy, Default)]
+struct FrameLine {
+    line: usize,
+    is_project: bool,
+}
 
 impl Lines {
     // Whether `line` starts anew in the frame `depth` frames above the
     // outermost, which forgets the frames above it.
     fn start(&mut self, depth: usize, line: usize) -> bool {
-        self.0.resize(depth + 1, 0);
-        if self.0[depth] == line {
+        self.0.resize(depth + 1, FrameLine::default());
+        if self.0[depth].line == line {
             return false;
         }
-        self.0[depth] = line;
+        self.0[depth] = FrameLine {
+            line,
+            is_project: false,
+        };
         true
+    }
+
+    // Marks the line the frame `depth` started as the project's.
+    fn claim(&mut self, depth: usize) {
+        self.0[depth].is_project = true;
+    }
+
+    fn count_project_frames(&self) -> i32 {
+        self.0.iter().filter(|frame| frame.is_project).count() as i32
     }
 }

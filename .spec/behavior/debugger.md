@@ -74,3 +74,15 @@ How a game run under Godot's debugger stops its Ruby: at a breakpoint, and line 
 | Given | the debugger stopped at a breakpoint no line after it holds |
 | When | the debugger continues |
 | Then | the callback runs to its end without breaking again |
+
+## `SA-010` A step never stops in the extension's own Ruby
+
+| Attribute | Value |
+| --- | --- |
+| relates | `SA-003` |
+
+| Step | Statement |
+| --- | --- |
+| Given | the debugger stopped at a line whose constant loads its file by name |
+| When | the debugger steps |
+| Then | it breaks at the loaded file's first line, not in the extension's loader |
