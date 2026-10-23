@@ -3,6 +3,7 @@
 //! the stack of, as GDScript breaks.
 
 use std::cell::Cell;
+use std::sync::{Mutex, PoisonError};
 
 use godot::builtin::{GString, StringName};
 use godot::classes::{EngineDebugger, ScriptLanguage};
@@ -23,7 +24,7 @@ thread_local! {
 /// runs under a debugger.
 pub fn attach(mut realm: Realm) -> Realm {
     if EngineDebugger::singleton().is_active() {
-        realm.attach_debugger(GodotDebugger);
+        realm.attach_debugger(GodotDebugger::default());
     }
     realm
 }
@@ -36,11 +37,20 @@ pub fn stop_reason() -> GString {
     }
 }
 
-struct GodotDebugger;
+#[derive(Default)]
+struct GodotDebugger {
+    // The last file asked about, with the name Godot keeps its breakpoints
+    // under: lines follow each other in one file far more often than not.
+    file: Mutex<(String, StringName)>,
+}
 
 impl realm::Debugger for GodotDebugger {
     fn is_breakpoint(&self, line: u32, file: &str) -> bool {
-        EngineDebugger::singleton().is_breakpoint(line as i32, &StringName::from(file))
+        let mut last = self.file.lock().unwrap_or_else(PoisonError::into_inner);
+        if last.0 != file {
+            *last = (file.to_owned(), StringName::from(file));
+        }
+        EngineDebugger::singleton().is_breakpoint(line as i32, &last.1)
     }
 
     fn lines_left(&self) -> i32 {
