@@ -27,6 +27,7 @@ defaults:
 jobs:
   check:
     name: Check
+    timeout-minutes: 20
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -51,6 +52,7 @@ jobs:
   # Needs neither Ruby nor Rust, so it stands apart from the build setup.
   spec:
     name: Specification
+    timeout-minutes: 5
     runs-on: ubuntu-24.04
     env:
       # Pinned by hand: nothing watches a release asset fetched over curl.
@@ -73,6 +75,7 @@ jobs:
 
   build:
     name: Build (${{ matrix.platform }})
+    timeout-minutes: 30
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -114,6 +117,7 @@ jobs:
 
   package:
     name: Package
+    timeout-minutes: 10
     needs: build
     runs-on: ubuntu-24.04
     steps:
@@ -137,6 +141,7 @@ jobs:
 
   integration:
     name: Integration (${{ matrix.os }}, Godot ${{ matrix.godot }})
+    timeout-minutes: 20
     needs: package
     runs-on: ${{ matrix.os }}
     strategy:
@@ -196,6 +201,7 @@ jobs:
   # so nothing waits on it.
   bench:
     name: Bench
+    timeout-minutes: 15
     needs: build
     runs-on: ubuntu-24.04
     env:
@@ -248,6 +254,7 @@ jobs:
 
   publish:
     name: Publish
+    timeout-minutes: 10
     needs: [check, spec, integration]
     if: inputs.tag != ''
     runs-on: ubuntu-24.04
