@@ -6,6 +6,7 @@ require "tmpdir"
 
 require_relative "announcement"
 require_relative "completion"
+require_relative "debugger"
 require_relative "declarations"
 require_relative "documentation"
 require_relative "export"
@@ -49,7 +50,7 @@ module Godot
   # The checks, each in the module named after the behaviour it claims.
   CHECKS = [
     Script, Declarations, Report, Runner, Runner::Failures, Runner::Results, Runner::Settings, Loader, Export,
-    Panel, Template, Announcement, Highlighting, Completion, Documentation
+    Panel, Template, Announcement, Highlighting, Completion, Documentation, Debugger
   ].freeze
 
   module_function
@@ -144,7 +145,7 @@ module Godot
     capture(EXECUTABLE, "--headless", "--editor", "--quit", "--path", project)
   end
 
-  def run_scene(project, scene, *)
-    capture(EXECUTABLE, "--headless", "--path", project, scene, *)
+  def run_scene(project, scene, *, **)
+    capture(EXECUTABLE, "--headless", "--path", project, scene, *, **)
   end
 end

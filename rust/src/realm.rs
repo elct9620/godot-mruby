@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::cell::{Cell, OnceCell, RefCell};
 use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::ffi::CStr;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::time::Duration;
 
@@ -16,6 +16,8 @@ use smallvec::SmallVec;
 use crate::compiler;
 use crate::snapshot::{self, Heading, MethodCalls, Property, Rpc, Signal, Snapshot};
 
+#[cfg(feature = "debugger")]
+mod debugger;
 mod executor;
 mod extensions;
 mod index;
@@ -25,6 +27,8 @@ mod print;
 mod reentrant_lock;
 mod registry;
 
+#[cfg(feature = "debugger")]
+pub use debugger::Debugger;
 use executor::Declaration;
 use extensions::ExtensionData;
 pub use index::{ClassIndex, Roots, join_inner_path, normalize, split_inner_path};
@@ -169,8 +173,9 @@ struct Bookkeeping {
     changed: RefCell<BTreeSet<String>>,
     // Set while the realm defines a directory's module, which no file created.
     is_defining_namespace: Cell<bool>,
-    // How the Ruby running now started, while any does.
-    outermost: Cell<Option<Origin>>,
+    // How the Ruby running now started, while any does; a debugger reads it
+    // as it stops.
+    outermost: Arc<Outermost>,
     // How each constant defined since the realm opened is spelled, by the
     // key the class index matches it with.
     spellings: RefCell<HashMap<Vec<String>, Opaque<Symbol>>>,
@@ -180,12 +185,35 @@ struct Bookkeeping {
     extension_data: ExtensionData,
 }
 
+// How the Ruby running now started, while any does.
+#[derive(Default)]
+struct Outermost(AtomicU8);
+
+impl Outermost {
+    fn get(&self) -> Option<Origin> {
+        match self.0.load(Ordering::Relaxed) {
+            1 => Some(Origin::Run),
+            2 => Some(Origin::Call),
+            _ => None,
+        }
+    }
+
+    fn set(&self, origin: Option<Origin>) {
+        let code = match origin {
+            None => 0,
+            Some(Origin::Run) => 1,
+            Some(Origin::Call) => 2,
+        };
+        self.0.store(code, Ordering::Relaxed);
+    }
+}
+
 // The realm's outermost Ruby while it runs, forgotten once it returns or
 // panics; an entry inside it leaves it as it is.
-struct OutermostGuard<'a>(Option<&'a Cell<Option<Origin>>>);
+struct OutermostGuard<'a>(Option<&'a Outermost>);
 
 impl<'a> OutermostGuard<'a> {
-    fn start(outermost: &'a Cell<Option<Origin>>, origin: Origin) -> Self {
+    fn start(outermost: &'a Outermost, origin: Origin) -> Self {
         if outermost.get().is_some() {
             return Self(None);
         }
@@ -680,7 +708,7 @@ impl Realm {
             changed: RefCell::default(),
             snapshot: RefCell::default(),
             is_defining_namespace: Cell::default(),
-            outermost: Cell::default(),
+            outermost: Arc::default(),
             spellings: RefCell::default(),
             method_symbols: RefCell::default(),
             extension_data: ExtensionData::default(),
@@ -1094,13 +1122,19 @@ fn filter_frames(mrb: &Mrb, backtrace: &[String]) -> Vec<Location> {
     if under_call && frames.last().is_some_and(|frame| frame.function.is_empty()) {
         frames.pop();
     }
+    leave_out_extension_frames(&mut frames);
+    frames
+}
+
+// Leaves out the frames of the Ruby the extension ships, unless no frame is
+// the project's.
+fn leave_out_extension_frames(frames: &mut Vec<Location>) {
     if frames
         .iter()
         .any(|frame| !frame.file.starts_with(EXTENSION_DIRECTORY))
     {
         frames.retain(|frame| !frame.file.starts_with(EXTENSION_DIRECTORY));
     }
-    frames
 }
 
 // The place a backtrace frame names, as mruby writes one: `file:line`, then

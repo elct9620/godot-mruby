@@ -28,8 +28,9 @@ module Extension
   PROFILES = { "release" => ["--release"], "debug" => [] }.freeze
 
   # The cargo flags for each library a platform ships: the editor's, with its
-  # tools and the test runner, and the two export templates load, without.
-  KINDS = { "editor" => [], "template_debug" => ["--no-default-features"],
+  # tools and the test runner, and the two export templates load, without;
+  # the debug template's stops at the debugger's breakpoints, as the editor's.
+  KINDS = { "editor" => [], "template_debug" => ["--no-default-features", "--features", "debugger"],
             "template" => ["--no-default-features"] }.freeze
 
   module_function

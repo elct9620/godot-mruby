@@ -7,6 +7,8 @@ mod bridge;
 mod compiler;
 #[cfg(feature = "editor")]
 mod completion;
+#[cfg(feature = "debugger")]
+mod debugger;
 #[cfg(feature = "editor")]
 mod documentation;
 #[cfg(feature = "editor")]
@@ -64,9 +66,12 @@ unsafe impl ExtensionLibrary for GodotMruby {
                 thread_name: log::name_thread,
             });
             realm::prepare(|| {
-                realm::Realm::open(game::RealmFiles, log::GodotLog, |realm| {
+                let realm = realm::Realm::open(game::RealmFiles, log::GodotLog, |realm| {
                     realm.install::<bridge::Godot>()
-                })
+                })?;
+                #[cfg(feature = "debugger")]
+                let realm = debugger::attach(realm);
+                Ok(realm)
             });
         }
     }

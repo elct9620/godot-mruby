@@ -5,6 +5,7 @@ The one way the extension runs Ruby. A component enters the game's realm and ask
 ## Includes
 
 - `rust/src/realm.rs`
+- `rust/src/realm/debugger.rs`
 - `rust/src/realm/index.rs`
 - `rust/src/realm/registry.rs`
 
@@ -909,6 +910,130 @@ An exception, as a script error at the first frame of its backtrace, with the fr
 ```rust
 pub trait Log {
     fn record_exception(&self, text: &str, backtrace: &[Location]) {}
+}
+```
+
+## `Realm::attach_debugger`
+
+Stops the Ruby a realm runs where the debugger it is given asks, from then on.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+impl Realm {
+    pub fn attach_debugger(&mut self, debugger: impl Debugger + 'static) {}
+}
+```
+
+## `Debugger`
+
+What a realm stops for: breakpoints, and steps counted as Godot's script debugger counts them.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub trait Debugger: Send {}
+```
+
+## `Debugger::is_breakpoint`
+
+Whether a line of a file holds a breakpoint.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub trait Debugger {
+    fn is_breakpoint(&self, line: u32, file: &str) -> bool;
+}
+```
+
+## `Debugger::lines_left`
+
+The lines a step has left to pass, none while no step is under way.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub trait Debugger {
+    fn lines_left(&self) -> i32;
+}
+```
+
+## `Debugger::set_lines_left`
+
+Counts down the lines a step has left to pass.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub trait Debugger {
+    fn set_lines_left(&self, lines: i32);
+}
+```
+
+## `Debugger::depth`
+
+How many calls deeper than its start a step is, negative when it stops in any of them.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub trait Debugger {
+    fn depth(&self) -> i32;
+}
+```
+
+## `Debugger::set_depth`
+
+Keeps a step's depth as calls go in and return.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub trait Debugger {
+    fn set_depth(&self, depth: i32);
+}
+```
+
+## `Debugger::stop`
+
+Holds the Ruby at a stack, nearest frame first, until the debugger lets it go on.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub trait Debugger {
+    fn stop(&self, stack: &[Location]);
+}
+```
+
+## `Debugger::poll`
+
+Lets the debugger take in what it was sent, as each line does.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub trait Debugger {
+    fn poll(&self);
 }
 ```
 

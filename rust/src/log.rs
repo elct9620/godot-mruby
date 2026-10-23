@@ -36,7 +36,7 @@ impl realm::Log for GodotLog {
     // Godot asks every language for its stack as it prints, so the language
     // answers the exception's backtrace while it is written.
     fn record_exception(&self, text: &str, backtrace: &[Location]) {
-        write_with_backtrace(backtrace, || {
+        report_with_backtrace(backtrace, || {
             write(
                 Level::ScriptError,
                 backtrace.first(),
@@ -61,11 +61,11 @@ thread_local! {
     static BACKTRACE: RefCell<Vec<Location>> = const { RefCell::new(Vec::new()) };
 }
 
-/// Runs `write` while `backtrace` is the one this thread is reporting, so
-/// what Godot prints in it carries that backtrace.
-pub fn write_with_backtrace<R>(backtrace: &[Location], write: impl FnOnce() -> R) -> R {
+/// Runs `report` while `backtrace` is the one this thread is reporting, so
+/// what Godot prints or asks of the language in it carries that backtrace.
+pub fn report_with_backtrace<R>(backtrace: &[Location], report: impl FnOnce() -> R) -> R {
     let outer = BACKTRACE.replace(backtrace.to_vec());
-    let answer = write();
+    let answer = report();
     BACKTRACE.set(outer);
     answer
 }

@@ -26,6 +26,7 @@ The addon registers Ruby as a script language, so a `.rb` file is served whereve
 | GDScript | calls a Ruby class's `new` and methods on `self`, awaits its methods |
 | Loading | files load by constant name, no `require` |
 | Editor | highlighting, completion, lookup, help pages, templates, validation, test panel |
+| Debugger | breakpoints, stepping and the stack of Ruby frames, in the editor and debug exports |
 | Tests | Minitest runner, left out of exports |
 
 ## Requirements
@@ -100,7 +101,7 @@ These are what a project meets today, each with what to do about it.
 | Limit | What to do |
 |---|---|
 | An exported game ships its `.rb` files as source | keep secrets out of scripts |
-| Breakpoints and stepping are not available | trace with `print`, or `push_error`, which carries Ruby's backtrace |
+| A debugger stop shows no method names, variables or expressions | read the frame's file and line; trace values with `print` |
 | An engine error inside a Ruby call carries no Ruby backtrace | find the call by the engine method the error names |
 | Ruby and the engine call into each other at most 24 deep | defer a call with `call_deferred` |
 | Completion infers no variable's type | write the name bare, or after `self.` or `Godot::` |

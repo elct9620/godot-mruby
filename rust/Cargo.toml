@@ -10,7 +10,10 @@ crate-type = ["cdylib"]
 default = ["editor"]
 # What only the editor binary reaches: the editor's tools and the test runner.
 # Export templates load a library built without it.
-editor = ["dep:ruby-prism-sys"]
+editor = ["dep:ruby-prism-sys", "debugger"]
+# Stopping Ruby at the debugger's breakpoints and steps, which links an mruby
+# built with its debug hook; the debug export template's library has it too.
+debugger = []
 
 [dependencies]
 # experimental-threads: Godot calls a script language, its scripts and their

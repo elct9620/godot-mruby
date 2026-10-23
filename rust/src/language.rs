@@ -85,6 +85,12 @@ pub fn language() -> Option<Gd<RubyLanguage>> {
     LANGUAGE.lock().unwrap().map(Gd::from_instance_id)
 }
 
+// The frame `level` of the stack this thread is reporting, nearest first.
+fn reported_frame(level: i32) -> Option<Location> {
+    let level = usize::try_from(level).ok()?;
+    log::current_backtrace().into_iter().nth(level)
+}
+
 fn empty_dictionary() -> AnyDictionary {
     VarDictionary::new().upcast_any_dictionary()
 }
@@ -241,23 +247,29 @@ impl IScriptLanguageExtension for RubyLanguage {
     fn thread_exit(&mut self) {}
 
     fn debug_get_error(&self) -> GString {
+        #[cfg(feature = "debugger")]
+        return crate::debugger::stop_reason();
+        #[cfg(not(feature = "debugger"))]
         GString::new()
     }
 
+    // A virtual never runs Ruby, so each stack level is a frame of what this
+    // thread is reporting: a debug break, an exception being written, or an
+    // error Ruby pushes.
     fn debug_get_stack_level_count(&self) -> i32 {
-        0
+        log::current_backtrace().len() as i32
     }
 
-    fn debug_get_stack_level_line(&self, _level: i32) -> i32 {
-        -1
+    fn debug_get_stack_level_line(&self, level: i32) -> i32 {
+        reported_frame(level).map_or(-1, |frame| frame.line as i32)
     }
 
-    fn debug_get_stack_level_function(&self, _level: i32) -> GString {
-        GString::new()
+    fn debug_get_stack_level_function(&self, level: i32) -> GString {
+        reported_frame(level).map_or_else(GString::new, |frame| frame.function.as_str().into())
     }
 
-    fn debug_get_stack_level_source(&self, _level: i32) -> GString {
-        GString::new()
+    fn debug_get_stack_level_source(&self, level: i32) -> GString {
+        reported_frame(level).map_or_else(GString::new, |frame| frame.file.as_str().into())
     }
 
     fn debug_get_stack_level_locals(
@@ -297,8 +309,6 @@ impl IScriptLanguageExtension for RubyLanguage {
         GString::new()
     }
 
-    // A virtual never runs Ruby, so the stack is what this thread is
-    // reporting: an exception being written, or an error Ruby pushes.
     fn debug_get_current_stack_info(&mut self) -> Array<AnyDictionary> {
         log::current_backtrace()
             .iter()

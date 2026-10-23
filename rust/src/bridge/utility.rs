@@ -227,7 +227,7 @@ fn call_row(
     }
     let args = to_arguments(mrb, super::data(mrb), args)?;
     let answer = if REPORTS.contains(name) {
-        log::write_with_backtrace(&realm::collect_backtrace(mrb), || utility(&args))
+        log::report_with_backtrace(&realm::collect_backtrace(mrb), || utility(&args))
     } else {
         utility(&args)
     };
