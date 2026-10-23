@@ -1,6 +1,6 @@
 # Debugger
 
-How a game run under Godot's debugger stops its Ruby: at a breakpoint, and line by line as the debugger steps, with the stack of Ruby frames it stopped in, as GDScript stops.
+How a game run under Godot's debugger stops its Ruby: at a breakpoint, and line by line as the debugger steps, with the stack of Ruby frames it stopped in, as GDScript stops. The editor and debug exports stop; a release export never does, so it pays nothing for it.
 
 ### What a stop does not show
 
@@ -74,6 +74,26 @@ How a game run under Godot's debugger stops its Ruby: at a breakpoint, and line 
 | Given | the debugger stopped at a breakpoint no line after it holds |
 | When | the debugger continues |
 | Then | the callback runs to its end without breaking again |
+
+## `SA-008` A release export never stops at a breakpoint
+
+| Step | Statement |
+| --- | --- |
+| Given | a game exported with a node script, and a breakpoint on a line its callback runs |
+| When | the release export template plays it under the debugger |
+| Then | the callback runs to its end without breaking |
+
+## `SA-009` A debug export stops at its breakpoints
+
+| Attribute | Value |
+| --- | --- |
+| relates | `SA-001` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a game exported with a node script, and a breakpoint on a line its callback runs |
+| When | the debug export template plays it under the debugger |
+| Then | the debugger breaks at that line and steps through the callback as the editor's does |
 
 ## `SA-010` A step never stops in the extension's own Ruby
 

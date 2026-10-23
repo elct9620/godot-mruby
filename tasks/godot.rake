@@ -9,7 +9,7 @@ namespace :godot do
     Godot.verify!
   end
 
-  desc "Play the release checks on an export template's release build"
+  desc "Play the release checks on export templates' release and debug builds"
   task :release do
     Godot::Release.verify!
   end

@@ -25,6 +25,8 @@ module Godot
     # in the extension's loader, and steps out of it back to the callback.
     LOADING = { breakpoint: "#{SCRIPT}:7", commands: %w[s o c],
                 places: ["#{SCRIPT}:7", "#{TALLY}:3", "#{SCRIPT}:8"] }.freeze
+    # A breakpoint in another file than the one the callback starts in.
+    ELSEWHERE = { breakpoint: "#{TALLY}:11", commands: %w[c], places: ["#{TALLY}:11"] }.freeze
     END_LINE = "stepped to 3"
 
     module_function
@@ -32,6 +34,7 @@ module Godot
     def verify!(project)
       verify_steps!(project)
       verify_step_over!(project)
+      verify_elsewhere!(project)
       verify_loading!(project)
     end
 
@@ -56,12 +59,40 @@ module Godot
       raise "The debugger did not step over the call to #{STEP_OVER[:places]}:\n#{lines.join("\n")}"
     end
 
+    # @behavior SA-001
+    def verify_elsewhere!(project)
+      lines = debug(project, ELSEWHERE)
+      return if breaks(lines) == ELSEWHERE[:places]
+
+      raise "The debugger did not break at #{ELSEWHERE[:places]}:\n#{lines.join("\n")}"
+    end
+
     # @behavior SA-010
     def verify_loading!(project)
       lines = debug(project, LOADING)
       return if breaks(lines) == LOADING[:places]
 
       raise "The debugger did not step through loading to #{LOADING[:places]}:\n#{lines.join("\n")}"
+    end
+
+    # The release template's library has no debug hook, so a breakpoint in
+    # an exported game never stops it.
+    # @behavior SA-008
+    def verify_release!(dir)
+      output, = Release.play(dir, SCENE, *under_debugger(STEPS), stdin_data: QUIT)
+      return if !output.include?("Debugger Break") && output.lines.map(&:chomp).include?(END_LINE)
+
+      raise "The release template's game stopped at a breakpoint or did not run on:\n#{output}"
+    end
+
+    # The debug template's library stops an exported game as the editor's
+    # stops one it plays.
+    # @behavior SA-009
+    def verify_debug!(dir)
+      output, = Release.play(dir, SCENE, *under_debugger(STEPS), stdin_data: typed(STEPS))
+      return if breaks(read_breaks(output)) == STEPS[:places]
+
+      raise "The debug template's game did not break at #{STEPS[:places]}:\n#{output}"
     end
 
     # What the scene printed under the debugger, from its first break.
