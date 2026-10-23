@@ -16,7 +16,9 @@ module Bench
       [describe_setup(results), describe_baseline(baseline, results["cpu"]),
        (tabulate_growth(growth) unless growth.empty?),
        tabulate_battle(results, baseline),
-       tabulate_spreads("call, ns", results["operations"], "%.0f", baseline&.fetch("operations", nil))]
+       tabulate_spreads("call, ns", results["operations"], "%.0f", baseline&.fetch("operations", nil)),
+       tabulate_spreads("call under a debugger, ns", results["operations_under_debugger"], "%.0f",
+                        baseline&.fetch("operations_under_debugger", nil))]
         .compact.join("\n\n")
     end
 

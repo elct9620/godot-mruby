@@ -11,7 +11,8 @@ require_relative "godot"
 
 # Measures what a game's Ruby costs: as its project grows, in a generated
 # project played and scanned headless at each size; per round of the game's
-# battle against its GDScript twin; and per call of each kind a game makes.
+# battle against its GDScript twin; and per call of each kind a game makes,
+# alone and under a debugger, as a run from the editor is.
 # Reports the numbers and judges nothing. Backs tasks/bench.rake.
 module Bench
   SIZES = [100, 1000].freeze
@@ -38,10 +39,11 @@ module Bench
   end
 
   # Every part's measures: the library's build, growth at `sizes`, the
-  # battle and the calls.
+  # battle and the calls, alone and under a debugger.
   def measure_all(sizes)
     { "library" => describe_library, "cpu" => describe_cpu, "growth" => measure(sizes), "battle" => Battle.measure,
-      "operations" => Operations.measure }
+      "operations" => Operations.measure,
+      "operations_under_debugger" => Operations.measure(run: Operations::UNDER_DEBUGGER) }
   end
 
   # The results an earlier bench wrote at `path`, when they were measured with

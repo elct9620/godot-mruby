@@ -92,6 +92,7 @@ Build output stays out of the repository. `vendor/` holds mruby's source and arc
 | Growth | `growth/` | a project's files at each size |
 | Battle | `battle/` | a round of `godot/src`'s battle, as written and in `ideal/` |
 | Calls | `battle/base/` | one call of each kind a game makes |
+| Calls under a debugger | `battle/base/` | the same, with Godot's debugger attached as in the editor |
 
 Battle and calls run Ruby and a GDScript twin, written line for line, in turns and report the ratio. A pair whose battles end apart fails the bench, since the twin drifted. `ideal/` writes the battle for the lowest call cost, to time what Ruby can reach. The bench names the build, Godot and CPU it measured, and times the library the addon holds, so a release build measures what ships. In CI it shows each ratio beside main's last bench of the same build. A ratio moves with the CPU too, so it names that bench's CPU when it differs. The call-cost gate marks a battle ratio grown more than 10% past main's on the same CPU, and fails nothing.
 
