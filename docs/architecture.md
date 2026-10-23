@@ -36,7 +36,7 @@ The realm is one `mrb_state`, reached only through `realm::enter`, and it reache
 res://addons/godot_mruby/
 ├─ godot_mruby.gdextension      names each platform's library
 ├─ godot_mruby.gdextension.uid  the uid Godot gives it
-├─ bin/                         two libraries per platform (1.2.1)
+├─ bin/                         three libraries per platform (1.2.1)
 ├─ runner.tscn                  the test runner scene
 ├─ LICENSE
 └─ THIRD_PARTY_LICENSES.txt     mruby, the shipped crates, what was changed in them
@@ -50,14 +50,15 @@ mruby carries only the gems `build_config/mruby.rb` lists, and none that reaches
 
 #### 1.2.1 Builds
 
-Each platform ships two builds of the crate, told apart by its `editor` feature. Godot picks the key whose tags all hold and are the most, and an export never holds `editor`.
+Each platform ships three builds of the crate, told apart by its `editor` feature and by the mruby archive it links. Godot picks the key whose tags all hold and are the most, and an export never holds `editor`.
 
-| Build | `.gdextension` key | Loaded by |
-| --- | --- | --- |
-| With `editor` | `<platform>.editor` | The editor and the runs it plays |
-| Without | `<platform>` | Export templates, debug and release |
+| Build | mruby debug hook | `.gdextension` key | Loaded by |
+| --- | --- | --- | --- |
+| With `editor` | yes | `<platform>.editor` | The editor and the runs it plays |
+| Without | yes | `<platform>.template_debug` | Debug export templates |
+| Without | no | `<platform>` | Release export templates |
 
-Only the editor's build carries its tools and the test runner, so a game ships neither.
+Only the editor's build carries its tools and the test runner, so a game ships neither. mruby asks before every instruction whether a debugger hook is installed, so the release template's archive leaves the hook out (`build_config/mruby.rb`).
 
 ### 1.3 Source layout
 

@@ -36,7 +36,7 @@ bundle exec rake bench                   # time a game's Ruby beside GDScript; r
 bundle exec rake addon:verify            # install the zip into a copy of godot/ and run godot:verify's checks on it
 bundle exec rake addon:release           # install the zip likewise and run godot:release's checks on it
 bundle exec rake                         # rubocop + extension:build + godot:verify
-bundle exec rake beni:clean beni:build   # rebuild mruby after editing build_config/mruby.rb
+bundle exec rake beni:clean beni:build   # rebuild mruby from nothing
 sumi verify                              # check the source against .spec/
 sumi fmt                                 # write .spec/ in sumi's form (--check only reports)
 ```
@@ -51,9 +51,10 @@ sumi fmt                                 # write .spec/ in sumi's form (--check 
 - Minimum Godot is 4.6: keep gdext's `api-4-6` feature, `rust/build.rs`'s `version_4_6` with the `gdextension-api` pin, and the `.gdextension`'s `compatibility_minimum` in step.
 - `godot/.godot/extension_list.cfg` is committed so Godot loads the addon at startup; an editor that first discovers it and quits at once crashes (godotengine/godot#111048).
 - The native library's file names are shared by `godot_mruby.gdextension` and `tasks/support/extension.rb`; change both together.
+- The mruby build names are shared by `build_config/mruby.rb` and `tasks/support/mruby_build.rb`; change both together.
 - A scenario is claimed where its outcome is observed: a Ruby test under `godot/test/unit/<spec>/` or, playing the game, `godot/test/e2e/`; or, when only a log or a run's outcome shows it, a check in `tasks/support/<spec>` reading `godot/integration/<spec>/`; or, when only the extension's own code reaches it, a Rust test beside that code; or, when a dependency must keep it, a Rust test under `rust/tests/`; a fixture claims nothing.
 - Name code, files and fixtures as `docs/convention.md` chapter 1 lays out; check a sibling's pattern against it before joining it.
 - Put task logic in `tasks/support/` (the only Ruby RuboCop checks) and keep `.rake` files as thin glue.
-- beni skips `beni:build` while an archive exists, so a config change needs `beni:clean` first.
+- `beni:build` hands every run to mruby's rake, which rebuilds what a changed `build_config/mruby.rb` touches.
 - Hooks format on edit and gate lint/tests at stop; formatting is settled before commit, not at stop.
 - Commits follow Conventional Commits.

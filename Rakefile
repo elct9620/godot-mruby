@@ -6,15 +6,15 @@ require "rubocop/rake_task"
 require_relative "tasks/support/extension"
 require_relative "tasks/support/godot_cell"
 
-# mruby is built once per architecture the extension ships: the host build is
-# what cargo links by default, and on macOS the x86_64 build is the other half
-# of the universal library. Each name here must match a build in the config,
-# since beni checks every named build's archive exists after building.
+# mruby is built twice per architecture the extension ships, with and without
+# the debug hook: the host build is what cargo links by default, and on macOS
+# the x86_64 build is the other half of the universal library. Each name must
+# match a build in the config, since beni checks every named build's archive
+# exists after building.
 Beni::Tasks.new do
   build_config "build_config/mruby.rb"
 
-  target :host
-  target Extension::CROSS_TRIPLE.to_sym if Extension.macos?
+  Extension.mruby_builds.each { |build| target build.to_sym }
 end
 
 RuboCop::RakeTask.new

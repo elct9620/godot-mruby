@@ -4,6 +4,8 @@ require "fileutils"
 require "open3"
 require "rbconfig"
 
+require_relative "mruby_build"
+
 # Where the extension is built and how a build of it reaches the place Godot
 # loads it from: bin/ of the addon, under the name godot_mruby.gdextension
 # resolves for each platform. Backs tasks/extension.rake.
@@ -26,8 +28,9 @@ module Extension
   PROFILES = { "release" => ["--release"], "debug" => [] }.freeze
 
   # The cargo flags for each library a platform ships: the editor's, with its
-  # tools and the test runner, and the one export templates load, without.
-  KINDS = { "editor" => [], "template" => ["--no-default-features"] }.freeze
+  # tools and the test runner, and the two export templates load, without.
+  KINDS = { "editor" => [], "template_debug" => ["--no-default-features"],
+            "template" => ["--no-default-features"] }.freeze
 
   module_function
 
@@ -35,7 +38,7 @@ module Extension
     RbConfig::CONFIG["host_os"].include?("darwin")
   end
 
-  # Debug builds of both libraries for this host, installed where Godot
+  # Debug builds of every library for this host, installed where Godot
   # loads them.
   def build_debug_libraries
     KINDS.each_key { |kind| build_host_library("debug", kind) }
@@ -49,10 +52,17 @@ module Extension
     end
   end
 
-  # Both kinds build to the same file, so each is installed before the next
+  # The mruby builds the libraries link, for beni to build: this host's, and
+  # on macOS the x86_64 half's.
+  def mruby_builds
+    MrubyBuild.names(macos? ? ["host", CROSS_TRIPLE] : ["host"])
+  end
+
+  # Every kind builds to the same file, so each is installed before the next
   # builds.
   def build_host_library(profile, kind)
-    system("cargo", "build", *PROFILES.fetch(profile), *KINDS.fetch(kind), "--manifest-path", MANIFEST,
+    system(build_cargo_env("host", kind),
+           "cargo", "build", *PROFILES.fetch(profile), *KINDS.fetch(kind), "--manifest-path", MANIFEST,
            exception: true)
 
     source, name = host_library(kind)
@@ -61,7 +71,7 @@ module Extension
 
   def build_universal_library(profile, kind)
     ARCHES.each_key do |triple|
-      system(build_cargo_env(triple),
+      system(build_cargo_env(triple == NATIVE_TRIPLE ? "host" : triple, kind),
              "cargo", "build", *PROFILES.fetch(profile), *KINDS.fetch(kind), "--target", triple,
              "--manifest-path", MANIFEST, exception: true)
     end
@@ -115,13 +125,14 @@ module Extension
     "lib#{CRATE}.macos.#{kind}.dylib"
   end
 
-  # The native build finds its archive through BENI_VENDOR_DIR, which
-  # .cargo/config.toml sets. A cross target reads only MRUBY_LIB_DIR, and
-  # that variable outranks the other, so it is set for the cross build alone.
-  def build_cargo_env(triple)
-    return {} if triple == NATIVE_TRIPLE
+  # The native build finds the host build's archive through BENI_VENDOR_DIR,
+  # which .cargo/config.toml sets. MRUBY_LIB_DIR outranks it, so it names
+  # any other build: a cross target's, or one without the debug hook.
+  def build_cargo_env(base, kind)
+    build = MrubyBuild.name(base, kind)
+    return {} if build == "host"
 
-    { "MRUBY_LIB_DIR" => File.join(VENDOR_DIR, "mruby", "build", triple, "lib") }
+    { "MRUBY_LIB_DIR" => File.join(VENDOR_DIR, "mruby", "build", build, "lib") }
   end
 
   def locate_slice(triple, profile)

@@ -30,7 +30,7 @@ The addon registers Ruby as a script language, so a `.rb` file is served whereve
 
 ## Requirements
 
-Each platform ships two self-contained libraries: the editor's, and one without its tools that export templates load.
+Each platform ships three self-contained libraries: the editor's, and two without its tools that debug and release export templates load.
 
 | Item | Supported |
 |---|---|

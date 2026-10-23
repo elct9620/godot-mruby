@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 namespace :extension do
-  desc "Build the editor and template libraries for this host (debug) into the addon"
+  desc "Build the editor and export template libraries for this host (debug) into the addon"
   task build: "beni:build" do
     Extension.build_debug_libraries
   end
