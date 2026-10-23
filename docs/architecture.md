@@ -133,6 +133,7 @@ Names follow the naming chapter of [`convention.md`](convention.md#1-naming).
 | `settings.rs` | `ProjectSettings` under `mruby/` |
 | `GameFiles`, `RealmFiles`, `FilesOnDisk` and their `Listing` in `game.rs` | `ResourceLoader` under `res://`, and the files on disk |
 | `GodotLog` in `log.rs` | Godot's log |
+| `GodotDebugger` in `debugger.rs` | `EngineDebugger`, in the editor's and the debug template's builds |
 | `Godot` in `bridge.rs` and `bridge/` | `ClassDB`, the engine's singletons, value types and utility functions |
 | `RubyObject` in `bridge/ruby_object.rs` | A `RefCounted` standing for a Ruby object |
 | `Snapshot` in `snapshot.rs` | What Godot asks a script about its class |
@@ -155,7 +156,7 @@ Scene stage begins
   │  loader::register       .rb loads as RubyScript
   │  saver::register        RubyScript saves as .rb
   │  realm::watch_waits     a wait past its patience is logged
-  │  realm::prepare         RealmFiles, GodotLog, the Godot gem
+  │  realm::prepare         RealmFiles, GodotLog, the Godot gem; GodotDebugger under a debugger
   ▼
 Editor stage begins, in the editor
   │  RubyEditorPlugin       added by gdext; adds RubyExportPlugin, RubyTestPanel
@@ -412,7 +413,7 @@ body(&Realm)
 a Rust value, or a RubyError ──► RubyError::write, at its Ruby line
 ```
 
-The realm is the one way into Ruby. A component hands `realm::enter` a body, which is given the realm, never its `mrb_state`. What comes back is a Rust value, or a `RubyError` the component writes to a log with its backtrace. While it is written, that backtrace answers as the language's stack (`.spec/behavior/report.md`). Since nothing outside holds a Ruby value, the realm's inside changes without its callers changing.
+The realm is the one way into Ruby. A component hands `realm::enter` a body, which is given the realm, never its `mrb_state`. What comes back is a Rust value, or a `RubyError` the component writes to a log with its backtrace. While it is written, that backtrace answers as the language's stack (`.spec/behavior/report.md`), as a debugger's stop does (`.spec/behavior/debugger.md`). Since nothing outside holds a Ruby value, the realm's inside changes without its callers changing.
 
 There is one realm, the game's, entered by one thread at a time. That thread enters again when the engine calls back into scripts, up to 24 entries deep, which the smallest thread stack holds. Freeing a node never waits: its key goes into a queue the next entry or frame empties. A reloaded script's file runs again at the next frame, as `.spec/behavior/reload.md` lays out. Its operations are in `.spec/contract/realm.md`.
 
@@ -439,7 +440,8 @@ realm.rs              Realm, prepare, enter, Files, Log, RubyError, the queues
 ├─ methods.rs, .rb    a class's own methods, published with it and again as Ruby adds one
 ├─ executor.rs        runs a file once, all or nothing, or again
 ├─ extensions.rs      each gem's data, added and never removed
-└─ registry.rs        keys to objects, rooted for the collector
+├─ registry.rs        keys to objects, rooted for the collector
+└─ debugger.rs        Debugger, the code fetch hook a stop starts from
 ```
 
 A realm's bookkeeping sits in the state's user data. Held objects live in a hash rooted for the collector, so mruby never frees an object a node still uses. Ruby's calls back into Rust reach it from the state they are given, and no gem knows the slot.
@@ -447,6 +449,15 @@ A realm's bookkeeping sits in the state's user data. Held objects live in a hash
 What makes this mruby environment its own is defined as the realm opens. Its output goes to its log. Its hooks let a missing constant ask the index, and record a running file's constants and a class's new methods.
 
 The index is built from the paths its files give, and the executor takes each file's source and declaration from them. The realm therefore never reads a file itself. What a file opens loads before it runs, and a node script's class is held to its declared superclass after. The loader's rules are in `.spec/behavior/loader.md`.
+
+#### 3.2.1 Debugger
+
+A debugger attached to the realm stops it before a line, through mruby's code fetch hook. The hook runs no Ruby, and the release template's build has no hook.
+
+```
+code fetch hook ──► a project frame starts a line?
+                      └─ Debugger: breakpoint, or a step's end ──► stop(stack)
+```
 
 ### 3.3 Extensions
 
