@@ -10,7 +10,7 @@ require_relative "extension"
 
 # The copy of gdext's godot-cell the extension builds with: the published
 # crate with one condition changed, so a mutable bind waits for the shared
-# binds other threads hold. Without it, a thread whose shared bind came first
+# binds other threads hold, and its docs.rs cfg declared. Without it, a thread whose shared bind came first
 # binds mutably while another thread's is still held, and gdext panics; Godot
 # makes such calls on the language from the editor's scan and from any thread
 # printing an error. rust/Cargo.toml patches crates.io's godot-cell with this
@@ -38,11 +38,20 @@ module GodotCell
             && tracker_guard.current_thread_has_mut_ref())
   RUST
 
+  # The cfg the crate's docs.rs build sets, declared in its manifest so cargo
+  # does not warn of it at every build of the copy.
+  LINTS = <<~TOML
+
+    [lints.rust]
+    unexpected_cfgs = { level = "warn", check-cfg = ["cfg(published_docs)"] }
+  TOML
+
   module_function
 
   # The change as the addon's third-party notices show it.
   def change
     "This build changes #{FILE}, in `borrow_mut`, from\n\n#{CONDITION}\nto\n\n#{REPLACEMENT}\n" \
+      "and adds to Cargo.toml#{LINTS}\n" \
       "The changed source is godot-cell #{VERSION} from crates.io with this change, under the same license.\n"
   end
 
@@ -69,7 +78,10 @@ module GodotCell
   end
 
   def applied?
-    File.exist?(File.join(DIR, FILE)) && File.binread(File.join(DIR, FILE)).include?(REPLACEMENT)
+    [[FILE, REPLACEMENT], ["Cargo.toml", LINTS]].all? do |file, text|
+      path = File.join(DIR, file)
+      File.exist?(path) && File.binread(path).include?(text)
+    end
   end
 
   def download
@@ -98,5 +110,6 @@ module GodotCell
     raise "#{FILE} of godot-cell #{VERSION} no longer reads as expected" unless source.scan(CONDITION).size == 1
 
     File.binwrite(path, source.sub(CONDITION, REPLACEMENT))
+    File.write(File.join(DIR, "Cargo.toml"), LINTS, mode: "a")
   end
 end
