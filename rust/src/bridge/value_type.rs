@@ -103,7 +103,7 @@ pub fn is_value_type(kind: VariantType) -> bool {
 
 /// Defines Godot::Value, the class every value type's class descends from.
 pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
-    let class = godot.define_class(mrb, c"Value", mrb.object_class())?;
+    let class = godot.define_class(mrb, c"Value", mrb.class_object())?;
     class.set_instance_data_tt(mrb)?;
     class.undef_default_alloc_func(mrb);
     class.define_singleton_method(mrb, c"__has_value_type__", method!(has_value_type, 1))?;
@@ -161,7 +161,7 @@ fn class_by_kind(mrb: &Mrb, data: &BridgeData, kind: VariantType) -> Option<RCla
     let classes = &data.value_classes;
     let index = kind.ord as usize;
     if let Some(class) = classes.borrow().get(index).copied().flatten() {
-        return Some(class);
+        return Some(mrb.get_inner(class));
     }
     let class = mrb
         .module_get(c"Godot")
@@ -175,13 +175,13 @@ fn class_by_kind(mrb: &Mrb, data: &BridgeData, kind: VariantType) -> Option<RCla
 // Keeps `class` as the class of the value type `kind`, rooted for the
 // collector so it lives while it is kept.
 fn keep_class(mrb: &Mrb, data: &BridgeData, kind: VariantType, class: RClass) {
-    mrb.gc_register_forever(class.as_value());
+    mrb.gc_register_mark_object(class.as_value());
     let mut classes = data.value_classes.borrow_mut();
     let index = kind.ord as usize;
     if classes.len() <= index {
         classes.resize(index + 1, None);
     }
-    classes[index] = Some(class);
+    classes[index] = Some(class.into());
 }
 
 impl EngineValue {
@@ -254,10 +254,13 @@ pub(super) fn kind_by_name(name: &str) -> Option<VariantType> {
 // class Godot names now is kept for its type in place of one it named
 // before, so the type's values are made of the class Ruby names.
 fn kind_by_class(mrb: &Mrb, data: &BridgeData, class: RClass) -> Result<VariantType, Error> {
-    let kept =
-        data.value_classes.borrow().iter().position(|kept| {
-            kept.is_some_and(|kept| kept.as_value().is_equal(mrb, class.as_value()))
-        });
+    let kept = data.value_classes.borrow().iter().position(|kept| {
+        kept.is_some_and(|kept| {
+            mrb.get_inner(kept)
+                .as_value()
+                .is_equal(mrb, class.as_value())
+        })
+    });
     if let Some(ord) = kept {
         return Ok(<VariantType as EngineEnum>::from_ord(ord as i32));
     }
@@ -356,7 +359,7 @@ fn engine_names(mrb: &Mrb, class: RClass) -> Result<Value, Error> {
     let kind = kind.ord as sys::GDExtensionVariantType;
     let Some((_, members, methods)) = VALUE_NAMES.iter().find(|(name, ..)| *name == kind_name)
     else {
-        return Ok(mrb.ary_new_from_values(&[]).as_value());
+        return Ok(mrb.ary_new_from_values::<Value>(&[]).as_value());
     };
     // SAFETY: the interface is initialized while the extension runs, and
     // each name lives for its call.
@@ -427,7 +430,7 @@ fn member_by_name(mrb: &Mrb, held: &EngineValue, name: Symbol) -> Value {
 // value itself never changes.
 fn with_member(mrb: &Mrb, held: &EngineValue, name: Symbol, member: Value) -> Result<Value, Error> {
     if let EngineValue::Vector2(vector) = held
-        && let Some(axis) = name.name(mrb).and_then(|name| match name.as_str() {
+        && let Some(axis) = name.name(mrb).ok().and_then(|name| match name.as_str() {
             "x" => Some(Vector2Axis::X),
             "y" => Some(Vector2Axis::Y),
             _ => None,

@@ -8,7 +8,7 @@
 use std::cell::{Cell, RefCell};
 use std::sync::{Mutex, PoisonError};
 
-use beni::{Error, IntoValue, Mrb, RHash, ReprValue, Value};
+use beni::{Error, IntoValue, Mrb, RHash, ReprValue, Value, value::Opaque};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 // The keys whose loosely held object the collector has freed, noted as it
@@ -55,10 +55,10 @@ impl From<i64> for Key {
 }
 
 pub(super) struct Registry {
-    objects: RHash,
+    objects: Opaque<RHash>,
     // The objects held loosely, by key: the collector does not mark them, so
     // one is read only while `DEAD_KEYS` does not name its key.
-    loose: RefCell<FxHashMap<i64, Value>>,
+    loose: RefCell<FxHashMap<i64, Opaque<Value>>>,
     // The last key the registry named itself. It counts down from -1, since
     // a node's key is its instance id, which is positive: only a
     // reference-counted object's id is negative, and no node is one.
@@ -68,9 +68,9 @@ pub(super) struct Registry {
 impl Registry {
     pub fn new(mrb: &Mrb) -> Self {
         let objects = mrb.hash_new();
-        mrb.gc_register_forever(objects.as_value());
+        mrb.gc_register_mark_object(objects.as_value());
         Self {
-            objects,
+            objects: objects.into(),
             loose: RefCell::default(),
             last: Cell::new(0),
         }
@@ -86,14 +86,15 @@ impl Registry {
 
     /// Holds `object` under `key`.
     pub fn hold(&self, mrb: &Mrb, key: Key, object: Value) -> Result<(), Error> {
-        self.objects.set(mrb, key.to_value(mrb), object)
+        mrb.get_inner(self.objects)
+            .aset(mrb, key.to_value(mrb), object)
     }
 
     /// Holds `object` under `key` loosely, for an object standing for a
     /// reference-counted engine object only Ruby holds.
     pub fn hold_loose(&self, key: Key, object: Value) {
         forget_collected(key);
-        self.loose.borrow_mut().insert(key.0, object);
+        self.loose.borrow_mut().insert(key.0, object.into());
     }
 
     /// Holds the object `key` holds loosely as firmly as any other, since
@@ -103,6 +104,7 @@ impl Registry {
         let Some(object) = self.loose.borrow_mut().remove(&key.0) else {
             return Ok(());
         };
+        let object = mrb.get_inner(object);
         if is_collected(key) {
             return Ok(());
         }
@@ -112,7 +114,7 @@ impl Registry {
     /// Holds the object `key` holds loosely from now on, since only Ruby
     /// holds its engine object.
     pub fn loosen(&self, mrb: &Mrb, key: Key) -> Result<(), Error> {
-        let object = self.objects.delete(mrb, key.to_value(mrb))?;
+        let object: Value = mrb.get_inner(self.objects).delete(mrb, key.to_value(mrb))?;
         if !object.is_nil() {
             self.hold_loose(key, object);
         }
@@ -121,7 +123,9 @@ impl Registry {
 
     /// Whether `key` holds an object.
     pub fn has_object(&self, mrb: &Mrb, key: Key) -> Result<bool, Error> {
-        Ok(self.objects.contains_key(mrb, key.to_value(mrb))?
+        Ok(mrb
+            .get_inner(self.objects)
+            .contains_key(mrb, key.to_value(mrb))?
             || self.loose_object_by_key(mrb, key).is_some())
     }
 
@@ -129,14 +133,14 @@ impl Registry {
     // protected in the arena now that Rust has it: callers run inside an
     // arena scope, which takes the protection back as it ends.
     fn loose_object_by_key(&self, mrb: &Mrb, key: Key) -> Option<Value> {
-        let object = *self.loose.borrow().get(&key.0)?;
+        let object = mrb.get_inner(*self.loose.borrow().get(&key.0)?);
         (!is_collected(key)).then(|| mrb.arena_scope().keep(object))
     }
 
     /// The object `key` holds; a key released already holds none. A held
     /// object is never nil, so nil means the key holds none.
     pub fn object_by_key(&self, mrb: &Mrb, key: Key) -> Result<Value, Error> {
-        let mut object = self.objects.get(mrb, key.to_value(mrb))?;
+        let mut object: Value = mrb.get_inner(self.objects).aref(mrb, key.to_value(mrb))?;
         if object.is_nil() {
             object = self.loose_object_by_key(mrb, key).unwrap_or(object);
         }
@@ -151,7 +155,7 @@ impl Registry {
     /// included.
     pub fn objects(&self, mrb: &Mrb) -> Vec<Value> {
         let keys: Vec<i64> = self.loose.borrow().keys().copied().collect();
-        self.objects
+        mrb.get_inner(self.objects)
             .values(mrb)
             .entries(mrb)
             .chain(
@@ -163,14 +167,16 @@ impl Registry {
 
     /// Lets go of the object `key` holds, for the collector to free.
     pub fn release(&self, mrb: &Mrb, key: Key) {
-        self.objects.delete(mrb, key.to_value(mrb)).ok();
+        mrb.get_inner(self.objects)
+            .delete::<_, Value>(mrb, key.to_value(mrb))
+            .ok();
         self.loose.borrow_mut().remove(&key.0);
         forget_collected(key);
     }
 
     #[cfg(test)]
     pub fn len(&self, mrb: &Mrb) -> usize {
-        self.objects.len(mrb)
+        mrb.get_inner(self.objects).len()
     }
 }
 

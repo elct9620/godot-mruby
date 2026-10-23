@@ -62,7 +62,7 @@ fn declare_signal(
 // engine class it extends when it is listed by none.
 fn read_parameter(mrb: &Mrb, name: String, class: Value) -> Result<Parameter, String> {
     let path = class
-        .funcall(mrb, c"to_s", &[])
+        .funcall(mrb, c"to_s", ())
         .ok()
         .and_then(String::from_value)
         .unwrap_or_default();
@@ -378,7 +378,7 @@ impl ElementType {
 // an object being a resource or a node, as an export's is.
 fn read_element_type(mrb: &Mrb, class: Value) -> Result<ElementType, String> {
     let path = class
-        .funcall(mrb, c"to_s", &[])
+        .funcall(mrb, c"to_s", ())
         .ok()
         .and_then(String::from_value)
         .unwrap_or_default();

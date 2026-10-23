@@ -506,7 +506,7 @@ fn take_away(mrb: &Mrb, frame: &Frame) {
 fn live_scope_by_names(mrb: &Mrb, scope: &[String]) -> Option<Scope> {
     scope
         .iter()
-        .try_fold(Scope::Class(mrb.object_class()), |outer, name| {
+        .try_fold(Scope::Class(mrb.class_object()), |outer, name| {
             let name = mrb.intern(name.as_bytes()).ok()?;
             if outer.const_defined_at(mrb, name) {
                 outer.const_get(mrb, name).ok().and_then(Scope::from_value)

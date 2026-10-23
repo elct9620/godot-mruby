@@ -32,7 +32,7 @@ static BOUND_MEMBER: DataType<BoundMember> = DataType::new(c"Godot::BoundMember"
 unsafe impl TypedData for BoundMember {
     fn class(mrb: &Mrb) -> RClass {
         super::find_class_once(mrb, &super::data(mrb).bound_member_class, || {
-            let class = RClass::new(mrb, mrb.object_class()).expect("mruby makes a class");
+            let class = RClass::new(mrb, mrb.class_object()).expect("mruby makes a class");
             class
                 .set_instance_data_tt(mrb)
                 .expect("mruby marks a class's data");

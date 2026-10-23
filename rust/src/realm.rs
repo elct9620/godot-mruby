@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use beni::{
     Class as _, Error, FromValue, Gem, IntoValue, Module as _, Mrb, Qtrue, RArray, RClass,
-    ReprValue, Symbol, TryConvert, Value,
+    ReprValue, Symbol, TryConvert, Value, value::Opaque,
 };
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
@@ -173,9 +173,9 @@ struct Bookkeeping {
     outermost: Cell<Option<Origin>>,
     // How each constant defined since the realm opened is spelled, by the
     // key the class index matches it with.
-    spellings: RefCell<HashMap<Vec<String>, Symbol>>,
+    spellings: RefCell<HashMap<Vec<String>, Opaque<Symbol>>>,
     // The symbol of each method name Rust has sent, interned once.
-    method_symbols: RefCell<FxHashMap<String, Symbol>>,
+    method_symbols: RefCell<FxHashMap<String, Opaque<Symbol>>>,
     // What each extension keeps for the realm, by its type.
     extension_data: ExtensionData,
 }
@@ -215,11 +215,11 @@ enum Origin {
 // interning searches every name the realm has.
 fn symbol_by_name(mrb: &Mrb, name: &str) -> Result<Symbol, Error> {
     let symbols = &bookkeeping(mrb).method_symbols;
-    if let Some(symbol) = symbols.borrow().get(name) {
-        return Ok(*symbol);
+    if let Some(&symbol) = symbols.borrow().get(name) {
+        return Ok(mrb.get_inner(symbol));
     }
     let symbol = Symbol::from(mrb.intern(name.as_bytes())?);
-    symbols.borrow_mut().insert(name.to_owned(), symbol);
+    symbols.borrow_mut().insert(name.to_owned(), symbol.into());
     Ok(symbol)
 }
 
@@ -480,8 +480,8 @@ pub fn file_by_constant(mrb: &Mrb, names: &[String]) -> Option<String> {
 /// recent first, as an exception raised here would carry them.
 pub fn collect_backtrace(mrb: &Mrb) -> Vec<Location> {
     let lines: Vec<String> = mrb
-        .object_class()
-        .funcall(mrb, c"caller", &[])
+        .class_object()
+        .funcall(mrb, c"caller", ())
         .and_then(|lines| RArray::try_convert(lines, mrb))
         .map(|lines| {
             lines
@@ -766,7 +766,7 @@ impl Realm {
             if ran && let Some(class) = self.find_respondent(path, rerun.withdraw).map_err(read)? {
                 let path_value = self.mrb.str_new(path.as_bytes()).as_value();
                 class
-                    .funcall(&self.mrb, rerun.withdraw, &[path_value])
+                    .funcall::<_, _, Value>(&self.mrb, rerun.withdraw, [path_value])
                     .map_err(read)?;
             }
             let former = if ran {
@@ -787,18 +787,20 @@ impl Realm {
                 return Err(read(error));
             }
             if ran && let Some(class) = self.find_respondent(path, rerun.prune).map_err(read)? {
-                class.funcall(&self.mrb, rerun.prune, &[]).map_err(read)?;
+                class
+                    .funcall::<_, _, Value>(&self.mrb, rerun.prune, ())
+                    .map_err(read)?;
             }
             if ran && let Some(class) = self.find_respondent(path, rerun.adopt).map_err(read)? {
                 for object in bookkeeping(&self.mrb).registry.objects(&self.mrb) {
                     if object
-                        .funcall(&self.mrb, c"is_a?", &[class])
+                        .funcall(&self.mrb, c"is_a?", [class])
                         .map_err(read)
                         .map(Qtrue::from_value)?
                         .is_some()
                     {
                         class
-                            .funcall(&self.mrb, rerun.adopt, &[object])
+                            .funcall::<_, _, Value>(&self.mrb, rerun.adopt, [object])
                             .map_err(read)?;
                     }
                 }
@@ -827,11 +829,11 @@ impl Realm {
         let Some(class) = loader::constant_by_key(&self.mrb, &key_by_path(&self.mrb, path)) else {
             return Ok(None);
         };
-        let name = Symbol::new(&self.mrb, message)?.into_value(&self.mrb);
+        let name = Symbol::new(&self.mrb, message.to_string_lossy())?.into_value(&self.mrb);
         let answers = class.funcall(
             &self.mrb,
             c"respond_to?",
-            &[name, true.into_value(&self.mrb)],
+            [name, true.into_value(&self.mrb)],
         )?;
         Ok(Qtrue::from_value(answers).map(|_| class))
     }
@@ -852,9 +854,9 @@ impl Realm {
             .collect();
         let answer = self.run_as(Origin::Call, || {
             self.mrb
-                .object_class()
+                .class_object()
                 .const_get::<_, Value>(&self.mrb, receiver)
-                .and_then(|receiver| receiver.funcall(&self.mrb, method, &args))
+                .and_then(|receiver| receiver.funcall(&self.mrb, method, args.as_slice()))
                 .map_err(|error| RubyError::from_error(&self.mrb, None, &error))
         })?;
         self.to_rust(answer, || {
@@ -919,7 +921,7 @@ impl Realm {
             .collect();
         self.run_as(Origin::Call, || {
             class
-                .funcall(&self.mrb, make, &args)
+                .funcall(&self.mrb, make, args.as_slice())
                 .and_then(|object| registry.hold(&self.mrb, key, object))
                 .map(|()| Build::New)
                 .map_err(read)
@@ -945,7 +947,7 @@ impl Realm {
                 .object_by_key(&self.mrb, key)
                 .and_then(|object| {
                     let method = symbol_by_name(&self.mrb, method)?;
-                    object.funcall(&self.mrb, method, &args)
+                    object.funcall(&self.mrb, method, args.as_slice())
                 })
                 .map_err(|error| RubyError::from_error(&self.mrb, None, &error))
         })?;

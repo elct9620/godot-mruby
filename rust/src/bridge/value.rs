@@ -77,14 +77,14 @@ fn to_ruby(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> Value {
 
 // The symbol for `name`, interned the first time the engine hands it over.
 fn intern_symbol(mrb: &Mrb, data: &BridgeData, name: StringName) -> Value {
-    if let Some(symbol) = data.symbols.borrow().get(&name) {
-        return symbol.as_value();
+    if let Some(&symbol) = data.symbols.borrow().get(&name) {
+        return mrb.get_inner(symbol).as_value();
     }
     let Ok(id) = mrb.intern(name.to_string().as_bytes()) else {
         return qnil().as_value();
     };
     let symbol = Symbol::from(id);
-    data.symbols.borrow_mut().insert(name, symbol);
+    data.symbols.borrow_mut().insert(name, symbol.into());
     symbol.as_value()
 }
 
@@ -120,7 +120,7 @@ pub(super) fn make_entries(mrb: &Mrb, data: &BridgeData, variant: &Variant) -> O
     let dictionary = variant.try_to::<AnyDictionary>().ok()?;
     let hash = mrb.hash_new();
     for (key, value) in dictionary.iter_shared() {
-        hash.set(mrb, to_ruby(mrb, data, &key), to_ruby(mrb, data, &value))
+        hash.aset(mrb, to_ruby(mrb, data, &key), to_ruby(mrb, data, &value))
             .ok();
     }
     Some(hash.as_value())
@@ -211,7 +211,7 @@ pub fn to_engine(
         let mut copied = VarDictionary::new();
         let keys = hash.keys(mrb);
         for key in keys.entries(mrb) {
-            let entry = hash.get(mrb, key).map_err(|error| error.message(mrb))?;
+            let entry: Value = hash.aref(mrb, key).map_err(|error| error.message(mrb))?;
             copied.set(
                 &to_engine(mrb, data, key, level + 1)?,
                 &to_engine(mrb, data, entry, level + 1)?,

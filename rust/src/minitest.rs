@@ -110,7 +110,7 @@ impl IntoValue for &LoadFailure {
             ),
         ];
         for (key, value) in entries {
-            hash.set(mrb, mrb.str_new(key.as_bytes()).as_value(), value)
+            hash.aset(mrb, mrb.str_new(key.as_bytes()).as_value(), value)
                 .expect("a fresh hash takes a string key");
         }
         hash.as_value()
@@ -155,7 +155,7 @@ impl IntoValue for Options {
         for (key, value) in entries {
             if let Some(value) = value {
                 let key = mrb.intern(key.as_bytes()).expect("a short name interns");
-                hash.set(mrb, Symbol::from(key).as_value(), value)
+                hash.aset(mrb, Symbol::from(key).as_value(), value)
                     .expect("a fresh hash takes a symbol key");
             }
         }

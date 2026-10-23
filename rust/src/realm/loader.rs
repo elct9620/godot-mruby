@@ -22,7 +22,7 @@ pub(super) fn define(mrb: &Mrb) -> Result<(), Error> {
 // Module#__load_by_name__(name): the constant in a one-element array, or nil
 // when the class index names no file for it.
 fn load_by_name(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error> {
-    let Some(name) = name.name(mrb) else {
+    let Some(name) = name.name(mrb).ok() else {
         return Ok(qnil().as_value());
     };
     Ok(match resolve(mrb, receiver, &name)? {
@@ -37,7 +37,7 @@ fn load_by_name(mrb: &Mrb, receiver: Value, name: Symbol) -> Result<Value, Error
 // it that other files name loaded, as Zeitwerk loads one before the
 // statement opening it.
 fn record_constant(mrb: &Mrb, receiver: Value, symbol: Symbol) -> Result<Value, Error> {
-    let (Some(scope), Some(name)) = (split_path(mrb, receiver), symbol.name(mrb)) else {
+    let (Some(scope), Some(name)) = (split_path(mrb, receiver), symbol.name(mrb).ok()) else {
         return Ok(qnil().as_value());
     };
     if !bookkeeping(mrb).is_defining_namespace.get() {
@@ -49,7 +49,10 @@ fn record_constant(mrb: &Mrb, receiver: Value, symbol: Symbol) -> Result<Value, 
         .map(|segment| index::normalize(segment))
         .collect();
     let inner_constants = executor::take_inner_constants(mrb, &key);
-    bookkeeping(mrb).spellings.borrow_mut().insert(key, symbol);
+    bookkeeping(mrb)
+        .spellings
+        .borrow_mut()
+        .insert(key, symbol.into());
     load_hidden(mrb, &scope, &name);
     for names in inner_constants {
         ensure_constant(mrb, &names)?;
@@ -259,7 +262,7 @@ pub(super) fn take_class_for_remake(mrb: &Mrb, path: &str) -> Result<Option<Form
     let name = names.pop().unwrap_or_default();
     let scope = match constant_by_key(mrb, &normalize_path(&names)) {
         Some(scope) if !names.is_empty() => Scope::try_convert(scope, mrb)?,
-        _ => Scope::Class(mrb.object_class()),
+        _ => Scope::Class(mrb.class_object()),
     };
     scope.const_remove(mrb, &name)?;
     Ok(Some(FormerClass { scope, name, class }))
@@ -322,7 +325,7 @@ pub(super) fn constant_by_key(mrb: &Mrb, key: &[String]) -> Option<Value> {
 }
 
 fn object(mrb: &Mrb) -> Value {
-    mrb.object_class().as_value()
+    mrb.class_object().as_value()
 }
 
 /// A class or a module: what holds constants.
@@ -390,14 +393,15 @@ impl TryConvert for Scope {
 // How the constant the class index matches to `key` was last defined, which
 // spares reading every constant of the namespace it sits in.
 fn spelling_by_key(mrb: &Mrb, key: &[String]) -> Option<Symbol> {
-    bookkeeping(mrb).spellings.borrow().get(key).copied()
+    let spelling = bookkeeping(mrb).spellings.borrow().get(key).copied()?;
+    Some(mrb.get_inner(spelling))
 }
 
 // The constant `scope` itself holds as `name`, asking without loading one.
 fn constant_by_name(mrb: &Mrb, scope: Value, name: Symbol) -> Option<Value> {
     let inherit = false.into_value(mrb);
     scope
-        .funcall(mrb, c"const_defined?", &[name.into_value(mrb), inherit])
+        .funcall(mrb, c"const_defined?", [name.into_value(mrb), inherit])
         .ok()
         .and_then(Qtrue::from_value)?;
     Scope::from_value(scope)?.const_get(mrb, name).ok()
@@ -407,11 +411,11 @@ fn constant_by_name(mrb: &Mrb, scope: Value, name: Symbol) -> Option<Value> {
 // `segment`.
 fn constant_by_segment(mrb: &Mrb, scope: Value, segment: &str) -> Option<Value> {
     let constants = scope
-        .funcall(mrb, c"constants", &[])
+        .funcall(mrb, c"constants", ())
         .ok()
         .and_then(RArray::from_value)?;
     let name = (0..constants.len())
-        .map(|index| constants.entry(mrb, index as isize))
+        .filter_map(|index| constants.entry::<Value>(mrb, index as isize).ok())
         .find(|name| index::normalize(&name.to_string(mrb)) == segment)?;
     Scope::from_value(scope)?
         .const_get(mrb, name.to_sym(mrb).ok()?)
@@ -503,7 +507,7 @@ fn define_namespace_module(
 fn scope_by_names(mrb: &Mrb, outer: &[String]) -> Result<Scope, Error> {
     outer
         .iter()
-        .try_fold(Scope::Class(mrb.object_class()), |scope, name| {
+        .try_fold(Scope::Class(mrb.class_object()), |scope, name| {
             Scope::try_convert(scope.const_get(mrb, name.as_str())?, mrb)
         })
 }
@@ -523,7 +527,7 @@ fn make_name_error(mrb: &Mrb, message: &str, name: &str) -> Error {
             mrb.str_new(message.as_bytes()).as_value(),
             Symbol::from(mrb.intern(name.as_bytes())?).as_value(),
         ];
-        class.into_value(mrb).funcall(mrb, c"new", &arguments)
+        class.into_value(mrb).funcall(mrb, c"new", arguments)
     });
     match error {
         Ok(error) => Error::Exception(error),

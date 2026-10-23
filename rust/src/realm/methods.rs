@@ -32,7 +32,7 @@ pub(super) fn methods_by_path(mrb: &Mrb, path: &str) -> Vec<String> {
         return Vec::new();
     };
     let Some(own_ancestors) = class
-        .funcall(mrb, c"__own_ancestors__", &[])
+        .funcall(mrb, c"__own_ancestors__", ())
         .ok()
         .and_then(RArray::from_value)
     else {
@@ -46,12 +46,12 @@ pub(super) fn methods_by_path(mrb: &Mrb, path: &str) -> Vec<String> {
         }
         let found = [c"instance_methods", c"private_instance_methods"]
             .into_iter()
-            .filter_map(|listing| module.funcall(mrb, listing, &own).ok())
+            .filter_map(|listing| module.funcall(mrb, listing, own).ok())
             .filter_map(RArray::from_value)
             .flat_map(|methods| methods.entries(mrb));
         for name in found
             .filter_map(Symbol::from_value)
-            .filter_map(|name| name.name(mrb))
+            .filter_map(|name| name.name(mrb).ok())
         {
             if !names.contains(&name) {
                 names.push(name);
@@ -143,6 +143,6 @@ fn record_taker(mrb: &Mrb, id: i64, path: &str) {
 
 // The identity of `module`, which no class overriding `hash` changes.
 fn read_id(mrb: &Mrb, module: Value) -> Option<i64> {
-    let id = module.funcall(mrb, c"__id__", &[]).ok()?;
+    let id = module.funcall(mrb, c"__id__", ()).ok()?;
     i64::try_convert(id, mrb).ok()
 }

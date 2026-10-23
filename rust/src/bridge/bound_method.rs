@@ -60,7 +60,7 @@ static BOUND_METHOD: DataType<BoundMethod> = DataType::new(c"Godot::BoundMethod"
 unsafe impl TypedData for BoundMethod {
     fn class(mrb: &Mrb) -> RClass {
         super::find_class_once(mrb, &super::data(mrb).bound_method_class, || {
-            let class = RClass::new(mrb, mrb.object_class()).expect("mruby makes a class");
+            let class = RClass::new(mrb, mrb.class_object()).expect("mruby makes a class");
             class
                 .set_instance_data_tt(mrb)
                 .expect("mruby marks a class's data");

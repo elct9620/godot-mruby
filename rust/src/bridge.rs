@@ -8,7 +8,8 @@ use std::ptr;
 use beni::typed_data::RTypedData;
 use beni::{
     Class as _, Error, Gem, Id, Module, Mrb, Object, RClass, ReprValue, Symbol, TryConvert,
-    TypedData, Value, method, value::qnil,
+    TypedData, Value, method,
+    value::{Opaque, qnil},
 };
 use godot::builtin::{StringName, Variant};
 use godot::classes::ClassDb;
@@ -75,23 +76,23 @@ impl Gem for Godot {
 #[derive(Default)]
 struct BridgeData {
     // Godot::Object.
-    object_class: Cell<Option<RClass>>,
+    object_class: Cell<Option<Opaque<RClass>>>,
     // The engine's name for each symbol the realm has asked the engine about.
     engine_names: RefCell<HashMap<Id, StringName>>,
     // The class under Godot of each engine class the realm has handed Ruby an
     // object of, by the engine's name for it.
-    engine_classes: RefCell<HashMap<StringName, RClass>>,
+    engine_classes: RefCell<HashMap<StringName, Opaque<RClass>>>,
     // Godot::Value.
-    value_class: Cell<Option<RClass>>,
+    value_class: Cell<Option<Opaque<RClass>>>,
     // The class under Godot of each value type the realm has handed Ruby a
     // value of, by the type's ordinal.
-    value_classes: RefCell<Vec<Option<RClass>>>,
+    value_classes: RefCell<Vec<Option<Opaque<RClass>>>>,
     // The nameless classes of bound methods and of bound members.
-    bound_method_class: Cell<Option<RClass>>,
-    bound_member_class: Cell<Option<RClass>>,
+    bound_method_class: Cell<Option<Opaque<RClass>>>,
+    bound_member_class: Cell<Option<Opaque<RClass>>>,
     // Ruby's symbol for each StringName the engine has handed Ruby: mruby
     // looks a name up in time that grows with the symbols the game has.
-    symbols: RefCell<HashMap<StringName, Symbol>>,
+    symbols: RefCell<HashMap<StringName, Opaque<Symbol>>>,
 }
 
 // What the bridge keeps for the realm `mrb` belongs to.
@@ -103,15 +104,17 @@ fn data(mrb: &Mrb) -> &BridgeData {
 // and rooted for the collector so it lives while it is kept.
 fn find_class_once(
     mrb: &Mrb,
-    kept: &Cell<Option<RClass>>,
+    kept: &Cell<Option<Opaque<RClass>>>,
     find: impl FnOnce() -> RClass,
 ) -> RClass {
-    kept.get().unwrap_or_else(|| {
-        let class = find();
-        mrb.gc_register_forever(class.as_value());
-        kept.set(Some(class));
-        class
-    })
+    kept.get()
+        .map(|class| mrb.get_inner(class))
+        .unwrap_or_else(|| {
+            let class = find();
+            mrb.gc_register_mark_object(class.as_value());
+            kept.set(Some(class.into()));
+            class
+        })
 }
 
 // Whether `class` is `ancestor` or descends from it, as Ruby's `class <=
@@ -181,7 +184,11 @@ fn run_engine_call(
 // inherits from, empty for the root, or nil when the engine has no such class.
 fn engine_superclass_by_name(mrb: &Mrb, _godot: Value, name: Symbol) -> Value {
     let class_db = ClassDb::singleton();
-    let Some(name) = name.name(mrb).filter(|name| class_db.class_exists(name)) else {
+    let Some(name) = name
+        .name(mrb)
+        .ok()
+        .filter(|name| class_db.class_exists(name))
+    else {
         return qnil().as_value();
     };
     let parent = class_db.get_parent_class(&name).to_string();

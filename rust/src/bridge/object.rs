@@ -124,7 +124,7 @@ pub(super) fn object_class(mrb: &Mrb, data: &BridgeData) -> RClass {
 
 /// Defines Godot::Object, the class every engine class descends from.
 pub fn define(mrb: &Mrb, godot: RModule) -> Result<(), Error> {
-    let object = godot.define_class(mrb, c"Object", mrb.object_class())?;
+    let object = godot.define_class(mrb, c"Object", mrb.class_object())?;
     object.set_instance_data_tt(mrb)?;
     object.undef_default_alloc_func(mrb);
     object.define_singleton_method(mrb, c"__make__", method!(make, 0))?;
@@ -566,7 +566,8 @@ pub(super) fn wrap_object(mrb: &Mrb, data: &BridgeData, object: Gd<Object>) -> V
 // kept. A class Ruby put under that name that is no engine class is not one.
 fn class_by_name(mrb: &Mrb, data: &BridgeData, name: StringName) -> Option<RClass> {
     let classes = &data.engine_classes;
-    if let Some(class) = classes.borrow().get(&name).copied() {
+    if let Some(&class) = classes.borrow().get(&name) {
+        let class = mrb.get_inner(class);
         return Some(class);
     }
     let class = mrb
@@ -574,8 +575,8 @@ fn class_by_name(mrb: &Mrb, data: &BridgeData, name: StringName) -> Option<RClas
         .and_then(|godot| godot.const_get::<_, RClass>(mrb, name.to_string().as_str()))
         .ok()
         .filter(|class| super::has_ancestor(mrb, *class, object_class(mrb, data)))?;
-    mrb.gc_register_forever(class.as_value());
-    classes.borrow_mut().insert(name, class);
+    mrb.gc_register_mark_object(class.as_value());
+    classes.borrow_mut().insert(name, class.into());
     Some(class)
 }
 
