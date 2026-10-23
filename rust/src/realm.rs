@@ -7,8 +7,8 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 use std::time::Duration;
 
 use beni::{
-    Class as _, Error, FromValue, Gem, IntoValue, Module as _, Mrb, Qtrue, RArray, RClass,
-    ReprValue, Symbol, TryConvert, Value, value::Opaque,
+    Class as _, Error, FromValue, Gem, IntoValue, Module as _, Mrb, Qtrue, RClass, ReprValue,
+    Symbol, TryConvert, Value, value::Opaque,
 };
 use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
@@ -505,20 +505,50 @@ pub fn file_by_constant(mrb: &Mrb, names: &[String]) -> Option<String> {
 }
 
 /// The frames the Ruby running in the realm `mrb` was called through, most
-/// recent first, as an exception raised here would carry them.
+/// recent first, as an exception raised here would carry them. With the
+/// debugger, they are read off the frame stack; without it, Ruby's `caller`
+/// answers them.
 pub fn collect_backtrace(mrb: &Mrb) -> Vec<Location> {
-    let lines: Vec<String> = mrb
-        .class_object()
+    #[cfg(feature = "debugger")]
+    return filter_locations(mrb, debugger::read_frames(mrb));
+    #[cfg(not(feature = "debugger"))]
+    filter_frames(mrb, &read_caller(mrb))
+}
+
+/// The frames of the project's Ruby this thread runs in the game's realm,
+/// most recent first, none outside it. It runs no Ruby, so it answers what
+/// Godot asks of the language as it prints; what the extension's own Ruby
+/// reports is placed already, so its frames are left out.
+#[cfg(feature = "debugger")]
+pub fn collect_running_backtrace() -> Vec<Location> {
+    if !is_inside() {
+        return Vec::new();
+    }
+    let game = lock_game();
+    let Ok(held) = game.try_borrow() else {
+        return Vec::new();
+    };
+    let Game::Open(realm) = &*held else {
+        return Vec::new();
+    };
+    let mut frames = collect_backtrace(&realm.mrb);
+    frames.retain(|frame| !frame.file.starts_with(EXTENSION_DIRECTORY));
+    frames
+}
+
+// The frames Ruby's `caller` names in `mrb`, as mruby writes them.
+#[cfg(not(feature = "debugger"))]
+fn read_caller(mrb: &Mrb) -> Vec<String> {
+    mrb.class_object()
         .funcall(mrb, c"caller", ())
-        .and_then(|lines| RArray::try_convert(lines, mrb))
+        .and_then(|lines| beni::RArray::try_convert(lines, mrb))
         .map(|lines| {
             lines
                 .entries(mrb)
                 .filter_map(|line| String::try_convert(line, mrb).ok())
                 .collect()
         })
-        .unwrap_or_default();
-    filter_frames(mrb, &lines)
+        .unwrap_or_default()
 }
 
 /// Lets go of the object `key` holds at the realm's next entry or frame,
@@ -1105,17 +1135,22 @@ fn collect_frames(mrb: &Mrb, error: &Error) -> Vec<Location> {
     filter_frames(mrb, &error.backtrace(mrb))
 }
 
-// The frames of `backtrace` that name a line, most recent first. Under a call
-// from Rust, the top level mruby's base frame kept from the last file it ran
-// is not one Ruby called through, so it is left out. So are the frames of the
-// Ruby the extension ships, as minitest leaves out its own, so what the
-// extension reports is placed where the project's Ruby called it; a
-// backtrace with no project frame keeps them all.
+// The frames of `backtrace` that name a line, most recent first.
 fn filter_frames(mrb: &Mrb, backtrace: &[String]) -> Vec<Location> {
-    let mut frames: Vec<Location> = backtrace
+    let frames = backtrace
         .iter()
         .filter_map(|frame| parse_location(frame))
         .collect();
+    filter_locations(mrb, frames)
+}
+
+// The frames Ruby called through among `frames`, most recent first. Under a
+// call from Rust, the top level mruby's base frame kept from the last file it
+// ran is not one Ruby called through, so it is left out. So are the frames of
+// the Ruby the extension ships, as minitest leaves out its own, so what the
+// extension reports is placed where the project's Ruby called it; a
+// backtrace with no project frame keeps them all.
+fn filter_locations(mrb: &Mrb, mut frames: Vec<Location>) -> Vec<Location> {
     let under_call = mrb
         .user_data::<Bookkeeping>()
         .is_some_and(|kept| matches!(kept.outermost.get(), Some(Origin::Call)));

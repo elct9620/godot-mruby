@@ -1,10 +1,11 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://integration/report/warner.rb" id="1"]
 [ext_resource type="Script" path="res://integration/report/typo.rb" id="2"]
 [ext_resource type="Script" path="res://integration/report/fuse.rb" id="3"]
 [ext_resource type="Script" path="res://integration/report/crier.rb" id="4"]
 [ext_resource type="Script" path="res://integration/report/herald.rb" id="5"]
+[ext_resource type="Script" path="res://integration/report/wanderer.rb" id="6"]
 
 [node name="Report" type="Node"]
 
@@ -22,3 +23,6 @@ script = ExtResource("4")
 
 [node name="Herald" type="Node" parent="."]
 script = ExtResource("5")
+
+[node name="Wanderer" type="Node" parent="."]
+script = ExtResource("6")

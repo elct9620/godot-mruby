@@ -102,7 +102,6 @@ These are what a project meets today, each with what to do about it.
 |---|---|
 | An exported game ships its `.rb` files as source | keep secrets out of scripts |
 | A debugger stop shows no method names, variables or expressions | read the frame's file and line; trace values with `print` |
-| An engine error inside a Ruby call carries no Ruby backtrace | find the call by the engine method the error names |
 | Ruby and the engine call into each other at most 24 deep | defer a call with `call_deferred` |
 | Completion infers no variable's type | write the name bare, or after `self.` or `Godot::` |
 | A file's top level runs in the editor | keep game work in methods |

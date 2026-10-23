@@ -85,10 +85,21 @@ pub fn language() -> Option<Gd<RubyLanguage>> {
     LANGUAGE.lock().unwrap().map(Gd::from_instance_id)
 }
 
+// The stack this thread is reporting, nearest first. With the debugger, an
+// error the engine reports inside a Ruby call reports the frames Ruby runs.
+fn reported_stack() -> Vec<Location> {
+    let backtrace = log::current_backtrace();
+    #[cfg(feature = "debugger")]
+    if backtrace.is_empty() {
+        return crate::realm::collect_running_backtrace();
+    }
+    backtrace
+}
+
 // The frame `level` of the stack this thread is reporting, nearest first.
 fn reported_frame(level: i32) -> Option<Location> {
     let level = usize::try_from(level).ok()?;
-    log::current_backtrace().into_iter().nth(level)
+    reported_stack().into_iter().nth(level)
 }
 
 fn empty_dictionary() -> AnyDictionary {
@@ -257,7 +268,7 @@ impl IScriptLanguageExtension for RubyLanguage {
     // thread is reporting: a debug break, an exception being written, or an
     // error Ruby pushes.
     fn debug_get_stack_level_count(&self) -> i32 {
-        log::current_backtrace().len() as i32
+        reported_stack().len() as i32
     }
 
     fn debug_get_stack_level_line(&self, level: i32) -> i32 {
@@ -310,7 +321,7 @@ impl IScriptLanguageExtension for RubyLanguage {
     }
 
     fn debug_get_current_stack_info(&mut self) -> Array<AnyDictionary> {
-        log::current_backtrace()
+        reported_stack()
             .iter()
             .map(|frame| {
                 vdict! {

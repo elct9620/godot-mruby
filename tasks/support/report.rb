@@ -2,8 +2,8 @@
 
 module Godot
   # Runs the integration-test project's scene whose Ruby warns, fails to
-  # parse, raises and pushes errors, and reads where each is reported. Part
-  # of Godot.verify!.
+  # parse, raises, pushes errors and meets the engine's, and reads where each
+  # is reported. Part of Godot.verify!.
   module Report
     SCENE = "res://integration/report/report.tscn"
     # What mruby says about the report scene's files, each as the line Godot
@@ -16,8 +16,9 @@ module Godot
     }.freeze
     # What the report scene's Ruby reports through Godot's own functions.
     PUSH_LINES = ["ERROR: push_error from mruby", "WARNING: push_warning from mruby"].freeze
-    # The backtraces Godot prints after the report scene's exception and what
-    # its Ruby pushes: the frames Ruby called through, and nothing after them.
+    # The backtraces Godot prints after the report scene's exception, what its
+    # Ruby pushes, and the error the engine reports inside a Ruby call: the
+    # frames Ruby called through, and nothing after them.
     BACKTRACES = {
       exception: ["Ruby backtrace (most recent call first):",
                   "[0] unlock (res://integration/report/fuse.rb:10)",
@@ -27,14 +28,17 @@ module Godot
               "[1] _ready (res://integration/report/herald.rb:7)"],
       warning: ["Ruby backtrace (most recent call first):",
                 "[0] proclaim (res://integration/report/herald.rb:12)",
-                "[1] _ready (res://integration/report/herald.rb:7)"]
+                "[1] _ready (res://integration/report/herald.rb:7)"],
+      engine_error: ["Ruby backtrace (most recent call first):",
+                     "[0] wander (res://integration/report/wanderer.rb:11)",
+                     "[1] _ready (res://integration/report/wanderer.rb:7)"]
     }.freeze
 
     module_function
 
     # Runs the report scene and looks for each report followed by its location,
     # and for the backtraces of the exception and of what Ruby pushed.
-    # @behavior RR-001 RR-002 RR-003 RR-004 RR-006 RR-009 RR-010
+    # @behavior RR-001 RR-002 RR-003 RR-004 RR-006 RR-009 RR-010 RR-011
     def verify!(project)
       output, status = Godot.run_scene(project, SCENE, "--quit-after", "3")
       lines = output.lines.map(&:strip)

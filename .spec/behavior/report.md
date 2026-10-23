@@ -98,3 +98,15 @@ How what mruby has to say about a Ruby file reaches Godot: through the log, at t
 | Given | a node script whose callback calls a method that calls `Godot.push_warning` |
 | When | the scene runs |
 | Then | the log follows the warning with its Ruby backtrace, most recent call first, each frame at its method, file and line |
+
+## `RR-011` An engine error inside a Ruby call carries the backtrace Ruby called through
+
+| Attribute | Value |
+| --- | --- |
+| relates | `RR-009` |
+
+| Step | Statement |
+| --- | --- |
+| Given | a node script whose callback calls a method that asks the engine for a node it does not have |
+| When | the scene runs in the editor |
+| Then | the log follows the engine's error with its Ruby backtrace, most recent call first, each frame at its method, file and line |

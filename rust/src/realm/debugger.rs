@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use beni::Mrb;
 use beni::debug::{DebugInspector, TraceArg};
 
 use super::{Location, Origin, Outermost, Realm, bookkeeping, leave_out_extension_frames};
@@ -80,14 +81,39 @@ fn collect_stack(inspector: DebugInspector<'_>, outermost: &Outermost) -> Vec<Lo
     let count = inspector.frame_depth(0).map_or(0, |depth| depth + 1);
     let mut stack: Vec<Location> = (0..count)
         .filter(|&index| !(under_call && index + 1 == count))
-        .filter_map(|index| {
-            let file = inspector.frame_path(index)?;
-            let line = inspector.frame_lineno(index)?;
-            Some(Location::new(file.into_owned(), line.get() as u32))
-        })
+        .filter_map(|index| locate_frame(inspector, index))
         .collect();
     leave_out_extension_frames(&mut stack);
     stack
+}
+
+/// The frames of the running fiber in `mrb` that stand at a line, nearest
+/// first, each in the method it runs, read off the frame stack without
+/// running Ruby.
+pub(super) fn read_frames(mrb: &Mrb) -> Vec<Location> {
+    let mut frames = Vec::new();
+    mrb.debug_inspector_open(|inspector| {
+        let count = inspector.frame_depth(0).map_or(0, |depth| depth + 1);
+        frames = (0..count)
+            .filter_map(|index| {
+                let mut frame = locate_frame(inspector, index)?;
+                if let Some(id) = inspector.frame_method_id(index) {
+                    frame.function = id.name(mrb).unwrap_or_default();
+                }
+                Some(frame)
+            })
+            .collect();
+    })
+    .ok();
+    frames
+}
+
+// Where the frame `index` stands, in no method it names; nothing for a frame
+// running Rust or C code, or code that carries no line numbers.
+fn locate_frame(inspector: DebugInspector<'_>, index: usize) -> Option<Location> {
+    let file = inspector.frame_path(index)?;
+    let line = inspector.frame_lineno(index)?;
+    Some(Location::new(file.into_owned(), line.get() as u32))
 }
 
 // The line each frame of the running fiber last started, outermost first, so

@@ -340,6 +340,19 @@ The frames the Ruby an extension's method runs in was called through, most recen
 pub fn collect_backtrace(mrb: &Mrb) -> Vec<Location> {}
 ```
 
+
+## `collect_running_backtrace`
+
+The frames of the project's Ruby the calling thread runs in the game's realm, most recent first, read without running Ruby; none outside the realm.
+
+| Attribute | Value |
+| --- | --- |
+| internal | yes |
+
+```rust
+pub fn collect_running_backtrace() -> Vec<Location> {}
+```
+
 ## `extension_data`
 
 What an extension keeps for the realm its method runs in, one value of each type, made the first time it is asked for, so what an extension remembers of a realm, such as a class it found, lives no longer than the realm.
