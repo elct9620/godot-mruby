@@ -32,8 +32,15 @@ module Godot
 
     def verify!(project = PROJECT)
       Godot.log_runs do
-        install_game(project, TEMPLATE) { |dir| CHECKS.each { |check| check.verify_release!(dir) } }
-        install_game(project, DEBUG_TEMPLATE) { |dir| DEBUG_CHECKS.each { |check| check.verify_debug!(dir) } }
+        install_game(project, TEMPLATE) { |dir| play_checks(CHECKS, :verify_release!, dir) }
+        install_game(project, DEBUG_TEMPLATE) { |dir| play_checks(DEBUG_CHECKS, :verify_debug!, dir) }
+      end
+    end
+
+    def play_checks(checks, verify, dir)
+      checks.each do |check|
+        Godot.report_start(check)
+        check.public_send(verify, dir)
       end
     end
 

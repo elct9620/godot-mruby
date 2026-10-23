@@ -6,6 +6,7 @@ require "tmpdir"
 
 require_relative "announcement"
 require_relative "completion"
+require_relative "conversation"
 require_relative "debugger"
 require_relative "declarations"
 require_relative "documentation"
@@ -79,8 +80,17 @@ module Godot
     Runner.forget_runs
     log_runs do
       verify_loaded!(project)
-      CHECKS.each { |check| check.verify!(project) }
+      CHECKS.each do |check|
+        report_start(check)
+        check.verify!(project)
+      end
     end
+  end
+
+  # Names `check` as it starts, so a run that stops shows where.
+  def report_start(check)
+    puts "Checking #{check.name.delete_prefix("Godot::")}"
+    $stdout.flush
   end
 
   # Writes the runs the checks in the block make to RUN_LOG, started afresh,
@@ -97,13 +107,21 @@ module Godot
 
   # Runs `command` as Open3.capture2e does, adding the run to RUN_LOG inside
   # log_runs; outside it, as for the bench, a run is timed and kept nowhere.
-  def capture(*command, **)
-    Open3.capture2e(*command, **).tap do |output, status|
-      next unless @logged
+  # `respond`, when given, keeps the run's input open and is handed all it
+  # has printed each time more arrives, answering what to type next or nil.
+  def capture(*command, stdin_data: "", respond: nil, **)
+    output, status = Conversation.hold(command, stdin_data, respond, **)
+    log_run(command, output, status || "killed as hung")
+    raise "#{command.join(" ")} was killed as hung, ending:\n#{output.lines.last(20).join}" unless status
 
-      FileUtils.mkdir_p(File.dirname(RUN_LOG))
-      File.write(RUN_LOG, "$ #{command.join(" ")}\n#{output}#{status}\n\n", mode: "a")
-    end
+    [output, status]
+  end
+
+  def log_run(command, output, status)
+    return unless @logged
+
+    FileUtils.mkdir_p(File.dirname(RUN_LOG))
+    File.write(RUN_LOG, "$ #{command.join(" ")}\n#{output}#{status}\n\n", mode: "a")
   end
 
   # The project keeps its extension list, so the editor loads the addon at
